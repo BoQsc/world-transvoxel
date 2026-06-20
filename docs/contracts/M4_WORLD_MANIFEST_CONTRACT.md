@@ -25,9 +25,9 @@ The common container magic is `WTWORLD`. Feature flags are zero for schema
 Missing, extra, duplicate, or nonzero-flag sections fail. The common
 container's source revision must equal the `META` source revision.
 
-## `META` schema 1.0
+## `META` schema 1.1
 
-`META` is exactly 64 bytes:
+`META` schema 1.1 is exactly 72 bytes:
 
 | Offset | Type | Meaning |
 | ---: | --- | --- |
@@ -43,10 +43,13 @@ container's source revision must equal the `META` source revision.
 | 56 | `u16` | required chunk-page schema major, `1` |
 | 58 | `u16` | maximum chunk-page schema minor, `0` |
 | 60 | `u32` | reserved, zero |
+| 64 | `u64` | current authoritative world edit revision |
 
 Page count is bounded to 262,144 and dependency count to 1,024.
+Schema 1.0's exact 64-byte `META` remains readable and yields world revision
+zero. Writers emit schema 1.1.
 
-## `DEPS` schema 1.0
+## `DEPS` schema 1.1
 
 The section begins with:
 
@@ -91,7 +94,7 @@ The configuration dependency hash must equal `META.configuration_hash`.
 Format versions are represented directly by the common, world, and page
 schema fields rather than a dependency string.
 
-## `INDX` schema 1.0
+## `INDX` schema 1.1
 
 The 12-byte index header is:
 
@@ -136,17 +139,19 @@ Only then may the authoritative samples enter meshing or editing.
 ## Determinism and evidence
 
 Writers sort dependencies and pages, so input order does not affect bytes.
-`tests/native/test_wt_m4_world.cpp` locks the debug/release world hash:
+`tests/native/test_wt_m4_world.cpp` locks the debug/release schema-1.1 world
+hash:
 
 ```text
-02e209f526c176148bdbcdf40f06ec43747c7b11adc02f6377e64e56e28c3311
+2b5281537b9247480431a3a1dc2608e994e3d458f399f236f3a0186536843b2e
 ```
 
-The test covers manifest round-trip, canonical ordering, page lookup and
+The test covers schema-1.1 and schema-1.0 migration, manifest round-trip,
+canonical ordering, page lookup and
 validation, missing/size/hash/metadata failures, incomplete and duplicate
 dependencies, configuration disagreement, invalid text, duplicate page keys,
 container corruption, section flags, and extra sections.
 
-This component does not complete M4. Typed edit transactions, spatial
-invalidation, journal replay and compaction, migrations, inspection tools,
-and command-line/editor baking entry points remain active work.
+Typed edit transactions, spatial invalidation, journal replay, authoritative
+application, and compaction now consume this manifest. Inspection tools and
+command-line/editor baking entry points remain active M4 work.

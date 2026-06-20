@@ -100,7 +100,6 @@ The test covers:
 - invalid command bounds;
 - non-finite additive results with atomic sample/revision preservation.
 
-This component does not complete M4. Compaction must turn the edited pages
-into a new source snapshot, retain an audit identity linking the previous
-world and journal, reset the journal baseline safely, and prove complete
-bake-load-edit-save-reload equivalence.
+Snapshot compaction now turns replayed samples into a new source revision,
+retains previous-world and journal audit identities, and persists the next
+journal baseline. User-facing tools and final M4 evidence remain.

@@ -11,8 +11,9 @@
 namespace world_transvoxel {
 
 constexpr std::uint16_t kWtWorldSchemaMajor = 1;
-constexpr std::uint16_t kWtWorldSchemaMinor = 0;
-constexpr std::size_t kWtWorldMetadataSize = 64;
+constexpr std::uint16_t kWtWorldSchemaMinor = 1;
+constexpr std::size_t kWtWorldMetadataV1_0Size = 64;
+constexpr std::size_t kWtWorldMetadataSize = 72;
 constexpr std::size_t kWtWorldIndexHeaderSize = 12;
 constexpr std::size_t kWtWorldIndexEntrySize = 56;
 constexpr std::size_t kWtWorldDependencyHeaderSize = 8;
@@ -54,6 +55,7 @@ struct WtWorldPageIndexEntry {
 
 struct WtWorldManifest {
 	std::uint64_t source_revision = 0;
+	std::uint64_t world_revision = 0;
 	WtHash256 configuration_hash{};
 	std::vector<WtDependencyEntry> dependencies;
 	std::vector<WtWorldPageIndexEntry> pages;
@@ -62,6 +64,7 @@ struct WtWorldManifest {
 struct WtWorldManifestView {
 	WtContainerView container;
 	std::uint64_t source_revision = 0;
+	std::uint64_t world_revision = 0;
 	WtHash256 configuration_hash{};
 	std::vector<WtDependencyEntry> dependencies;
 	std::vector<WtWorldPageIndexEntry> pages;

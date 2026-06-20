@@ -151,7 +151,8 @@ WtWorldManifestStatus encode_metadata(
 		) != WtBinaryStatus::Ok ||
 		writer.write_u16(kWtChunkPageSchemaMajor) != WtBinaryStatus::Ok ||
 		writer.write_u16(kWtChunkPageSchemaMinor) != WtBinaryStatus::Ok ||
-		writer.write_u32(0) != WtBinaryStatus::Ok) {
+		writer.write_u32(0) != WtBinaryStatus::Ok ||
+		writer.write_u64(manifest.world_revision) != WtBinaryStatus::Ok) {
 		return WtWorldManifestStatus::CapacityExceeded;
 	}
 	output = writer.take_bytes();
@@ -254,7 +255,8 @@ bool decode_metadata(
 	std::uint32_t &page_count,
 	std::uint32_t &dependency_count
 ) {
-	if (bytes.size != kWtWorldMetadataSize) {
+	if (bytes.size != kWtWorldMetadataV1_0Size &&
+		bytes.size != kWtWorldMetadataSize) {
 		return false;
 	}
 	WtBinaryReader reader(bytes);
@@ -287,7 +289,20 @@ bool decode_metadata(
 		hash.data + hash.size,
 		output.configuration_hash.begin()
 	);
-	return major == kWtWorldSchemaMajor &&
+	if (major != kWtWorldSchemaMajor ||
+		minor > kWtWorldSchemaMinor ||
+		(minor == 0 && bytes.size != kWtWorldMetadataV1_0Size) ||
+		(minor >= 1 && bytes.size != kWtWorldMetadataSize)) {
+		return false;
+	}
+	if (minor >= 1) {
+		if (reader.read_u64(output.world_revision) != WtBinaryStatus::Ok) {
+			return false;
+		}
+	} else {
+		output.world_revision = 0;
+	}
+	return
 		minor <= kWtWorldSchemaMinor &&
 		page_count <= kWtMaximumWorldPageCount &&
 		dependency_count <= kWtMaximumDependencyCount &&

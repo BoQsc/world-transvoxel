@@ -126,6 +126,7 @@ wt::WtWorldManifest make_manifest(
 ) {
 	wt::WtWorldManifest manifest;
 	manifest.source_revision = 7001;
+	manifest.world_revision = 0;
 	manifest.configuration_hash = hash_text("configuration");
 	manifest.dependencies = make_dependencies();
 	for (auto iterator = pages.rbegin(); iterator != pages.rend(); ++iterator) {
@@ -176,6 +177,7 @@ void test_world_round_trip(
 	);
 	check(
 		view.source_revision == 7001 &&
+			view.world_revision == 0 &&
 			view.configuration_hash == hash_text("configuration"),
 		"world metadata mismatch"
 	);
@@ -376,6 +378,73 @@ void test_manifest_failures(
 	);
 }
 
+void test_schema_1_0_migration(const std::vector<std::uint8_t> &current_bytes) {
+	wt::WtWorldManifestView current;
+	check(
+		wt::wt_open_world_manifest(
+			{ current_bytes.data(), current_bytes.size() },
+			current
+		) == wt::WtWorldManifestStatus::Ok,
+		"schema 1.0 migration fixture failed"
+	);
+	const wt::WtContainerSection *metadata =
+		current.container.find_section(wt::kWtWorldMetadataSection);
+	const wt::WtContainerSection *dependencies =
+		current.container.find_section(wt::kWtWorldDependencySection);
+	const wt::WtContainerSection *index =
+		current.container.find_section(wt::kWtWorldIndexSection);
+	if (metadata == nullptr || dependencies == nullptr || index == nullptr) {
+		check(false, "schema 1.0 migration sections missing");
+		return;
+	}
+	std::vector<std::uint8_t> legacy_metadata(
+		metadata->payload.data,
+		metadata->payload.data + wt::kWtWorldMetadataV1_0Size
+	);
+	std::vector<std::uint8_t> legacy_dependencies(
+		dependencies->payload.data,
+		dependencies->payload.data + dependencies->payload.size
+	);
+	std::vector<std::uint8_t> legacy_index(
+		index->payload.data,
+		index->payload.data + index->payload.size
+	);
+	legacy_metadata[2] = 0;
+	legacy_metadata[3] = 0;
+	legacy_dependencies[2] = 0;
+	legacy_dependencies[3] = 0;
+	legacy_index[2] = 0;
+	legacy_index[3] = 0;
+	const std::vector<wt::WtContainerSectionInput> sections = {
+		{ wt::kWtWorldMetadataSection, 0, wt::WtStorageCodec::None,
+			{ legacy_metadata.data(), legacy_metadata.size() } },
+		{ wt::kWtWorldDependencySection, 0, wt::WtStorageCodec::None,
+			{ legacy_dependencies.data(), legacy_dependencies.size() } },
+		{ wt::kWtWorldIndexSection, 0, wt::WtStorageCodec::None,
+			{ legacy_index.data(), legacy_index.size() } },
+	};
+	std::vector<std::uint8_t> legacy_bytes;
+	wt::WtWorldManifestView legacy;
+	check(
+		wt::wt_write_container(
+			wt::kWtWorldMagic,
+			0,
+			7001,
+			sections,
+			legacy_bytes
+		) == wt::WtContainerStatus::Ok &&
+			wt::wt_open_world_manifest(
+				{ legacy_bytes.data(), legacy_bytes.size() },
+				legacy
+			) == wt::WtWorldManifestStatus::Ok &&
+			legacy.source_revision == 7001 &&
+			legacy.world_revision == 0 &&
+			legacy.pages == current.pages &&
+			legacy.dependencies.size() == current.dependencies.size(),
+		"schema 1.0 world migration failed"
+	);
+}
+
 } // namespace
 
 int main() {
@@ -387,6 +456,7 @@ int main() {
 	std::vector<std::uint8_t> world_bytes;
 	test_world_round_trip(pages, world_bytes);
 	test_manifest_failures(pages, world_bytes);
+	test_schema_1_0_migration(world_bytes);
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M4_WORLD_FAIL failures=%d\n", failure_count);
 		return 1;
@@ -394,7 +464,7 @@ int main() {
 	std::printf("M4_WORLD_HASH ");
 	print_hash(wt::wt_sha256(world_bytes.data(), world_bytes.size()));
 	std::printf(
-		"M4_WORLD_PASS pages=3 dependencies=7 failure_cases=12\n"
+		"M4_WORLD_PASS pages=3 dependencies=7 failure_cases=13\n"
 	);
 	return 0;
 }
