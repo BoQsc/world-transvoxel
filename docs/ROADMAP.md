@@ -68,8 +68,8 @@ thread readback.
 
 Status: in progress; versioned bounded containers, SHA-256 identities,
 standalone range-addressable chunk pages, deterministic native page baking,
-content-addressed world manifests/indexes, and atomic typed edit transactions
-complete.
+content-addressed world manifests/indexes, atomic typed edit transactions, and
+bounded padded-sample spatial invalidation complete.
 
 - versioned binary world/chunk/edit formats;
 - deterministic baker;

@@ -4,7 +4,7 @@ Status: canonical project direction
 
 Last reviewed: 2026-06-20
 
-Current state: M4 storage/baking/editing in progress; atomic edit transactions complete
+Current state: M4 storage/baking/editing in progress; spatial edit invalidation complete
 
 ## 1. Authority of this document
 

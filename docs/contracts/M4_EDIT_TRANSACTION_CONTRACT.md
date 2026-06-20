@@ -142,6 +142,7 @@ byte-identical round-trip, revision and sequence rules, duplicate IDs,
 non-finite and zero-strength values, invalid shape bounds, container
 corruption, section flags, and commit-to-command hash disagreement.
 
-This component does not complete M4. The bounded spatial invalidation index,
-append-only journal replay, transaction ordering, compaction, authoritative
-sample reconstruction, migrations, and user-facing bake/inspect tools remain.
+The bounded spatial invalidation index now consumes these transaction bounds.
+This component does not complete M4. Append-only journal replay, transaction
+ordering, compaction, authoritative sample reconstruction, migrations, and
+user-facing bake/inspect tools remain.
