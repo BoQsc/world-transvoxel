@@ -66,7 +66,8 @@ thread readback.
 
 ## M4 - Storage, baking, and editing
 
-Status: next.
+Status: in progress; versioned bounded container, SHA-256 identities, and
+corruption-safe range views complete.
 
 - versioned binary world/chunk/edit formats;
 - deterministic baker;

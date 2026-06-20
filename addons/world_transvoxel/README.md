@@ -24,14 +24,18 @@ generation-checked readiness, and application-latency telemetry.
 M3 does not implement editing, storage, production streaming, baking, or
 compute.
 
+Active M4 work includes the versioned bounded `wtworld`/`wtchunk`/`wtedit`/
+`wttrace` container and SHA-256 validation. Authoritative chunk and edit
+schemas are not complete yet.
+
 Build from the repository root:
 
 ```console
 python scripts/build.py
 ```
 
-Validate M3 and all prior milestone contracts:
+Validate the active M4 foundation and all prior milestone contracts:
 
 ```console
-python scripts/test_m3.py
+python scripts/test_m4.py
 ```

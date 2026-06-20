@@ -4,7 +4,7 @@ Status: canonical project direction
 
 Last reviewed: 2026-06-20
 
-Current state: M3 render/collision integration complete; M4 storage/baking/editing is next
+Current state: M4 storage/baking/editing in progress; binary container foundation complete
 
 ## 1. Authority of this document
 

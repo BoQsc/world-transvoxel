@@ -17,8 +17,9 @@ If another project document conflicts with the charter, the charter controls.
 R0 through M3 are complete. The addon now has the exact native cell backend,
 closed-seam chunk meshing, bounded scheduling, Godot `ArrayMesh` rendering,
 sanitized concave collision, generation-checked application, and readiness
-telemetry. M4 storage, baking, and editing is next; production streaming is
-still later roadmap work.
+telemetry. M4 storage, baking, and editing is active. The versioned bounded
+container and SHA-256 corruption foundation are implemented; chunk pages,
+baking, and edit transactions remain. Production streaming is later work.
 
 ## Tooling
 
@@ -29,7 +30,7 @@ there are no operating-system shell scripts in the project-owned toolchain.
 ```console
 python scripts/bootstrap_toolchain.py
 python scripts/build.py
-python scripts/test_m3.py
+python scripts/test_m4.py
 ```
 
 ## Production strategy

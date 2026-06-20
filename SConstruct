@@ -57,6 +57,7 @@ sources = (
     + Glob("addons/world_transvoxel/src/physics/*.cpp")
     + Glob("addons/world_transvoxel/src/render/*.cpp")
     + Glob("addons/world_transvoxel/src/services/*.cpp")
+    + Glob("addons/world_transvoxel/src/storage/*.cpp")
     + Glob("addons/world_transvoxel/src/streaming/*.cpp")
     + Glob("addons/world_transvoxel/src/testing/*.cpp")
 )
@@ -160,6 +161,24 @@ m3_application_test = native_test_env.Program(
     ],
 )
 
+m4_storage_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_m4_storage.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_m4_storage.cpp",
+        "addons/world_transvoxel/src/storage/wt_binary_io.cpp",
+        "addons/world_transvoxel/src/storage/wt_container_format.cpp",
+        "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+    ],
+)
+
 normalizer = os.path.join(PROJECT_ROOT, "tools", "normalize_pe_timestamp.py")
 
 
@@ -196,4 +215,16 @@ if env["platform"] == "windows":
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
 
-Default([library, native_test, m2_core_test, m2_mesh_test, m3_application_test])
+    env.AddPostAction(
+        m4_storage_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
+Default([
+    library,
+    native_test,
+    m2_core_test,
+    m2_mesh_test,
+    m3_application_test,
+    m4_storage_test,
+])
