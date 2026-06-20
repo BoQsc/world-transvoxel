@@ -306,4 +306,90 @@ WtContainerStatus wt_read_container(
 	return WtContainerStatus::Ok;
 }
 
+WtContainerStatus wt_measure_container(
+	WtByteView bytes,
+	const WtFormatMagic &expected_magic,
+	std::size_t &output_size
+) {
+	output_size = 0;
+	if (bytes.size != 0 && bytes.data == nullptr) {
+		return WtContainerStatus::InvalidInput;
+	}
+	if (bytes.size < kWtContainerHeaderSize) {
+		return WtContainerStatus::Truncated;
+	}
+	WtBinaryReader reader(bytes);
+	WtContainerHeader header;
+	WtContainerStatus status = read_header(reader, header);
+	if (status != WtContainerStatus::Ok) return status;
+	if (header.magic != expected_magic) {
+		return WtContainerStatus::InvalidMagic;
+	}
+	if (header.format_major != kWtFormatMajor ||
+		header.format_minor > kWtFormatMinor) {
+		return WtContainerStatus::UnsupportedVersion;
+	}
+	if (header.header_size != kWtContainerHeaderSize ||
+		header.directory_offset != kWtContainerHeaderSize ||
+		(header.directory_size % kWtSectionDirectoryEntrySize) != 0) {
+		return WtContainerStatus::InvalidDirectory;
+	}
+	if ((header.feature_flags & kWtRequiredFeatureMask &
+			~kWtKnownRequiredFeatures) != 0) {
+		return WtContainerStatus::UnsupportedRequiredFeature;
+	}
+	if (!add_fits(
+			header.directory_offset,
+			header.directory_size,
+			kWtMaximumContainerSize
+		)) {
+		return WtContainerStatus::InvalidDirectory;
+	}
+	const std::uint64_t directory_end =
+		header.directory_offset + header.directory_size;
+	if (directory_end > bytes.size) {
+		return WtContainerStatus::Truncated;
+	}
+	const std::uint64_t section_count =
+		header.directory_size / kWtSectionDirectoryEntrySize;
+	if (section_count > kWtMaximumSectionCount ||
+		reader.seek(static_cast<std::size_t>(header.directory_offset)) !=
+			WtBinaryStatus::Ok) {
+		return WtContainerStatus::InvalidDirectory;
+	}
+	std::uint64_t previous_end = directory_end;
+	std::uint32_t previous_type = 0;
+	for (std::uint64_t index = 0; index < section_count; ++index) {
+		WtContainerSection section;
+		status = read_section_entry(reader, section);
+		if (status != WtContainerStatus::Ok) return status;
+		if (section.codec != WtStorageCodec::None) {
+			return WtContainerStatus::UnsupportedCodec;
+		}
+		if (section.type == 0 ||
+			section.stored_size != section.uncompressed_size ||
+			section.stored_size > kWtMaximumSectionSize ||
+			section.offset != previous_end ||
+			!add_fits(
+				section.offset,
+				section.stored_size,
+				kWtMaximumContainerSize
+			)) {
+			return WtContainerStatus::InvalidSectionBounds;
+		}
+		if (index != 0 && previous_type >= section.type) {
+			return previous_type == section.type ?
+				WtContainerStatus::DuplicateSection :
+				WtContainerStatus::InvalidDirectory;
+		}
+		previous_type = section.type;
+		previous_end = section.offset + section.stored_size;
+	}
+	if (previous_end > bytes.size) {
+		return WtContainerStatus::Truncated;
+	}
+	output_size = static_cast<std::size_t>(previous_end);
+	return WtContainerStatus::Ok;
+}
+
 } // namespace world_transvoxel

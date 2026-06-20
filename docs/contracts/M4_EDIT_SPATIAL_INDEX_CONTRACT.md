@@ -99,6 +99,6 @@ The test covers:
 - candidate and result capacity limits;
 - invalid transaction sequences.
 
-This component does not complete M4. Journal ordering/replay, compaction,
-application of commands to authoritative samples, migrations, and user-facing
-bake/inspect tools remain active work.
+Journal ordering and replay now consume the same transactions. This component
+does not complete M4. Compaction, application of commands to authoritative
+samples, migrations, and user-facing bake/inspect tools remain active work.

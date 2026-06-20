@@ -113,4 +113,10 @@ WtContainerStatus wt_read_container(
 	WtContainerView &output
 );
 
+WtContainerStatus wt_measure_container(
+	WtByteView bytes,
+	const WtFormatMagic &expected_magic,
+	std::size_t &output_size
+);
+
 } // namespace world_transvoxel
