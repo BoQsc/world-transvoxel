@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
+import struct
 import subprocess
 import sys
 from pathlib import Path
@@ -11,6 +13,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOWNLOAD_ROOT = ROOT / "references" / "downloaded"
+ADDON_ROOT = ROOT / "addons" / "world_transvoxel"
+GODOT_CPP_REVISION = "e83fd0904c13356ed1d4c3d09f8bb9132bdc6b77"
+TRANSVOXEL_CPP_SHA256 = (
+    "83a5511346b54c42e4e66dec916d3971c92f4fbda1c7878cbad5901a820dcab4"
+)
 
 REQUIRED_FILES = (
     ".gitignore",
@@ -19,7 +26,33 @@ REQUIRED_FILES = (
     "LICENSES/MIT-Transvoxel.txt",
     "README.md",
     "IMPLEMENTATION_CHARTER.md",
+    "SConstruct",
+    "project.godot",
+    "build_profiles/m0.json",
+    "scripts/bootstrap_toolchain.ps1",
+    "scripts/build.ps1",
+    "scripts/download_test_engines.ps1",
+    "scripts/test_m0.ps1",
+    "tools/normalize_pe_timestamp.py",
+    "tests/godot/m0_load_test.gd",
+    "addons/world_transvoxel/LICENSE_SCOPE.md",
+    "addons/world_transvoxel/README.md",
+    "addons/world_transvoxel/plugin.cfg",
+    "addons/world_transvoxel/world_transvoxel.gdextension",
+    "addons/world_transvoxel/editor/world_transvoxel_plugin.gd",
+    "addons/world_transvoxel/src/register_types.cpp",
+    "addons/world_transvoxel/src/register_types.h",
+    "addons/world_transvoxel/src/api/world_transvoxel_terrain.cpp",
+    "addons/world_transvoxel/src/api/world_transvoxel_terrain.h",
+    "addons/world_transvoxel/src/backend/wt_meshing_backend.h",
+    "addons/world_transvoxel/src/backend/wt_transvoxel_mit_backend.cpp",
+    "addons/world_transvoxel/src/backend/wt_transvoxel_mit_backend.h",
+    "addons/world_transvoxel/src/core/wt_version.h",
+    "addons/world_transvoxel/thirdparty/transvoxel_mit/LICENSE",
+    "addons/world_transvoxel/thirdparty/transvoxel_mit/Transvoxel.cpp",
+    "addons/world_transvoxel/thirdparty/transvoxel_mit/UPSTREAM.md",
     "docs/ROADMAP.md",
+    "docs/milestones/M0_STATUS.md",
     "docs/architecture/API_BOUNDARIES.md",
     "docs/architecture/ARCHITECTURE.md",
     "docs/architecture/BINARY_FORMATS.md",
@@ -29,6 +62,13 @@ REQUIRED_FILES = (
     "docs/research/VOXEL_TOOLS_FINDINGS.md",
     "references/manifest.json",
     "references/lock.json",
+)
+
+M0_BINARIES = (
+    "addons/world_transvoxel/bin/"
+    "world_transvoxel.windows.template_debug.x86_64.dll",
+    "addons/world_transvoxel/bin/"
+    "world_transvoxel.windows.template_release.x86_64.dll",
 )
 
 SOURCE_LIMITS = {
@@ -78,6 +118,25 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def pe_timestamp(path: Path) -> int:
+    with path.open("rb") as binary:
+        if binary.read(2) != b"MZ":
+            raise ValueError("missing MZ signature")
+        binary.seek(0x3C)
+        pe_offset_data = binary.read(4)
+        if len(pe_offset_data) != 4:
+            raise ValueError("truncated DOS header")
+        pe_offset = struct.unpack("<I", pe_offset_data)[0]
+        binary.seek(pe_offset)
+        if binary.read(4) != b"PE\0\0":
+            raise ValueError("missing PE signature")
+        binary.seek(pe_offset + 8)
+        timestamp_data = binary.read(4)
+        if len(timestamp_data) != 4:
+            raise ValueError("truncated COFF header")
+        return struct.unpack("<I", timestamp_data)[0]
+
+
 def git_output(*arguments: str, cwd: Path = ROOT) -> str:
     result = subprocess.run(
         ("git", *arguments),
@@ -114,7 +173,7 @@ def validate_charter(errors: list[str]) -> None:
 
     required_statements = (
         "This document is the single source of truth",
-        "The next and only active milestone is M0.",
+        "The next and only active milestone is M1.",
         "exact official compatibility is not proven",
     )
     for statement in required_statements:
@@ -167,6 +226,61 @@ def validate_reference_sets(errors: list[str]) -> None:
             fail(errors, f"repository revision mismatch: {entry['target']}")
 
 
+def validate_m0(errors: list[str], require_binaries: bool) -> None:
+    godot_cpp_root = ROOT / "thirdparty" / "godot-cpp"
+    if not (godot_cpp_root / ".git").exists():
+        fail(errors, "godot-cpp submodule is not initialized")
+    else:
+        try:
+            revision = git_output("rev-parse", "HEAD", cwd=godot_cpp_root)
+        except (OSError, subprocess.CalledProcessError) as error:
+            fail(errors, f"cannot read godot-cpp revision: {error}")
+        else:
+            if revision != GODOT_CPP_REVISION:
+                fail(
+                    errors,
+                    "godot-cpp revision mismatch: "
+                    f"expected {GODOT_CPP_REVISION}, got {revision}",
+                )
+
+    transvoxel_cpp = (
+        ADDON_ROOT / "thirdparty" / "transvoxel_mit" / "Transvoxel.cpp"
+    )
+    if transvoxel_cpp.is_file():
+        actual_hash = sha256(transvoxel_cpp)
+        if actual_hash != TRANSVOXEL_CPP_SHA256:
+            fail(
+                errors,
+                "official Transvoxel.cpp byte hash mismatch: "
+                f"expected {TRANSVOXEL_CPP_SHA256}, got {actual_hash}",
+            )
+
+    gdextension = ADDON_ROOT / "world_transvoxel.gdextension"
+    if gdextension.is_file():
+        descriptor = gdextension.read_text(encoding="utf-8")
+        for binary in M0_BINARIES:
+            resource_path = "res://" + binary.replace("\\", "/")
+            if resource_path not in descriptor:
+                fail(errors, f"GDExtension descriptor does not map {resource_path}")
+
+    if require_binaries:
+        for relative_path in M0_BINARIES:
+            path = ROOT / relative_path
+            if not path.is_file() or path.stat().st_size == 0:
+                fail(errors, f"missing required M0 binary: {relative_path}")
+                continue
+            try:
+                timestamp = pe_timestamp(path)
+            except (OSError, ValueError) as error:
+                fail(errors, f"invalid M0 PE binary {relative_path}: {error}")
+            else:
+                if timestamp != 0:
+                    fail(
+                        errors,
+                        f"M0 PE timestamp is not normalized: {relative_path}",
+                    )
+
+
 def validate_license_boundaries(errors: list[str]) -> None:
     try:
         tracked = git_output("ls-files").splitlines()
@@ -216,7 +330,18 @@ def validate_source_sizes(errors: list[str], warnings: list[str]) -> None:
             )
 
 
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--require-binaries",
+        action="store_true",
+        help="Require both M0 Windows x86-64 debug and release binaries.",
+    )
+    return parser.parse_args()
+
+
 def main() -> int:
+    arguments = parse_arguments()
     errors: list[str] = []
     warnings: list[str] = []
 
@@ -224,6 +349,7 @@ def main() -> int:
     if not errors:
         validate_charter(errors)
         validate_reference_sets(errors)
+        validate_m0(errors, arguments.require_binaries)
     validate_license_boundaries(errors)
     validate_source_sizes(errors, warnings)
 

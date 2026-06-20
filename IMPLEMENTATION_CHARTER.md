@@ -4,7 +4,7 @@ Status: canonical project direction
 
 Last reviewed: 2026-06-20
 
-Current state: R0 research lock complete; M0 addon baseline is next
+Current state: M0 addon baseline complete; M1 exact native cell backend is next
 
 ## 1. Authority of this document
 
@@ -244,9 +244,13 @@ Policy:
 - Platform support is claimed only after that platform passes the build and
   runtime matrix.
 
-The exact build orchestrator may be selected during M0, but it must produce
-reproducible Zig-driven builds and must not require modifying vendored
-godot-cpp.
+The M0 build orchestrator is SCons using godot-cpp's supported binding
+generation, with Zig 0.16.0 as the C/C++ compiler, archiver, and linker. It
+produces reproducible Zig-driven builds without modifying vendored godot-cpp.
+
+The initial validated platform is Windows x86-64. The native addon loads and
+passes its M0 runtime test on Godot 4.6.3 and Godot 4.7. Other platforms are
+not yet claimed.
 
 Research and repository checks are reproduced with:
 
@@ -912,6 +916,8 @@ Exit: implementation direction is recorded before terrain code begins.
 
 ### M0 - Addon and official upstream baseline
 
+Status: complete on 2026-06-20.
+
 Deliverables:
 
 - self-contained addon skeleton;
@@ -1071,8 +1077,6 @@ unstructured experimentation.
 
 | Decision | Must be fixed by | Required evidence |
 | --- | --- | --- |
-| Zig-compatible build orchestrator | M0 | reproducible debug/release builds |
-| Initial supported OS/architecture matrix | M0 | clean build/load tests |
 | Chunk cell/sample dimensions | M1 | padding, cache, and performance tests |
 | Density scalar encoding and isovalue convention | M1 | deterministic contract tests |
 | Material encoding and interpolation | M1 | visual/backend contract |
@@ -1086,6 +1090,12 @@ unstructured experimentation.
 The default role of root `world_transvoxel/` is resolved: it is thin example
 and application integration. Reconsidering that boundary requires an explicit
 charter change.
+
+Resolved in M0:
+
+- build orchestration is SCons with Zig 0.16.0 providing compilation,
+  archiving, and linking;
+- the initial validated matrix is Windows x86-64 with Godot 4.6.3 and 4.7.
 
 ## 22. Change and review discipline
 
@@ -1125,27 +1135,27 @@ measurement requirements.
 
 ## 23. Immediate next work
 
-The next and only active milestone is M0.
+The next and only active milestone is M1.
 
 Ordered work:
 
-1. Create the addon directory and license/provenance files.
-2. Import the pinned official MIT source unchanged.
-3. Add integrity validation for upstream files.
-4. Pin godot-cpp.
-5. Establish the Zig-driven native build.
-6. Add the GDExtension entry point and minimal registered class.
-7. Define the project-owned meshing-backend interface without implementing
-   terrain streaming.
-8. Add a minimal official MIT adapter.
-9. Build debug and optimized binaries.
-10. Load-test the addon in Godot 4.6.3.
-11. Compatibility-test it in Godot 4.7.
-12. Validate package contents and license separation.
-13. Commit M0 only when its exit condition is met.
+1. Freeze the typed cell-backend input and output contract.
+2. Define density sign, isovalue, coordinate handedness, winding, interpolation,
+   material, and normal conventions.
+3. Expose official regular-cell meshing through the MIT adapter.
+4. Expose official transition-cell meshing without leaking table types or class
+   IDs through project headers.
+5. Add reusable thread-local scratch storage.
+6. Build exhaustive regular-case tests.
+7. Build exhaustive transition-case tests.
+8. Cover all six transition orientations.
+9. Add vertex/index bounds, winding, material, normal, invalid-input, and
+   deterministic-hash checks.
+10. Run the contract headlessly in debug and release builds.
+11. Record exact M1 evidence and only then mark M1 complete.
 
-Do not begin compute meshing, world streaming, editing, buildings, vegetation,
-or application terrain scenes during M0.
+Do not begin chunks, streaming, rendering, collision integration, editing,
+baking, or compute acceleration during M1.
 
 ## 24. Final definition of success
 

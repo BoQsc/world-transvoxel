@@ -4,8 +4,11 @@
 /.godot/
 /build/
 /artifacts/
+/.tools/
 __pycache__/
 *.pyc
+*.o
+*.a
 *.obj
 *.pdb
 *.dll

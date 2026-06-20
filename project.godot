@@ -1,0 +1,21 @@
+; Engine configuration file.
+; Edit through Godot where practical.
+;
+; Format:
+;   [section]
+;   param=value
+
+config_version=5
+
+[application]
+
+config/name="World Transvoxel M0"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/world_transvoxel/plugin.cfg")
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"

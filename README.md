@@ -14,8 +14,9 @@ If another project document conflicts with the charter, the charter controls.
 
 ## Current phase
 
-R0 research lock is complete. M0, the native addon and official upstream
-baseline, is next. No terrain implementation exists yet.
+R0 research lock and M0 native addon baseline are complete. M1, the exact
+native regular/transition cell backend, is next. No chunk terrain or streaming
+implementation exists yet.
 
 ## Production strategy
 

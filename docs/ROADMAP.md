@@ -5,6 +5,8 @@ automatically create another one.
 
 ## R0 - Research lock
 
+Status: complete.
+
 - references downloaded and hashed;
 - upstream revisions pinned;
 - existing Marching Cubes postmortem recorded;
@@ -13,6 +15,8 @@ automatically create another one.
 Exit: no terrain implementation exists before these documents pass review.
 
 ## M0 - Addon and upstream baseline
+
+Status: complete on 2026-06-20 for Windows x86-64, Godot 4.6.3 and 4.7.
 
 - self-contained `addons/world_transvoxel`;
 - official MIT files unchanged and isolated;
@@ -24,6 +28,8 @@ Exit: no terrain implementation exists before these documents pass review.
 Exit: addon loads on the primary Godot baseline and one later minor version.
 
 ## M1 - Exact native cell backend
+
+Status: next.
 
 - typed native API;
 - exhaustive 256 regular and 512 transition cases;

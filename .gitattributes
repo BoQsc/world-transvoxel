@@ -1,3 +1,5 @@
 * text=auto eol=lf
 *.bat text eol=crlf
 *.cmd text eol=crlf
+addons/world_transvoxel/thirdparty/transvoxel_mit/Transvoxel.cpp -text whitespace=-blank-at-eol,cr-at-eol
+addons/world_transvoxel/thirdparty/transvoxel_mit/LICENSE -text whitespace=-blank-at-eol,cr-at-eol
