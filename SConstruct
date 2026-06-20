@@ -287,6 +287,31 @@ m4_journal_test = native_test_env.Program(
     ],
 )
 
+m4_apply_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_m4_apply.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_m4_apply.cpp",
+        "addons/world_transvoxel/src/bake/wt_chunk_baker.cpp",
+        "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/editing/wt_chunk_edit_state.cpp",
+        "addons/world_transvoxel/src/editing/wt_edit_journal.cpp",
+        "addons/world_transvoxel/src/editing/wt_edit_transaction.cpp",
+        "addons/world_transvoxel/src/editing/wt_edit_types.cpp",
+        "addons/world_transvoxel/src/storage/wt_binary_io.cpp",
+        "addons/world_transvoxel/src/storage/wt_chunk_page.cpp",
+        "addons/world_transvoxel/src/storage/wt_container_format.cpp",
+        "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+    ],
+)
+
 normalizer = os.path.join(PROJECT_ROOT, "tools", "normalize_pe_timestamp.py")
 
 
@@ -353,6 +378,11 @@ if env["platform"] == "windows":
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
 
+    env.AddPostAction(
+        m4_apply_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
 Default([
     library,
     native_test,
@@ -365,4 +395,5 @@ Default([
     m4_edit_test,
     m4_spatial_test,
     m4_journal_test,
+    m4_apply_test,
 ])

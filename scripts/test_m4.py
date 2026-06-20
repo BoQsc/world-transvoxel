@@ -16,6 +16,7 @@ EXPECTED_WORLD_HASH = "02e209f526c176148bdbcdf40f06ec43747c7b11adc02f6377e64e56e
 EXPECTED_EDIT_HASH = "b8d28a739463c3e43a20d14f9d0496d3041c8e667e77f1e5f029256855a2b26d"
 EXPECTED_SPATIAL_HASH = "dd58c70452ae48e8e32d582d769c13ccfe235b64d612aba668e4ad15d89ef513"
 EXPECTED_JOURNAL_HASH = "82ba948c7f37e5812e5fc40331cf7b07c2fbad58a63903f484448d9dcf71de36"
+EXPECTED_APPLY_HASH = "86361ec1918d415539e73091c7a9710af9bfecd21a66e3ed5f5e48a3266536df"
 
 
 def run_native_test(configuration: str, test_name: str, pass_marker: str) -> str:
@@ -83,6 +84,17 @@ def run_m4_tests(configuration: str) -> None:
         raise RuntimeError(
             f"M4 journal hash mismatch for {configuration}: {actual}"
         )
+    output = run_native_test(
+        configuration,
+        "test_wt_m4_apply",
+        "M4_APPLY_PASS",
+    )
+    match = re.search(r"M4_APPLY_HASH ([0-9a-f]{64})", output)
+    if match is None or match.group(1) != EXPECTED_APPLY_HASH:
+        actual = "missing" if match is None else match.group(1)
+        raise RuntimeError(
+            f"M4 apply hash mismatch for {configuration}: {actual}"
+        )
 
 
 def test_m4(skip_build: bool = False, skip_engine_download: bool = False) -> None:
@@ -91,7 +103,7 @@ def test_m4(skip_build: bool = False, skip_engine_download: bool = False) -> Non
     for configuration in ("template_debug", "template_release"):
         run_m4_tests(configuration)
     test_m3(skip_build=True, skip_engine_download=skip_engine_download)
-    print("M4 storage, baking, indexing, edit invalidation, and journal replay passed with the complete M3 suite.")
+    print("M4 storage, baking, indexing, and authoritative edit replay passed with the complete M3 suite.")
 
 
 def main() -> None:

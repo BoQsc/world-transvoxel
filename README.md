@@ -23,8 +23,9 @@ baker, content-addressed world manifest/index, and SHA-256 corruption checks
 are implemented. Atomic typed edit transactions are also implemented; spatial
 invalidation now covers padded same-LOD and coarser-LOD dependencies. Journal
 ordering, append recovery, and deterministic replay are implemented.
-Authoritative sample application and compaction remain. Production streaming
-is later work.
+Ordered commands now mutate authoritative chunk samples with overlap tests and
+finite-result rejection. Snapshot compaction remains. Production streaming is
+later work.
 
 ## Tooling
 
