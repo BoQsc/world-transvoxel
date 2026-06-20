@@ -1,0 +1,13 @@
+/references/downloaded/
+/addons/world_transvoxel/bin/
+/.sconsign*
+/.godot/
+/build/
+/artifacts/
+__pycache__/
+*.pyc
+*.obj
+*.pdb
+*.dll
+*.so
+*.dylib

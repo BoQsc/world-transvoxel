@@ -1,0 +1,110 @@
+{
+  "schema": "world-transvoxel.references.v1",
+  "reviewed_date": "2026-06-20",
+  "papers": [
+    {
+      "id": "lengyel_voxel_terrain_2010",
+      "title": "Voxel-Based Terrain for Real-Time Virtual Simulations",
+      "url": "https://transvoxel.org/Lengyel-VoxelTerrain.pdf",
+      "target": "papers/Lengyel-VoxelTerrain.pdf",
+      "role": "canonical_transvoxel_system"
+    },
+    {
+      "id": "ju_dual_contouring_2002",
+      "title": "Dual Contouring of Hermite Data",
+      "url": "https://www.cs.rice.edu/~jwarren/papers/dualcontour.pdf",
+      "target": "papers/Dual-Contouring-Hermite-Data.pdf",
+      "role": "sharp_feature_alternative"
+    },
+    {
+      "id": "wald_amr_iso_2020",
+      "title": "A Simple, General, and GPU Friendly Method for Computing Dual Mesh and Iso-Surfaces of Adaptive Mesh Refinement Data",
+      "url": "https://arxiv.org/pdf/2004.08475",
+      "target": "papers/Wald-AMR-IsoSurface-2020.pdf",
+      "role": "gpu_adaptive_alternative"
+    },
+    {
+      "id": "mcgrids_2024",
+      "title": "McGrids: Monte Carlo-Driven Adaptive Grids for Iso-Surface Extraction",
+      "url": "https://arxiv.org/pdf/2409.06710",
+      "target": "papers/McGrids-2024.pdf",
+      "role": "adaptive_sampling_research"
+    },
+    {
+      "id": "tetweave_2025",
+      "title": "TetWeave: Isosurface Extraction using On-The-Fly Delaunay Tetrahedral Grids for Gradient-Based Mesh Optimization",
+      "url": "https://arxiv.org/pdf/2505.04590",
+      "target": "papers/TetWeave-2025.pdf",
+      "role": "watertight_optimization_research"
+    },
+    {
+      "id": "power_diagram_adaptive_2025",
+      "title": "Power Diagram Enhanced Adaptive Isosurface Extraction from Signed Distance Fields",
+      "url": "https://arxiv.org/pdf/2506.09579",
+      "target": "papers/Power-Diagram-Adaptive-Isosurface-2025.pdf",
+      "role": "offline_adaptive_research"
+    },
+    {
+      "id": "power_isosurfacing_2025",
+      "title": "Isosurface Extraction for Signed Distance Functions using Power Diagrams",
+      "url": "https://cybertron.cg.tu-berlin.de/projects/power-isosurfacing/power_isosurfacing.pdf",
+      "target": "papers/Power-Isosurfacing-2025.pdf",
+      "role": "sdf_quality_research"
+    },
+    {
+      "id": "dual_contouring_sdf_2026",
+      "title": "Dual Contouring of Signed Distance Data",
+      "url": "https://arxiv.org/pdf/2604.00157",
+      "target": "papers/Dual-Contouring-Signed-Distance-2026.pdf",
+      "role": "latest_sharp_feature_research"
+    }
+  ],
+  "repositories": [
+    {
+      "id": "official_transvoxel",
+      "url": "https://github.com/EricLengyel/Transvoxel.git",
+      "revision": "51a494f03c5b024cd153b596bcc7152eb3cc93a6",
+      "target": "upstream/Transvoxel",
+      "role": "production_reference_backend"
+    },
+    {
+      "id": "godot_voxel_v1_6",
+      "url": "https://github.com/Zylann/godot_voxel.git",
+      "revision": "595f52ee4e23203a865eeb981f115909f7aa92f4",
+      "target": "upstream/godot_voxel",
+      "role": "godot_production_architecture_reference"
+    },
+    {
+      "id": "cuda_amr_iso",
+      "url": "https://github.com/ingowald/cudaAmrIsoSurfaceExtraction.git",
+      "revision": "e1074d9e78a7aa208a0969b80afe5b0d5a92d0b5",
+      "target": "upstream/cudaAmrIsoSurfaceExtraction",
+      "role": "gpu_adaptive_reference"
+    },
+    {
+      "id": "mcgrids",
+      "url": "https://github.com/zcblshz/McGrids.git",
+      "revision": "6c24f0968c82b00472130303a1a532b15626dbb1",
+      "target": "upstream/McGrids",
+      "role": "adaptive_sampling_reference"
+    }
+  ],
+  "toolchain": {
+    "godot_primary": {
+      "version": "4.6.3-stable",
+      "revision": "7d41c59c457bd5a245092b4e7eb2d833e3b3f8c3"
+    },
+    "godot_compatibility_test": {
+      "version": "4.7-stable",
+      "revision": "5b4e0cb0fd279832bbdd69fed5354d4e5ad26f88"
+    },
+    "godot_cpp_minimum": {
+      "version": "godot-4.5-stable",
+      "revision": "e83fd0904c13356ed1d4c3d09f8bb9132bdc6b77"
+    },
+    "zig": {
+      "version": "0.16.0",
+      "url": "https://ziglang.org/download/0.16.0/"
+    }
+  }
+}

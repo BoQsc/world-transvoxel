@@ -1,0 +1,64 @@
+{
+  "schema": "world-transvoxel.reference-lock.v1",
+  "generated_date": "2026-06-20",
+  "papers": [
+    {
+      "target": "papers/Dual-Contouring-Hermite-Data.pdf",
+      "bytes": 2341560,
+      "sha256": "30e6950d68a0294ecb953763ca622ec50d5ec78fa7c687c8527e1a36764b6db1"
+    },
+    {
+      "target": "papers/Dual-Contouring-Signed-Distance-2026.pdf",
+      "bytes": 10644234,
+      "sha256": "bcd76702fc5d612cbf7bb3502874a2db6da90742184e4b67660cd108c6974cd4"
+    },
+    {
+      "target": "papers/Lengyel-VoxelTerrain.pdf",
+      "bytes": 59370083,
+      "sha256": "c1c86dc1c441fa86dbe6b4b38a521ffb26a5eec3c4eede0f5782508a6ad41160"
+    },
+    {
+      "target": "papers/McGrids-2024.pdf",
+      "bytes": 42652809,
+      "sha256": "15b2eb8fd5d943d2e9edfc45ac412e5b17b76cb0e5cc02b45887b5aef2915d8b"
+    },
+    {
+      "target": "papers/Power-Diagram-Adaptive-Isosurface-2025.pdf",
+      "bytes": 37976658,
+      "sha256": "386c25fb023c85e449f93a7509e5d3d2f199412bf3ae0b116b1e988409a04069"
+    },
+    {
+      "target": "papers/Power-Isosurfacing-2025.pdf",
+      "bytes": 49270418,
+      "sha256": "94d58d16726d6d5f60f904a11dfad652afad3bda19e4e512bb95b05dd8eb1109"
+    },
+    {
+      "target": "papers/TetWeave-2025.pdf",
+      "bytes": 46075153,
+      "sha256": "455702ce786b74e9a2d6c6460bde300822ecb9fc3c27b55e377cec5f68790cc5"
+    },
+    {
+      "target": "papers/Wald-AMR-IsoSurface-2020.pdf",
+      "bytes": 6644072,
+      "sha256": "3c8f0bf41c9130e8e556b35a9b9764a703bb9ee4d23da7c155fe6e9cfb642c19"
+    }
+  ],
+  "repositories": [
+    {
+      "target": "upstream/Transvoxel",
+      "revision": "51a494f03c5b024cd153b596bcc7152eb3cc93a6"
+    },
+    {
+      "target": "upstream/godot_voxel",
+      "revision": "595f52ee4e23203a865eeb981f115909f7aa92f4"
+    },
+    {
+      "target": "upstream/cudaAmrIsoSurfaceExtraction",
+      "revision": "e1074d9e78a7aa208a0969b80afe5b0d5a92d0b5"
+    },
+    {
+      "target": "upstream/McGrids",
+      "revision": "6c24f0968c82b00472130303a1a532b15626dbb1"
+    }
+  ]
+}
