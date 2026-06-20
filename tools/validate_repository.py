@@ -56,6 +56,13 @@ REQUIRED_FILES = (
     "addons/world_transvoxel/src/backend/wt_transvoxel_mit_backend.h",
     "addons/world_transvoxel/src/core/wt_version.h",
     "addons/world_transvoxel/src/core/wt_meshing_limits.h",
+    "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+    "addons/world_transvoxel/src/core/wt_chunk_key.h",
+    "addons/world_transvoxel/src/core/wt_chunk_state.h",
+    "addons/world_transvoxel/src/streaming/wt_lod_map.cpp",
+    "addons/world_transvoxel/src/streaming/wt_lod_map.h",
+    "addons/world_transvoxel/src/streaming/wt_stream_scheduler.cpp",
+    "addons/world_transvoxel/src/streaming/wt_stream_scheduler.h",
     "addons/world_transvoxel/thirdparty/transvoxel_mit/LICENSE",
     "addons/world_transvoxel/thirdparty/transvoxel_mit/Transvoxel.cpp",
     "addons/world_transvoxel/thirdparty/transvoxel_mit/UPSTREAM.md",
@@ -63,6 +70,7 @@ REQUIRED_FILES = (
     "docs/milestones/M0_STATUS.md",
     "docs/milestones/M1_STATUS.md",
     "docs/contracts/M1_CELL_BACKEND.md",
+    "docs/contracts/M2_CHUNK_LOD_CONTRACT.md",
     "docs/architecture/API_BOUNDARIES.md",
     "docs/architecture/ARCHITECTURE.md",
     "docs/architecture/BINARY_FORMATS.md",
@@ -73,6 +81,7 @@ REQUIRED_FILES = (
     "references/manifest.json",
     "references/lock.json",
     "tests/native/test_wt_m1_cell_backend.cpp",
+    "tests/native/test_wt_m2_core.cpp",
 )
 
 BINARY_SETS = {

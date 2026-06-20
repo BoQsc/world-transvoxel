@@ -52,6 +52,9 @@ sources = (
     Glob("addons/world_transvoxel/src/*.cpp")
     + Glob("addons/world_transvoxel/src/api/*.cpp")
     + Glob("addons/world_transvoxel/src/backend/*.cpp")
+    + Glob("addons/world_transvoxel/src/core/*.cpp")
+    + Glob("addons/world_transvoxel/src/meshing/*.cpp")
+    + Glob("addons/world_transvoxel/src/streaming/*.cpp")
 )
 
 variant_root = os.path.join(
@@ -93,6 +96,24 @@ native_test = native_test_env.Program(
     source=native_test_sources,
 )
 
+m2_core_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_m2_core.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_m2_core.cpp",
+        "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/streaming/wt_lod_map.cpp",
+        "addons/world_transvoxel/src/streaming/wt_stream_scheduler.cpp",
+    ],
+)
+
 normalizer = os.path.join(PROJECT_ROOT, "tools", "normalize_pe_timestamp.py")
 
 
@@ -114,4 +135,9 @@ if env["platform"] == "windows":
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
 
-Default([library, native_test])
+    env.AddPostAction(
+        m2_core_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
+Default([library, native_test, m2_core_test])
