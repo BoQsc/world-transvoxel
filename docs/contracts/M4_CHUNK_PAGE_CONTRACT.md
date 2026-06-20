@@ -12,8 +12,8 @@ and zero-copy section views.
 
 One `wtchunk` file contains the complete padded scalar and material sample
 grid for one chunk key and one source revision. Pages are standalone,
-content-addressable units. A future `wtworld` index may point directly to
-individual page ranges without requiring a monolithic world decode.
+content-addressable units. The `wtworld` index maps chunk keys to complete
+page hashes and byte sizes without requiring a monolithic world decode.
 
 The page stores authoritative samples, not Transvoxel case IDs, lookup-table
 indices, generated vertices, render resources, collision resources, or
@@ -117,6 +117,6 @@ Input key order does not affect output order, bytes, or hashes.
   sections, capacity overflow, duplicate/invalid keys, sample-source failure,
   non-finite density, and invalid page metadata fail safely.
 
-This component does not complete M4. The `wtworld` page index and manifests,
-typed `wtedit` transactions, invalidation index, replay, compaction,
-migrations, and command-line/editor entry points remain active work.
+This component does not complete M4. Typed `wtedit` transactions, invalidation
+index, replay, compaction, migrations, and command-line/editor entry points
+remain active work.

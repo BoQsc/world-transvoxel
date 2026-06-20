@@ -12,6 +12,7 @@ from wt_script_common import native_test_path
 
 
 EXPECTED_BAKE_HASH = "7ed6975c20b67762bd00016b4bebd982b6aafcd4766dc3c0e6bbffaf94dfe5ce"
+EXPECTED_WORLD_HASH = "02e209f526c176148bdbcdf40f06ec43747c7b11adc02f6377e64e56e28c3311"
 
 
 def run_native_test(configuration: str, test_name: str, pass_marker: str) -> str:
@@ -43,6 +44,13 @@ def run_m4_tests(configuration: str) -> None:
         raise RuntimeError(
             f"M4 bake hash mismatch for {configuration}: {actual}"
         )
+    output = run_native_test(configuration, "test_wt_m4_world", "M4_WORLD_PASS")
+    match = re.search(r"M4_WORLD_HASH ([0-9a-f]{64})", output)
+    if match is None or match.group(1) != EXPECTED_WORLD_HASH:
+        actual = "missing" if match is None else match.group(1)
+        raise RuntimeError(
+            f"M4 world hash mismatch for {configuration}: {actual}"
+        )
 
 
 def test_m4(skip_build: bool = False, skip_engine_download: bool = False) -> None:
@@ -51,7 +59,7 @@ def test_m4(skip_build: bool = False, skip_engine_download: bool = False) -> Non
     for configuration in ("template_debug", "template_release"):
         run_m4_tests(configuration)
     test_m3(skip_build=True, skip_engine_download=skip_engine_download)
-    print("M4 chunk storage and baking passed with the complete M3 suite.")
+    print("M4 storage, page baking, and world indexing passed with the complete M3 suite.")
 
 
 def main() -> None:

@@ -90,6 +90,6 @@ truncation, deterministic section ordering, zero-copy views, and corruption of
 magic, version, required features, codec, section bounds, duplicate types,
 container payload, and truncation.
 
-The common container alone does not complete M4. Chunk page schemas, world
-index/manifest sections, edit journals, transactions, compaction, migration,
-and deterministic baking remain active M4 work.
+The common container alone does not complete M4. Chunk pages and the world
+manifest/index now use it. Edit journals, transactions, compaction,
+migration, and user-facing baking tools remain active M4 work.

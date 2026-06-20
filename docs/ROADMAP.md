@@ -67,8 +67,8 @@ thread readback.
 ## M4 - Storage, baking, and editing
 
 Status: in progress; versioned bounded containers, SHA-256 identities,
-standalone range-addressable chunk pages, and deterministic native page baking
-complete.
+standalone range-addressable chunk pages, deterministic native page baking,
+and content-addressed world manifests/indexes complete.
 
 - versioned binary world/chunk/edit formats;
 - deterministic baker;
