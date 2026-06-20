@@ -129,7 +129,12 @@ wt::WtTransitionCellInput make_transition_input(unsigned int case_code) {
 	return input;
 }
 
-void validate_mesh(const wt::WtCellMesh &mesh, const wt::WtCellSample *samples, unsigned int sample_count) {
+void validate_mesh(
+	const wt::WtCellMesh &mesh,
+	const wt::WtCellSample *samples,
+	unsigned int sample_count,
+	unsigned int topology_sample_count
+) {
 	check(mesh.vertex_count <= wt::kWtCellMaxVertexCount, "vertex capacity exceeded");
 	check(mesh.index_count <= wt::kWtCellMaxIndexCount, "index capacity exceeded");
 	check((mesh.index_count % 3U) == 0U, "index count is not triangular");
@@ -142,6 +147,21 @@ void validate_mesh(const wt::WtCellMesh &mesh, const wt::WtCellSample *samples, 
 			std::isfinite(vertex.position.z), "position is not finite");
 		check(nearly_equal(dot(vertex.normal, vertex.normal), 1.0F), "normal is not unit length");
 		check(vertex.material > 0 && vertex.material <= sample_count, "material is outside sample set");
+		check(vertex.endpoint_a < topology_sample_count && vertex.endpoint_b < topology_sample_count,
+			"vertex endpoint provenance is outside topology samples");
+		check(vertex.endpoint_a != vertex.endpoint_b,
+			"vertex endpoint provenance names a zero-length topology edge");
+		const unsigned int aliases[4] = { 0, 2, 6, 8 };
+		if (vertex.endpoint_a < topology_sample_count &&
+			vertex.endpoint_b < topology_sample_count) {
+			const unsigned int source_a = vertex.endpoint_a < sample_count ?
+				vertex.endpoint_a : aliases[vertex.endpoint_a - 9];
+			const unsigned int source_b = vertex.endpoint_b < sample_count ?
+				vertex.endpoint_b : aliases[vertex.endpoint_b - 9];
+			check((samples[source_a].density < 0.0F) !=
+				(samples[source_b].density < 0.0F),
+				"vertex endpoint provenance does not cross the isosurface");
+		}
 		if (vertex.material > 0 && vertex.material <= sample_count) {
 			check(samples[vertex.material - 1].density < 0.0F, "material did not come from solid endpoint");
 		}
@@ -174,7 +194,7 @@ std::uint64_t test_regular_cases(const wt::WtMeshingBackend &backend) {
 		const bool expected_empty = case_code == 0 || case_code == 255;
 		check((status == wt::WtCellStatus::Empty) == expected_empty, "regular empty classification mismatch");
 		if (status == wt::WtCellStatus::Ok) {
-			validate_mesh(mesh, input.samples.data(), input.samples.size());
+			validate_mesh(mesh, input.samples.data(), input.samples.size(), 8);
 			for (std::uint8_t index = 0; index < mesh.vertex_count; ++index) {
 				const wt::WtVec3 p = mesh.vertices[index].position;
 				check(p.x >= 0.0F && p.x <= 1.0F && p.y >= 0.0F && p.y <= 1.0F &&
@@ -214,7 +234,7 @@ std::uint64_t test_transition_cases(const wt::WtMeshingBackend &backend) {
 			const wt::WtCellStatus status = backend.mesh_transition_cell(input, mesh, scratch);
 			check(status == canonical_status, "transition orientation changed status");
 			if (status == wt::WtCellStatus::Ok) {
-				validate_mesh(mesh, input.samples.data(), input.samples.size());
+				validate_mesh(mesh, input.samples.data(), input.samples.size(), 13);
 				check(mesh.vertex_count == canonical_mesh.vertex_count &&
 					mesh.index_count == canonical_mesh.index_count, "transition orientation changed counts");
 				wt::WtVec3 u;

@@ -94,6 +94,9 @@ class-inversion flag appears in project-owned outputs.
   the material of the solid endpoint. Materials are not numerically blended.
 - Half-resolution aliases copy all attributes from their matching unique
   full-resolution corner.
+- Each cell vertex retains its two generic sample endpoint indexes. These are
+  edge provenance for deterministic chunk canonicalization, not official class
+  IDs or lookup-table data.
 
 ## Output and error behavior
 

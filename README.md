@@ -14,9 +14,10 @@ If another project document conflicts with the charter, the charter controls.
 
 ## Current phase
 
-R0, M0, and the M1 exact native cell backend are complete. M2, native chunk and
-LOD ownership with seam proof, is next. No rendered terrain or streaming
-implementation exists yet.
+R0 through M2 are complete. The addon has the exact native cell backend,
+bounded chunk/LOD ownership and scheduling, and deterministic closed-seam
+chunk meshing. M3 render and collision integration is next. No rendered
+terrain implementation exists yet.
 
 ## Tooling
 
@@ -27,7 +28,7 @@ there are no operating-system shell scripts in the project-owned toolchain.
 ```console
 python scripts/bootstrap_toolchain.py
 python scripts/build.py
-python scripts/test_m1.py
+python scripts/test_m2.py
 ```
 
 ## Production strategy

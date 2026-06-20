@@ -86,7 +86,42 @@ objects cross worker queues.
 Viewer snapshots are immutable values identified by ID and monotonic revision.
 Stale viewer revisions and capacity overflow are rejected.
 
-## Current proof
+## Chunk meshing
+
+- Scalar and categorical material values come from an immutable
+  `WtChunkSampleSource` in signed base-grid coordinates.
+- Gradients use central differences one base-grid unit from each sample.
+- Regular chunks contain `16 * 16 * 16` cells at spacing `2^L`.
+- A coarse transition face contains `16 * 16` transition cells. Its full face
+  samples at spacing `2^(L-1)` and its half face is inset by one quarter of the
+  coarse cell spacing by default.
+- Output vertices are chunk-local `float` values paired with a signed 64-bit
+  world origin. Large world origins never enter floating-point interpolation.
+- The cell backend reports each generated vertex's source edge. The chunk
+  mesher recomputes interpolation in double precision and snaps local
+  positions to a `1/65536` base-unit lattice before vertex reuse. Integer chunk
+  origins keep that lattice aligned between neighbors.
+- Regular boundary cells deform toward owned transition half faces. At edges
+  and corners, each transition patch progressively receives the deformation
+  of the other owned faces from zero at its full face to full deformation at
+  its half face. Adjacent patches therefore share the same folded boundary.
+- Vertex reuse is deterministic within each regular or transition buffer and
+  keys position, normal, and material. Failed output is cleared.
+
+Reusable scratch and outputs have fixed limits:
+
+```text
+scalar sample cache       131072
+cell sample cache          32768
+regular vertices           49152
+regular indices            61440
+transition vertices/face    3072
+transition indices/face     9216
+```
+
+Exceeding a cache or buffer limit returns an explicit status.
+
+## M2 proof
 
 `tests/native/test_wt_m2_core.cpp` covers negative coordinates, parent mapping,
 same-LOD leaves, valid 2:1 ownership, two-face LOD corners, overlap rejection,
@@ -94,5 +129,15 @@ invalid LOD differences, priority order, lifecycle transitions, cancellation,
 stale-result rejection, viewer revisions, queue capacity, and 1,000 repeated
 supersession cycles with bounded state.
 
-Chunk mesh and geometrical seam proofs are the remaining M2 work and must
-extend this contract before M2 is marked complete.
+`tests/native/test_wt_m2_chunk_mesh.cpp` covers three same-LOD closed galleries,
+including signed 32-bit coordinate extremes at LOD 20; each of the six
+transition directions; all 12 signed LOD-edge orientations; all eight signed
+LOD-corner orientations; and one translated negative-coordinate corner whose
+center is the world origin. Closed galleries require every quantized triangle
+edge to have exactly two incident triangles. Individual transition tests also
+require exact matching contours at both full and half faces.
+
+The locked chunk aggregate hash is `8d807e44f0160eec`. Debug and optimized
+release builds must produce the same hash. `scripts/test_m2.py` runs both M2
+native contracts, the complete M1 contract, repository validation, and both
+Godot compatibility load tests.

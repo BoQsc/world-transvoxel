@@ -113,6 +113,8 @@ WtCellStatus make_vertex(
 	);
 	vertex.normal = normalized(lerp(sample_a.gradient, sample_b.gradient, alpha));
 	vertex.material = sample_a.density < isovalue ? sample_a.material : sample_b.material;
+	vertex.endpoint_a = endpoint_a;
+	vertex.endpoint_b = endpoint_b;
 	return WtCellStatus::Ok;
 }
 

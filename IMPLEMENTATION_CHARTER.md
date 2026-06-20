@@ -4,7 +4,7 @@ Status: canonical project direction
 
 Last reviewed: 2026-06-20
 
-Current state: M1 exact native cell backend complete; M2 chunk/LOD ownership is next
+Current state: M2 chunk/LOD ownership complete; M3 render/collision integration is next
 
 ## 1. Authority of this document
 
@@ -959,7 +959,7 @@ Exit: the official MIT backend passes the complete isolated native contract.
 
 ### M2 - Chunk and LOD ownership
 
-Status: next.
+Status: complete on 2026-06-20 for Windows x86-64.
 
 Deliverables:
 
@@ -976,6 +976,8 @@ Exit: deterministic multi-chunk test worlds have zero detected open LOD seams
 and no unbounded scheduling state.
 
 ### M3 - Godot render and collision integration
+
+Status: next.
 
 Deliverables:
 
@@ -1085,11 +1087,6 @@ unstructured experimentation.
 
 | Decision | Must be fixed by | Required evidence |
 | --- | --- | --- |
-| Chunk cell/sample dimensions | M1 | padding, cache, and performance tests |
-| Density scalar encoding and isovalue convention | M1 | deterministic contract tests |
-| Material encoding and interpolation | M1 | visual/backend contract |
-| Normal generation policy | M1 | seam and quality tests |
-| Transition ownership convention | M2 | all orientation/corner galleries |
 | Collision sanitation/simplification policy | M3 | physics integration tests |
 | First compressed storage codec | M4 | determinism and throughput tests |
 | Numerical production budgets | M5 | representative hardware traces |
@@ -1107,10 +1104,29 @@ Resolved in M0:
 
 Resolved in M1:
 
+- chunks contain 16 cells per axis, with padded scalar sampling for central
+  differences;
+- runtime density and isovalue are `float`, with negative density solid and
+  equality outside;
+- runtime material is categorical `uint16_t` selected from the solid endpoint;
+- normals interpolate normalized world-space density gradients;
 - project-owned automation uses Python 3.11+ entry points and shared
   cross-platform path/process/download helpers;
 - scripts detect Windows, Linux, and macOS plus x86-64 and ARM64, while runtime
   platform support remains unclaimed until its complete matrix passes.
+
+Resolved in M2:
+
+- active chunks are non-overlapping octree leaves with a validated 2:1
+  face-neighbor invariant;
+- the coarser leaf exclusively owns transitions toward finer face neighbors;
+- chunk output uses local `float` vertices with signed 64-bit integer origins;
+- regular and transition source-edge interpolation is canonicalized on a
+  `1/65536` base-unit local lattice;
+- simultaneous transition faces use progressive cross-face deformation so
+  all signed edge and corner galleries close;
+- native job queues, completion queues, records, viewers, sample caches, and
+  mesh buffers have explicit construction-time bounds.
 
 ## 22. Change and review discipline
 
@@ -1150,27 +1166,28 @@ measurement requirements.
 
 ## 23. Immediate next work
 
-The next and only active milestone is M2.
+The next and only active milestone is M3.
 
 Ordered work:
 
-1. Freeze native chunk keys, sample windows, records, lifecycle states,
-   generation tokens, and revisions.
-2. Define cell and vertex ownership at same-LOD chunk boundaries.
-3. Build a deterministic regular-cell chunk mesher using the M1 backend.
-4. Add bounded per-worker scratch and mesh buffers with explicit overflow
-   failure.
-5. Enforce the 2:1 neighboring LOD invariant before meshing.
-6. Define deterministic transition-face ownership for all six directions.
-7. Generate transition layers and reuse vertices across cells and boundaries.
-8. Add same-LOD, transition, edge, and multi-LOD-corner seam galleries.
-9. Add typed job inputs/results, cancellation, generation tokens, and stale
-   result rejection without Godot scene mutation.
-10. Prove deterministic chunk hashes and bounded scheduling state headlessly.
-11. Record exact M2 evidence and only then mark M2 complete.
+1. Freeze native render-input, collision-input, and main-thread application
+   result contracts without exposing backend or worker-owned containers.
+2. Add bounded render and physics application queues with generation-token
+   rejection before any Godot resource mutation.
+3. Convert ready native chunk buffers into Godot mesh resources on the main
+   thread under an explicit per-frame application budget.
+4. Define and implement collision sanitation for degenerate and extremely thin
+   triangles, retaining separate visual and collision evidence.
+5. Define collision activation distance, readiness state, and stale collision
+   replacement behavior.
+6. Expose typed readiness and queue-latency telemetry needed by moving-viewer
+   tests.
+7. Add headless integration fixtures for movement, cancellation during each
+   stage, bounded application, and resource teardown with work in flight.
+8. Record exact M3 evidence and only then mark M3 complete.
 
-Do not begin rendering, collision integration, editing, persistence, streaming,
-or compute acceleration during M2.
+Do not begin editing, persistence, production streaming, baking, or compute
+acceleration during M3.
 
 ## 24. Final definition of success
 

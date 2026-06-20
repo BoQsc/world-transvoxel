@@ -41,7 +41,7 @@ Exit: exact MIT backend contract passes headless tests.
 
 ## M2 - Chunk and LOD ownership
 
-Status: next.
+Status: complete on 2026-06-20 for Windows x86-64.
 
 - native chunk records and generation tokens;
 - 2:1 LOD invariant;
@@ -52,6 +52,8 @@ Status: next.
 Exit: deterministic multi-chunk galleries have zero open LOD seams.
 
 ## M3 - Render and collision integration
+
+Status: next.
 
 - main-thread application queues;
 - native mesh resources;

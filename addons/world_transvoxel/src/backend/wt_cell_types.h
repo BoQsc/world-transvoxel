@@ -27,6 +27,8 @@ struct WtCellVertex {
 	WtVec3 position;
 	WtVec3 normal;
 	std::uint16_t material = 0;
+	std::uint8_t endpoint_a = 0;
+	std::uint8_t endpoint_b = 0;
 };
 
 struct WtCellMesh {

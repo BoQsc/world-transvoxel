@@ -168,15 +168,18 @@ def output(command: Sequence[os.PathLike[str] | str], *, cwd: Path = REPO_ROOT) 
     return run(command, cwd=cwd, capture=True).stdout.strip()
 
 
-def native_test_path(configuration: str) -> Path:
+def native_test_path(
+    configuration: str,
+    test_name: str = "test_wt_m1_cell_backend",
+) -> Path:
     host = host_platform()
     return (
         REPO_ROOT
         / "build"
         / "native-tests"
         / (
-            "test_wt_m1_cell_backend."
-            f"{configuration}.{host.godot_arch}{host.executable_suffix}"
+            f"{test_name}.{configuration}."
+            f"{host.godot_arch}{host.executable_suffix}"
         )
     )
 

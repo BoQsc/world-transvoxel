@@ -114,6 +114,27 @@ m2_core_test = native_test_env.Program(
     ],
 )
 
+m2_mesh_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_m2_chunk_mesh.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_m2_chunk_mesh.cpp",
+        "tests/native/wt_m2_mesh_test_support.cpp",
+        "addons/world_transvoxel/src/backend/wt_cell_types.cpp",
+        "addons/world_transvoxel/src/backend/wt_transvoxel_mit_backend.cpp",
+        "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/meshing/wt_chunk_mesh_geometry.cpp",
+        "addons/world_transvoxel/src/meshing/wt_chunk_mesher.cpp",
+    ],
+)
+
 normalizer = os.path.join(PROJECT_ROOT, "tools", "normalize_pe_timestamp.py")
 
 
@@ -140,4 +161,9 @@ if env["platform"] == "windows":
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
 
-Default([library, native_test, m2_core_test])
+    env.AddPostAction(
+        m2_mesh_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
+Default([library, native_test, m2_core_test, m2_mesh_test])

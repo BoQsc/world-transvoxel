@@ -20,6 +20,9 @@ struct WtGridPoint {
 	std::int64_t x = 0;
 	std::int64_t y = 0;
 	std::int64_t z = 0;
+
+	bool operator==(const WtGridPoint &other) const noexcept;
+	bool operator!=(const WtGridPoint &other) const noexcept;
 };
 
 struct WtChunkBounds {

@@ -37,6 +37,7 @@ REQUIRED_FILES = (
     "scripts/download_test_engines.py",
     "scripts/test_m0.py",
     "scripts/test_m1.py",
+    "scripts/test_m2.py",
     "tools/normalize_pe_timestamp.py",
     "tests/godot/addon_load_test.gd",
     "tests/godot/addon_load_test.gd.uid",
@@ -59,6 +60,10 @@ REQUIRED_FILES = (
     "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
     "addons/world_transvoxel/src/core/wt_chunk_key.h",
     "addons/world_transvoxel/src/core/wt_chunk_state.h",
+    "addons/world_transvoxel/src/meshing/wt_chunk_mesher.cpp",
+    "addons/world_transvoxel/src/meshing/wt_chunk_mesher.h",
+    "addons/world_transvoxel/src/meshing/wt_chunk_mesh_geometry.cpp",
+    "addons/world_transvoxel/src/meshing/wt_chunk_mesh_geometry.h",
     "addons/world_transvoxel/src/streaming/wt_lod_map.cpp",
     "addons/world_transvoxel/src/streaming/wt_lod_map.h",
     "addons/world_transvoxel/src/streaming/wt_stream_scheduler.cpp",
@@ -69,6 +74,7 @@ REQUIRED_FILES = (
     "docs/ROADMAP.md",
     "docs/milestones/M0_STATUS.md",
     "docs/milestones/M1_STATUS.md",
+    "docs/milestones/M2_STATUS.md",
     "docs/contracts/M1_CELL_BACKEND.md",
     "docs/contracts/M2_CHUNK_LOD_CONTRACT.md",
     "docs/architecture/API_BOUNDARIES.md",
@@ -82,6 +88,9 @@ REQUIRED_FILES = (
     "references/lock.json",
     "tests/native/test_wt_m1_cell_backend.cpp",
     "tests/native/test_wt_m2_core.cpp",
+    "tests/native/test_wt_m2_chunk_mesh.cpp",
+    "tests/native/wt_m2_mesh_test_support.cpp",
+    "tests/native/wt_m2_mesh_test_support.h",
 )
 
 BINARY_SETS = {
@@ -237,7 +246,7 @@ def validate_charter(errors: list[str]) -> None:
 
     required_statements = (
         "This document is the single source of truth",
-        "The next and only active milestone is M2.",
+        "The next and only active milestone is M3.",
         "exact official compatibility is not proven",
     )
     for statement in required_statements:

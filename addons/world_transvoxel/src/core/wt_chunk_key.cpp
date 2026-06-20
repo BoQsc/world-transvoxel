@@ -16,6 +16,14 @@ std::int32_t floor_divide_by_two(std::int32_t value) noexcept {
 
 } // namespace
 
+bool WtGridPoint::operator==(const WtGridPoint &other) const noexcept {
+	return x == other.x && y == other.y && z == other.z;
+}
+
+bool WtGridPoint::operator!=(const WtGridPoint &other) const noexcept {
+	return !(*this == other);
+}
+
 bool WtChunkKey::operator==(const WtChunkKey &other) const noexcept {
 	return x == other.x && y == other.y && z == other.z && lod == other.lod;
 }

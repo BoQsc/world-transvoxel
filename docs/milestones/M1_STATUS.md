@@ -90,4 +90,5 @@ prove multi-cell vertex reuse, chunk ownership, same-LOD seams, LOD transition
 seams, LOD corners, scheduling, rendering, collision, editing, persistence, or
 streaming. Those gates remain finite roadmap work beginning with M2.
 
-The next active milestone is M2: chunk and LOD ownership.
+M2 chunk and LOD ownership subsequently completed. The current active
+milestone is M3: Godot render and collision integration.
