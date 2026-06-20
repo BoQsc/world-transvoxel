@@ -53,8 +53,7 @@ Exit: deterministic multi-chunk galleries have zero open LOD seams.
 
 ## M3 - Render and collision integration
 
-Status: in progress; native payload, collision sanitation, bounded queue, and
-readiness foundation complete.
+Status: complete on 2026-06-20 for Windows x86-64, Godot 4.6.3 and 4.7.
 
 - main-thread application queues;
 - native mesh resources;
@@ -66,6 +65,8 @@ Exit: moving-viewer integration test passes without unbounded queues or frame
 thread readback.
 
 ## M4 - Storage, baking, and editing
+
+Status: next.
 
 - versioned binary world/chunk/edit formats;
 - deterministic baker;

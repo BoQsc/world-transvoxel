@@ -11,6 +11,11 @@ namespace world_transvoxel {
 
 using WtCollisionPayloadPtr = std::shared_ptr<const WtCollisionPayload>;
 
+struct WtCollisionApplyEntry {
+	WtCollisionPayloadPtr payload;
+	std::uint64_t submission_tick = 0;
+};
+
 class WtCollisionSink {
 public:
 	virtual ~WtCollisionSink() = default;
@@ -21,13 +26,16 @@ class WtCollisionApplyQueue {
 public:
 	explicit WtCollisionApplyQueue(std::size_t capacity);
 
-	WtApplicationStatus submit(const WtCollisionPayloadPtr &payload);
-	bool pop(WtCollisionPayloadPtr &payload);
+	WtApplicationStatus submit(
+		const WtCollisionPayloadPtr &payload,
+		std::uint64_t submission_tick
+	);
+	bool pop(WtCollisionApplyEntry &entry);
 	std::size_t size() const noexcept;
 	std::size_t capacity() const noexcept;
 
 private:
-	WtBoundedFifo<WtCollisionPayloadPtr> queue_;
+	WtBoundedFifo<WtCollisionApplyEntry> queue_;
 };
 
 } // namespace world_transvoxel

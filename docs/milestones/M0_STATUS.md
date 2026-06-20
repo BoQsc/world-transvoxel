@@ -89,4 +89,5 @@ M0 contains no regular-cell meshing implementation, transition-cell meshing
 implementation, chunk ownership, streaming, render integration, collision,
 editing, baking, storage, or compute acceleration.
 
-The next and only active milestone is M1: exact native cell backend.
+M1 through M3 subsequently completed. The current active milestone is M4:
+storage, baking, and editing.

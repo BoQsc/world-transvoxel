@@ -15,10 +15,10 @@ func _run_test() -> void:
 		_fail("WorldTransvoxelTerrain could not be instantiated")
 		return
 
-	if terrain.call("get_addon_version") != "0.3.0-m2":
+	if terrain.call("get_addon_version") != "0.4.0-m3":
 		_fail("unexpected addon version")
 		return
-	if terrain.call("get_milestone") != "M2":
+	if terrain.call("get_milestone") != "M3":
 		_fail("unexpected milestone")
 		return
 	if not terrain.call("is_mit_backend_available"):

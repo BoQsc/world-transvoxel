@@ -31,6 +31,10 @@ struct WtApplicationMetrics {
 	std::uint64_t unrequired_collision = 0;
 	std::uint64_t sink_failures = 0;
 	std::uint64_t queue_rejections = 0;
+	std::uint64_t render_latency_frames_total = 0;
+	std::uint64_t render_latency_frames_maximum = 0;
+	std::uint64_t collision_latency_frames_total = 0;
+	std::uint64_t collision_latency_frames_maximum = 0;
 };
 
 struct WtApplicationBatchResult {
@@ -75,11 +79,13 @@ private:
 	WtChunkApplicationRecord *find_record_mutable(const WtChunkKey &key) noexcept;
 	std::size_t apply_render(
 		std::size_t budget,
-		WtRenderSink &sink
+		WtRenderSink &sink,
+		std::uint64_t application_tick
 	);
 	std::size_t apply_collision(
 		std::size_t budget,
-		WtCollisionSink &sink
+		WtCollisionSink &sink,
+		std::uint64_t application_tick
 	);
 
 	std::size_t record_capacity_ = 0;
@@ -90,6 +96,7 @@ private:
 	std::atomic<std::uint64_t> asynchronous_render_submissions_{ 0 };
 	std::atomic<std::uint64_t> asynchronous_collision_submissions_{ 0 };
 	std::atomic<std::uint64_t> asynchronous_queue_rejections_{ 0 };
+	std::atomic<std::uint64_t> application_tick_{ 0 };
 };
 
 } // namespace world_transvoxel

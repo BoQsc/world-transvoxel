@@ -2,10 +2,37 @@
 
 #include "backend/wt_transvoxel_mit_backend.h"
 #include "core/wt_version.h"
+#include "physics/wt_godot_collision_sink.h"
+#include "render/wt_godot_render_sink.h"
+#include "services/wt_chunk_application.h"
+#include "testing/wt_m3_integration_fixture.h"
 
 #include <godot_cpp/core/class_db.hpp>
 
+#include <algorithm>
+#include <memory>
+
 namespace world_transvoxel {
+
+WorldTransvoxelTerrain::WorldTransvoxelTerrain() {
+	application_ = std::make_unique<WtChunkApplicationService>(256, 128, 128);
+	render_sink_ = std::make_unique<WtGodotRenderSink>(*this);
+	collision_sink_ = std::make_unique<WtGodotCollisionSink>(*this);
+	integration_fixture_ = std::make_unique<WtM3IntegrationFixture>();
+	set_process(true);
+}
+
+WorldTransvoxelTerrain::~WorldTransvoxelTerrain() = default;
+
+void WorldTransvoxelTerrain::_process(double delta) {
+	(void)delta;
+	application_->apply(
+		render_apply_budget_,
+		collision_apply_budget_,
+		*render_sink_,
+		*collision_sink_
+	);
+}
 
 void WorldTransvoxelTerrain::_bind_methods() {
 	godot::ClassDB::bind_method(
@@ -32,6 +59,78 @@ void WorldTransvoxelTerrain::_bind_methods() {
 		godot::D_METHOD("get_backend_upstream_revision"),
 		&WorldTransvoxelTerrain::get_backend_upstream_revision
 	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("set_render_apply_budget", "budget"),
+		&WorldTransvoxelTerrain::set_render_apply_budget
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_render_apply_budget"),
+		&WorldTransvoxelTerrain::get_render_apply_budget
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("set_collision_apply_budget", "budget"),
+		&WorldTransvoxelTerrain::set_collision_apply_budget
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_collision_apply_budget"),
+		&WorldTransvoxelTerrain::get_collision_apply_budget
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_render_resource_count"),
+		&WorldTransvoxelTerrain::get_render_resource_count
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_collision_resource_count"),
+		&WorldTransvoxelTerrain::get_collision_resource_count
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_queued_render_count"),
+		&WorldTransvoxelTerrain::get_queued_render_count
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_queued_collision_count"),
+		&WorldTransvoxelTerrain::get_queued_collision_count
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_render_latency_frames_maximum"),
+		&WorldTransvoxelTerrain::get_render_latency_frames_maximum
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_collision_latency_frames_maximum"),
+		&WorldTransvoxelTerrain::get_collision_latency_frames_maximum
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("_m3_test_submit_generation", "generation", "collision_required"),
+		&WorldTransvoxelTerrain::_m3_test_submit_generation
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("_m3_test_set_collision_distance", "distance"),
+		&WorldTransvoxelTerrain::_m3_test_set_collision_distance
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("_m3_test_fully_ready"),
+		&WorldTransvoxelTerrain::_m3_test_fully_ready
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("_m3_test_render_generation"),
+		&WorldTransvoxelTerrain::_m3_test_render_generation
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("_m3_test_collision_generation"),
+		&WorldTransvoxelTerrain::_m3_test_collision_generation
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("_m3_test_stale_render_count"),
+		&WorldTransvoxelTerrain::_m3_test_stale_render_count
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("_m3_test_stale_collision_count"),
+		&WorldTransvoxelTerrain::_m3_test_stale_collision_count
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("_m3_test_forget_chunk"),
+		&WorldTransvoxelTerrain::_m3_test_forget_chunk
+	);
 }
 
 godot::String WorldTransvoxelTerrain::get_addon_version() const {
@@ -56,6 +155,93 @@ godot::String WorldTransvoxelTerrain::get_backend_license() const {
 
 godot::String WorldTransvoxelTerrain::get_backend_upstream_revision() const {
 	return wt_get_transvoxel_mit_backend().get_info().upstream_revision;
+}
+
+void WorldTransvoxelTerrain::set_render_apply_budget(std::int64_t budget) {
+	render_apply_budget_ = static_cast<std::size_t>(
+		std::clamp<std::int64_t>(budget, 0, 128)
+	);
+}
+
+std::int64_t WorldTransvoxelTerrain::get_render_apply_budget() const noexcept {
+	return static_cast<std::int64_t>(render_apply_budget_);
+}
+
+void WorldTransvoxelTerrain::set_collision_apply_budget(std::int64_t budget) {
+	collision_apply_budget_ = static_cast<std::size_t>(
+		std::clamp<std::int64_t>(budget, 0, 128)
+	);
+}
+
+std::int64_t WorldTransvoxelTerrain::get_collision_apply_budget() const noexcept {
+	return static_cast<std::int64_t>(collision_apply_budget_);
+}
+
+std::int64_t WorldTransvoxelTerrain::get_render_resource_count() const noexcept {
+	return static_cast<std::int64_t>(render_sink_->resource_count());
+}
+
+std::int64_t WorldTransvoxelTerrain::get_collision_resource_count() const noexcept {
+	return static_cast<std::int64_t>(collision_sink_->resource_count());
+}
+
+std::int64_t WorldTransvoxelTerrain::get_queued_render_count() const noexcept {
+	return static_cast<std::int64_t>(application_->queued_render_count());
+}
+
+std::int64_t WorldTransvoxelTerrain::get_queued_collision_count() const noexcept {
+	return static_cast<std::int64_t>(application_->queued_collision_count());
+}
+
+std::int64_t WorldTransvoxelTerrain::get_render_latency_frames_maximum() const noexcept {
+	return static_cast<std::int64_t>(
+		application_->get_metrics().render_latency_frames_maximum
+	);
+}
+
+std::int64_t WorldTransvoxelTerrain::get_collision_latency_frames_maximum() const noexcept {
+	return static_cast<std::int64_t>(
+		application_->get_metrics().collision_latency_frames_maximum
+	);
+}
+
+bool WorldTransvoxelTerrain::_m3_test_submit_generation(
+	std::int64_t generation,
+	bool collision_required
+) {
+	return integration_fixture_->submit_generation(
+		generation, collision_required, *application_
+	);
+}
+
+bool WorldTransvoxelTerrain::_m3_test_set_collision_distance(double distance) {
+	return integration_fixture_->set_collision_distance(
+		distance, *application_, *collision_sink_
+	);
+}
+
+bool WorldTransvoxelTerrain::_m3_test_fully_ready() const noexcept {
+	return integration_fixture_->fully_ready(*application_);
+}
+
+std::int64_t WorldTransvoxelTerrain::_m3_test_render_generation() const noexcept {
+	return integration_fixture_->render_generation(*render_sink_);
+}
+
+std::int64_t WorldTransvoxelTerrain::_m3_test_collision_generation() const noexcept {
+	return integration_fixture_->collision_generation(*collision_sink_);
+}
+
+std::int64_t WorldTransvoxelTerrain::_m3_test_stale_render_count() const noexcept {
+	return integration_fixture_->stale_render_count(*application_);
+}
+
+std::int64_t WorldTransvoxelTerrain::_m3_test_stale_collision_count() const noexcept {
+	return integration_fixture_->stale_collision_count(*application_);
+}
+
+void WorldTransvoxelTerrain::_m3_test_forget_chunk() {
+	integration_fixture_->forget(*application_, *render_sink_, *collision_sink_);
 }
 
 } // namespace world_transvoxel

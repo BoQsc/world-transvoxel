@@ -14,11 +14,11 @@ If another project document conflicts with the charter, the charter controls.
 
 ## Current phase
 
-R0 through M2 are complete. The addon has the exact native cell backend,
-bounded chunk/LOD ownership and scheduling, and deterministic closed-seam
-chunk meshing. M3 render and collision integration is in progress: native
-payload preparation, collision sanitation, bounded application queues, and
-readiness are implemented; Godot resource integration remains.
+R0 through M3 are complete. The addon now has the exact native cell backend,
+closed-seam chunk meshing, bounded scheduling, Godot `ArrayMesh` rendering,
+sanitized concave collision, generation-checked application, and readiness
+telemetry. M4 storage, baking, and editing is next; production streaming is
+still later roadmap work.
 
 ## Tooling
 

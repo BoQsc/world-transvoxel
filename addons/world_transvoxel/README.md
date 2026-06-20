@@ -17,12 +17,12 @@ M0 through M2 provide:
 - host-aware Python build orchestration using Zig and SCons;
 - validated Windows x86-64 debug and release builds.
 
-M2 does not create Godot mesh resources or implement collision, editing,
-storage, production streaming, baking, or compute.
+M3 adds deterministic render payloads, Godot `ArrayMesh` resources, sanitized
+concave collision, distance hysteresis, bounded main-thread application,
+generation-checked readiness, and application-latency telemetry.
 
-The active M3 work now includes native render payload preparation, collision
-sanitation, bounded main-thread application queues, and generation-checked
-readiness. Godot mesh/physics resource creation is not complete yet.
+M3 does not implement editing, storage, production streaming, baking, or
+compute.
 
 Build from the repository root:
 
@@ -30,7 +30,7 @@ Build from the repository root:
 python scripts/build.py
 ```
 
-Validate the active M3 foundation and all prior milestone contracts:
+Validate M3 and all prior milestone contracts:
 
 ```console
 python scripts/test_m3.py

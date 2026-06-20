@@ -11,6 +11,11 @@ namespace world_transvoxel {
 
 using WtRenderPayloadPtr = std::shared_ptr<const WtRenderPayload>;
 
+struct WtRenderApplyEntry {
+	WtRenderPayloadPtr payload;
+	std::uint64_t submission_tick = 0;
+};
+
 class WtRenderSink {
 public:
 	virtual ~WtRenderSink() = default;
@@ -21,13 +26,13 @@ class WtRenderApplyQueue {
 public:
 	explicit WtRenderApplyQueue(std::size_t capacity);
 
-	WtApplicationStatus submit(const WtRenderPayloadPtr &payload);
-	bool pop(WtRenderPayloadPtr &payload);
+	WtApplicationStatus submit(const WtRenderPayloadPtr &payload, std::uint64_t submission_tick);
+	bool pop(WtRenderApplyEntry &entry);
 	std::size_t size() const noexcept;
 	std::size_t capacity() const noexcept;
 
 private:
-	WtBoundedFifo<WtRenderPayloadPtr> queue_;
+	WtBoundedFifo<WtRenderApplyEntry> queue_;
 };
 
 } // namespace world_transvoxel

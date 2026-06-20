@@ -4,7 +4,7 @@ Status: canonical project direction
 
 Last reviewed: 2026-06-20
 
-Current state: M3 render/collision integration in progress; native application foundation complete
+Current state: M3 render/collision integration complete; M4 storage/baking/editing is next
 
 ## 1. Authority of this document
 
@@ -977,7 +977,7 @@ and no unbounded scheduling state.
 
 ### M3 - Godot render and collision integration
 
-Status: next.
+Status: complete on 2026-06-20 for Windows x86-64, Godot 4.6.3 and 4.7.
 
 Deliverables:
 
@@ -995,6 +995,8 @@ Exit: active movement tests pass without unbounded queues, invalid collisions,
 or frame-thread readback.
 
 ### M4 - Storage, baking, and editing
+
+Status: next.
 
 Deliverables:
 
@@ -1087,7 +1089,6 @@ unstructured experimentation.
 
 | Decision | Must be fixed by | Required evidence |
 | --- | --- | --- |
-| Collision sanitation/simplification policy | M3 | physics integration tests |
 | First compressed storage codec | M4 | determinism and throughput tests |
 | Numerical production budgets | M5 | representative hardware traces |
 | First compute-accelerated workload | M6 | end-to-end CPU/GPU comparison |
@@ -1128,6 +1129,25 @@ Resolved in M2:
 - native job queues, completion queues, records, viewers, sample caches, and
   mesh buffers have explicit construction-time bounds.
 
+Resolved in M3:
+
+- render payloads combine regular then face-ordered transition buffers and
+  retain local positions, signed world origins, normals, and `uint16_t`
+  materials;
+- exact-zero-area visual triangles fail payload preparation;
+- collision removes degenerate triangles and triangles with scale-independent
+  squared shape ratio at or below `1e-12`;
+- collision demand uses 96-unit activation and 128-unit deactivation
+  hysteresis for the integration baseline, while production distances remain
+  an M5 budget decision;
+- worker-safe render and collision submission queues are separate, bounded,
+  and consumed only on the Godot main thread;
+- stale generations are rejected before `ArrayMesh` or physics mutation;
+- material IDs are transferred to Godot mesh `UV2.x` while authoritative
+  payloads retain categorical `uint16_t` values;
+- application telemetry records independent readiness, queue depth, stale
+  work, failures, and total/maximum latency in application-frame ticks.
+
 ## 22. Change and review discipline
 
 Every implementation change should answer:
@@ -1166,28 +1186,29 @@ measurement requirements.
 
 ## 23. Immediate next work
 
-The next and only active milestone is M3.
+The next and only active milestone is M4.
 
 Ordered work:
 
-1. Freeze native render-input, collision-input, and main-thread application
-   result contracts without exposing backend or worker-owned containers.
-2. Add bounded render and physics application queues with generation-token
-   rejection before any Godot resource mutation.
-3. Convert ready native chunk buffers into Godot mesh resources on the main
-   thread under an explicit per-frame application budget.
-4. Define and implement collision sanitation for degenerate and extremely thin
-   triangles, retaining separate visual and collision evidence.
-5. Define collision activation distance, readiness state, and stale collision
-   replacement behavior.
-6. Expose typed readiness and queue-latency telemetry needed by moving-viewer
-   tests.
-7. Add headless integration fixtures for movement, cancellation during each
-   stage, bounded application, and resource teardown with work in flight.
-8. Record exact M3 evidence and only then mark M3 complete.
+1. Freeze versioned `wtworld`, `wtchunk`, `wtedit`, and optional `wttrace`
+   headers, section directories, feature flags, checksums, and size limits.
+2. Implement bounded little-endian readers and deterministic writers with the
+   uncompressed `none` codec as the required baseline.
+3. Add direct range-readable chunk pages and explicit source/dependency
+   manifests without embedding backend lookup data.
+4. Build deterministic command-line and editor baking entry points using the
+   native sampling and chunk contracts.
+5. Define typed edit commands, atomic transactions, world revisions, and a
+   spatial index that invalidates affected same-LOD and dependent lower-LOD
+   chunks.
+6. Implement edit journal replay, compaction, save/load, and backend-neutral
+   authoritative state reconstruction.
+7. Add truncation, corrupt offset/size/hash, unknown feature, migration, and
+   deterministic byte-agreement tests.
+8. Record exact M4 evidence and only then mark M4 complete.
 
-Do not begin editing, persistence, production streaming, baking, or compute
-acceleration during M3.
+Do not begin production streaming, representative soak budgets, or compute
+acceleration during M4.
 
 ## 24. Final definition of success
 

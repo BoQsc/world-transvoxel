@@ -5,15 +5,19 @@ namespace world_transvoxel {
 WtRenderApplyQueue::WtRenderApplyQueue(std::size_t capacity) : queue_(capacity) {
 }
 
-WtApplicationStatus WtRenderApplyQueue::submit(const WtRenderPayloadPtr &payload) {
+WtApplicationStatus WtRenderApplyQueue::submit(
+	const WtRenderPayloadPtr &payload,
+	std::uint64_t submission_tick
+) {
 	if (!payload || !wt_is_valid_chunk_key(payload->key) || payload->generation.value == 0) {
 		return WtApplicationStatus::InvalidInput;
 	}
-	return queue_.push(payload) ? WtApplicationStatus::Ok : WtApplicationStatus::QueueFull;
+	return queue_.push({ payload, submission_tick }) ?
+		WtApplicationStatus::Ok : WtApplicationStatus::QueueFull;
 }
 
-bool WtRenderApplyQueue::pop(WtRenderPayloadPtr &payload) {
-	return queue_.pop(payload);
+bool WtRenderApplyQueue::pop(WtRenderApplyEntry &entry) {
+	return queue_.pop(entry);
 }
 
 std::size_t WtRenderApplyQueue::size() const noexcept {

@@ -58,6 +58,7 @@ sources = (
     + Glob("addons/world_transvoxel/src/render/*.cpp")
     + Glob("addons/world_transvoxel/src/services/*.cpp")
     + Glob("addons/world_transvoxel/src/streaming/*.cpp")
+    + Glob("addons/world_transvoxel/src/testing/*.cpp")
 )
 
 variant_root = os.path.join(

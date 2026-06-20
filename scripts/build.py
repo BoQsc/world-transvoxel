@@ -40,7 +40,7 @@ def build(configuration: str = "all", jobs: int = 0, skip_bootstrap: bool = Fals
                 f"target={target}",
                 f"platform={host.godot_platform}",
                 f"arch={host.godot_arch}",
-                "build_profile=build_profiles/m0.json",
+                "build_profile=build_profiles/world_transvoxel.json",
             ],
             cwd=REPO_ROOT,
         )

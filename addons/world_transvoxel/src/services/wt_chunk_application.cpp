@@ -83,7 +83,9 @@ WtApplicationStatus WtChunkApplicationService::forget_chunk(const WtChunkKey &ke
 WtApplicationStatus WtChunkApplicationService::submit_render(
 	const WtRenderPayloadPtr &payload
 ) {
-	const WtApplicationStatus status = render_queue_.submit(payload);
+	const WtApplicationStatus status = render_queue_.submit(
+		payload, application_tick_.load(std::memory_order_relaxed)
+	);
 	if (status == WtApplicationStatus::Ok) {
 		asynchronous_render_submissions_.fetch_add(1, std::memory_order_relaxed);
 	} else if (status == WtApplicationStatus::QueueFull) {
@@ -95,7 +97,9 @@ WtApplicationStatus WtChunkApplicationService::submit_render(
 WtApplicationStatus WtChunkApplicationService::submit_collision(
 	const WtCollisionPayloadPtr &payload
 ) {
-	const WtApplicationStatus status = collision_queue_.submit(payload);
+	const WtApplicationStatus status = collision_queue_.submit(
+		payload, application_tick_.load(std::memory_order_relaxed)
+	);
 	if (status == WtApplicationStatus::Ok) {
 		asynchronous_collision_submissions_.fetch_add(1, std::memory_order_relaxed);
 	} else if (status == WtApplicationStatus::QueueFull) {
@@ -110,20 +114,29 @@ WtApplicationBatchResult WtChunkApplicationService::apply(
 	WtRenderSink &render_sink,
 	WtCollisionSink &collision_sink
 ) {
+	const std::uint64_t tick =
+		application_tick_.fetch_add(1, std::memory_order_relaxed) + 1;
 	return {
-		apply_render(render_budget, render_sink),
-		apply_collision(collision_budget, collision_sink),
+		apply_render(render_budget, render_sink, tick),
+		apply_collision(collision_budget, collision_sink, tick),
 	};
 }
 
 std::size_t WtChunkApplicationService::apply_render(
 	std::size_t budget,
-	WtRenderSink &sink
+	WtRenderSink &sink,
+	std::uint64_t application_tick
 ) {
 	std::size_t processed = 0;
-	WtRenderPayloadPtr payload;
-	while (processed < budget && render_queue_.pop(payload)) {
+	WtRenderApplyEntry entry;
+	while (processed < budget && render_queue_.pop(entry)) {
 		++processed;
+		const WtRenderPayloadPtr &payload = entry.payload;
+		const std::uint64_t latency = application_tick - entry.submission_tick;
+		metrics_.render_latency_frames_total += latency;
+		metrics_.render_latency_frames_maximum = std::max(
+			metrics_.render_latency_frames_maximum, latency
+		);
 		WtChunkApplicationRecord *record = find_record_mutable(payload->key);
 		if (record == nullptr || record->generation != payload->generation) {
 			++metrics_.stale_render;
@@ -141,12 +154,19 @@ std::size_t WtChunkApplicationService::apply_render(
 
 std::size_t WtChunkApplicationService::apply_collision(
 	std::size_t budget,
-	WtCollisionSink &sink
+	WtCollisionSink &sink,
+	std::uint64_t application_tick
 ) {
 	std::size_t processed = 0;
-	WtCollisionPayloadPtr payload;
-	while (processed < budget && collision_queue_.pop(payload)) {
+	WtCollisionApplyEntry entry;
+	while (processed < budget && collision_queue_.pop(entry)) {
 		++processed;
+		const WtCollisionPayloadPtr &payload = entry.payload;
+		const std::uint64_t latency = application_tick - entry.submission_tick;
+		metrics_.collision_latency_frames_total += latency;
+		metrics_.collision_latency_frames_maximum = std::max(
+			metrics_.collision_latency_frames_maximum, latency
+		);
 		WtChunkApplicationRecord *record = find_record_mutable(payload->key);
 		if (record == nullptr || record->generation != payload->generation) {
 			++metrics_.stale_collision;

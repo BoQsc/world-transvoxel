@@ -1,6 +1,6 @@
 # M3 Render, Collision, and Application Contract
 
-Status: normative for M3 implementation
+Status: normative and complete for M3
 
 ## Execution boundary
 
@@ -26,6 +26,9 @@ indices, non-finite attributes, zero-area triangles, invalid origins, and
 capacity overflow fail the complete build and clear output.
 
 Maximum combined payload sizes are 67,584 vertices and 116,736 indices.
+Godot integration maps material IDs to `UV2.x` as exactly representable float
+values for later terrain shaders; topology payloads retain authoritative
+`uint16_t` values.
 
 ## Collision sanitation
 
@@ -79,6 +82,8 @@ readiness bits.
 - Collision results are discarded when collision is no longer required.
 - Stale, unrequired, and sink-failed entries consume application budget so a
   frame cannot perform unbounded cleanup.
+- Queue latency is recorded in application-frame ticks with total and maximum
+  values for render and collision independently.
 - A chunk is fully ready when visual output is ready and collision output is
   either ready or not required.
 - A zero budget performs no queue work or record scan.
@@ -94,7 +99,12 @@ distance hysteresis, bounded queues and records, independent readiness,
 pre-sink stale rejection, frame budgets, and 1,000 supersession cycles with
 bounded state in debug and optimized builds.
 
-M3 is not complete at this contract stage. Remaining work is Godot `ArrayMesh`
-and concave collision resource creation, chunk resource replacement/removal,
-main-thread integration, and the moving-viewer/teardown test required by the
-roadmap exit condition.
+`tests/godot/m3_integration_test.gd` applies an actual M2-generated sphere to
+Godot `ArrayMesh` and `ConcavePolygonShape3D` resources. It covers zero and
+one-item frame budgets, generation replacement, stale rejection before Godot,
+16 collision activation/deactivation movement cycles, resource bounds,
+in-flight eviction, and shutdown with queued work.
+
+The integration runner executes this contract against debug and optimized
+addon builds on both supported Godot versions. No GPU readback or frame-thread
+wait is used.

@@ -219,6 +219,12 @@ void test_application_service(
 		"stale application metrics mismatch");
 	check(metrics.applied_render == 1 && metrics.applied_collision == 1,
 		"applied resource metrics mismatch");
+	check(metrics.render_latency_frames_total == stale_cycles + 3 &&
+		metrics.render_latency_frames_maximum == 2,
+		"render application latency metrics mismatch");
+	check(metrics.collision_latency_frames_total == 2 &&
+		metrics.collision_latency_frames_maximum == 1,
+		"collision application latency metrics mismatch");
 }
 
 } // namespace
