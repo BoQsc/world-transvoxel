@@ -86,11 +86,11 @@ foreach ($Engine in $Engines) {
             "--path",
             $RepoRoot,
             "--script",
-            "res://tests/godot/m0_load_test.gd"
+            "res://tests/godot/addon_load_test.gd"
         ) `
         "$VersionName-runtime-load"
-    if ($RuntimeOutput -notmatch "M0_LOAD_TEST_PASS") {
-        throw "M0 runtime load test did not print its pass marker with $Version."
+    if ($RuntimeOutput -notmatch "ADDON_LOAD_TEST_PASS") {
+        throw "Addon runtime load test did not print its pass marker with $Version."
     }
 }
 
@@ -115,12 +115,12 @@ try {
                 "--path",
                 $RepoRoot,
                 "--script",
-                "res://tests/godot/m0_load_test.gd"
+                "res://tests/godot/addon_load_test.gd"
             ) `
             "$VersionName-template-release-load"
-        if ($ReleaseOutput -notmatch "M0_LOAD_TEST_PASS") {
+        if ($ReleaseOutput -notmatch "ADDON_LOAD_TEST_PASS") {
             throw (
-                "M0 template_release load test did not print its pass marker " +
+                "Addon template_release load test did not print its pass marker " +
                 "with Godot $VersionName."
             )
         }

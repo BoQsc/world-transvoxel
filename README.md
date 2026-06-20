@@ -14,8 +14,8 @@ If another project document conflicts with the charter, the charter controls.
 
 ## Current phase
 
-R0 research lock and M0 native addon baseline are complete. M1, the exact
-native regular/transition cell backend, is next. No chunk terrain or streaming
+R0, M0, and the M1 exact native cell backend are complete. M2, native chunk and
+LOD ownership with seam proof, is next. No rendered terrain or streaming
 implementation exists yet.
 
 ## Production strategy

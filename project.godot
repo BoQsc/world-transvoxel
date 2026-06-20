@@ -9,7 +9,7 @@ config_version=5
 
 [application]
 
-config/name="World Transvoxel M0"
+config/name="World Transvoxel"
 
 [editor_plugins]
 

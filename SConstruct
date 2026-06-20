@@ -69,6 +69,21 @@ library = env.SharedLibrary(
     source=objects,
 )
 
+native_test_env = env.Clone()
+native_test_sources = [
+    "tests/native/test_wt_m1_cell_backend.cpp",
+    "addons/world_transvoxel/src/backend/wt_cell_types.cpp",
+    "addons/world_transvoxel/src/backend/wt_transvoxel_mit_backend.cpp",
+]
+native_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_m1_cell_backend.{}.{}.exe".format(env["target"], env["arch"]),
+    ),
+    source=native_test_sources,
+)
+
 normalizer = os.path.join(PROJECT_ROOT, "tools", "normalize_pe_timestamp.py")
 
 
@@ -84,4 +99,9 @@ env.AddPostAction(
     Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
 )
 
-Default(library)
+env.AddPostAction(
+    native_test,
+    Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+)
+
+Default([library, native_test])

@@ -4,7 +4,7 @@ Status: canonical project direction
 
 Last reviewed: 2026-06-20
 
-Current state: M0 addon baseline complete; M1 exact native cell backend is next
+Current state: M1 exact native cell backend complete; M2 chunk/LOD ownership is next
 
 ## 1. Authority of this document
 
@@ -936,6 +936,8 @@ that the official files and license boundary are intact.
 
 ### M1 - Exact native cell backend
 
+Status: complete on 2026-06-20 for Windows x86-64.
+
 Deliverables:
 
 - typed backend contract;
@@ -952,6 +954,8 @@ Deliverables:
 Exit: the official MIT backend passes the complete isolated native contract.
 
 ### M2 - Chunk and LOD ownership
+
+Status: next.
 
 Deliverables:
 
@@ -1135,27 +1139,27 @@ measurement requirements.
 
 ## 23. Immediate next work
 
-The next and only active milestone is M1.
+The next and only active milestone is M2.
 
 Ordered work:
 
-1. Freeze the typed cell-backend input and output contract.
-2. Define density sign, isovalue, coordinate handedness, winding, interpolation,
-   material, and normal conventions.
-3. Expose official regular-cell meshing through the MIT adapter.
-4. Expose official transition-cell meshing without leaking table types or class
-   IDs through project headers.
-5. Add reusable thread-local scratch storage.
-6. Build exhaustive regular-case tests.
-7. Build exhaustive transition-case tests.
-8. Cover all six transition orientations.
-9. Add vertex/index bounds, winding, material, normal, invalid-input, and
-   deterministic-hash checks.
-10. Run the contract headlessly in debug and release builds.
-11. Record exact M1 evidence and only then mark M1 complete.
+1. Freeze native chunk keys, sample windows, records, lifecycle states,
+   generation tokens, and revisions.
+2. Define cell and vertex ownership at same-LOD chunk boundaries.
+3. Build a deterministic regular-cell chunk mesher using the M1 backend.
+4. Add bounded per-worker scratch and mesh buffers with explicit overflow
+   failure.
+5. Enforce the 2:1 neighboring LOD invariant before meshing.
+6. Define deterministic transition-face ownership for all six directions.
+7. Generate transition layers and reuse vertices across cells and boundaries.
+8. Add same-LOD, transition, edge, and multi-LOD-corner seam galleries.
+9. Add typed job inputs/results, cancellation, generation tokens, and stale
+   result rejection without Godot scene mutation.
+10. Prove deterministic chunk hashes and bounded scheduling state headlessly.
+11. Record exact M2 evidence and only then mark M2 complete.
 
-Do not begin chunks, streaming, rendering, collision integration, editing,
-baking, or compute acceleration during M1.
+Do not begin rendering, collision integration, editing, persistence, streaming,
+or compute acceleration during M2.
 
 ## 24. Final definition of success
 

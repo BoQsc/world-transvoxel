@@ -33,8 +33,10 @@ REQUIRED_FILES = (
     "scripts/build.ps1",
     "scripts/download_test_engines.ps1",
     "scripts/test_m0.ps1",
+    "scripts/test_m1.ps1",
     "tools/normalize_pe_timestamp.py",
-    "tests/godot/m0_load_test.gd",
+    "tests/godot/addon_load_test.gd",
+    "tests/godot/addon_load_test.gd.uid",
     "addons/world_transvoxel/LICENSE_SCOPE.md",
     "addons/world_transvoxel/README.md",
     "addons/world_transvoxel/plugin.cfg",
@@ -45,14 +47,19 @@ REQUIRED_FILES = (
     "addons/world_transvoxel/src/api/world_transvoxel_terrain.cpp",
     "addons/world_transvoxel/src/api/world_transvoxel_terrain.h",
     "addons/world_transvoxel/src/backend/wt_meshing_backend.h",
+    "addons/world_transvoxel/src/backend/wt_cell_types.cpp",
+    "addons/world_transvoxel/src/backend/wt_cell_types.h",
     "addons/world_transvoxel/src/backend/wt_transvoxel_mit_backend.cpp",
     "addons/world_transvoxel/src/backend/wt_transvoxel_mit_backend.h",
     "addons/world_transvoxel/src/core/wt_version.h",
+    "addons/world_transvoxel/src/core/wt_meshing_limits.h",
     "addons/world_transvoxel/thirdparty/transvoxel_mit/LICENSE",
     "addons/world_transvoxel/thirdparty/transvoxel_mit/Transvoxel.cpp",
     "addons/world_transvoxel/thirdparty/transvoxel_mit/UPSTREAM.md",
     "docs/ROADMAP.md",
     "docs/milestones/M0_STATUS.md",
+    "docs/milestones/M1_STATUS.md",
+    "docs/contracts/M1_CELL_BACKEND.md",
     "docs/architecture/API_BOUNDARIES.md",
     "docs/architecture/ARCHITECTURE.md",
     "docs/architecture/BINARY_FORMATS.md",
@@ -62,6 +69,7 @@ REQUIRED_FILES = (
     "docs/research/VOXEL_TOOLS_FINDINGS.md",
     "references/manifest.json",
     "references/lock.json",
+    "tests/native/test_wt_m1_cell_backend.cpp",
 )
 
 M0_BINARIES = (
@@ -173,7 +181,7 @@ def validate_charter(errors: list[str]) -> None:
 
     required_statements = (
         "This document is the single source of truth",
-        "The next and only active milestone is M1.",
+        "The next and only active milestone is M2.",
         "exact official compatibility is not proven",
     )
     for statement in required_statements:

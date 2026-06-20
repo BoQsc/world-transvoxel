@@ -29,7 +29,7 @@ Exit: addon loads on the primary Godot baseline and one later minor version.
 
 ## M1 - Exact native cell backend
 
-Status: next.
+Status: complete on 2026-06-20 for Windows x86-64.
 
 - typed native API;
 - exhaustive 256 regular and 512 transition cases;
@@ -40,6 +40,8 @@ Status: next.
 Exit: exact MIT backend contract passes headless tests.
 
 ## M2 - Chunk and LOD ownership
+
+Status: next.
 
 - native chunk records and generation tokens;
 - 2:1 LOD invariant;
