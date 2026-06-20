@@ -133,5 +133,5 @@ Persistent scalar/material encodings remain an M4 binary-format decision.
 It checks capacities, index bounds, finite positions, normal length, material
 ownership, canonical orientation equivalence, representative winding,
 isovalue equality, invalid input, scratch reuse, repeatability, and locked
-aggregate hashes. `scripts/test_m1.ps1` requires matching debug/release hashes
+aggregate hashes. `scripts/test_m1.py` requires matching debug/release hashes
 and then reruns the Godot 4.6.3/4.7 addon compatibility suite.

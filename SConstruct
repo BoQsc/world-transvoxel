@@ -7,11 +7,16 @@ import sys
 
 REQUIRED_ZIG_VERSION = "0.16.0"
 PROJECT_ROOT = os.path.abspath(os.getcwd())
-ZIG_EXE = os.path.join(PROJECT_ROOT, ".tools", "zig", "zig.exe")
+ZIG_EXE = os.path.join(
+    PROJECT_ROOT,
+    ".tools",
+    "zig",
+    "zig.exe" if sys.platform == "win32" else "zig",
+)
 
 if not os.path.isfile(ZIG_EXE):
     raise RuntimeError(
-        "Pinned Zig is missing. Run scripts/bootstrap_toolchain.ps1 first."
+        "Pinned Zig is missing. Run python scripts/bootstrap_toolchain.py first."
     )
 
 zig_version = subprocess.check_output([ZIG_EXE, "version"], text=True).strip()
@@ -79,7 +84,11 @@ native_test = native_test_env.Program(
     os.path.join(
         "build",
         "native-tests",
-        "test_wt_m1_cell_backend.{}.{}.exe".format(env["target"], env["arch"]),
+        "test_wt_m1_cell_backend.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
     ),
     source=native_test_sources,
 )
@@ -94,14 +103,15 @@ def normalize_pe_timestamp(target, source, env):
     return 0
 
 
-env.AddPostAction(
-    library,
-    Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
-)
+if env["platform"] == "windows":
+    env.AddPostAction(
+        library,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
 
-env.AddPostAction(
-    native_test,
-    Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
-)
+    env.AddPostAction(
+        native_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
 
 Default([library, native_test])

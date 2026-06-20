@@ -5,8 +5,8 @@ downloads and revisions.
 
 Run:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/download_references.ps1
+```console
+python scripts/download_references.py
 ```
 
 Downloaded papers and repository checkouts are stored under

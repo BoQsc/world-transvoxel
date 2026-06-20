@@ -224,6 +224,7 @@ Godot primary             4.6.3-stable
 Godot compatibility       4.7-stable
 godot-cpp minimum         godot-4.5-stable
 Zig                       0.16.0 stable
+Python tooling            3.11 or newer
 Official Transvoxel       51a494f03c5b024cd153b596bcc7152eb3cc93a6
 Voxel Tools reference     595f52ee4e23203a865eeb981f115909f7aa92f4
 ```
@@ -233,6 +234,8 @@ Exact revisions are recorded in `references/manifest.json`.
 Policy:
 
 - Zig stable is the primary native compiler driver.
+- Project-owned build, download, validation, and test automation uses Python;
+  platform-specific shell scripting is not part of the toolchain.
 - C++ is the native addon implementation language because Godot's supported
   binding is godot-cpp/GDExtension.
 - The build must provide debug and optimized release configurations.
@@ -244,9 +247,10 @@ Policy:
 - Platform support is claimed only after that platform passes the build and
   runtime matrix.
 
-The M0 build orchestrator is SCons using godot-cpp's supported binding
-generation, with Zig 0.16.0 as the C/C++ compiler, archiver, and linker. It
-produces reproducible Zig-driven builds without modifying vendored godot-cpp.
+The build entry points are Python programs that invoke SCons using godot-cpp's
+supported binding generation, with Zig 0.16.0 as the C/C++ compiler, archiver,
+and linker. Host operating system and architecture detection is centralized in
+`scripts/wt_script_common.py`. The build does not modify vendored godot-cpp.
 
 The initial validated platform is Windows x86-64. The native addon loads and
 passes its M0 runtime test on Godot 4.6.3 and Godot 4.7. Other platforms are
@@ -254,8 +258,8 @@ not yet claimed.
 
 Research and repository checks are reproduced with:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/download_references.ps1
+```console
+python scripts/download_references.py
 python tools/validate_repository.py
 ```
 
@@ -1100,6 +1104,13 @@ Resolved in M0:
 - build orchestration is SCons with Zig 0.16.0 providing compilation,
   archiving, and linking;
 - the initial validated matrix is Windows x86-64 with Godot 4.6.3 and 4.7.
+
+Resolved in M1:
+
+- project-owned automation uses Python 3.11+ entry points and shared
+  cross-platform path/process/download helpers;
+- scripts detect Windows, Linux, and macOS plus x86-64 and ARM64, while runtime
+  platform support remains unclaimed until its complete matrix passes.
 
 ## 22. Change and review discipline
 

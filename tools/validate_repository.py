@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import platform
 import struct
 import subprocess
 import sys
@@ -29,11 +30,13 @@ REQUIRED_FILES = (
     "SConstruct",
     "project.godot",
     "build_profiles/m0.json",
-    "scripts/bootstrap_toolchain.ps1",
-    "scripts/build.ps1",
-    "scripts/download_test_engines.ps1",
-    "scripts/test_m0.ps1",
-    "scripts/test_m1.ps1",
+    "scripts/wt_script_common.py",
+    "scripts/bootstrap_toolchain.py",
+    "scripts/build.py",
+    "scripts/download_references.py",
+    "scripts/download_test_engines.py",
+    "scripts/test_m0.py",
+    "scripts/test_m1.py",
     "tools/normalize_pe_timestamp.py",
     "tests/godot/addon_load_test.gd",
     "tests/godot/addon_load_test.gd.uid",
@@ -72,12 +75,32 @@ REQUIRED_FILES = (
     "tests/native/test_wt_m1_cell_backend.cpp",
 )
 
-M0_BINARIES = (
-    "addons/world_transvoxel/bin/"
-    "world_transvoxel.windows.template_debug.x86_64.dll",
-    "addons/world_transvoxel/bin/"
-    "world_transvoxel.windows.template_release.x86_64.dll",
-)
+BINARY_SETS = {
+    ("windows", "x86_64"): (
+        "world_transvoxel.windows.template_debug.x86_64.dll",
+        "world_transvoxel.windows.template_release.x86_64.dll",
+    ),
+    ("windows", "arm64"): (
+        "world_transvoxel.windows.template_debug.arm64.dll",
+        "world_transvoxel.windows.template_release.arm64.dll",
+    ),
+    ("linux", "x86_64"): (
+        "libworld_transvoxel.linux.template_debug.x86_64.so",
+        "libworld_transvoxel.linux.template_release.x86_64.so",
+    ),
+    ("linux", "arm64"): (
+        "libworld_transvoxel.linux.template_debug.arm64.so",
+        "libworld_transvoxel.linux.template_release.arm64.so",
+    ),
+    ("macos", "x86_64"): (
+        "libworld_transvoxel.macos.template_debug.x86_64.dylib",
+        "libworld_transvoxel.macos.template_release.x86_64.dylib",
+    ),
+    ("macos", "arm64"): (
+        "libworld_transvoxel.macos.template_debug.arm64.dylib",
+        "libworld_transvoxel.macos.template_release.arm64.dylib",
+    ),
+}
 
 SOURCE_LIMITS = {
     ".cpp": (600, 900),
@@ -143,6 +166,30 @@ def pe_timestamp(path: Path) -> int:
         if len(timestamp_data) != 4:
             raise ValueError("truncated COFF header")
         return struct.unpack("<I", timestamp_data)[0]
+
+
+def current_binary_set() -> tuple[str, ...]:
+    if sys.platform == "win32":
+        host_os = "windows"
+    elif sys.platform.startswith("linux"):
+        host_os = "linux"
+    elif sys.platform == "darwin":
+        host_os = "macos"
+    else:
+        raise ValueError(f"unsupported host operating system: {sys.platform}")
+
+    machine = platform.machine().lower()
+    if machine in {"amd64", "x86_64"}:
+        host_arch = "x86_64"
+    elif machine in {"arm64", "aarch64"}:
+        host_arch = "arm64"
+    else:
+        raise ValueError(f"unsupported host architecture: {platform.machine()}")
+
+    return tuple(
+        f"addons/world_transvoxel/bin/{filename}"
+        for filename in BINARY_SETS[(host_os, host_arch)]
+    )
 
 
 def git_output(*arguments: str, cwd: Path = ROOT) -> str:
@@ -266,32 +313,39 @@ def validate_m0(errors: list[str], require_binaries: bool) -> None:
     gdextension = ADDON_ROOT / "world_transvoxel.gdextension"
     if gdextension.is_file():
         descriptor = gdextension.read_text(encoding="utf-8")
-        for binary in M0_BINARIES:
-            resource_path = "res://" + binary.replace("\\", "/")
-            if resource_path not in descriptor:
-                fail(errors, f"GDExtension descriptor does not map {resource_path}")
+        for filenames in BINARY_SETS.values():
+            for filename in filenames:
+                resource_path = "res://addons/world_transvoxel/bin/" + filename
+                if resource_path not in descriptor:
+                    fail(errors, f"GDExtension descriptor does not map {resource_path}")
 
     if require_binaries:
-        for relative_path in M0_BINARIES:
+        try:
+            required_binaries = current_binary_set()
+        except (KeyError, ValueError) as error:
+            fail(errors, str(error))
+            required_binaries = ()
+        for relative_path in required_binaries:
             path = ROOT / relative_path
             if not path.is_file() or path.stat().st_size == 0:
-                fail(errors, f"missing required M0 binary: {relative_path}")
+                fail(errors, f"missing required host binary: {relative_path}")
                 continue
-            try:
-                timestamp = pe_timestamp(path)
-            except (OSError, ValueError) as error:
-                fail(errors, f"invalid M0 PE binary {relative_path}: {error}")
-            else:
-                if timestamp != 0:
-                    fail(
-                        errors,
-                        f"M0 PE timestamp is not normalized: {relative_path}",
-                    )
+            if sys.platform == "win32":
+                try:
+                    timestamp = pe_timestamp(path)
+                except (OSError, ValueError) as error:
+                    fail(errors, f"invalid PE binary {relative_path}: {error}")
+                else:
+                    if timestamp != 0:
+                        fail(
+                            errors,
+                            f"PE timestamp is not normalized: {relative_path}",
+                        )
 
 
 def validate_license_boundaries(errors: list[str]) -> None:
     try:
-        tracked = git_output("ls-files").splitlines()
+        tracked = git_output("ls-files", "--cached", "--others", "--exclude-standard").splitlines()
     except (OSError, subprocess.CalledProcessError) as error:
         fail(errors, f"cannot inspect tracked files: {error}")
         return
@@ -308,6 +362,35 @@ def validate_license_boundaries(errors: list[str]) -> None:
         allowed_prefix = "addons/world_transvoxel/thirdparty/transvoxel_mit/"
         if not relative_path.startswith(allowed_prefix):
             fail(errors, f"MIT Transvoxel source is outside its boundary: {relative_path}")
+
+
+def validate_python_automation(errors: list[str]) -> None:
+    try:
+        tracked = git_output(
+            "ls-files", "--cached", "--others", "--exclude-standard"
+        ).splitlines()
+    except (OSError, subprocess.CalledProcessError) as error:
+        fail(errors, f"cannot inspect automation files: {error}")
+        return
+
+    forbidden_language = "power" + "shell"
+    forbidden_extension = ".p" + "s1"
+    text_suffixes = {".md", ".py", ".txt", ".json", ".gd", ".h", ".cpp"}
+    for relative_path in tracked:
+        normalized = relative_path.replace("\\", "/")
+        if normalized.startswith("thirdparty/"):
+            continue
+        path = ROOT / relative_path
+        if not path.is_file():
+            continue
+        if normalized.lower().endswith(forbidden_extension):
+            fail(errors, f"platform-specific shell script is tracked: {normalized}")
+            continue
+        if path.suffix.lower() not in text_suffixes:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace").lower()
+        if forbidden_language in text or forbidden_extension in text:
+            fail(errors, f"project-owned text references forbidden shell tooling: {normalized}")
 
 
 def validate_source_sizes(errors: list[str], warnings: list[str]) -> None:
@@ -343,7 +426,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--require-binaries",
         action="store_true",
-        help="Require both M0 Windows x86-64 debug and release binaries.",
+        help="Require debug and release binaries for the current host.",
     )
     return parser.parse_args()
 
@@ -359,6 +442,7 @@ def main() -> int:
         validate_reference_sets(errors)
         validate_m0(errors, arguments.require_binaries)
     validate_license_boundaries(errors)
+    validate_python_automation(errors)
     validate_source_sizes(errors, warnings)
 
     for warning in warnings:

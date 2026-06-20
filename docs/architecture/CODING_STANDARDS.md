@@ -61,6 +61,16 @@ Circular includes and cross-service singleton lookups are forbidden.
 - No unversioned persistent format.
 - No modification of vendored upstream files.
 
+## Automation
+
+- Project-owned build, download, validation, and test entry points are Python
+  3.11+ programs.
+- Shared path safety, host detection, hashing, downloading, and subprocess
+  behavior belongs in `scripts/wt_script_common.py`.
+- Automation must use `pathlib` and argument arrays, not shell command strings.
+- Host support is detected explicitly; a script must fail clearly for an
+  unsupported host instead of silently selecting another platform.
+
 ## Documentation and tests
 
 - Public classes receive GDExtension XML documentation.

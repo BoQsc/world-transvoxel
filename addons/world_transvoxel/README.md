@@ -11,19 +11,20 @@ M0 and M1 provide:
 - reusable thread-local scratch storage;
 - exhaustive debug/release native contract tests and deterministic hashes;
 - a minimal `WorldTransvoxelTerrain` GDExtension class;
-- Zig-driven Windows x86-64 debug and release builds.
+- host-aware Python build orchestration using Zig and SCons;
+- validated Windows x86-64 debug and release builds.
 
 M1 does not implement chunks, streaming, rendering, collision, editing, baking,
 or compute.
 
 Build from the repository root:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/build.ps1
+```console
+python scripts/build.py
 ```
 
 Validate M1, including the M0 engine compatibility baseline:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/test_m1.ps1
+```console
+python scripts/test_m1.py
 ```

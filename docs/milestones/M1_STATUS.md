@@ -35,8 +35,8 @@ The normative definition is
 
 Command:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/test_m1.ps1
+```console
+python scripts/test_m1.py
 ```
 
 The native test runs:

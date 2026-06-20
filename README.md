@@ -18,6 +18,18 @@ R0, M0, and the M1 exact native cell backend are complete. M2, native chunk and
 LOD ownership with seam proof, is next. No rendered terrain or streaming
 implementation exists yet.
 
+## Tooling
+
+All project-owned build, download, validation, and test automation uses Python
+3.11 or newer. The entry points share host detection and path/process safety;
+there are no operating-system shell scripts in the project-owned toolchain.
+
+```console
+python scripts/bootstrap_toolchain.py
+python scripts/build.py
+python scripts/test_m1.py
+```
+
 ## Production strategy
 
 1. Start with the official upstream MIT `Transvoxel.cpp`.
@@ -72,12 +84,12 @@ docs/ROADMAP.md
 
 Download the pinned local research set:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/download_references.ps1
+```console
+python scripts/download_references.py
 ```
 
 Validate the repository and any locally downloaded references:
 
-```powershell
+```console
 python tools/validate_repository.py
 ```
