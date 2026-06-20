@@ -16,8 +16,9 @@ If another project document conflicts with the charter, the charter controls.
 
 R0 through M2 are complete. The addon has the exact native cell backend,
 bounded chunk/LOD ownership and scheduling, and deterministic closed-seam
-chunk meshing. M3 render and collision integration is next. No rendered
-terrain implementation exists yet.
+chunk meshing. M3 render and collision integration is in progress: native
+payload preparation, collision sanitation, bounded application queues, and
+readiness are implemented; Godot resource integration remains.
 
 ## Tooling
 
@@ -28,7 +29,7 @@ there are no operating-system shell scripts in the project-owned toolchain.
 ```console
 python scripts/bootstrap_toolchain.py
 python scripts/build.py
-python scripts/test_m2.py
+python scripts/test_m3.py
 ```
 
 ## Production strategy

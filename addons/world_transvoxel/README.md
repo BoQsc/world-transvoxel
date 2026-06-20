@@ -20,14 +20,18 @@ M0 through M2 provide:
 M2 does not create Godot mesh resources or implement collision, editing,
 storage, production streaming, baking, or compute.
 
+The active M3 work now includes native render payload preparation, collision
+sanitation, bounded main-thread application queues, and generation-checked
+readiness. Godot mesh/physics resource creation is not complete yet.
+
 Build from the repository root:
 
 ```console
 python scripts/build.py
 ```
 
-Validate M2, including the M1 contract and M0 engine compatibility baseline:
+Validate the active M3 foundation and all prior milestone contracts:
 
 ```console
-python scripts/test_m2.py
+python scripts/test_m3.py
 ```

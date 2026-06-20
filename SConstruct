@@ -54,6 +54,9 @@ sources = (
     + Glob("addons/world_transvoxel/src/backend/*.cpp")
     + Glob("addons/world_transvoxel/src/core/*.cpp")
     + Glob("addons/world_transvoxel/src/meshing/*.cpp")
+    + Glob("addons/world_transvoxel/src/physics/*.cpp")
+    + Glob("addons/world_transvoxel/src/render/*.cpp")
+    + Glob("addons/world_transvoxel/src/services/*.cpp")
     + Glob("addons/world_transvoxel/src/streaming/*.cpp")
 )
 
@@ -135,6 +138,27 @@ m2_mesh_test = native_test_env.Program(
     ],
 )
 
+m3_application_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_m3_application.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_m3_application.cpp",
+        "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/physics/wt_collision_apply_queue.cpp",
+        "addons/world_transvoxel/src/physics/wt_collision_builder.cpp",
+        "addons/world_transvoxel/src/render/wt_render_apply_queue.cpp",
+        "addons/world_transvoxel/src/render/wt_render_payload.cpp",
+        "addons/world_transvoxel/src/services/wt_chunk_application.cpp",
+    ],
+)
+
 normalizer = os.path.join(PROJECT_ROOT, "tools", "normalize_pe_timestamp.py")
 
 
@@ -166,4 +190,9 @@ if env["platform"] == "windows":
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
 
-Default([library, native_test, m2_core_test, m2_mesh_test])
+    env.AddPostAction(
+        m3_application_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
+Default([library, native_test, m2_core_test, m2_mesh_test, m3_application_test])

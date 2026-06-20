@@ -4,7 +4,7 @@ Status: canonical project direction
 
 Last reviewed: 2026-06-20
 
-Current state: M2 chunk/LOD ownership complete; M3 render/collision integration is next
+Current state: M3 render/collision integration in progress; native application foundation complete
 
 ## 1. Authority of this document
 

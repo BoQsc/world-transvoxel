@@ -53,7 +53,8 @@ Exit: deterministic multi-chunk galleries have zero open LOD seams.
 
 ## M3 - Render and collision integration
 
-Status: next.
+Status: in progress; native payload, collision sanitation, bounded queue, and
+readiness foundation complete.
 
 - main-thread application queues;
 - native mesh resources;
