@@ -18,6 +18,7 @@ REQUIRED_FILES = (
     "LICENSE_SCOPE.md",
     "LICENSES/MIT-Transvoxel.txt",
     "README.md",
+    "IMPLEMENTATION_CHARTER.md",
     "docs/ROADMAP.md",
     "docs/architecture/API_BOUNDARIES.md",
     "docs/architecture/ARCHITECTURE.md",
@@ -40,6 +41,24 @@ SOURCE_LIMITS = {
     ".glsl": (400, 650),
     ".gdshader": (400, 650),
 }
+
+CHARTER_HEADINGS = (
+    "## 2. Product goal",
+    "## 3. Production strategy and backend policy",
+    "## 4. License model",
+    "## 5. Repository and addon boundaries",
+    "## 6. Technology baseline",
+    "## 8. Runtime architecture",
+    "## 12. Public API direction",
+    "## 13. Binary data strategy",
+    "## 14. Performance policy",
+    "## 16. Testing strategy",
+    "## 18. Scope control",
+    "## 20. Finite implementation roadmap",
+    "## 21. Controlled open decisions",
+    "## 23. Immediate next work",
+    "## 24. Final definition of success",
+)
 
 
 def fail(errors: list[str], message: str) -> None:
@@ -74,6 +93,33 @@ def validate_required_files(errors: list[str]) -> None:
     for relative_path in REQUIRED_FILES:
         if not (ROOT / relative_path).is_file():
             fail(errors, f"missing required file: {relative_path}")
+
+
+def validate_charter(errors: list[str]) -> None:
+    charter_path = ROOT / "IMPLEMENTATION_CHARTER.md"
+    readme_path = ROOT / "README.md"
+    if not charter_path.is_file() or not readme_path.is_file():
+        return
+
+    charter = charter_path.read_text(encoding="utf-8")
+    readme = readme_path.read_text(encoding="utf-8")
+    normalized_charter = " ".join(charter.split())
+
+    if "[IMPLEMENTATION_CHARTER.md](IMPLEMENTATION_CHARTER.md)" not in readme:
+        fail(errors, "README does not link to the canonical implementation charter")
+
+    for heading in CHARTER_HEADINGS:
+        if heading not in charter:
+            fail(errors, f"implementation charter is missing section: {heading}")
+
+    required_statements = (
+        "This document is the single source of truth",
+        "The next and only active milestone is M0.",
+        "exact official compatibility is not proven",
+    )
+    for statement in required_statements:
+        if statement not in normalized_charter:
+            fail(errors, f"implementation charter is missing policy: {statement}")
 
 
 def validate_reference_sets(errors: list[str]) -> None:
@@ -176,6 +222,7 @@ def main() -> int:
 
     validate_required_files(errors)
     if not errors:
+        validate_charter(errors)
         validate_reference_sets(errors)
     validate_license_boundaries(errors)
     validate_source_sizes(errors, warnings)

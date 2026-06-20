@@ -3,11 +3,19 @@
 Production-oriented Godot terrain research and implementation using the
 official upstream MIT Transvoxel tables behind an isolated native addon.
 
+## Canonical direction
+
+Read [IMPLEMENTATION_CHARTER.md](IMPLEMENTATION_CHARTER.md) before changing the
+project. It is the single authoritative statement of the intended product,
+license boundaries, architecture, performance model, implementation roadmap,
+acceptance tests, and production finish line.
+
+If another project document conflicts with the charter, the charter controls.
+
 ## Current phase
 
-Research and architecture only. Terrain implementation does not begin until
-the reference lock, architecture boundaries, binary format, and acceptance
-roadmap are reviewed.
+R0 research lock is complete. M0, the native addon and official upstream
+baseline, is next. No terrain implementation exists yet.
 
 ## Production strategy
 
@@ -50,6 +58,7 @@ tools/                         bake, inspect, validate, and conversion tools
 Start with:
 
 ```text
+IMPLEMENTATION_CHARTER.md
 docs/research/MARCHING_CUBES_POSTMORTEM.md
 docs/research/REFERENCE_ASSESSMENT.md
 docs/research/VOXEL_TOOLS_FINDINGS.md
