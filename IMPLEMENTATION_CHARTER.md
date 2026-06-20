@@ -4,7 +4,7 @@ Status: canonical project direction
 
 Last reviewed: 2026-06-20
 
-Current state: M4 storage/baking/editing in progress; world index and page baking complete
+Current state: M4 storage/baking/editing in progress; atomic edit transactions complete
 
 ## 1. Authority of this document
 

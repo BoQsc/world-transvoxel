@@ -20,8 +20,9 @@ sanitized concave collision, generation-checked application, and readiness
 telemetry. M4 storage, baking, and editing is active. The versioned bounded
 container, standalone authoritative chunk pages, native deterministic page
 baker, content-addressed world manifest/index, and SHA-256 corruption checks
-are implemented. Edit transactions, spatial invalidation, and replay remain.
-Production streaming is later work.
+are implemented. Atomic typed edit transactions are also implemented; spatial
+invalidation, journal replay, and compaction remain. Production streaming is
+later work.
 
 ## Tooling
 
