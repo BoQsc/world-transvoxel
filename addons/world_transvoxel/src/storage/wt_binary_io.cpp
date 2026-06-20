@@ -1,9 +1,13 @@
 #include "storage/wt_binary_io.h"
 
 #include <cstring>
+#include <limits>
 #include <utility>
 
 namespace world_transvoxel {
+
+static_assert(sizeof(float) == sizeof(std::uint32_t));
+static_assert(std::numeric_limits<float>::is_iec559);
 
 WtBinaryWriter::WtBinaryWriter(std::size_t capacity) : capacity_(capacity) {
 	bytes_.reserve(capacity);
@@ -45,6 +49,12 @@ WtBinaryStatus WtBinaryWriter::write_i32(std::int32_t value) {
 
 WtBinaryStatus WtBinaryWriter::write_i64(std::int64_t value) {
 	return write_u64(static_cast<std::uint64_t>(value));
+}
+
+WtBinaryStatus WtBinaryWriter::write_f32(float value) {
+	std::uint32_t bits = 0;
+	std::memcpy(&bits, &value, sizeof(bits));
+	return write_u32(bits);
 }
 
 WtBinaryStatus WtBinaryWriter::write_bytes(
@@ -141,14 +151,27 @@ WtBinaryStatus WtBinaryReader::read_u64(std::uint64_t &value) {
 WtBinaryStatus WtBinaryReader::read_i32(std::int32_t &value) {
 	std::uint32_t unsigned_value = 0;
 	const WtBinaryStatus status = read_u32(unsigned_value);
-	value = static_cast<std::int32_t>(unsigned_value);
+	if (status == WtBinaryStatus::Ok) {
+		std::memcpy(&value, &unsigned_value, sizeof(value));
+	}
 	return status;
 }
 
 WtBinaryStatus WtBinaryReader::read_i64(std::int64_t &value) {
 	std::uint64_t unsigned_value = 0;
 	const WtBinaryStatus status = read_u64(unsigned_value);
-	value = static_cast<std::int64_t>(unsigned_value);
+	if (status == WtBinaryStatus::Ok) {
+		std::memcpy(&value, &unsigned_value, sizeof(value));
+	}
+	return status;
+}
+
+WtBinaryStatus WtBinaryReader::read_f32(float &value) {
+	std::uint32_t bits = 0;
+	const WtBinaryStatus status = read_u32(bits);
+	if (status == WtBinaryStatus::Ok) {
+		std::memcpy(&value, &bits, sizeof(value));
+	}
 	return status;
 }
 
@@ -157,7 +180,10 @@ WtBinaryStatus WtBinaryReader::read_bytes(std::size_t size, WtByteView &value) {
 		value = {};
 		return WtBinaryStatus::OutOfBounds;
 	}
-	value = { bytes_.data + position_, size };
+	value = {
+		size == 0 ? bytes_.data : bytes_.data + position_,
+		size,
+	};
 	position_ += size;
 	return WtBinaryStatus::Ok;
 }

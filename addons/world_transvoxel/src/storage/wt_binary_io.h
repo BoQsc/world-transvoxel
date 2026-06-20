@@ -32,6 +32,7 @@ public:
 	WtBinaryStatus write_u64(std::uint64_t value);
 	WtBinaryStatus write_i32(std::int32_t value);
 	WtBinaryStatus write_i64(std::int64_t value);
+	WtBinaryStatus write_f32(float value);
 	WtBinaryStatus write_bytes(const std::uint8_t *data, std::size_t size);
 	WtBinaryStatus patch_bytes(
 		std::size_t offset,
@@ -59,6 +60,7 @@ public:
 	WtBinaryStatus read_u64(std::uint64_t &value);
 	WtBinaryStatus read_i32(std::int32_t &value);
 	WtBinaryStatus read_i64(std::int64_t &value);
+	WtBinaryStatus read_f32(float &value);
 	WtBinaryStatus read_bytes(std::size_t size, WtByteView &value);
 	WtBinaryStatus seek(std::size_t offset) noexcept;
 

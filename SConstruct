@@ -52,6 +52,7 @@ sources = (
     Glob("addons/world_transvoxel/src/*.cpp")
     + Glob("addons/world_transvoxel/src/api/*.cpp")
     + Glob("addons/world_transvoxel/src/backend/*.cpp")
+    + Glob("addons/world_transvoxel/src/bake/*.cpp")
     + Glob("addons/world_transvoxel/src/core/*.cpp")
     + Glob("addons/world_transvoxel/src/meshing/*.cpp")
     + Glob("addons/world_transvoxel/src/physics/*.cpp")
@@ -179,6 +180,27 @@ m4_storage_test = native_test_env.Program(
     ],
 )
 
+m4_bake_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_m4_bake.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_m4_bake.cpp",
+        "addons/world_transvoxel/src/bake/wt_chunk_baker.cpp",
+        "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/storage/wt_binary_io.cpp",
+        "addons/world_transvoxel/src/storage/wt_chunk_page.cpp",
+        "addons/world_transvoxel/src/storage/wt_container_format.cpp",
+        "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+    ],
+)
+
 normalizer = os.path.join(PROJECT_ROOT, "tools", "normalize_pe_timestamp.py")
 
 
@@ -220,6 +242,11 @@ if env["platform"] == "windows":
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
 
+    env.AddPostAction(
+        m4_bake_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
 Default([
     library,
     native_test,
@@ -227,4 +254,5 @@ Default([
     m2_mesh_test,
     m3_application_test,
     m4_storage_test,
+    m4_bake_test,
 ])

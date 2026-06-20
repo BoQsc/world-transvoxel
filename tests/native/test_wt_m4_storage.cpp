@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 namespace wt = world_transvoxel;
@@ -73,13 +74,19 @@ void test_sha256() {
 }
 
 void test_binary_io() {
-	wt::WtBinaryWriter writer(23);
+	wt::WtBinaryWriter writer(31);
 	check(writer.write_u8(0x12) == wt::WtBinaryStatus::Ok, "write u8 failed");
 	check(writer.write_u16(0x3456) == wt::WtBinaryStatus::Ok, "write u16 failed");
 	check(writer.write_u32(0x789abcdeU) == wt::WtBinaryStatus::Ok, "write u32 failed");
 	check(writer.write_u64(0x0123456789abcdefULL) == wt::WtBinaryStatus::Ok,
 		"write u64 failed");
 	check(writer.write_i64(-7) == wt::WtBinaryStatus::Ok, "write i64 failed");
+	check(
+		writer.write_i32(std::numeric_limits<std::int32_t>::min()) ==
+			wt::WtBinaryStatus::Ok,
+		"write i32 failed"
+	);
+	check(writer.write_f32(-12.5F) == wt::WtBinaryStatus::Ok, "write f32 failed");
 	check(writer.write_u8(1) == wt::WtBinaryStatus::CapacityExceeded,
 		"writer accepted capacity overflow");
 
@@ -89,7 +96,9 @@ void test_binary_io() {
 	std::uint16_t u16 = 0;
 	std::uint32_t u32 = 0;
 	std::uint64_t u64 = 0;
+	std::int32_t i32 = 0;
 	std::int64_t i64 = 0;
+	float f32 = 0.0F;
 	check(reader.read_u8(u8) == wt::WtBinaryStatus::Ok && u8 == 0x12,
 		"read u8 mismatch");
 	check(reader.read_u16(u16) == wt::WtBinaryStatus::Ok && u16 == 0x3456,
@@ -100,6 +109,10 @@ void test_binary_io() {
 		u64 == 0x0123456789abcdefULL, "read u64 mismatch");
 	check(reader.read_i64(i64) == wt::WtBinaryStatus::Ok && i64 == -7,
 		"read i64 mismatch");
+	check(reader.read_i32(i32) == wt::WtBinaryStatus::Ok &&
+		i32 == std::numeric_limits<std::int32_t>::min(), "read i32 mismatch");
+	check(reader.read_f32(f32) == wt::WtBinaryStatus::Ok && f32 == -12.5F,
+		"read f32 mismatch");
 	check(reader.read_u8(u8) == wt::WtBinaryStatus::OutOfBounds,
 		"reader accepted truncation");
 }
