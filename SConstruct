@@ -363,6 +363,29 @@ storage_tool = native_test_env.Program(
     ],
 )
 
+bake_tool = native_test_env.Program(
+    os.path.join(
+        "build",
+        "tools",
+        "wt_bake_tool.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tools/native/wt_bake_tool.cpp",
+        "addons/world_transvoxel/src/bake/wt_chunk_baker.cpp",
+        "addons/world_transvoxel/src/bake/wt_dense_grid_source.cpp",
+        "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/storage/wt_binary_io.cpp",
+        "addons/world_transvoxel/src/storage/wt_chunk_page.cpp",
+        "addons/world_transvoxel/src/storage/wt_container_format.cpp",
+        "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+        "addons/world_transvoxel/src/storage/wt_world_manifest.cpp",
+    ],
+)
+
 normalizer = os.path.join(PROJECT_ROOT, "tools", "normalize_pe_timestamp.py")
 
 
@@ -444,6 +467,11 @@ if env["platform"] == "windows":
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
 
+    env.AddPostAction(
+        bake_tool,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
 Default([
     library,
     native_test,
@@ -459,4 +487,5 @@ Default([
     m4_apply_test,
     m4_compaction_test,
     storage_tool,
+    bake_tool,
 ])

@@ -27,8 +27,8 @@ Ordered commands now mutate authoritative chunk samples with overlap tests and
 finite-result rejection. Snapshot compaction now emits audited replacement
 pages and a revisioned world manifest. Native-backed Python storage
 inspection, validation, and migration tools are implemented. The practical
-command-line baker and final M4 closure remain. Production streaming is later
-work.
+dense-volume command-line baker is also implemented. Editor scaffolding and
+final M4 closure remain. Production streaming is later work.
 
 ## Tooling
 
@@ -43,6 +43,9 @@ python scripts/test_m4.py
 python tools/wt_storage.py inspect path/to/world.wtworld
 python tools/wt_storage.py validate path/to/page.wtchunk
 python tools/wt_storage.py migrate-world old.wtworld current.wtworld
+python tools/wt_bake.py density.f32 keys.txt output \
+  --origin -1 -1 -1 --dimensions 35 19 19 \
+  --spacing 1 --source-revision 7
 ```
 
 ## Production strategy

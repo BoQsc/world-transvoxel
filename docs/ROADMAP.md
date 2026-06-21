@@ -72,7 +72,8 @@ content-addressed world manifests/indexes, atomic typed edit transactions, and
 bounded padded-sample spatial invalidation, append-only journal recovery, and
 deterministic authoritative sample replay and audited snapshot compaction
 complete. Native-backed inspect, validation, and world migration tools are
-also complete.
+also complete, together with the deterministic dense-volume command-line
+baker.
 
 - versioned binary world/chunk/edit formats;
 - deterministic baker;

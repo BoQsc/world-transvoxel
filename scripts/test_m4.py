@@ -120,6 +120,11 @@ def test_m4(skip_build: bool = False, skip_engine_download: bool = False) -> Non
         cwd=REPO_ROOT,
         check=True,
     )
+    subprocess.run(
+        [sys.executable, REPO_ROOT / "scripts" / "test_m4_bake_tool.py"],
+        cwd=REPO_ROOT,
+        check=True,
+    )
     test_m3(skip_build=True, skip_engine_download=skip_engine_download)
     print("M4 storage, baking, authoritative edit replay, and compaction passed with the complete M3 suite.")
 
