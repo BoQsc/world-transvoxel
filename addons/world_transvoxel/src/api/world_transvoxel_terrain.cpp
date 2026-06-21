@@ -6,6 +6,7 @@
 #include "render/wt_godot_render_sink.h"
 #include "services/wt_chunk_application.h"
 #include "testing/wt_m3_integration_fixture.h"
+#include "testing/wt_m5_application_benchmark_fixture.h"
 
 #include <godot_cpp/core/class_db.hpp>
 
@@ -19,6 +20,8 @@ WorldTransvoxelTerrain::WorldTransvoxelTerrain() {
 	render_sink_ = std::make_unique<WtGodotRenderSink>(*this);
 	collision_sink_ = std::make_unique<WtGodotCollisionSink>(*this);
 	integration_fixture_ = std::make_unique<WtM3IntegrationFixture>();
+	application_benchmark_ =
+		std::make_unique<WtM5ApplicationBenchmarkFixture>();
 	set_process(true);
 }
 
@@ -131,6 +134,23 @@ void WorldTransvoxelTerrain::_bind_methods() {
 		godot::D_METHOD("_m3_test_forget_chunk"),
 		&WorldTransvoxelTerrain::_m3_test_forget_chunk
 	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"_m5_benchmark_prepare_batch",
+			"render_count",
+			"collision_count",
+			"generation"
+		),
+		&WorldTransvoxelTerrain::_m5_benchmark_prepare_batch
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("_m5_benchmark_apply_frame"),
+		&WorldTransvoxelTerrain::_m5_benchmark_apply_frame
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("_m5_benchmark_clear"),
+		&WorldTransvoxelTerrain::_m5_benchmark_clear
+	);
 }
 
 godot::String WorldTransvoxelTerrain::get_addon_version() const {
@@ -242,6 +262,54 @@ std::int64_t WorldTransvoxelTerrain::_m3_test_stale_collision_count() const noex
 
 void WorldTransvoxelTerrain::_m3_test_forget_chunk() {
 	integration_fixture_->forget(*application_, *render_sink_, *collision_sink_);
+}
+
+bool WorldTransvoxelTerrain::_m5_benchmark_prepare_batch(
+	std::int64_t render_count,
+	std::int64_t collision_count,
+	std::int64_t generation
+) {
+	if (render_count <= 0 || collision_count < 0 || generation <= 0) {
+		return false;
+	}
+	return application_benchmark_->prepare_batch(
+		static_cast<std::size_t>(render_count),
+		static_cast<std::size_t>(collision_count),
+		static_cast<std::uint64_t>(generation),
+		*application_
+	);
+}
+
+godot::Dictionary WorldTransvoxelTerrain::_m5_benchmark_apply_frame() {
+	const WtM5ApplicationFrameResult result =
+		application_benchmark_->apply_frame(
+			kWtDefaultRenderApplyBudget,
+			kWtDefaultCollisionApplyBudget,
+			*application_,
+			*render_sink_,
+			*collision_sink_
+		);
+	godot::Dictionary output;
+	output["valid"] = result.valid;
+	output["duration_ns"] = static_cast<std::int64_t>(result.duration_ns);
+	output["render_sink_ns"] =
+		static_cast<std::int64_t>(result.render_sink_ns);
+	output["collision_sink_ns"] =
+		static_cast<std::int64_t>(result.collision_sink_ns);
+	output["render_processed"] =
+		static_cast<std::int64_t>(result.render_processed);
+	output["collision_processed"] =
+		static_cast<std::int64_t>(result.collision_processed);
+	output["ready_count"] = static_cast<std::int64_t>(result.ready_count);
+	return output;
+}
+
+std::int64_t WorldTransvoxelTerrain::_m5_benchmark_clear() {
+	return static_cast<std::int64_t>(application_benchmark_->clear(
+		*application_,
+		*render_sink_,
+		*collision_sink_
+	));
 }
 
 } // namespace world_transvoxel

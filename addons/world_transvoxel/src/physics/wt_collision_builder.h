@@ -9,11 +9,13 @@
 namespace world_transvoxel {
 
 constexpr double kWtDefaultCollisionThinRatioSquared = 1.0e-12;
+constexpr double kWtDefaultCollisionActivationDistance = 96.0;
+constexpr double kWtDefaultCollisionDeactivationDistance = 128.0;
 
 struct WtCollisionPolicy {
 	double thin_ratio_squared = kWtDefaultCollisionThinRatioSquared;
-	double activation_distance = 96.0;
-	double deactivation_distance = 128.0;
+	double activation_distance = kWtDefaultCollisionActivationDistance;
+	double deactivation_distance = kWtDefaultCollisionDeactivationDistance;
 };
 
 enum class WtCollisionRequirement : std::uint8_t {

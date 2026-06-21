@@ -1,6 +1,7 @@
 #pragma once
 
 #include <godot_cpp/classes/node3d.hpp>
+#include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/string.hpp>
 
 #include <cstdint>
@@ -12,6 +13,10 @@ class WtChunkApplicationService;
 class WtGodotCollisionSink;
 class WtGodotRenderSink;
 class WtM3IntegrationFixture;
+class WtM5ApplicationBenchmarkFixture;
+
+constexpr std::size_t kWtDefaultRenderApplyBudget = 4;
+constexpr std::size_t kWtDefaultCollisionApplyBudget = 2;
 
 class WorldTransvoxelTerrain : public godot::Node3D {
 	GDCLASS(WorldTransvoxelTerrain, godot::Node3D)
@@ -49,14 +54,22 @@ public:
 	std::int64_t _m3_test_stale_render_count() const noexcept;
 	std::int64_t _m3_test_stale_collision_count() const noexcept;
 	void _m3_test_forget_chunk();
+	bool _m5_benchmark_prepare_batch(
+		std::int64_t render_count,
+		std::int64_t collision_count,
+		std::int64_t generation
+	);
+	godot::Dictionary _m5_benchmark_apply_frame();
+	std::int64_t _m5_benchmark_clear();
 
 private:
 	std::unique_ptr<WtChunkApplicationService> application_;
 	std::unique_ptr<WtGodotRenderSink> render_sink_;
 	std::unique_ptr<WtGodotCollisionSink> collision_sink_;
 	std::unique_ptr<WtM3IntegrationFixture> integration_fixture_;
-	std::size_t render_apply_budget_ = 4;
-	std::size_t collision_apply_budget_ = 2;
+	std::unique_ptr<WtM5ApplicationBenchmarkFixture> application_benchmark_;
+	std::size_t render_apply_budget_ = kWtDefaultRenderApplyBudget;
+	std::size_t collision_apply_budget_ = kWtDefaultCollisionApplyBudget;
 };
 
 } // namespace world_transvoxel

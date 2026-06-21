@@ -1,0 +1,51 @@
+{
+  "profiles": [
+    {
+      "architecture": "x86_64",
+      "godot_version": "4.6.3",
+      "limits": {
+        "clear_ns": 20000000,
+        "cold_frame_max_ns": 200000000,
+        "cold_scenario_ns": 500000000,
+        "collision_sink_p95_ns": 300000000,
+        "frame_max_p95_ns": 100000000,
+        "peak_working_set_bytes": 268435456,
+        "readiness_max_frames": 8,
+        "render_sink_p95_ns": 100000000,
+        "scenario_p50_ns": 200000000,
+        "scenario_p95_ns": 400000000
+      },
+      "name": "windows-x86_64-godot-4.6.3-reference",
+      "platform": "windows",
+      "reference_host": {
+        "cpu": "Intel64 Family 6 Model 158 Stepping 9, GenuineIntel",
+        "logical_cpu_count": 4,
+        "physical_memory_bytes": 17066790912
+      }
+    },
+    {
+      "architecture": "x86_64",
+      "godot_version": "4.7",
+      "limits": {
+        "clear_ns": 20000000,
+        "cold_frame_max_ns": 200000000,
+        "cold_scenario_ns": 500000000,
+        "collision_sink_p95_ns": 300000000,
+        "frame_max_p95_ns": 100000000,
+        "peak_working_set_bytes": 268435456,
+        "readiness_max_frames": 8,
+        "render_sink_p95_ns": 100000000,
+        "scenario_p50_ns": 200000000,
+        "scenario_p95_ns": 400000000
+      },
+      "name": "windows-x86_64-godot-4.7-reference",
+      "platform": "windows",
+      "reference_host": {
+        "cpu": "Intel64 Family 6 Model 158 Stepping 9, GenuineIntel",
+        "logical_cpu_count": 4,
+        "physical_memory_bytes": 17066790912
+      }
+    }
+  ],
+  "schema": 1
+}

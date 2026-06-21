@@ -44,4 +44,5 @@ Validate the active M5 foundation and all prior milestone contracts:
 
 ```console
 python scripts/test_m5.py
+python tools/benchmark_m5_application.py --engine-version 4.6.3
 ```

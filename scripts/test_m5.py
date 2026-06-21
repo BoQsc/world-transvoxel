@@ -152,6 +152,61 @@ def run_pipeline_benchmark_smoke() -> None:
         raise RuntimeError("M5 pipeline benchmark interface failed.")
 
 
+def run_application_benchmark_smoke() -> None:
+    for version in ("4.6.3", "4.7"):
+        normalized = version.replace(".", "_")
+        evidence = (
+            REPO_ROOT / "build" / f"m5_application_budget_{normalized}_smoke.json"
+        )
+        evidence.unlink(missing_ok=True)
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(REPO_ROOT / "tools" / "benchmark_m5_application.py"),
+                "--engine-version",
+                version,
+                "--skip-build",
+                "--no-budget-check",
+                "--iterations",
+                "3",
+                "--warmup",
+                "1",
+                "--output",
+                str(evidence),
+            ],
+            check=False,
+            text=True,
+            capture_output=True,
+            errors="replace",
+        )
+        combined = result.stdout + result.stderr
+        print(combined, end="" if combined.endswith("\n") else "\n")
+        document = (
+            json.loads(evidence.read_text(encoding="utf-8"))
+            if evidence.is_file()
+            else {}
+        )
+        samples = document.get("samples_ns", {})
+        if (
+            result.returncode != 0
+            or document.get("schema") != 1
+            or document.get("source", {}).get("godot_version") != version
+            or any(
+                len(samples.get(key, [])) != 3
+                for key in (
+                    "scenario",
+                    "frame_max",
+                    "render_sink",
+                    "collision_sink",
+                )
+            )
+            or "M5_GODOT_APPLICATION_BUDGET_PASS" not in combined
+        ):
+            raise RuntimeError(
+                f"M5 Godot {version} application benchmark interface failed."
+            )
+
+
 def test_m5(
     skip_build: bool = False,
     skip_engine_download: bool = False,
@@ -218,11 +273,12 @@ def test_m5(
         )
     run_workload_benchmark_smoke()
     run_pipeline_benchmark_smoke()
+    run_application_benchmark_smoke()
     test_m4(skip_build=True, skip_engine_download=skip_engine_download)
     print(
         "M5 storage, cache, page-meshing runtime, multi-viewer, edit "
         "replacement, and representative functional workloads plus runtime "
-        "and pipeline budget interfaces "
+        "pipeline and Godot application budget interfaces "
         "passed with the complete M4 suite."
     )
 
