@@ -47,6 +47,8 @@ env.Append(
     CPPPATH=["addons/world_transvoxel/src"],
     CXXFLAGS=["-std=c++17", "-Wall", "-Wextra"],
 )
+if env["platform"] == "linux":
+    env.Append(CXXFLAGS=["-pthread"], LINKFLAGS=["-pthread"])
 
 sources = (
     Glob("addons/world_transvoxel/src/*.cpp")
@@ -339,6 +341,29 @@ m4_compaction_test = native_test_env.Program(
     ],
 )
 
+m5_async_storage_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_m5_async_storage.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_m5_async_storage.cpp",
+        "addons/world_transvoxel/src/bake/wt_chunk_baker.cpp",
+        "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/storage/wt_async_storage_service.cpp",
+        "addons/world_transvoxel/src/storage/wt_binary_io.cpp",
+        "addons/world_transvoxel/src/storage/wt_chunk_page.cpp",
+        "addons/world_transvoxel/src/storage/wt_container_format.cpp",
+        "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+        "addons/world_transvoxel/src/storage/wt_world_manifest.cpp",
+    ],
+)
+
 storage_tool = native_test_env.Program(
     os.path.join(
         "build",
@@ -463,6 +488,11 @@ if env["platform"] == "windows":
     )
 
     env.AddPostAction(
+        m5_async_storage_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
+    env.AddPostAction(
         storage_tool,
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
@@ -486,6 +516,7 @@ Default([
     m4_journal_test,
     m4_apply_test,
     m4_compaction_test,
+    m5_async_storage_test,
     storage_tool,
     bake_tool,
 ])

@@ -78,6 +78,7 @@ addons/world_transvoxel/
       wt_chunk_priority.*
       wt_job_graph.*
     storage/
+      wt_async_storage_service.*
       wt_world_reader.*
       wt_world_writer.*
       wt_chunk_codec.*
@@ -172,6 +173,11 @@ chunk_eviction_requested
 Each chunk has a generation token. Late worker results are discarded if their
 token no longer matches. Dirty queues contain only affected chunks. There is no
 full active-chunk scan in idle frames.
+
+The M5 storage baseline owns an immutable world manifest and resolves
+content-addressed chunk objects on a sleeping native I/O worker. Bounded
+request and completion queues provide backpressure; completions retain the
+request generation for later scheduler-side stale-result rejection.
 
 ## Ownership
 

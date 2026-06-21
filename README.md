@@ -30,7 +30,9 @@ inspection, validation, and migration tools are implemented. The practical
 dense-volume command-line baker is also implemented. Editor scaffolding and
 the editor Tools menu use the same Python/native bake path. The controlled
 codec decision retains deterministic zero-copy `none` and rejects byte RLE.
-M5 production streaming is now the only active milestone.
+M5 production streaming is now the only active milestone. Its first bounded
+unit provides native asynchronous manifest/page loading with content-addressed
+validation, queue backpressure, and generation-tagged completions.
 
 ## Tooling
 
@@ -41,7 +43,7 @@ there are no operating-system shell scripts in the project-owned toolchain.
 ```console
 python scripts/bootstrap_toolchain.py
 python scripts/build.py
-python scripts/test_m4.py
+python scripts/test_m5.py
 python tools/wt_storage.py inspect path/to/world.wtworld
 python tools/wt_storage.py validate path/to/page.wtchunk
 python tools/wt_storage.py migrate-world old.wtworld current.wtworld

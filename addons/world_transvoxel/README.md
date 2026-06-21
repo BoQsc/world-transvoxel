@@ -26,7 +26,9 @@ content-addressed manifests, atomic edit transactions, padded spatial
 invalidation, append-only replay, authoritative sample application, audited
 compaction, migration/inspection tools, and a thin editor bake entry.
 
-M5 production streaming is active. Compute acceleration remains later work.
+M5 production streaming is active. Its asynchronous immutable-page storage
+foundation is implemented; caches, runtime integration, representative
+budgets, and soak evidence remain. Compute acceleration is later work.
 
 Build from the repository root:
 
@@ -34,8 +36,8 @@ Build from the repository root:
 python scripts/build.py
 ```
 
-Validate M4 and all prior milestone contracts:
+Validate the active M5 foundation and all prior milestone contracts:
 
 ```console
-python scripts/test_m4.py
+python scripts/test_m5.py
 ```

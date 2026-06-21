@@ -88,10 +88,13 @@ Exit: bake-load-edit-save-reload produces identical authoritative state.
 
 ## M5 - Streaming production baseline
 
-Status: next and active.
+Status: active; bounded asynchronous immutable-page storage foundation
+complete.
 
 - multiple viewers;
-- bounded caches and eviction;
+- asynchronous manifest/page storage with content-addressed validation
+  (complete);
+- bounded caches and eviction (next);
 - teleport, fast vehicle, underground, and vertical-world tests;
 - rendering and collision readiness APIs;
 - representative telemetry.

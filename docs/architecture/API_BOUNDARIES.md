@@ -74,7 +74,7 @@ promises:
 
 - meshing backend;
 - sampler;
-- chunk store;
+- asynchronous manifest/page store;
 - edit journal;
 - stream policy;
 - render sink;

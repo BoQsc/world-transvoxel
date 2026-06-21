@@ -77,6 +77,10 @@ payload
 Meshes are caches, not authoritative world data. The authoritative inputs are
 baked samples/source descriptors plus ordered edits.
 
+The M5 filesystem reader resolves pages by full-page SHA-256 filename and
+validates size, hash, schema, chunk key, and source revision before publishing
+an immutable asynchronous completion.
+
 ## Edit journal
 
 Each edit record contains:
