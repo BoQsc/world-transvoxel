@@ -78,12 +78,12 @@ not performance thresholds.
 The 2026-06-21 reference evidence records:
 
 ```text
-scenario p50                 1,152,400 ns
-scenario p95                 1,941,700 ns
-scenario p99                 2,804,800 ns
-scenario maximum             3,016,600 ns
-simulated-frame p95             18,318 ns
-peak process working set     3,776,512 bytes
+scenario p50                 1,123,300 ns
+scenario p95                 2,916,700 ns
+scenario p99                 3,021,800 ns
+scenario maximum             3,045,500 ns
+simulated-frame p95             27,517 ns
+peak process working set     3,760,128 bytes
 ```
 
 The locked gates are deliberately above the captured values to tolerate normal
