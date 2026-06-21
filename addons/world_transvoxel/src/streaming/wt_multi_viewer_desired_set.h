@@ -14,12 +14,14 @@ constexpr std::size_t kWtMaximumDesiredChunkCount = 65536;
 struct WtViewerChunkDemand {
 	WtChunkKey key;
 	std::int32_t priority = 0;
+	bool collision_required = false;
 };
 
 struct WtDesiredChunk {
 	WtChunkKey key;
 	std::int32_t priority = 0;
 	std::uint32_t supporter_count = 0;
+	bool collision_required = false;
 
 	bool operator==(const WtDesiredChunk &other) const noexcept;
 };

@@ -49,6 +49,8 @@ struct WtSchedulerMetrics {
 	std::uint64_t completed_jobs = 0;
 	std::uint64_t stale_results = 0;
 	std::uint64_t cancellations = 0;
+	std::uint64_t discarded_jobs = 0;
+	std::uint64_t discarded_completions = 0;
 	std::uint64_t queue_rejections = 0;
 };
 
@@ -73,6 +75,11 @@ public:
 		std::int32_t priority
 	);
 	WtSchedulerStatus cancel_chunk(const WtChunkKey &key);
+	WtSchedulerStatus forget_chunk(const WtChunkKey &key);
+	WtSchedulerStatus reprioritize_chunk(
+		const WtChunkKey &key,
+		std::int32_t priority
+	);
 	bool pop_job(WtChunkJob &job);
 	WtSchedulerStatus submit_completion(const WtChunkJobResult &result);
 	std::size_t apply_completions(std::size_t maximum_count);
@@ -82,6 +89,8 @@ public:
 	const std::vector<WtChunkRecord> &get_records() const noexcept;
 	const std::vector<WtViewerSnapshot> &get_viewers() const noexcept;
 	WtSchedulerMetrics get_metrics() const noexcept;
+	std::size_t record_capacity() const noexcept;
+	std::size_t available_record_capacity() const noexcept;
 	std::size_t queued_job_count() const noexcept;
 	std::size_t available_job_capacity() const noexcept;
 	std::size_t queued_completion_count() const noexcept;
@@ -92,6 +101,12 @@ private:
 		explicit JobQueue(std::size_t capacity);
 		bool push(const WtChunkJob &job);
 		bool pop(WtChunkJob &job);
+		bool reprioritize(
+			const WtChunkKey &key,
+			WtGenerationToken generation,
+			std::int32_t priority
+		);
+		std::size_t erase_key(const WtChunkKey &key);
 		std::size_t size() const noexcept;
 		std::size_t available() const noexcept;
 
@@ -106,6 +121,7 @@ private:
 		explicit CompletionQueue(std::size_t capacity);
 		bool push(const WtChunkJobResult &result);
 		bool pop(WtChunkJobResult &result);
+		std::size_t erase_key(const WtChunkKey &key);
 		std::size_t size() const noexcept;
 
 	private:

@@ -88,8 +88,9 @@ Exit: bake-load-edit-save-reload produces identical authoritative state.
 
 ## M5 - Streaming production baseline
 
-Status: active; bounded asynchronous storage, caches, multi-viewer desired
-sets, and edit-driven runtime replacement complete.
+Status: active; bounded asynchronous storage, caches, multi-viewer runtime
+ownership, edit-driven replacement, and representative functional workloads
+complete.
 
 - multiple viewers;
 - asynchronous manifest/page storage with content-addressed validation
@@ -99,9 +100,10 @@ sets, and edit-driven runtime replacement complete.
 - multi-viewer desired-set scheduling without idle world scans (complete);
 - edit invalidation and generation-cancelled runtime replacement (complete);
 - teleport, fast vehicle, underground, vertical-world, edit, and multi-viewer
-  workloads (next);
-- rendering and collision readiness APIs;
-- representative telemetry.
+  functional workloads (complete);
+- numerical frame, memory, queue, cache, and readiness budgets on
+  representative hardware (next);
+- binary telemetry and fixed-duration soak evidence.
 
 Exit: fixed-duration motion/edit workload meets queue, memory, seam, collision,
 and frame-time budgets.

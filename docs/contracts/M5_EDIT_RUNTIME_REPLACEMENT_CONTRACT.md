@@ -108,6 +108,6 @@ The locked deterministic evidence hash is:
 03eedad6263963350d32226bd5c59f9aba48e4b35adefa4f2cd774cd70cfb9df
 ```
 
-This completes the edit-driven runtime replacement coordination unit. The
-remaining M5 work is representative motion/edit workload testing, numerical
-budget measurement, binary telemetry, and fixed-duration soak evidence.
+This completes the edit-driven runtime replacement coordination unit.
+Representative functional workload testing is now also complete. Numerical
+hardware budgets, binary telemetry, and fixed-duration soak evidence remain.

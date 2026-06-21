@@ -36,10 +36,12 @@ logical ID rather than reuse a removed viewer ID for an unrelated lifecycle.
 The global set is sorted by canonical chunk key. For every key it records:
 
 - maximum priority requested by any viewer;
-- number of supporting viewers.
+- number of supporting viewers;
+- whether any supporting viewer currently requires collision.
 
-Changing either value emits an updated entry. A newly supported key emits an
-addition; loss of the final supporter emits a removal.
+Collision demand is aggregated with logical OR. Changing priority, supporter
+count, or collision demand emits an updated entry. A newly supported key emits
+an addition; loss of the final supporter emits a removal.
 
 The union is a load/prefetch desired set, not the final render-leaf map. Parent
 and child demands may coexist when different policies or viewers need them.
@@ -79,7 +81,7 @@ demand items processed, delta counts, and rejected events.
 `test_wt_m5_multi_viewer` proves:
 
 - deterministic union independent of viewer and demand order;
-- max-priority and supporter-count aggregation;
+- max-priority, supporter-count, and collision-demand aggregation;
 - typed add/remove/update deltas during movement and removal;
 - stale, invalid, duplicate, missing, and every capacity failure path;
 - atomic state retention after rejected events;
@@ -89,9 +91,9 @@ demand items processed, delta counts, and rejected events.
 - matching debug/release evidence hash:
 
 ```text
-584147bbd499abf91f1d37468ea4638b34a18c70aaea362ff9dffb6401dc1d0f
+65c5397d2e6174c496a6b3ebc06d1547b39cc0c0ca36a1794e5177914c7fe696
 ```
 
-This completes the standalone multi-viewer desired-set scheduler. Edit-driven
-loaded-page replacement and end-to-end generation cancellation are the next
-finite M5 unit.
+`WtDesiredSetRuntimeService` now consumes these deltas for bounded scheduler,
+application, and cache ownership. Representative workload evidence is recorded
+in `M5_REPRESENTATIVE_WORKLOAD_CONTRACT.md`.

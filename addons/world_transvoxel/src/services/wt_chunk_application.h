@@ -72,6 +72,8 @@ public:
 	const WtChunkApplicationRecord *find_record(const WtChunkKey &key) const noexcept;
 	const std::vector<WtChunkApplicationRecord> &get_records() const noexcept;
 	WtApplicationMetrics get_metrics() const noexcept;
+	std::size_t record_capacity() const noexcept;
+	std::size_t available_record_capacity() const noexcept;
 	std::size_t queued_render_count() const noexcept;
 	std::size_t queued_collision_count() const noexcept;
 

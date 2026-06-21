@@ -6,7 +6,7 @@ Last reviewed: 2026-06-21
 
 Current state: M4 complete; M5 streaming production baseline is active with
 bounded storage/caches, multi-viewer desired sets, and edit-driven runtime
-replacement implemented
+replacement plus representative functional workloads implemented
 
 ## 1. Authority of this document
 
@@ -1017,7 +1017,8 @@ all corruption cases fail safely.
 ### M5 - Streaming production baseline
 
 Status: active; asynchronous immutable-page storage, authoritative and derived
-caches, multi-viewer desired sets, and edit-driven runtime replacement complete.
+caches, multi-viewer runtime ownership, edit-driven replacement, and
+representative functional workloads complete.
 
 Deliverables:
 
@@ -1212,9 +1213,9 @@ Ordered work:
 4. Complete: edit invalidation now coordinates loaded-page replacement,
    generation-token cancellation, remeshing, and independent render/collision
    readiness.
-5. Next: test teleport, fast vehicle, underground, vertical-world, edit, and
-   multi-viewer workloads.
-6. Measure and fix numerical frame, memory, queue, cache, and readiness
+5. Complete: deterministic functional workloads cover teleport, fast vehicle,
+   underground, vertical-world, edit, and multi-viewer runtime behavior.
+6. Next: measure and fix numerical frame, memory, queue, cache, and readiness
    budgets on representative hardware.
 7. Add fixed-duration soak testing and binary telemetry traces.
 8. Record exact M5 evidence and only then mark M5 complete.

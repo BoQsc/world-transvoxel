@@ -21,10 +21,13 @@ EXPECTED_RESOURCE_CACHE_HASH = (
     "842a4104d541f930c88ed3c6bcea6a1a34f83c4725b88cd3da28803a90c17dc8"
 )
 EXPECTED_MULTI_VIEWER_HASH = (
-    "584147bbd499abf91f1d37468ea4638b34a18c70aaea362ff9dffb6401dc1d0f"
+    "65c5397d2e6174c496a6b3ebc06d1547b39cc0c0ca36a1794e5177914c7fe696"
 )
 EXPECTED_EDIT_REPLACEMENT_HASH = (
     "03eedad6263963350d32226bd5c59f9aba48e4b35adefa4f2cd774cd70cfb9df"
+)
+EXPECTED_WORKLOAD_HASH = (
+    "c5bdf6b8896f0a5e4271c5aeab2e8f552e7b776bccc66e9082595467ff90b2a3"
 )
 
 
@@ -102,10 +105,17 @@ def test_m5(
             "M5_EDIT_REPLACEMENT_HASH",
             EXPECTED_EDIT_REPLACEMENT_HASH,
         )
+        run_hashed_test(
+            configuration,
+            "test_wt_m5_workload",
+            "M5_WORKLOAD_PASS",
+            "M5_WORKLOAD_HASH",
+            EXPECTED_WORKLOAD_HASH,
+        )
     test_m4(skip_build=True, skip_engine_download=skip_engine_download)
     print(
-        "M5 storage, cache, multi-viewer, and edit replacement foundations "
-        "passed with the complete M4 suite."
+        "M5 storage, cache, multi-viewer, edit replacement, and representative "
+        "functional workloads passed with the complete M4 suite."
     )
 
 

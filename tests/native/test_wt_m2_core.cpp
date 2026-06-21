@@ -184,6 +184,54 @@ void test_scheduler_stale_and_bounds() {
 		"full completion queue accepted work");
 }
 
+void test_scheduler_forget_wrapped_completions() {
+	const wt::WtChunkKey target = { 0, 0, 0, 0 };
+	wt::WtStreamScheduler scheduler(1, 1, 3, 0);
+	check(scheduler.request_chunk(target, 1, 1) == wt::WtSchedulerStatus::Ok,
+		"forget fixture request failed");
+	const wt::WtChunkRecord *record = scheduler.find_record(target);
+	check(record != nullptr, "forget fixture record missing");
+	check(
+		scheduler.submit_completion({
+			{ 8, 0, 0, 0 }, { 1 }, wt::WtChunkJobStage::Sample, true
+		}) == wt::WtSchedulerStatus::Ok &&
+		scheduler.submit_completion({
+			{ 9, 0, 0, 0 }, { 2 }, wt::WtChunkJobStage::Sample, true
+		}) == wt::WtSchedulerStatus::Ok &&
+		scheduler.apply_completions(2) == 2,
+		"forget fixture did not advance completion ring head"
+	);
+	const wt::WtGenerationToken generation =
+		record == nullptr ? wt::WtGenerationToken{} : record->generation;
+	check(
+		scheduler.submit_completion({
+			target, generation, wt::WtChunkJobStage::Sample, true
+		}) == wt::WtSchedulerStatus::Ok &&
+		scheduler.submit_completion({
+			{ 7, 0, 0, 0 }, { 3 }, wt::WtChunkJobStage::Sample, true
+		}) == wt::WtSchedulerStatus::Ok &&
+		scheduler.submit_completion({
+			target, generation, wt::WtChunkJobStage::Sample, true
+		}) == wt::WtSchedulerStatus::Ok,
+		"forget fixture wrapped completion submission failed"
+	);
+	check(
+		scheduler.forget_chunk(target) == wt::WtSchedulerStatus::Ok &&
+		scheduler.find_record(target) == nullptr &&
+		scheduler.queued_job_count() == 0 &&
+		scheduler.queued_completion_count() == 1 &&
+		scheduler.get_metrics().discarded_jobs == 1 &&
+		scheduler.get_metrics().discarded_completions == 2,
+		"forget did not preserve the wrapped non-target completion"
+	);
+	check(
+		scheduler.apply_completions(1) == 1 &&
+		scheduler.queued_completion_count() == 0 &&
+		scheduler.get_metrics().stale_results == 3,
+		"forget corrupted the retained wrapped completion"
+	);
+}
+
 } // namespace
 
 int main() {
@@ -191,6 +239,7 @@ int main() {
 	test_lod_map();
 	test_scheduler_priority_and_lifecycle();
 	test_scheduler_stale_and_bounds();
+	test_scheduler_forget_wrapped_completions();
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M2_CORE_FAIL failures=%d\n", failure_count);
 		return 1;

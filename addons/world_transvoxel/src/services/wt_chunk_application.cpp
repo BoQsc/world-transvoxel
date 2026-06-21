@@ -222,6 +222,15 @@ WtApplicationMetrics WtChunkApplicationService::get_metrics() const noexcept {
 	return snapshot;
 }
 
+std::size_t WtChunkApplicationService::record_capacity() const noexcept {
+	return record_capacity_;
+}
+
+std::size_t
+WtChunkApplicationService::available_record_capacity() const noexcept {
+	return record_capacity_ - records_.size();
+}
+
 std::size_t WtChunkApplicationService::queued_render_count() const noexcept {
 	return render_queue_.size();
 }

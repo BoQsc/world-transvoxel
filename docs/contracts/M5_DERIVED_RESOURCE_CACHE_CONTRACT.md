@@ -109,5 +109,6 @@ for each tier:
 842a4104d541f930c88ed3c6bcea6a1a34f83c4725b88cd3da28803a90c17dc8
 ```
 
-This completes M5's bounded cache foundation. Multi-viewer desired-set
-scheduling is the next finite M5 unit.
+This completes M5's bounded cache foundation. Multi-viewer runtime ownership,
+edit replacement, and representative workload contracts now consume these
+generation-safe resources.

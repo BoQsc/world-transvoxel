@@ -91,6 +91,7 @@ store. It proves:
 96ba7123c6b86fe9e2f07aa17f27553f58db92cca6427a069eced98de1471402
 ```
 
-This contract completes the first M5 work item only. Bounded caches,
-multi-viewer scheduling, edit-driven replacement, representative budgets,
-binary traces, and soak evidence remain active M5 work.
+This contract completed the first M5 work item. Bounded caches, multi-viewer
+runtime ownership, edit-driven replacement, and representative functional
+workloads are now also complete. Hardware budgets, binary traces, and soak
+evidence remain active M5 work.

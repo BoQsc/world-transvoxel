@@ -42,6 +42,10 @@ Committed edits now replace only spatially affected loaded generations,
 preserve separate source/world revisions, evict authoritative and derived
 cache ownership, reject stale pipeline results, and reset visual/collision
 readiness until remeshing and application complete.
+Desired-set deltas now create, reprioritize, and release bounded runtime
+ownership. A deterministic workload covers fast movement, teleportation,
+underground and vertical traversal, two viewers, collision-demand changes, and
+edits while moving without record or queue growth.
 
 ## Tooling
 

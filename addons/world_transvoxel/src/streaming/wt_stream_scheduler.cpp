@@ -38,6 +38,41 @@ bool WtStreamScheduler::JobQueue::pop(WtChunkJob &job) {
 	return true;
 }
 
+bool WtStreamScheduler::JobQueue::reprioritize(
+	const WtChunkKey &key,
+	WtGenerationToken generation,
+	std::int32_t priority
+) {
+	std::lock_guard<std::mutex> lock(mutex_);
+	bool changed = false;
+	for (WtChunkJob &job : jobs_) {
+		if (job.key == key && job.generation == generation) {
+			job.priority = priority;
+			changed = true;
+		}
+	}
+	if (changed) {
+		std::sort(jobs_.begin(), jobs_.end(), job_precedes);
+	}
+	return changed;
+}
+
+std::size_t WtStreamScheduler::JobQueue::erase_key(const WtChunkKey &key) {
+	std::lock_guard<std::mutex> lock(mutex_);
+	const std::size_t previous_size = jobs_.size();
+	jobs_.erase(
+		std::remove_if(
+			jobs_.begin(),
+			jobs_.end(),
+			[&key](const WtChunkJob &job) {
+				return job.key == key;
+			}
+		),
+		jobs_.end()
+	);
+	return previous_size - jobs_.size();
+}
+
 std::size_t WtStreamScheduler::JobQueue::size() const noexcept {
 	std::lock_guard<std::mutex> lock(mutex_);
 	return jobs_.size();
@@ -72,6 +107,28 @@ bool WtStreamScheduler::CompletionQueue::pop(WtChunkJobResult &result) {
 	head_ = (head_ + 1) % capacity_;
 	--count_;
 	return true;
+}
+
+std::size_t WtStreamScheduler::CompletionQueue::erase_key(
+	const WtChunkKey &key
+) {
+	std::lock_guard<std::mutex> lock(mutex_);
+	std::vector<WtChunkJobResult> retained;
+	retained.reserve(count_);
+	for (std::size_t index = 0; index < count_; ++index) {
+		const WtChunkJobResult &result =
+			slots_[(head_ + index) % capacity_];
+		if (result.key != key) {
+			retained.push_back(result);
+		}
+	}
+	const std::size_t erased = count_ - retained.size();
+	for (std::size_t index = 0; index < retained.size(); ++index) {
+		slots_[index] = retained[index];
+	}
+	head_ = 0;
+	count_ = retained.size();
+	return erased;
 }
 
 std::size_t WtStreamScheduler::CompletionQueue::size() const noexcept {
@@ -153,6 +210,41 @@ WtSchedulerStatus WtStreamScheduler::cancel_chunk(const WtChunkKey &key) {
 	record->generation = next_generation();
 	record->lifecycle = WtChunkLifecycle::Cancelled;
 	++metrics_.cancellations;
+	return WtSchedulerStatus::Ok;
+}
+
+WtSchedulerStatus WtStreamScheduler::forget_chunk(const WtChunkKey &key) {
+	const auto iterator = std::lower_bound(
+		records_.begin(),
+		records_.end(),
+		key,
+		[](const WtChunkRecord &record, const WtChunkKey &value) {
+			return record.key < value;
+		}
+	);
+	if (iterator == records_.end() || iterator->key != key) {
+		return WtSchedulerStatus::NotFound;
+	}
+	metrics_.discarded_jobs += jobs_.erase_key(key);
+	metrics_.discarded_completions += completions_.erase_key(key);
+	records_.erase(iterator);
+	++metrics_.cancellations;
+	return WtSchedulerStatus::Ok;
+}
+
+WtSchedulerStatus WtStreamScheduler::reprioritize_chunk(
+	const WtChunkKey &key,
+	std::int32_t priority
+) {
+	WtChunkRecord *record = find_record_mutable(key);
+	if (record == nullptr) {
+		return WtSchedulerStatus::NotFound;
+	}
+	if (record->priority == priority) {
+		return WtSchedulerStatus::AlreadyCurrent;
+	}
+	record->priority = priority;
+	jobs_.reprioritize(key, record->generation, priority);
 	return WtSchedulerStatus::Ok;
 }
 
@@ -262,6 +354,14 @@ WtSchedulerMetrics WtStreamScheduler::get_metrics() const noexcept {
 	snapshot.queue_rejections +=
 		asynchronous_queue_rejections_.load(std::memory_order_relaxed);
 	return snapshot;
+}
+
+std::size_t WtStreamScheduler::record_capacity() const noexcept {
+	return record_capacity_;
+}
+
+std::size_t WtStreamScheduler::available_record_capacity() const noexcept {
+	return record_capacity_ - records_.size();
 }
 
 std::size_t WtStreamScheduler::queued_job_count() const noexcept {

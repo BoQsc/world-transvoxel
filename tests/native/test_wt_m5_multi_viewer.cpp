@@ -31,9 +31,10 @@ wt::WtViewerSnapshot viewer(
 
 wt::WtViewerChunkDemand demand(
 	const wt::WtChunkKey &key,
-	std::int32_t priority
+	std::int32_t priority,
+	bool collision_required = false
 ) {
-	return { key, priority };
+	return { key, priority, collision_required };
 }
 
 void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
@@ -59,6 +60,7 @@ void append_desired(
 	bytes.push_back(chunk.key.lod);
 	append_i32(bytes, chunk.priority);
 	append_u64(bytes, chunk.supporter_count);
+	bytes.push_back(chunk.collision_required ? 1 : 0);
 }
 
 void print_hash(const wt::WtHash256 &hash) {
@@ -79,7 +81,7 @@ void test_union_and_deltas(std::vector<std::uint8_t> &evidence) {
 	check(
 		desired.update_viewer(
 			viewer(1, 1),
-			{ demand(b, 5), demand(a, 10) },
+			{ demand(b, 5), demand(a, 10, true) },
 			delta
 		) == wt::WtMultiViewerDesiredSetStatus::Ok,
 		"first viewer update failed"
@@ -103,7 +105,7 @@ void test_union_and_deltas(std::vector<std::uint8_t> &evidence) {
 		delta.added.size() == 1 && delta.added[0].key == c &&
 			delta.updated.size() == 1 && delta.updated[0].key == a &&
 			shared != nullptr && shared->priority == 20 &&
-			shared->supporter_count == 2,
+			shared->supporter_count == 2 && shared->collision_required,
 		"multi-viewer priority union mismatch"
 	);
 	check(
@@ -120,7 +122,7 @@ void test_union_and_deltas(std::vector<std::uint8_t> &evidence) {
 			delta.removed.size() == 1 && delta.removed[0] == c &&
 			delta.updated.size() == 1 && delta.updated[0].key == a &&
 			shared != nullptr && shared->priority == 10 &&
-			shared->supporter_count == 2,
+			shared->supporter_count == 2 && shared->collision_required,
 		"viewer movement delta mismatch"
 	);
 	check(
@@ -133,14 +135,24 @@ void test_union_and_deltas(std::vector<std::uint8_t> &evidence) {
 		delta.removed.size() == 1 && delta.removed[0] == b &&
 			delta.updated.size() == 1 && delta.updated[0].key == a &&
 			shared != nullptr && shared->priority == 3 &&
-			shared->supporter_count == 1 &&
+			shared->supporter_count == 1 && !shared->collision_required &&
 			desired.viewer_count() == 1 && desired.total_demand_count() == 2,
 		"viewer removal union mismatch"
 	);
 	check(
 		desired.update_viewer(
 			viewer(2, 3, 80.0),
-			{ demand(a, 3), demand(d, 8) },
+			{ demand(a, 3, true), demand(d, 8) },
+			delta
+		) == wt::WtMultiViewerDesiredSetStatus::Ok &&
+			delta.added.empty() && delta.removed.empty() &&
+			delta.updated.size() == 1 && delta.updated[0].key == a,
+		"collision demand change did not emit an update"
+	);
+	check(
+		desired.update_viewer(
+			viewer(2, 4, 80.0),
+			{ demand(a, 3, true), demand(d, 8) },
 			delta
 		) == wt::WtMultiViewerDesiredSetStatus::Ok &&
 			delta.added.empty() && delta.removed.empty() && delta.updated.empty(),
@@ -155,9 +167,9 @@ void test_union_and_deltas(std::vector<std::uint8_t> &evidence) {
 		"idle reads rebuilt the desired set"
 	);
 	check(
-		desired.update_viewer(viewer(2, 3), {}, delta) ==
+		desired.update_viewer(viewer(2, 4), {}, delta) ==
 			wt::WtMultiViewerDesiredSetStatus::StaleViewerRevision &&
-		desired.remove_viewer(2, 3, delta) ==
+		desired.remove_viewer(2, 4, delta) ==
 			wt::WtMultiViewerDesiredSetStatus::StaleViewerRevision &&
 		desired.remove_viewer(99, 1, delta) ==
 			wt::WtMultiViewerDesiredSetStatus::ViewerNotFound,

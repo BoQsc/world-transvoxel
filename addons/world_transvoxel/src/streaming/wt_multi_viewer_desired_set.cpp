@@ -28,7 +28,8 @@ bool valid_snapshot(const WtViewerSnapshot &snapshot) noexcept {
 bool WtDesiredChunk::operator==(const WtDesiredChunk &other) const noexcept {
 	return key == other.key &&
 		priority == other.priority &&
-		supporter_count == other.supporter_count;
+		supporter_count == other.supporter_count &&
+		collision_required == other.collision_required;
 }
 
 void WtDesiredSetDelta::clear() noexcept {
@@ -109,8 +110,11 @@ WtMultiViewerDesiredSetStatus WtMultiViewerDesiredSet::build_union(
 		const WtChunkKey key = combined[index].key;
 		std::int32_t priority = combined[index].priority;
 		std::uint32_t supporters = 0;
+		bool collision_required = false;
 		do {
 			priority = std::max(priority, combined[index].priority);
+			collision_required =
+				collision_required || combined[index].collision_required;
 			if (supporters == std::numeric_limits<std::uint32_t>::max()) {
 				return WtMultiViewerDesiredSetStatus::DesiredChunkCapacityExceeded;
 			}
@@ -121,7 +125,7 @@ WtMultiViewerDesiredSetStatus WtMultiViewerDesiredSet::build_union(
 			desired.clear();
 			return WtMultiViewerDesiredSetStatus::DesiredChunkCapacityExceeded;
 		}
-		desired.push_back({ key, priority, supporters });
+		desired.push_back({ key, priority, supporters, collision_required });
 	}
 	return WtMultiViewerDesiredSetStatus::Ok;
 }

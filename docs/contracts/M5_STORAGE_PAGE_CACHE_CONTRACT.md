@@ -105,5 +105,6 @@ Metrics expose:
 11b2749ef19124bf73f6f2e287f0cc0da3c877fd9876d3cd42e0d031bd0f740f
 ```
 
-This completes authoritative page/sample cache ownership. Derived mesh,
-render, and collision caches remain the next bounded M5 cache unit.
+This completes authoritative page/sample cache ownership. Derived cache,
+multi-viewer runtime, edit replacement, and representative workload contracts
+now build on this ownership model.
