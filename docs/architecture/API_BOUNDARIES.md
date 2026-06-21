@@ -30,6 +30,10 @@ Versioned immutable runtime configuration resource.
 - backend selection.
 
 Configuration is validated once before startup.
+Schema 1 is implemented as the first production-qualification foundation. It
+records all M5 construction-time queue, cache, viewer, trace, application, and
+collision-policy limits. Live mutation does not resize a running world;
+applying another configuration requires controlled restart.
 
 ### `WorldTransvoxelDataSource`
 

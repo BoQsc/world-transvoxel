@@ -1,5 +1,7 @@
 #pragma once
 
+#include "api/world_transvoxel_config.h"
+
 #include <godot_cpp/classes/node3d.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/string.hpp>
@@ -35,6 +37,12 @@ public:
 	godot::String get_backend_id() const;
 	godot::String get_backend_license() const;
 	godot::String get_backend_upstream_revision() const;
+	void set_configuration(
+		const godot::Ref<WorldTransvoxelConfig> &configuration
+	);
+	godot::Ref<WorldTransvoxelConfig> get_configuration() const;
+	bool is_configuration_valid() const noexcept;
+	godot::String get_configuration_error() const;
 	void set_render_apply_budget(std::int64_t budget);
 	std::int64_t get_render_apply_budget() const noexcept;
 	void set_collision_apply_budget(std::int64_t budget);
@@ -63,6 +71,7 @@ public:
 	std::int64_t _m5_benchmark_clear();
 
 private:
+	godot::Ref<WorldTransvoxelConfig> configuration_;
 	std::unique_ptr<WtChunkApplicationService> application_;
 	std::unique_ptr<WtGodotRenderSink> render_sink_;
 	std::unique_ptr<WtGodotCollisionSink> collision_sink_;

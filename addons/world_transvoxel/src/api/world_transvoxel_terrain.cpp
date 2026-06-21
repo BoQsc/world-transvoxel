@@ -63,6 +63,32 @@ void WorldTransvoxelTerrain::_bind_methods() {
 		&WorldTransvoxelTerrain::get_backend_upstream_revision
 	);
 	godot::ClassDB::bind_method(
+		godot::D_METHOD("set_configuration", "configuration"),
+		&WorldTransvoxelTerrain::set_configuration
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_configuration"),
+		&WorldTransvoxelTerrain::get_configuration
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("is_configuration_valid"),
+		&WorldTransvoxelTerrain::is_configuration_valid
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_configuration_error"),
+		&WorldTransvoxelTerrain::get_configuration_error
+	);
+	ADD_PROPERTY(
+		godot::PropertyInfo(
+			godot::Variant::OBJECT,
+			"configuration",
+			godot::PROPERTY_HINT_RESOURCE_TYPE,
+			"WorldTransvoxelConfig"
+		),
+		"set_configuration",
+		"get_configuration"
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD("set_render_apply_budget", "budget"),
 		&WorldTransvoxelTerrain::set_render_apply_budget
 	);
@@ -175,6 +201,27 @@ godot::String WorldTransvoxelTerrain::get_backend_license() const {
 
 godot::String WorldTransvoxelTerrain::get_backend_upstream_revision() const {
 	return wt_get_transvoxel_mit_backend().get_info().upstream_revision;
+}
+
+void WorldTransvoxelTerrain::set_configuration(
+	const godot::Ref<WorldTransvoxelConfig> &configuration
+) {
+	configuration_ = configuration;
+}
+
+godot::Ref<WorldTransvoxelConfig>
+WorldTransvoxelTerrain::get_configuration() const {
+	return configuration_;
+}
+
+bool WorldTransvoxelTerrain::is_configuration_valid() const noexcept {
+	return configuration_.is_valid() && configuration_->is_valid();
+}
+
+godot::String WorldTransvoxelTerrain::get_configuration_error() const {
+	return configuration_.is_valid() ?
+		configuration_->get_validation_error() :
+		godot::String("configuration is required");
 }
 
 void WorldTransvoxelTerrain::set_render_apply_budget(std::int64_t budget) {

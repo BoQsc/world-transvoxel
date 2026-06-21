@@ -82,6 +82,7 @@ addons/world_transvoxel/
       wt_chunk_application.*
       wt_chunk_resource_cache.*
       wt_chunk_resource_payload.*
+      wt_runtime_config.*
     storage/
       wt_async_storage_service.*
       wt_storage_page_cache.*

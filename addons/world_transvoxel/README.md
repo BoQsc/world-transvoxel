@@ -26,14 +26,17 @@ content-addressed manifests, atomic edit transactions, padded spatial
 invalidation, append-only replay, authoritative sample application, audited
 compaction, migration/inspection tools, and a thin editor bake entry.
 
-M5 production streaming is active. Its asynchronous immutable-page storage
+M5 production streaming is complete. Its asynchronous immutable-page storage
 and all five bounded native cache tiers are implemented. The bounded
 multi-viewer desired-set union, edit-driven generation replacement,
 representative native budgets, and page-backed transition job scheduling,
 pinning, cancellation, and invalidation are also complete. Real Godot
 render/physics application budgets and the collision/readiness baseline are
-locked on both supported engines. Binary telemetry and soak evidence remain.
-Compute acceleration is later work.
+locked on both supported engines. Versioned binary telemetry and the checked
+60-second soak also pass. Production qualification is active; schema-1
+`WorldTransvoxelConfig` is the first completed foundation, while real world
+startup/streaming through the public facade remains unfinished. Compute
+acceleration is optional later work.
 
 Build from the repository root:
 
@@ -41,9 +44,10 @@ Build from the repository root:
 python scripts/build.py
 ```
 
-Validate the active M5 foundation and all prior milestone contracts:
+Validate the active production qualification foundation and all prior
+milestone contracts:
 
 ```console
-python scripts/test_m5.py
+python scripts/test_production_qualification.py
 python tools/benchmark_m5_application.py --engine-version 4.6.3
 ```

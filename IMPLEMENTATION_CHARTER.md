@@ -8,7 +8,9 @@ Current state: M5 streaming production baseline complete on Windows x86-64
 with bounded storage/caches, multi-viewer/edit runtime ownership, page-backed
 official MIT meshing, real Godot render/physics application budgets, versioned
 binary telemetry, and checked fixed-duration soak evidence. Production
-qualification is the only active phase.
+qualification is the only active phase; its workflow audit and schema-1
+runtime configuration foundation are complete, with explicit world lifecycle
+and manifest startup next.
 
 ## 1. Authority of this document
 
@@ -1223,20 +1225,22 @@ The next and only active phase is production qualification.
 
 Ordered work:
 
-1. Audit the current Godot facade and root example against the complete real
+1. Complete: audit the current Godot facade and root example against the complete real
    workflow: bake, load, stream, render, collide, edit, query, save, reload,
    migrate, and shut down.
-2. Define the smallest missing public/runtime contract needed to connect the
-   existing M0-M5 services into that workflow without introducing a universal
-   manager or GDScript hot path.
-3. Build a clean-install integration project and real baked-world scene using
+2. Complete: add schema-1 `WorldTransvoxelConfig` with native validation for
+   all construction-time M5 limits and attach it to the terrain facade.
+3. Next: add explicit world lifecycle and asynchronous manifest startup/
+   shutdown ownership without introducing a universal manager or GDScript hot
+   path.
+4. Build a clean-install integration project and real baked-world scene using
    the official MIT backend.
-4. Run a fixed-duration full-world Godot soak with real page I/O, official MIT
+5. Run a fixed-duration full-world Godot soak with real page I/O, official MIT
    meshing, render resources, collision resources, edits, save/reload, and
    telemetry.
-5. Lock save migration, operational limits, supported Godot/platform matrix,
+6. Lock save migration, operational limits, supported Godot/platform matrix,
    clean shutdown, and reproducible release evidence.
-6. Only after those gates pass, mark the official MIT-backed addon
+7. Only after those gates pass, mark the official MIT-backed addon
    production-ready and begin the separate 0BSD backend qualification.
 
 M6 compute acceleration remains optional. Do not let it delay the measured CPU

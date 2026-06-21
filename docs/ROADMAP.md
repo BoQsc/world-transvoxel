@@ -130,6 +130,15 @@ Exit: compute is enabled only where end-to-end measurements beat CPU.
 
 Status: active.
 
+Finite qualification gates are tracked in
+`docs/production/QUALIFICATION_AUDIT.md`:
+
+- PQ0 configuration and lifecycle (configuration complete; lifecycle next);
+- PQ1 read-only real baked-world streaming;
+- PQ2 editing, query, and persistence;
+- PQ3 clean install and fixed-duration full-world soak;
+- PQ4 release qualification.
+
 - official MIT backend remains the reference;
 - full-world soak test;
 - save migration test;

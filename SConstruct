@@ -618,6 +618,23 @@ m5_page_meshing_runtime_test = native_test_env.Program(
     ],
 )
 
+production_config_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_production_config.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_production_config.cpp",
+        "addons/world_transvoxel/src/services/wt_runtime_config.cpp",
+        "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+    ],
+)
+
 storage_tool = native_test_env.Program(
     os.path.join(
         "build",
@@ -797,6 +814,11 @@ if env["platform"] == "windows":
     )
 
     env.AddPostAction(
+        production_config_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
+    env.AddPostAction(
         storage_tool,
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
@@ -831,6 +853,7 @@ Default([
     m5_pipeline_budget_test,
     m5_page_transition_test,
     m5_page_meshing_runtime_test,
+    production_config_test,
     storage_tool,
     bake_tool,
 ])

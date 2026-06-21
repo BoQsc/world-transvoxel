@@ -62,6 +62,12 @@ installation and a real baked-world stream/render/collide/edit/query/save/
 reload/shutdown workflow. Optional compute acceleration is deferred and does
 not block that release path.
 
+The current production audit is
+[`docs/production/QUALIFICATION_AUDIT.md`](docs/production/QUALIFICATION_AUDIT.md).
+Its first completed foundation is the schema-1 native/Godot runtime
+configuration. Explicit world lifecycle and manifest startup are next; the
+addon is not yet represented as production-ready.
+
 ## Tooling
 
 All project-owned build, download, validation, and test automation uses Python
