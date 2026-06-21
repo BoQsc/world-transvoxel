@@ -14,10 +14,19 @@ from wt_script_common import native_test_path
 EXPECTED_ASYNC_STORAGE_HASH = (
     "96ba7123c6b86fe9e2f07aa17f27553f58db92cca6427a069eced98de1471402"
 )
+EXPECTED_STORAGE_CACHE_HASH = (
+    "11b2749ef19124bf73f6f2e287f0cc0da3c877fd9876d3cd42e0d031bd0f740f"
+)
 
 
-def run_async_storage_test(configuration: str) -> None:
-    executable = native_test_path(configuration, "test_wt_m5_async_storage")
+def run_hashed_test(
+    configuration: str,
+    test_name: str,
+    pass_marker: str,
+    hash_label: str,
+    expected_hash: str,
+) -> None:
+    executable = native_test_path(configuration, test_name)
     if not executable.is_file():
         raise RuntimeError(f"Missing M5 test executable: {executable}")
     result = subprocess.run(
@@ -29,17 +38,16 @@ def run_async_storage_test(configuration: str) -> None:
     )
     combined = result.stdout + result.stderr
     print(combined, end="" if combined.endswith("\n") else "\n")
-    match = re.search(r"M5_ASYNC_STORAGE_HASH ([0-9a-f]{64})", combined)
+    match = re.search(rf"{hash_label} ([0-9a-f]{{64}})", combined)
     if (
         result.returncode != 0
-        or "M5_ASYNC_STORAGE_PASS" not in combined
+        or pass_marker not in combined
         or match is None
-        or match.group(1) != EXPECTED_ASYNC_STORAGE_HASH
+        or match.group(1) != expected_hash
     ):
         actual = "missing" if match is None else match.group(1)
         raise RuntimeError(
-            f"M5 asynchronous storage contract failed for "
-            f"{configuration}: {actual}"
+            f"{test_name} contract failed for {configuration}: {actual}"
         )
 
 
@@ -50,10 +58,24 @@ def test_m5(
     if not skip_build:
         build("all")
     for configuration in ("template_debug", "template_release"):
-        run_async_storage_test(configuration)
+        run_hashed_test(
+            configuration,
+            "test_wt_m5_async_storage",
+            "M5_ASYNC_STORAGE_PASS",
+            "M5_ASYNC_STORAGE_HASH",
+            EXPECTED_ASYNC_STORAGE_HASH,
+        )
+        run_hashed_test(
+            configuration,
+            "test_wt_m5_storage_cache",
+            "M5_STORAGE_CACHE_PASS",
+            "M5_STORAGE_CACHE_HASH",
+            EXPECTED_STORAGE_CACHE_HASH,
+        )
     test_m4(skip_build=True, skip_engine_download=skip_engine_download)
     print(
-        "M5 asynchronous storage foundation passed with the complete M4 suite."
+        "M5 asynchronous storage and authoritative cache foundations passed "
+        "with the complete M4 suite."
     )
 
 

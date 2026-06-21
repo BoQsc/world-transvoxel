@@ -32,7 +32,9 @@ the editor Tools menu use the same Python/native bake path. The controlled
 codec decision retains deterministic zero-copy `none` and rejects byte RLE.
 M5 production streaming is now the only active milestone. Its first bounded
 unit provides native asynchronous manifest/page loading with content-addressed
-validation, queue backpressure, and generation-tagged completions.
+validation, queue backpressure, and generation-tagged completions. Bounded
+encoded-page and decoded-sample caches now add generation rejection,
+immutable identities, byte/item budgets, and deterministic LRU eviction.
 
 ## Tooling
 

@@ -79,6 +79,7 @@ addons/world_transvoxel/
       wt_job_graph.*
     storage/
       wt_async_storage_service.*
+      wt_storage_page_cache.*
       wt_world_reader.*
       wt_world_writer.*
       wt_chunk_codec.*
@@ -178,6 +179,10 @@ The M5 storage baseline owns an immutable world manifest and resolves
 content-addressed chunk objects on a sleeping native I/O worker. Bounded
 request and completion queues provide backpressure; completions retain the
 request generation for later scheduler-side stale-result rejection.
+
+The authoritative storage cache has independently bounded encoded-page and
+decoded-sample tiers. Both use immutable shared ownership and deterministic
+event-driven LRU eviction; they perform no idle scan.
 
 ## Ownership
 

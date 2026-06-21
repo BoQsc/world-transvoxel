@@ -5,7 +5,7 @@ Status: canonical project direction
 Last reviewed: 2026-06-21
 
 Current state: M4 complete; M5 streaming production baseline is active with
-bounded asynchronous immutable-page storage implemented
+bounded asynchronous storage and authoritative page/sample caches implemented
 
 ## 1. Authority of this document
 
@@ -1015,7 +1015,8 @@ all corruption cases fail safely.
 
 ### M5 - Streaming production baseline
 
-Status: active; asynchronous immutable-page storage foundation complete.
+Status: active; asynchronous immutable-page storage and authoritative
+page/sample cache foundations complete.
 
 Deliverables:
 
@@ -1202,8 +1203,8 @@ Ordered work:
 
 1. Complete: connect immutable `wtworld` manifests and content-addressed
    `wtchunk` objects to a bounded asynchronous native storage service.
-2. Add bounded page, decoded-sample, mesh, render, and collision caches with
-   explicit ownership and eviction.
+2. In progress: bounded encoded-page and decoded-sample caches are complete;
+   add mesh, render, and collision caches with explicit ownership and eviction.
 3. Extend desired-set scheduling to multiple viewers without full-world idle
    scans.
 4. Integrate edit invalidation with loaded-page replacement, generation-token
