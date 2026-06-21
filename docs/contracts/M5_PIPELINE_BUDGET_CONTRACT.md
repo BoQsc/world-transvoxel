@@ -67,16 +67,16 @@ enforcing hardware thresholds.
 The 2026-06-21 reference capture recorded:
 
 ```text
-I/O + validation + decode batch p50      26,737,600 ns
-I/O + validation + decode batch p95      36,840,400 ns
-I/O + validation + decode per-page p95    2,167,083 ns
-decoded-page regular mesh batch p50      35,254,700 ns
-decoded-page regular mesh batch p95      59,685,300 ns
-decoded-page regular mesh per-chunk p95  14,921,325 ns
-page transition mesh batch p50           20,624,800 ns
-page transition mesh batch p95           52,121,800 ns
-page transition mesh per-chunk p95       52,121,800 ns
-peak process working set                  9,183,232 bytes
+I/O + validation + decode batch p50      25,615,900 ns
+I/O + validation + decode batch p95      39,733,800 ns
+I/O + validation + decode per-page p95    2,337,283 ns
+decoded-page regular mesh batch p50      33,752,100 ns
+decoded-page regular mesh batch p95      82,150,300 ns
+decoded-page regular mesh per-chunk p95  20,537,575 ns
+page transition mesh batch p50           19,846,400 ns
+page transition mesh batch p95           44,272,600 ns
+page transition mesh per-chunk p95       44,272,600 ns
+peak process working set                  9,293,824 bytes
 ```
 
 The locked gates are:
