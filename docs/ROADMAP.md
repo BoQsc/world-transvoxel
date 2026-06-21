@@ -101,8 +101,10 @@ complete.
 - edit invalidation and generation-cancelled runtime replacement (complete);
 - teleport, fast vehicle, underground, vertical-world, edit, and multi-viewer
   functional workloads (complete);
-- numerical frame, memory, queue, cache, and readiness budgets on
-  representative hardware (next);
+- native orchestration latency and process-memory budgets on reference
+  hardware (complete);
+- real page I/O/decode, MIT chunk meshing, and Godot render/physics budgets
+  (next);
 - binary telemetry and fixed-duration soak evidence.
 
 Exit: fixed-duration motion/edit workload meets queue, memory, seam, collision,

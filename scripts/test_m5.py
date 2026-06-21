@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
+import sys
 
 from build import build
 from test_m4 import test_m4
-from wt_script_common import native_test_path
+from wt_script_common import REPO_ROOT, native_test_path
 
 
 EXPECTED_ASYNC_STORAGE_HASH = (
@@ -63,6 +65,42 @@ def run_hashed_test(
         )
 
 
+def run_workload_benchmark_smoke() -> None:
+    evidence = REPO_ROOT / "build" / "m5_runtime_budget_smoke.json"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "tools" / "benchmark_m5_runtime.py"),
+            "--skip-build",
+            "--no-budget-check",
+            "--iterations",
+            "3",
+            "--warmup",
+            "1",
+            "--output",
+            str(evidence),
+        ],
+        check=False,
+        text=True,
+        capture_output=True,
+        errors="replace",
+    )
+    combined = result.stdout + result.stderr
+    print(combined, end="" if combined.endswith("\n") else "\n")
+    document = (
+        json.loads(evidence.read_text(encoding="utf-8"))
+        if evidence.is_file()
+        else {}
+    )
+    if (
+        result.returncode != 0
+        or document.get("schema") != 1
+        or len(document.get("samples_ns", [])) != 3
+        or "M5_RUNTIME_BUDGET_PASS" not in combined
+    ):
+        raise RuntimeError("M5 workload benchmark interface failed.")
+
+
 def test_m5(
     skip_build: bool = False,
     skip_engine_download: bool = False,
@@ -112,10 +150,12 @@ def test_m5(
             "M5_WORKLOAD_HASH",
             EXPECTED_WORKLOAD_HASH,
         )
+    run_workload_benchmark_smoke()
     test_m4(skip_build=True, skip_engine_download=skip_engine_download)
     print(
         "M5 storage, cache, multi-viewer, edit replacement, and representative "
-        "functional workloads passed with the complete M4 suite."
+        "functional workloads plus the runtime-budget interface passed with "
+        "the complete M4 suite."
     )
 
 

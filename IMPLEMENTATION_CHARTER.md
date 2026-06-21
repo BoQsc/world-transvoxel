@@ -6,7 +6,8 @@ Last reviewed: 2026-06-21
 
 Current state: M4 complete; M5 streaming production baseline is active with
 bounded storage/caches, multi-viewer desired sets, and edit-driven runtime
-replacement plus representative functional workloads implemented
+replacement, representative functional workloads, and native orchestration
+budgets implemented
 
 ## 1. Authority of this document
 
@@ -1018,7 +1019,8 @@ all corruption cases fail safely.
 
 Status: active; asynchronous immutable-page storage, authoritative and derived
 caches, multi-viewer runtime ownership, edit-driven replacement, and
-representative functional workloads complete.
+representative functional workloads plus reference-hardware native
+orchestration budgets complete.
 
 Deliverables:
 
@@ -1215,8 +1217,9 @@ Ordered work:
    readiness.
 5. Complete: deterministic functional workloads cover teleport, fast vehicle,
    underground, vertical-world, edit, and multi-viewer runtime behavior.
-6. Next: measure and fix numerical frame, memory, queue, cache, and readiness
-   budgets on representative hardware.
+6. In progress: native orchestration latency and process-memory budgets are
+   complete on reference hardware; next measure real page I/O/decode, MIT chunk
+   meshing, and Godot render/physics application.
 7. Add fixed-duration soak testing and binary telemetry traces.
 8. Record exact M5 evidence and only then mark M5 complete.
 

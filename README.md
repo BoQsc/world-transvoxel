@@ -57,6 +57,7 @@ there are no operating-system shell scripts in the project-owned toolchain.
 python scripts/bootstrap_toolchain.py
 python scripts/build.py
 python scripts/test_m5.py
+python tools/benchmark_m5_runtime.py
 python tools/wt_storage.py inspect path/to/world.wtworld
 python tools/wt_storage.py validate path/to/page.wtchunk
 python tools/wt_storage.py migrate-world old.wtworld current.wtworld

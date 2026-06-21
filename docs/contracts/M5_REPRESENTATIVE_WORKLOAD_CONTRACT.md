@@ -118,4 +118,5 @@ These are deterministic functional bounds, not production hardware budgets.
 The fixture uses immediate synthetic worker completions and native payload
 builders; it does not measure filesystem latency, real terrain meshing cost,
 Godot frame time, physics-server cost, seam geometry, or percentile wall-clock
-latency. Representative hardware measurement remains the next finite M5 unit.
+latency. Native orchestration wall-clock and process-memory budgets are now
+defined separately in `M5_RUNTIME_BUDGET_CONTRACT.md`.

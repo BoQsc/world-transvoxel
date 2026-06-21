@@ -3,9 +3,13 @@
 #include "storage/wt_hash256.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstdio>
+#include <limits>
+#include <string_view>
 #include <vector>
 
 namespace wt = world_transvoxel;
@@ -233,7 +237,10 @@ void test_runtime_delta_contract(std::vector<std::uint8_t> &evidence) {
 	append_u64(evidence, scheduler.get_metrics().discarded_completions);
 }
 
-void test_representative_workload(std::vector<std::uint8_t> &evidence) {
+void test_representative_workload(
+	std::vector<std::uint8_t> &evidence,
+	bool print_metrics
+) {
 	wtt::WtM5WorkloadFixture fixture;
 	check(fixture.valid(), "representative workload fixture is invalid");
 	std::uint64_t revision1 = 1;
@@ -409,36 +416,97 @@ void test_representative_workload(std::vector<std::uint8_t> &evidence) {
 	append_u64(evidence, runtime_metrics.removed_chunks);
 	append_u64(evidence, runtime_metrics.updated_chunks);
 	append_u64(evidence, edit_metrics.replaced_chunks);
+	if (print_metrics) {
+		std::printf(
+			"M5_WORKLOAD_METRICS frames=%llu worker_jobs=%llu desired_max=%zu "
+			"records_max=%zu jobs_max=%zu render_max=%zu collision_max=%zu "
+			"resources_max=%zu readiness_max=%llu stale=%llu "
+			"discarded_jobs=%llu discarded_completions=%llu\n",
+			static_cast<unsigned long long>(metrics.frames),
+			static_cast<unsigned long long>(metrics.worker_jobs),
+			metrics.maximum_desired_chunks,
+			metrics.maximum_scheduler_records,
+			metrics.maximum_job_queue,
+			metrics.maximum_render_queue,
+			metrics.maximum_collision_queue,
+			metrics.maximum_resource_entries,
+			static_cast<unsigned long long>(
+				metrics.maximum_readiness_latency_frames
+			),
+			static_cast<unsigned long long>(scheduler_metrics.stale_results),
+			static_cast<unsigned long long>(scheduler_metrics.discarded_jobs),
+			static_cast<unsigned long long>(
+				scheduler_metrics.discarded_completions
+			)
+		);
+	}
+}
+
+bool parse_count(const char *text, std::size_t &output) {
+	char *end = nullptr;
+	const unsigned long long value = std::strtoull(text, &end, 10);
+	if (end == text || *end != '\0' || value == 0 ||
+		value > std::numeric_limits<std::size_t>::max()) {
+		return false;
+	}
+	output = static_cast<std::size_t>(value);
+	return true;
+}
+
+int run_benchmark(std::size_t runs, std::size_t warmup_runs) {
+	using Clock = std::chrono::steady_clock;
+	for (std::size_t iteration = 0;
+		iteration < warmup_runs + runs;
+		++iteration) {
+		std::vector<std::uint8_t> evidence;
+		const auto start = Clock::now();
+		test_representative_workload(evidence, false);
+		const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
+			Clock::now() - start
+		).count();
+		if (failure_count != 0) {
+			std::fprintf(stderr,
+				"M5_WORKLOAD_BENCHMARK_FAIL failures=%d\n",
+				failure_count);
+			return 1;
+		}
+		if (iteration >= warmup_runs) {
+			std::printf(
+				"M5_WORKLOAD_BENCHMARK_SAMPLE run=%zu duration_ns=%lld\n",
+				iteration - warmup_runs,
+				static_cast<long long>(elapsed)
+			);
+		}
+	}
 	std::printf(
-		"M5_WORKLOAD_METRICS frames=%llu worker_jobs=%llu desired_max=%zu "
-		"records_max=%zu jobs_max=%zu render_max=%zu collision_max=%zu "
-		"resources_max=%zu readiness_max=%llu stale=%llu "
-		"discarded_jobs=%llu discarded_completions=%llu\n",
-		static_cast<unsigned long long>(metrics.frames),
-		static_cast<unsigned long long>(metrics.worker_jobs),
-		metrics.maximum_desired_chunks,
-		metrics.maximum_scheduler_records,
-		metrics.maximum_job_queue,
-		metrics.maximum_render_queue,
-		metrics.maximum_collision_queue,
-		metrics.maximum_resource_entries,
-		static_cast<unsigned long long>(
-			metrics.maximum_readiness_latency_frames
-		),
-		static_cast<unsigned long long>(scheduler_metrics.stale_results),
-		static_cast<unsigned long long>(scheduler_metrics.discarded_jobs),
-		static_cast<unsigned long long>(
-			scheduler_metrics.discarded_completions
-		)
+		"M5_WORKLOAD_BENCHMARK_PASS runs=%zu warmup=%zu frames_per_run=106\n",
+		runs,
+		warmup_runs
 	);
+	return 0;
 }
 
 } // namespace
 
-int main() {
+int main(int argc, char **argv) {
+	if (argc != 1) {
+		std::size_t runs = 0;
+		std::size_t warmup_runs = 0;
+		if (argc != 5 ||
+			std::string_view(argv[1]) != "--benchmark-runs" ||
+			!parse_count(argv[2], runs) ||
+			std::string_view(argv[3]) != "--warmup-runs" ||
+			!parse_count(argv[4], warmup_runs)) {
+			std::fprintf(stderr,
+				"usage: %s [--benchmark-runs N --warmup-runs N]\n",
+				argv[0]);
+			return 2;
+		}
+		return run_benchmark(runs, warmup_runs);
+	}
 	std::vector<std::uint8_t> evidence;
 	test_runtime_delta_contract(evidence);
-	test_representative_workload(evidence);
+	test_representative_workload(evidence, true);
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M5_WORKLOAD_FAIL failures=%d\n", failure_count);
 		return 1;
