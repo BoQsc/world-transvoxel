@@ -386,6 +386,27 @@ m5_storage_cache_test = native_test_env.Program(
     ],
 )
 
+m5_resource_cache_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_m5_resource_cache.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_m5_resource_cache.cpp",
+        "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/physics/wt_collision_builder.cpp",
+        "addons/world_transvoxel/src/render/wt_render_payload.cpp",
+        "addons/world_transvoxel/src/services/wt_chunk_resource_cache.cpp",
+        "addons/world_transvoxel/src/services/wt_chunk_resource_payload.cpp",
+        "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+    ],
+)
+
 storage_tool = native_test_env.Program(
     os.path.join(
         "build",
@@ -520,6 +541,11 @@ if env["platform"] == "windows":
     )
 
     env.AddPostAction(
+        m5_resource_cache_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
+    env.AddPostAction(
         storage_tool,
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
@@ -545,6 +571,7 @@ Default([
     m4_compaction_test,
     m5_async_storage_test,
     m5_storage_cache_test,
+    m5_resource_cache_test,
     storage_tool,
     bake_tool,
 ])

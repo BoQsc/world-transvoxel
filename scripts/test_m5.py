@@ -17,6 +17,9 @@ EXPECTED_ASYNC_STORAGE_HASH = (
 EXPECTED_STORAGE_CACHE_HASH = (
     "11b2749ef19124bf73f6f2e287f0cc0da3c877fd9876d3cd42e0d031bd0f740f"
 )
+EXPECTED_RESOURCE_CACHE_HASH = (
+    "842a4104d541f930c88ed3c6bcea6a1a34f83c4725b88cd3da28803a90c17dc8"
+)
 
 
 def run_hashed_test(
@@ -72,9 +75,16 @@ def test_m5(
             "M5_STORAGE_CACHE_HASH",
             EXPECTED_STORAGE_CACHE_HASH,
         )
+        run_hashed_test(
+            configuration,
+            "test_wt_m5_resource_cache",
+            "M5_RESOURCE_CACHE_PASS",
+            "M5_RESOURCE_CACHE_HASH",
+            EXPECTED_RESOURCE_CACHE_HASH,
+        )
     test_m4(skip_build=True, skip_engine_download=skip_engine_download)
     print(
-        "M5 asynchronous storage and authoritative cache foundations passed "
+        "M5 asynchronous storage and all bounded cache foundations passed "
         "with the complete M4 suite."
     )
 

@@ -35,6 +35,8 @@ unit provides native asynchronous manifest/page loading with content-addressed
 validation, queue backpressure, and generation-tagged completions. Bounded
 encoded-page and decoded-sample caches now add generation rejection,
 immutable identities, byte/item budgets, and deterministic LRU eviction.
+Derived mesh, render, and collision payloads now use the same bounded
+generation-safe ownership model.
 
 ## Tooling
 

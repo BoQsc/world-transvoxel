@@ -27,9 +27,9 @@ invalidation, append-only replay, authoritative sample application, audited
 compaction, migration/inspection tools, and a thin editor bake entry.
 
 M5 production streaming is active. Its asynchronous immutable-page storage
-and authoritative encoded/decoded cache foundations are implemented; derived
-resource caches, runtime integration, representative budgets, and soak
-evidence remain. Compute acceleration is later work.
+and all five bounded native cache tiers are implemented; multi-viewer runtime
+integration, representative budgets, and soak evidence remain. Compute
+acceleration is later work.
 
 Build from the repository root:
 

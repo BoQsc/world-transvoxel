@@ -77,6 +77,10 @@ addons/world_transvoxel/
       wt_lod_map.*
       wt_chunk_priority.*
       wt_job_graph.*
+    services/
+      wt_chunk_application.*
+      wt_chunk_resource_cache.*
+      wt_chunk_resource_payload.*
     storage/
       wt_async_storage_service.*
       wt_storage_page_cache.*
@@ -183,6 +187,10 @@ request generation for later scheduler-side stale-result rejection.
 The authoritative storage cache has independently bounded encoded-page and
 decoded-sample tiers. Both use immutable shared ownership and deterministic
 event-driven LRU eviction; they perform no idle scan.
+
+Mesh, render, and collision payload caches follow the same bounded immutable
+ownership model while retaining independent tier budgets and generation
+supersession.
 
 ## Ownership
 
