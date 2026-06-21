@@ -143,7 +143,7 @@ Writers sort dependencies and pages, so input order does not affect bytes.
 hash:
 
 ```text
-2b5281537b9247480431a3a1dc2608e994e3d458f399f236f3a0186536843b2e
+aec8e150c1001b91a816e9a3d9c5a04362b8098bda5fbace2d916b50de5e0e55
 ```
 
 The test covers schema-1.1 and schema-1.0 migration, manifest round-trip,
@@ -153,5 +153,5 @@ dependencies, configuration disagreement, invalid text, duplicate page keys,
 container corruption, section flags, and extra sections.
 
 Typed edit transactions, spatial invalidation, journal replay, authoritative
-application, and compaction now consume this manifest. Inspection tools and
-command-line/editor baking entry points remain active M4 work.
+application, compaction, inspection, migration, and both bake entry points
+consume this manifest in the completed M4 suite.

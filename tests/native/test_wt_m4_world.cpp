@@ -93,7 +93,7 @@ std::vector<wt::WtDependencyEntry> make_dependencies() {
 		dependency(
 			wt::WtDependencyKind::Generator,
 			"world-transvoxel-baker",
-			"0.4.0-m3",
+			"0.5.0-m4",
 			"generator-version"
 		),
 		dependency(

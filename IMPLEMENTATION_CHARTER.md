@@ -2,9 +2,9 @@
 
 Status: canonical project direction
 
-Last reviewed: 2026-06-20
+Last reviewed: 2026-06-21
 
-Current state: M4 storage/baking/editing in progress; command-line and editor baking complete
+Current state: M4 complete; M5 streaming production baseline is active
 
 ## 1. Authority of this document
 
@@ -996,7 +996,7 @@ or frame-thread readback.
 
 ### M4 - Storage, baking, and editing
 
-Status: next.
+Status: complete on 2026-06-21 for Windows x86-64, Godot 4.6.3 and 4.7.
 
 Deliverables:
 
@@ -1193,29 +1193,26 @@ measurement requirements.
 
 ## 23. Immediate next work
 
-The next and only active milestone is M4.
+The next and only active milestone is M5.
 
 Ordered work:
 
-1. Freeze versioned `wtworld`, `wtchunk`, `wtedit`, and optional `wttrace`
-   headers, section directories, feature flags, checksums, and size limits.
-2. Implement bounded little-endian readers and deterministic writers with the
-   uncompressed `none` codec as the required baseline.
-3. Add direct range-readable chunk pages and explicit source/dependency
-   manifests without embedding backend lookup data.
-4. Build deterministic command-line and editor baking entry points using the
-   native sampling and chunk contracts.
-5. Define typed edit commands, atomic transactions, world revisions, and a
-   spatial index that invalidates affected same-LOD and dependent lower-LOD
-   chunks.
-6. Implement edit journal replay, compaction, save/load, and backend-neutral
-   authoritative state reconstruction.
-7. Add truncation, corrupt offset/size/hash, unknown feature, migration, and
-   deterministic byte-agreement tests.
-8. Record exact M4 evidence and only then mark M4 complete.
+1. Connect immutable `wtworld` manifests and content-addressed `wtchunk`
+   objects to an asynchronous native storage service.
+2. Add bounded page, decoded-sample, mesh, render, and collision caches with
+   explicit ownership and eviction.
+3. Extend desired-set scheduling to multiple viewers without full-world idle
+   scans.
+4. Integrate edit invalidation with loaded-page replacement, generation-token
+   cancellation, remeshing, render readiness, and collision readiness.
+5. Test teleport, fast vehicle, underground, vertical-world, edit, and
+   multi-viewer workloads.
+6. Measure and fix numerical frame, memory, queue, cache, and readiness
+   budgets on representative hardware.
+7. Add fixed-duration soak testing and binary telemetry traces.
+8. Record exact M5 evidence and only then mark M5 complete.
 
-Do not begin production streaming, representative soak budgets, or compute
-acceleration during M4.
+Do not begin optional compute acceleration during M5.
 
 ## 24. Final definition of success
 

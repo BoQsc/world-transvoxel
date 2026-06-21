@@ -134,6 +134,7 @@ REQUIRED_FILES = (
     "docs/milestones/M1_STATUS.md",
     "docs/milestones/M2_STATUS.md",
     "docs/milestones/M3_STATUS.md",
+    "docs/milestones/M4_STATUS.md",
     "docs/contracts/M1_CELL_BACKEND.md",
     "docs/contracts/M2_CHUNK_LOD_CONTRACT.md",
     "docs/contracts/M3_RENDER_COLLISION_CONTRACT.md",
@@ -327,7 +328,7 @@ def validate_charter(errors: list[str]) -> None:
 
     required_statements = (
         "This document is the single source of truth",
-        "The next and only active milestone is M4.",
+        "The next and only active milestone is M5.",
         "exact official compatibility is not proven",
     )
     for statement in required_statements:

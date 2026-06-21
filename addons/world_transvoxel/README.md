@@ -21,12 +21,12 @@ M3 adds deterministic render payloads, Godot `ArrayMesh` resources, sanitized
 concave collision, distance hysteresis, bounded main-thread application,
 generation-checked readiness, and application-latency telemetry.
 
-M3 does not implement editing, storage, production streaming, baking, or
-compute.
+M4 adds versioned world/chunk/edit storage, deterministic dense-volume baking,
+content-addressed manifests, atomic edit transactions, padded spatial
+invalidation, append-only replay, authoritative sample application, audited
+compaction, migration/inspection tools, and a thin editor bake entry.
 
-Active M4 work includes the versioned bounded `wtworld`/`wtchunk`/`wtedit`/
-`wttrace` container and SHA-256 validation. Authoritative chunk and edit
-schemas are not complete yet.
+M5 production streaming is active. Compute acceleration remains later work.
 
 Build from the repository root:
 
@@ -34,7 +34,7 @@ Build from the repository root:
 python scripts/build.py
 ```
 
-Validate the active M4 foundation and all prior milestone contracts:
+Validate M4 and all prior milestone contracts:
 
 ```console
 python scripts/test_m4.py

@@ -90,7 +90,6 @@ truncation, deterministic section ordering, zero-copy views, and corruption of
 magic, version, required features, codec, section bounds, duplicate types,
 container payload, and truncation.
 
-The common container alone does not complete M4. Chunk pages, the world
-manifest/index, and atomic edit transactions now use it. Spatial invalidation,
-journal replay, compaction, migration, and user-facing baking tools remain
-active M4 work.
+The common container is one component of completed M4. Chunk pages, the world
+manifest/index, atomic edit transactions, journal replay, compaction,
+migration, inspection, and baking all use or validate it.

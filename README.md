@@ -14,13 +14,13 @@ If another project document conflicts with the charter, the charter controls.
 
 ## Current phase
 
-R0 through M3 are complete. The addon now has the exact native cell backend,
+R0 through M4 are complete. The addon now has the exact native cell backend,
 closed-seam chunk meshing, bounded scheduling, Godot `ArrayMesh` rendering,
 sanitized concave collision, generation-checked application, and readiness
-telemetry. M4 storage, baking, and editing is active. The versioned bounded
+telemetry. M4 adds the versioned bounded
 container, standalone authoritative chunk pages, native deterministic page
-baker, content-addressed world manifest/index, and SHA-256 corruption checks
-are implemented. Atomic typed edit transactions are also implemented; spatial
+baker, content-addressed world manifest/index, and SHA-256 corruption checks.
+Atomic typed edit transactions are also implemented; spatial
 invalidation now covers padded same-LOD and coarser-LOD dependencies. Journal
 ordering, append recovery, and deterministic replay are implemented.
 Ordered commands now mutate authoritative chunk samples with overlap tests and
@@ -30,7 +30,7 @@ inspection, validation, and migration tools are implemented. The practical
 dense-volume command-line baker is also implemented. Editor scaffolding and
 the editor Tools menu use the same Python/native bake path. The controlled
 codec decision retains deterministic zero-copy `none` and rejects byte RLE.
-Final M4 evidence remains. Production streaming is later work.
+M5 production streaming is now the only active milestone.
 
 ## Tooling
 

@@ -107,6 +107,5 @@ The test covers:
 `DEPS`, and `INDX` fixture and proves it loads with world revision zero.
 
 This component satisfies the native bake-load-edit-save-reload state loop.
-M4 still requires user-facing bake/inspect/validation tools, broader migration
-and corruption fixtures, exact milestone evidence, and the controlled codec
-decision before closure.
+User-facing tools, migration/corruption fixtures, milestone evidence, and the
+controlled codec decision subsequently completed M4.

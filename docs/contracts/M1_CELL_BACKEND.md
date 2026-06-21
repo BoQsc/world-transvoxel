@@ -127,7 +127,8 @@ by an index.
   endpoint.
 - Runtime normal input: world-space `float3` density gradient.
 
-Persistent scalar/material encodings remain an M4 binary-format decision.
+M4 subsequently fixed persistent scalar/material page encoding as
+little-endian float32 density plus categorical uint16 material.
 
 ## M1 proof obligations
 

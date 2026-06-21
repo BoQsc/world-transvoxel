@@ -102,7 +102,6 @@ The test covers:
 - duplicate transaction and command IDs;
 - transaction, command, and byte capacity limits.
 
-Ordered commands now apply directly to authoritative chunk samples. This
-component does not complete M4. Bake-load-edit-save-reload equivalence,
-compaction into a new snapshot with audit identity, migrations, and
-user-facing bake/inspect tools remain active work.
+Ordered commands apply directly to authoritative chunk samples. The completed
+M4 suite also proves bake-load-edit-save-reload equivalence, audited
+compaction, migration, inspection, and baking.

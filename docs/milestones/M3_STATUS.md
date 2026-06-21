@@ -69,4 +69,5 @@ yet provide persistent worlds, deterministic baking, edit transactions,
 production cache eviction, representative soak budgets, or compute
 acceleration.
 
-The next and only active milestone is M4: storage, baking, and editing.
+M4 storage, baking, and editing subsequently completed. The next and only
+active milestone is M5: streaming production baseline.

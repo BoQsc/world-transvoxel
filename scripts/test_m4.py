@@ -14,7 +14,7 @@ from wt_script_common import REPO_ROOT, native_test_path
 
 
 EXPECTED_BAKE_HASH = "7ed6975c20b67762bd00016b4bebd982b6aafcd4766dc3c0e6bbffaf94dfe5ce"
-EXPECTED_WORLD_HASH = "2b5281537b9247480431a3a1dc2608e994e3d458f399f236f3a0186536843b2e"
+EXPECTED_WORLD_HASH = "aec8e150c1001b91a816e9a3d9c5a04362b8098bda5fbace2d916b50de5e0e55"
 EXPECTED_EDIT_HASH = "b8d28a739463c3e43a20d14f9d0496d3041c8e667e77f1e5f029256855a2b26d"
 EXPECTED_SPATIAL_HASH = "dd58c70452ae48e8e32d582d769c13ccfe235b64d612aba668e4ad15d89ef513"
 EXPECTED_JOURNAL_HASH = "82ba948c7f37e5812e5fc40331cf7b07c2fbad58a63903f484448d9dcf71de36"
@@ -159,7 +159,7 @@ def test_m4(skip_build: bool = False, skip_engine_download: bool = False) -> Non
     )
     run_editor_bake_tests()
     test_m3(skip_build=True, skip_engine_download=skip_engine_download)
-    print("M4 storage, baking, authoritative edit replay, and compaction passed with the complete M3 suite.")
+    print("M4 validation passed with storage, baking, editing, tooling, migration, and the complete M3 suite.")
 
 
 def main() -> None:

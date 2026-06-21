@@ -66,7 +66,9 @@ thread readback.
 
 ## M4 - Storage, baking, and editing
 
-Status: in progress; versioned bounded containers, SHA-256 identities,
+Status: complete on 2026-06-21 for Windows x86-64, Godot 4.6.3 and 4.7.
+
+Versioned bounded containers, SHA-256 identities,
 standalone range-addressable chunk pages, deterministic native page baking,
 content-addressed world manifests/indexes, atomic typed edit transactions, and
 bounded padded-sample spatial invalidation, append-only journal recovery, and
@@ -85,6 +87,8 @@ resolved as `none` only.
 Exit: bake-load-edit-save-reload produces identical authoritative state.
 
 ## M5 - Streaming production baseline
+
+Status: next and active.
 
 - multiple viewers;
 - bounded caches and eviction;

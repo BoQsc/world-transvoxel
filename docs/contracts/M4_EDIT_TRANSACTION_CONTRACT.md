@@ -144,5 +144,5 @@ corruption, section flags, and commit-to-command hash disagreement.
 
 The bounded spatial invalidation index consumes these transaction bounds, and
 the append-only journal orders and replays complete transaction containers.
-This component does not complete M4. Compaction, authoritative sample
-reconstruction, migrations, and user-facing bake/inspect tools remain.
+Authoritative reconstruction, compaction, migration, and tools are covered by
+the completed M4 suite.

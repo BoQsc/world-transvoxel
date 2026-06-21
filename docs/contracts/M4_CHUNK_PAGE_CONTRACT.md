@@ -117,6 +117,5 @@ Input key order does not affect output order, bytes, or hashes.
   sections, capacity overflow, duplicate/invalid keys, sample-source failure,
   non-finite density, and invalid page metadata fail safely.
 
-This component does not complete M4. Typed `wtedit` transactions, invalidation
-index, replay, compaction, migrations, and command-line/editor entry points
-remain active work.
+Typed `wtedit` transactions, invalidation, replay, compaction, migrations, and
+command-line/editor entry points consume this page contract in completed M4.

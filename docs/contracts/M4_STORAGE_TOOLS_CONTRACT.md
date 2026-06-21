@@ -70,6 +70,5 @@ temporary directory and runs both debug and release tools. It proves:
 
 No test artifacts or archives remain in the repository.
 
-This component does not complete M4. A practical deterministic command-line
-bake entry point, the controlled codec decision, and final milestone evidence
-remain.
+The deterministic command-line/editor baker, codec decision, and milestone
+evidence subsequently completed the M4 storage workflow.
