@@ -76,6 +76,7 @@ addons/world_transvoxel/
       wt_viewer_state.*
       wt_lod_map.*
       wt_chunk_priority.*
+      wt_multi_viewer_desired_set.*
       wt_job_graph.*
     services/
       wt_chunk_application.*
@@ -191,6 +192,10 @@ event-driven LRU eviction; they perform no idle scan.
 Mesh, render, and collision payload caches follow the same bounded immutable
 ownership model while retaining independent tier budgets and generation
 supersession.
+
+Multi-viewer policy updates feed bounded per-viewer chunk demands into a
+deterministic global priority union. The union emits typed deltas only on
+events; idle access never scans viewers, chunks, or world state.
 
 ## Ownership
 

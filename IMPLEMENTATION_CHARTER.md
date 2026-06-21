@@ -5,7 +5,7 @@ Status: canonical project direction
 Last reviewed: 2026-06-21
 
 Current state: M4 complete; M5 streaming production baseline is active with
-bounded asynchronous storage and all five native cache tiers implemented
+bounded storage/caches and multi-viewer desired-set scheduling implemented
 
 ## 1. Authority of this document
 
@@ -1016,7 +1016,7 @@ all corruption cases fail safely.
 ### M5 - Streaming production baseline
 
 Status: active; asynchronous immutable-page storage and authoritative
-page/sample plus derived resource cache foundations complete.
+page/sample plus derived resource cache and multi-viewer foundations complete.
 
 Deliverables:
 
@@ -1206,8 +1206,8 @@ Ordered work:
 2. Complete: bounded encoded-page, decoded-sample, mesh, render, and collision
    caches have explicit ownership, byte/item budgets, and deterministic
    eviction.
-3. Extend desired-set scheduling to multiple viewers without full-world idle
-   scans.
+3. Complete: desired-set scheduling supports bounded multi-viewer unions and
+   typed deltas without full-world idle scans.
 4. Integrate edit invalidation with loaded-page replacement, generation-token
    cancellation, remeshing, render readiness, and collision readiness.
 5. Test teleport, fast vehicle, underground, vertical-world, edit, and

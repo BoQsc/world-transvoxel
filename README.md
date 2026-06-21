@@ -36,7 +36,8 @@ validation, queue backpressure, and generation-tagged completions. Bounded
 encoded-page and decoded-sample caches now add generation rejection,
 immutable identities, byte/item budgets, and deterministic LRU eviction.
 Derived mesh, render, and collision payloads now use the same bounded
-generation-safe ownership model.
+generation-safe ownership model. Multi-viewer demand events now produce a
+deterministic priority union and typed scheduling deltas without idle scans.
 
 ## Tooling
 

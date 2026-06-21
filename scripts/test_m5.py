@@ -20,6 +20,9 @@ EXPECTED_STORAGE_CACHE_HASH = (
 EXPECTED_RESOURCE_CACHE_HASH = (
     "842a4104d541f930c88ed3c6bcea6a1a34f83c4725b88cd3da28803a90c17dc8"
 )
+EXPECTED_MULTI_VIEWER_HASH = (
+    "584147bbd499abf91f1d37468ea4638b34a18c70aaea362ff9dffb6401dc1d0f"
+)
 
 
 def run_hashed_test(
@@ -82,9 +85,16 @@ def test_m5(
             "M5_RESOURCE_CACHE_HASH",
             EXPECTED_RESOURCE_CACHE_HASH,
         )
+        run_hashed_test(
+            configuration,
+            "test_wt_m5_multi_viewer",
+            "M5_MULTI_VIEWER_PASS",
+            "M5_MULTI_VIEWER_HASH",
+            EXPECTED_MULTI_VIEWER_HASH,
+        )
     test_m4(skip_build=True, skip_engine_download=skip_engine_download)
     print(
-        "M5 asynchronous storage and all bounded cache foundations passed "
+        "M5 storage, cache, and multi-viewer desired-set foundations passed "
         "with the complete M4 suite."
     )
 

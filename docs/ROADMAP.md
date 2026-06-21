@@ -89,14 +89,15 @@ Exit: bake-load-edit-save-reload produces identical authoritative state.
 ## M5 - Streaming production baseline
 
 Status: active; bounded asynchronous immutable-page storage and authoritative
-page/sample plus derived resource cache foundations complete.
+page/sample plus derived resource cache and multi-viewer foundations complete.
 
 - multiple viewers;
 - asynchronous manifest/page storage with content-addressed validation
   (complete);
 - authoritative encoded-page and decoded-sample caches (complete);
 - derived mesh, render, and collision caches (complete);
-- multi-viewer desired-set scheduling without idle world scans (next);
+- multi-viewer desired-set scheduling without idle world scans (complete);
+- edit invalidation and generation-cancelled runtime replacement (next);
 - teleport, fast vehicle, underground, and vertical-world tests;
 - rendering and collision readiness APIs;
 - representative telemetry.
