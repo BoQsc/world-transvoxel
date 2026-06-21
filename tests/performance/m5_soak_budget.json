@@ -1,0 +1,39 @@
+{
+  "profiles": [
+    {
+      "architecture": "x86_64",
+      "limits": {
+        "maximum_collision_max": 16,
+        "maximum_completions_max": 0,
+        "maximum_desired_max": 10,
+        "maximum_jobs_max": 32,
+        "maximum_peak_working_set_bytes": 33554432,
+        "maximum_pending_max": 10,
+        "maximum_readiness_max": 32,
+        "maximum_records_max": 10,
+        "maximum_rejections": 0,
+        "maximum_render_max": 32,
+        "maximum_resources_max": 30,
+        "maximum_trace_bytes": 8388608,
+        "minimum_applied_collision": 1,
+        "minimum_applied_render": 1,
+        "minimum_cancellations": 1,
+        "minimum_duration_ns": 60000000000,
+        "minimum_edit_events": 1,
+        "minimum_frames": 1000,
+        "minimum_stale": 1,
+        "minimum_trace_events": 2,
+        "minimum_viewer_events": 1,
+        "minimum_worker_jobs": 1
+      },
+      "name": "windows-x86_64-reference",
+      "platform": "windows",
+      "reference_host": {
+        "cpu": "Intel64 Family 6 Model 158 Stepping 9, GenuineIntel",
+        "logical_cpu_count": 4,
+        "physical_memory_bytes": 17066790912
+      }
+    }
+  ],
+  "schema": 1
+}

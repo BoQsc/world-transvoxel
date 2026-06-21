@@ -71,6 +71,7 @@ python scripts/test_m5.py
 python tools/benchmark_m5_runtime.py
 python tools/benchmark_m5_pipeline.py
 python tools/benchmark_m5_application.py --engine-version 4.6.3
+python tools/run_m5_soak.py
 python tools/wt_storage.py inspect path/to/world.wtworld
 python tools/wt_storage.py validate path/to/page.wtchunk
 python tools/wt_storage.py migrate-world old.wtworld current.wtworld

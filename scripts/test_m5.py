@@ -35,6 +35,9 @@ EXPECTED_PAGE_TRANSITION_HASH = "7717f75423306cca"
 EXPECTED_PAGE_MESHING_RUNTIME_HASH = (
     "f5509061d2cbc71f70f3ba4f493ad124aa454fe95a9915ec567a05601d6c6b70"
 )
+EXPECTED_RUNTIME_TRACE_HASH = (
+    "31df6c0ed649020984b7ae56b9237d6102bdcf526c26e098c5c0faf1bff0375e"
+)
 
 
 def run_hashed_test(
@@ -207,6 +210,50 @@ def run_application_benchmark_smoke() -> None:
             )
 
 
+def run_soak_smoke() -> None:
+    evidence = REPO_ROOT / "build" / "m5_soak_smoke.json"
+    trace = REPO_ROOT / "build" / "m5_soak_smoke.wttrace"
+    evidence.unlink(missing_ok=True)
+    trace.unlink(missing_ok=True)
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "tools" / "run_m5_soak.py"),
+            "--skip-build",
+            "--no-budget-check",
+            "--duration-seconds",
+            "0.1",
+            "--sample-period-frames",
+            "64",
+            "--output",
+            str(evidence),
+            "--trace",
+            str(trace),
+        ],
+        check=False,
+        text=True,
+        capture_output=True,
+        errors="replace",
+    )
+    combined = result.stdout + result.stderr
+    print(combined, end="" if combined.endswith("\n") else "\n")
+    document = (
+        json.loads(evidence.read_text(encoding="utf-8"))
+        if evidence.is_file()
+        else {}
+    )
+    measurements = document.get("measurements", {})
+    if (
+        result.returncode != 0
+        or document.get("schema") != 1
+        or measurements.get("rejections") != 0
+        or measurements.get("duration_ns", 0) < 100_000_000
+        or not trace.is_file()
+        or "M5_SOAK_BUDGET_PASS" not in combined
+    ):
+        raise RuntimeError("M5 fixed-duration soak interface failed.")
+
+
 def test_m5(
     skip_build: bool = False,
     skip_engine_download: bool = False,
@@ -271,14 +318,23 @@ def test_m5(
             "M5_PAGE_MESHING_RUNTIME_HASH",
             EXPECTED_PAGE_MESHING_RUNTIME_HASH,
         )
+        run_hashed_test(
+            configuration,
+            "test_wt_m5_runtime_trace",
+            "M5_RUNTIME_TRACE_PASS",
+            "M5_RUNTIME_TRACE_HASH",
+            EXPECTED_RUNTIME_TRACE_HASH,
+        )
     run_workload_benchmark_smoke()
     run_pipeline_benchmark_smoke()
     run_application_benchmark_smoke()
+    run_soak_smoke()
     test_m4(skip_build=True, skip_engine_download=skip_engine_download)
     print(
         "M5 storage, cache, page-meshing runtime, multi-viewer, edit "
-        "replacement, and representative functional workloads plus runtime "
-        "pipeline and Godot application budget interfaces "
+        "replacement, representative functional workloads, binary trace "
+        "format, and runtime pipeline, Godot application, and fixed-duration "
+        "soak budget interfaces "
         "passed with the complete M4 suite."
     )
 

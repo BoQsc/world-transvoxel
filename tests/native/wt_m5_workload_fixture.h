@@ -23,9 +23,11 @@ struct WtM5WorkloadMetrics {
 	std::size_t maximum_desired_chunks = 0;
 	std::size_t maximum_scheduler_records = 0;
 	std::size_t maximum_job_queue = 0;
+	std::size_t maximum_completion_queue = 0;
 	std::size_t maximum_render_queue = 0;
 	std::size_t maximum_collision_queue = 0;
 	std::size_t maximum_resource_entries = 0;
+	std::size_t maximum_pending_readiness = 0;
 	std::uint64_t maximum_readiness_latency_frames = 0;
 };
 
@@ -55,6 +57,7 @@ public:
 	const WtEditRuntimeReplacementService &edit_service() const noexcept;
 	WtM5WorkloadMetrics get_metrics() const noexcept;
 	std::uint64_t world_revision() const noexcept;
+	std::size_t pending_readiness_count() const noexcept;
 
 private:
 	struct PendingReadiness {

@@ -103,6 +103,20 @@ record_checksum
 Transactions commit atomically through a journal footer or commit record.
 Compaction produces a new snapshot and retains a migration audit.
 
+## Runtime trace
+
+`*.wttrace` uses the common `WTTRACE` container with fixed `META` and `EVNT`
+sections. Schema 1 stores 80 bytes of run metadata and 128-byte checkpoint or
+final records. Records contain monotonic sequence, elapsed-time, and simulated
+frame fields plus bounded queue, ownership, readiness, event, stale-result,
+and rejection counters.
+
+Trace writers have a construction-time event capacity. There are no strings,
+wall-clock timestamps, native structure images, pointer-sized fields, Godot
+variants, or backend topology records in the format. The normative field
+layout, validation rules, limits, and soak usage are defined in
+`docs/contracts/M5_BINARY_TELEMETRY_SOAK_CONTRACT.md`.
+
 ## Bake reproducibility
 
 Every baked artifact records:

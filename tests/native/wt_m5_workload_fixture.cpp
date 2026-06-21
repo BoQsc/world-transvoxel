@@ -343,6 +343,10 @@ void WtM5WorkloadFixture::update_maxima() {
 		metrics_.maximum_job_queue,
 		scheduler_.queued_job_count()
 	);
+	metrics_.maximum_completion_queue = std::max(
+		metrics_.maximum_completion_queue,
+		scheduler_.queued_completion_count()
+	);
 	metrics_.maximum_render_queue = std::max(
 		metrics_.maximum_render_queue,
 		application_.queued_render_count()
@@ -358,6 +362,10 @@ void WtM5WorkloadFixture::update_maxima() {
 	metrics_.maximum_resource_entries = std::max(
 		metrics_.maximum_resource_entries,
 		resource_entries
+	);
+	metrics_.maximum_pending_readiness = std::max(
+		metrics_.maximum_pending_readiness,
+		pending_.size()
 	);
 }
 
@@ -409,6 +417,10 @@ WtM5WorkloadMetrics WtM5WorkloadFixture::get_metrics() const noexcept {
 
 std::uint64_t WtM5WorkloadFixture::world_revision() const noexcept {
 	return world_revision_;
+}
+
+std::size_t WtM5WorkloadFixture::pending_readiness_count() const noexcept {
+	return pending_.size();
 }
 
 } // namespace world_transvoxel::testing

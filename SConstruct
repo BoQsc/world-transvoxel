@@ -63,6 +63,7 @@ sources = (
     + Glob("addons/world_transvoxel/src/services/*.cpp")
     + Glob("addons/world_transvoxel/src/storage/*.cpp")
     + Glob("addons/world_transvoxel/src/streaming/*.cpp")
+    + Glob("addons/world_transvoxel/src/telemetry/*.cpp")
     + Glob("addons/world_transvoxel/src/testing/*.cpp")
 )
 
@@ -458,6 +459,29 @@ m5_edit_replacement_test = native_test_env.Program(
     ],
 )
 
+m5_workload_runtime_sources = [
+    "tests/native/wt_m5_workload_fixture.cpp",
+    "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+    "addons/world_transvoxel/src/editing/wt_edit_spatial_index.cpp",
+    "addons/world_transvoxel/src/editing/wt_edit_types.cpp",
+    "addons/world_transvoxel/src/physics/wt_collision_apply_queue.cpp",
+    "addons/world_transvoxel/src/physics/wt_collision_builder.cpp",
+    "addons/world_transvoxel/src/render/wt_render_apply_queue.cpp",
+    "addons/world_transvoxel/src/render/wt_render_payload.cpp",
+    "addons/world_transvoxel/src/services/wt_chunk_application.cpp",
+    "addons/world_transvoxel/src/services/wt_chunk_resource_cache.cpp",
+    "addons/world_transvoxel/src/services/wt_chunk_resource_payload.cpp",
+    "addons/world_transvoxel/src/services/wt_desired_set_runtime.cpp",
+    "addons/world_transvoxel/src/services/wt_edit_runtime_replacement.cpp",
+    "addons/world_transvoxel/src/storage/wt_binary_io.cpp",
+    "addons/world_transvoxel/src/storage/wt_chunk_page.cpp",
+    "addons/world_transvoxel/src/storage/wt_container_format.cpp",
+    "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+    "addons/world_transvoxel/src/storage/wt_storage_page_cache.cpp",
+    "addons/world_transvoxel/src/streaming/wt_multi_viewer_desired_set.cpp",
+    "addons/world_transvoxel/src/streaming/wt_stream_scheduler.cpp",
+]
+
 m5_workload_test = native_test_env.Program(
     os.path.join(
         "build",
@@ -468,29 +492,42 @@ m5_workload_test = native_test_env.Program(
             ".exe" if env["platform"] == "windows" else "",
         ),
     ),
+    source=["tests/native/test_wt_m5_workload.cpp"] + m5_workload_runtime_sources,
+)
+
+m5_runtime_trace_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_m5_runtime_trace.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
     source=[
-        "tests/native/test_wt_m5_workload.cpp",
-        "tests/native/wt_m5_workload_fixture.cpp",
-        "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
-        "addons/world_transvoxel/src/editing/wt_edit_spatial_index.cpp",
-        "addons/world_transvoxel/src/editing/wt_edit_types.cpp",
-        "addons/world_transvoxel/src/physics/wt_collision_apply_queue.cpp",
-        "addons/world_transvoxel/src/physics/wt_collision_builder.cpp",
-        "addons/world_transvoxel/src/render/wt_render_apply_queue.cpp",
-        "addons/world_transvoxel/src/render/wt_render_payload.cpp",
-        "addons/world_transvoxel/src/services/wt_chunk_application.cpp",
-        "addons/world_transvoxel/src/services/wt_chunk_resource_cache.cpp",
-        "addons/world_transvoxel/src/services/wt_chunk_resource_payload.cpp",
-        "addons/world_transvoxel/src/services/wt_desired_set_runtime.cpp",
-        "addons/world_transvoxel/src/services/wt_edit_runtime_replacement.cpp",
+        "tests/native/test_wt_m5_runtime_trace.cpp",
         "addons/world_transvoxel/src/storage/wt_binary_io.cpp",
-        "addons/world_transvoxel/src/storage/wt_chunk_page.cpp",
         "addons/world_transvoxel/src/storage/wt_container_format.cpp",
         "addons/world_transvoxel/src/storage/wt_hash256.cpp",
-        "addons/world_transvoxel/src/storage/wt_storage_page_cache.cpp",
-        "addons/world_transvoxel/src/streaming/wt_multi_viewer_desired_set.cpp",
-        "addons/world_transvoxel/src/streaming/wt_stream_scheduler.cpp",
+        "addons/world_transvoxel/src/telemetry/wt_runtime_trace.cpp",
     ],
+)
+
+m5_soak_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_m5_soak.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_m5_soak.cpp",
+        "addons/world_transvoxel/src/telemetry/wt_runtime_trace.cpp",
+    ] + m5_workload_runtime_sources,
 )
 
 m5_pipeline_budget_test = native_test_env.Program(
@@ -735,6 +772,16 @@ if env["platform"] == "windows":
     )
 
     env.AddPostAction(
+        m5_runtime_trace_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
+    env.AddPostAction(
+        m5_soak_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
+    env.AddPostAction(
         m5_pipeline_budget_test,
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
@@ -779,6 +826,8 @@ Default([
     m5_multi_viewer_test,
     m5_edit_replacement_test,
     m5_workload_test,
+    m5_runtime_trace_test,
+    m5_soak_test,
     m5_pipeline_budget_test,
     m5_page_transition_test,
     m5_page_meshing_runtime_test,
