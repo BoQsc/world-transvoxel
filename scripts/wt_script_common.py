@@ -184,6 +184,22 @@ def native_test_path(
     )
 
 
+def native_tool_path(
+    configuration: str,
+    tool_name: str,
+) -> Path:
+    host = host_platform()
+    return (
+        REPO_ROOT
+        / "build"
+        / "tools"
+        / (
+            f"{tool_name}.{configuration}."
+            f"{host.godot_arch}{host.executable_suffix}"
+        )
+    )
+
+
 def addon_binary_path(configuration: str) -> Path:
     host = host_platform()
     filename = (

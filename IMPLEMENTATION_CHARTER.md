@@ -4,7 +4,7 @@ Status: canonical project direction
 
 Last reviewed: 2026-06-20
 
-Current state: M4 storage/baking/editing in progress; audited snapshot compaction complete
+Current state: M4 storage/baking/editing in progress; storage inspection and migration tools complete
 
 ## 1. Authority of this document
 

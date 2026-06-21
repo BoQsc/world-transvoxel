@@ -5,10 +5,11 @@ from __future__ import annotations
 import argparse
 import re
 import subprocess
+import sys
 
 from build import build
 from test_m3 import test_m3
-from wt_script_common import native_test_path
+from wt_script_common import REPO_ROOT, native_test_path
 
 
 EXPECTED_BAKE_HASH = "7ed6975c20b67762bd00016b4bebd982b6aafcd4766dc3c0e6bbffaf94dfe5ce"
@@ -114,6 +115,11 @@ def test_m4(skip_build: bool = False, skip_engine_download: bool = False) -> Non
         build("all")
     for configuration in ("template_debug", "template_release"):
         run_m4_tests(configuration)
+    subprocess.run(
+        [sys.executable, REPO_ROOT / "scripts" / "test_m4_tools.py"],
+        cwd=REPO_ROOT,
+        check=True,
+    )
     test_m3(skip_build=True, skip_engine_download=skip_engine_download)
     print("M4 storage, baking, authoritative edit replay, and compaction passed with the complete M3 suite.")
 

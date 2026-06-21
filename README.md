@@ -25,8 +25,10 @@ invalidation now covers padded same-LOD and coarser-LOD dependencies. Journal
 ordering, append recovery, and deterministic replay are implemented.
 Ordered commands now mutate authoritative chunk samples with overlap tests and
 finite-result rejection. Snapshot compaction now emits audited replacement
-pages and a revisioned world manifest. User-facing storage tools and final M4
-closure remain. Production streaming is later work.
+pages and a revisioned world manifest. Native-backed Python storage
+inspection, validation, and migration tools are implemented. The practical
+command-line baker and final M4 closure remain. Production streaming is later
+work.
 
 ## Tooling
 
@@ -38,6 +40,9 @@ there are no operating-system shell scripts in the project-owned toolchain.
 python scripts/bootstrap_toolchain.py
 python scripts/build.py
 python scripts/test_m4.py
+python tools/wt_storage.py inspect path/to/world.wtworld
+python tools/wt_storage.py validate path/to/page.wtchunk
+python tools/wt_storage.py migrate-world old.wtworld current.wtworld
 ```
 
 ## Production strategy
