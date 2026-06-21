@@ -6,6 +6,7 @@
     "MeshInstance3D",
     "Node3D",
     "OS",
+    "ProjectSettings",
     "Resource",
     "StaticBody3D"
   ]

@@ -394,6 +394,16 @@ std::uint64_t WtAsyncStorageService::source_revision() const noexcept {
 	return open_ ? manifest_.source_revision : 0;
 }
 
+std::uint64_t WtAsyncStorageService::world_revision() const noexcept {
+	std::lock_guard<std::mutex> lock(mutex_);
+	return open_ ? manifest_.world_revision : 0;
+}
+
+std::size_t WtAsyncStorageService::page_count() const noexcept {
+	std::lock_guard<std::mutex> lock(mutex_);
+	return open_ ? manifest_.pages.size() : 0;
+}
+
 std::size_t WtAsyncStorageService::queued_request_count() const noexcept {
 	std::lock_guard<std::mutex> lock(mutex_);
 	return requests_.size();

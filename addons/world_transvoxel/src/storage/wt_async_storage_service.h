@@ -100,6 +100,8 @@ public:
 
 	bool is_open() const noexcept;
 	std::uint64_t source_revision() const noexcept;
+	std::uint64_t world_revision() const noexcept;
+	std::size_t page_count() const noexcept;
 	std::size_t queued_request_count() const noexcept;
 	std::size_t queued_completion_count() const noexcept;
 	WtAsyncStorageMetrics get_metrics() const noexcept;

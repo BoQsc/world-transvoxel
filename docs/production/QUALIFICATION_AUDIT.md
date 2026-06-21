@@ -9,8 +9,8 @@ Status: current production boundary and finite remaining plan
 M0 through M5 produced tested native components, but the addon is not yet a
 production terrain system. `WorldTransvoxelTerrain` currently owns the Godot
 render/collision application queues and test fixtures; it does not yet connect
-manifest loading, viewer demand, page meshing, edits, queries, or persistence
-into a real world lifecycle.
+viewer demand, page meshing, edits, queries, or persistence into the now
+implemented manifest lifecycle.
 
 The repository also has no root `world_transvoxel/` example/application
 directory. Current Godot tests instantiate the addon from the development
@@ -26,7 +26,7 @@ between the completed components and the production finish line.
 | install addon | debug/release binaries load on Godot 4.6.3 and 4.7 | clean copied-addon project not yet proven |
 | configure runtime | M5 limits and defaults are locked | explicit schema-1 `WorldTransvoxelConfig` now implemented and attached |
 | bake world | deterministic CLI and editor path complete | no example project invokes the result as a terrain world |
-| load world | manifest/page readers and corruption checks complete | no facade lifecycle or world handle |
+| load world | manifest/page readers and corruption checks complete | asynchronous facade manifest lifecycle complete; page streaming is PQ1 |
 | stream chunks | scheduler, multi-viewer union, caches, and page-meshing runtime complete | no integrated runtime coordinator behind the facade |
 | render/collide | real Godot sinks and budgets complete | driven only by tests, not streamed world state |
 | edit world | transaction, spatial invalidation, journal, replay, and replacement complete | no public edit capability or lifecycle ownership |
@@ -34,7 +34,7 @@ between the completed components and the production finish line.
 | save/reload | journal and compaction round trips complete | no facade save/reload workflow |
 | migrate | native/Python migration tooling complete | not exercised by a clean application workflow |
 | telemetry | bounded binary trace and 60-second orchestration soak complete | not exposed through a public runtime capability |
-| shutdown | queued Godot application teardown is tested | full I/O/meshing/edit runtime shutdown absent |
+| shutdown | queued Godot application teardown is tested | manifest/storage lifecycle shutdown complete; meshing/edit ownership follows in PQ1/PQ2 |
 
 The addon version was stale at `0.5.0-m4`; the configuration foundation moves
 it to `0.6.0-m5`, matching the completed milestone without claiming a
@@ -46,13 +46,17 @@ production release.
 
 - complete: immutable-on-start schema-1 runtime configuration resource;
 - complete: native and Godot validation on both supported engines;
-- next: explicit stopped/starting/running/stopping/failed lifecycle;
-- next: validated manifest path and asynchronous startup/shutdown ownership.
+- complete: explicit stopped/starting/running/stopping/failed lifecycle;
+- complete: validated manifest path and asynchronous startup/shutdown
+  ownership.
 
-Exit: a terrain node starts and stops one validated baked world without test
-fixtures or leaked workers/resources.
+Exit: passed. A terrain node starts, reports, fails, restarts, and stops one
+validated baked manifest through production storage ownership without leaked
+workers/resources.
 
 ### PQ1 - Read-only real world
+
+Status: next.
 
 - connect viewer events to desired-set, scheduler, page I/O, official MIT
   meshing, resource caches, and Godot sinks;

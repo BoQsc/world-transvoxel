@@ -635,6 +635,31 @@ production_config_test = native_test_env.Program(
     ],
 )
 
+production_lifecycle_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_production_lifecycle.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_production_lifecycle.cpp",
+        "tests/native/wt_production_world_fixture.cpp",
+        "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/services/wt_runtime_config.cpp",
+        "addons/world_transvoxel/src/services/wt_world_lifecycle.cpp",
+        "addons/world_transvoxel/src/storage/wt_async_storage_service.cpp",
+        "addons/world_transvoxel/src/storage/wt_binary_io.cpp",
+        "addons/world_transvoxel/src/storage/wt_chunk_page.cpp",
+        "addons/world_transvoxel/src/storage/wt_container_format.cpp",
+        "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+        "addons/world_transvoxel/src/storage/wt_world_manifest.cpp",
+    ],
+)
+
 storage_tool = native_test_env.Program(
     os.path.join(
         "build",
@@ -819,6 +844,11 @@ if env["platform"] == "windows":
     )
 
     env.AddPostAction(
+        production_lifecycle_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
+    env.AddPostAction(
         storage_tool,
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
@@ -854,6 +884,7 @@ Default([
     m5_page_transition_test,
     m5_page_meshing_runtime_test,
     production_config_test,
+    production_lifecycle_test,
     storage_tool,
     bake_tool,
 ])

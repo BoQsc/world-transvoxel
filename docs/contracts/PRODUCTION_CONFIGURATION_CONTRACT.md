@@ -7,7 +7,8 @@ Status: complete foundation for production qualification PQ0
 `WorldTransvoxelConfig` is the versioned Godot `Resource` that records every
 construction-time bound already required by the M5 native services. It is
 attached to `WorldTransvoxelTerrain`, but it does not start a world or allocate
-runtime services. Startup remains the next PQ0 unit.
+runtime services by itself. `PRODUCTION_LIFECYCLE_CONTRACT.md` now consumes an
+immutable copy during asynchronous startup.
 
 The C++ authority is the fixed-width `WtRuntimeConfig`. Godot values convert to
 that structure and pass the same native validator before lifecycle startup can
@@ -80,5 +81,5 @@ python scripts/test_production_qualification.py
 ```
 
 That suite includes the complete M5-through-M0 regression chain. Passing this
-contract means the first PQ0 foundation is complete, not that the addon is
-production-ready.
+contract together with `PRODUCTION_LIFECYCLE_CONTRACT.md` completes PQ0, not
+the production finish line.

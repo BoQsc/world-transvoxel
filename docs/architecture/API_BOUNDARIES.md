@@ -17,6 +17,8 @@ High-level `Node3D` facade.
 - emit coarse lifecycle and error signals.
 
 It does not expose internal queues, chunk dictionaries, RIDs, or worker state.
+PQ0 implements explicit asynchronous manifest startup/failure/restart/stop and
+read-only lifecycle metadata. Viewer-driven page streaming remains PQ1.
 
 ### `WorldTransvoxelConfig`
 

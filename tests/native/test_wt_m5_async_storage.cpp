@@ -335,6 +335,8 @@ void test_async_service(
 	);
 	check(service.is_open(), "open service reports closed");
 	check(service.source_revision() == 9001, "source revision mismatch");
+	check(service.world_revision() == 41 && service.page_count() == 5,
+		"open manifest metadata mismatch");
 	check(
 		service.open(fixture.world_path, fixture.root) ==
 			wt::WtAsyncStorageStatus::AlreadyOpen,
@@ -472,6 +474,9 @@ void test_async_service(
 	append_u64(evidence, metrics.bytes_read);
 	service.close();
 	check(!service.is_open(), "closed service reports open");
+	check(service.source_revision() == 0 && service.world_revision() == 0 &&
+		service.page_count() == 0,
+		"closed storage retained manifest metadata");
 	check(
 		service.request_page(fixture.pages[0].key, { 18 }, 0) ==
 			wt::WtAsyncStorageStatus::NotOpen,

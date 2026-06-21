@@ -1,6 +1,7 @@
 #pragma once
 
 #include "api/world_transvoxel_config.h"
+#include "services/wt_world_lifecycle.h"
 
 #include <godot_cpp/classes/node3d.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
@@ -43,6 +44,18 @@ public:
 	godot::Ref<WorldTransvoxelConfig> get_configuration() const;
 	bool is_configuration_valid() const noexcept;
 	godot::String get_configuration_error() const;
+	bool start_world(
+		const godot::String &world_manifest_path,
+		const godot::String &object_root
+	);
+	bool stop_world();
+	std::int64_t get_world_state() const noexcept;
+	godot::String get_world_state_name() const;
+	bool is_world_running() const noexcept;
+	godot::String get_world_error() const;
+	std::int64_t get_world_source_revision() const noexcept;
+	std::int64_t get_world_revision() const noexcept;
+	std::int64_t get_world_page_count() const noexcept;
 	void set_render_apply_budget(std::int64_t budget);
 	std::int64_t get_render_apply_budget() const noexcept;
 	void set_collision_apply_budget(std::int64_t budget);
@@ -71,7 +84,14 @@ public:
 	std::int64_t _m5_benchmark_clear();
 
 private:
+	void emit_lifecycle_state(WtWorldLifecycleState state);
+	void notify_lifecycle_state();
+
 	godot::Ref<WorldTransvoxelConfig> configuration_;
+	std::unique_ptr<WtWorldLifecycleService> lifecycle_;
+	WtWorldLifecycleState last_notified_state_ =
+		WtWorldLifecycleState::Stopped;
+	godot::String synchronous_world_error_ = "ok";
 	std::unique_ptr<WtChunkApplicationService> application_;
 	std::unique_ptr<WtGodotRenderSink> render_sink_;
 	std::unique_ptr<WtGodotCollisionSink> collision_sink_;

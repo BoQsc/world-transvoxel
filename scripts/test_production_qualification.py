@@ -22,12 +22,22 @@ ARTIFACT_ROOT = REPO_ROOT / "artifacts" / "production-qualification"
 EXPECTED_CONFIG_HASH = (
     "c21861342875b96db0bad453f8251d4586994f579e75188be102af1155af0104"
 )
+EXPECTED_LIFECYCLE_HASH = (
+    "ccdb1e1ad000f824ebd4628e640a6c1d95f9d734cc1298f738de3d0c98f3a126"
+)
+LIFECYCLE_FIXTURE_ROOT = REPO_ROOT / "build" / "production-lifecycle-fixture"
 
 
-def run_native_config(configuration: str) -> None:
-    executable = native_test_path(configuration, "test_wt_production_config")
+def run_hashed_native(
+    configuration: str,
+    test_name: str,
+    pass_marker: str,
+    hash_label: str,
+    expected_hash: str,
+) -> None:
+    executable = native_test_path(configuration, test_name)
     if not executable.is_file():
-        raise RuntimeError(f"Missing production config test: {executable}")
+        raise RuntimeError(f"Missing production native test: {executable}")
     result = subprocess.run(
         [str(executable)],
         cwd=REPO_ROOT,
@@ -38,20 +48,53 @@ def run_native_config(configuration: str) -> None:
     )
     combined = result.stdout + result.stderr
     print(combined, end="" if combined.endswith("\n") else "\n")
-    match = re.search(r"PRODUCTION_CONFIG_HASH ([0-9a-f]{64})", combined)
+    match = re.search(rf"{hash_label} ([0-9a-f]{{64}})", combined)
     if (
         result.returncode != 0
-        or "PRODUCTION_CONFIG_PASS" not in combined
+        or pass_marker not in combined
         or match is None
-        or match.group(1) != EXPECTED_CONFIG_HASH
+        or match.group(1) != expected_hash
     ):
         actual = "missing" if match is None else match.group(1)
         raise RuntimeError(
-            f"Production config contract failed for {configuration}: {actual}"
+            f"{test_name} failed for {configuration}: {actual}"
         )
 
 
-def run_godot_config(engine: Path, name: str) -> None:
+def prepare_lifecycle_fixture() -> None:
+    if LIFECYCLE_FIXTURE_ROOT.exists():
+        shutil.rmtree(LIFECYCLE_FIXTURE_ROOT)
+    executable = native_test_path(
+        "template_release", "test_wt_production_lifecycle"
+    )
+    result = subprocess.run(
+        [
+            str(executable),
+            "--write-godot-fixture",
+            str(LIFECYCLE_FIXTURE_ROOT),
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        text=True,
+        capture_output=True,
+        errors="replace",
+    )
+    combined = result.stdout + result.stderr
+    print(combined, end="" if combined.endswith("\n") else "\n")
+    if (
+        result.returncode != 0
+        or "PRODUCTION_LIFECYCLE_FIXTURE_PASS" not in combined
+        or not (LIFECYCLE_FIXTURE_ROOT / "world.wtworld").is_file()
+    ):
+        raise RuntimeError("Production lifecycle fixture generation failed.")
+
+
+def run_godot_test(
+    engine: Path,
+    name: str,
+    script: str,
+    pass_marker: str,
+) -> None:
     ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
     result = subprocess.run(
         [
@@ -60,7 +103,7 @@ def run_godot_config(engine: Path, name: str) -> None:
             "--path",
             str(REPO_ROOT),
             "--script",
-            "res://tests/godot/production_config_test.gd",
+            script,
         ],
         cwd=REPO_ROOT,
         check=False,
@@ -76,8 +119,23 @@ def run_godot_config(engine: Path, name: str) -> None:
     )
     combined = result.stdout + result.stderr
     print(combined, end="" if combined.endswith("\n") else "\n")
-    if result.returncode != 0 or "PRODUCTION_GODOT_CONFIG_PASS" not in combined:
-        raise RuntimeError(f"Production Godot config failed for {name}.")
+    if result.returncode != 0 or pass_marker not in combined:
+        raise RuntimeError(f"Production Godot test failed for {name}.")
+
+
+def run_engine_tests(engine: Path, name: str) -> None:
+    run_godot_test(
+        engine,
+        f"{name}-config",
+        "res://tests/godot/production_config_test.gd",
+        "PRODUCTION_GODOT_CONFIG_PASS",
+    )
+    run_godot_test(
+        engine,
+        f"{name}-lifecycle",
+        "res://tests/godot/production_lifecycle_test.gd",
+        "PRODUCTION_GODOT_LIFECYCLE_PASS",
+    )
 
 
 def run_godot_matrix() -> None:
@@ -85,7 +143,7 @@ def run_godot_matrix() -> None:
     for spec, engine in engines:
         if not engine.is_file():
             raise RuntimeError(f"Required test engine is missing: {engine}")
-        run_godot_config(engine, f"{spec.version}-debug-config")
+        run_engine_tests(engine, f"{spec.version}-debug")
 
     debug_binary = addon_binary_path("template_debug")
     release_binary = addon_binary_path("template_release")
@@ -94,7 +152,7 @@ def run_godot_matrix() -> None:
     try:
         shutil.copy2(release_binary, debug_binary)
         for spec, engine in engines:
-            run_godot_config(engine, f"{spec.version}-release-config")
+            run_engine_tests(engine, f"{spec.version}-release")
     finally:
         shutil.copy2(backup, debug_binary)
 
@@ -108,12 +166,26 @@ def test_production_qualification(
     if not skip_engine_download:
         download_test_engines()
     for configuration in ("template_debug", "template_release"):
-        run_native_config(configuration)
+        run_hashed_native(
+            configuration,
+            "test_wt_production_config",
+            "PRODUCTION_CONFIG_PASS",
+            "PRODUCTION_CONFIG_HASH",
+            EXPECTED_CONFIG_HASH,
+        )
+        run_hashed_native(
+            configuration,
+            "test_wt_production_lifecycle",
+            "PRODUCTION_LIFECYCLE_PASS",
+            "PRODUCTION_LIFECYCLE_HASH",
+            EXPECTED_LIFECYCLE_HASH,
+        )
+    prepare_lifecycle_fixture()
     run_godot_matrix()
     test_m5(skip_build=True, skip_engine_download=skip_engine_download)
     print(
-        "Production qualification configuration foundation passed with the "
-        "complete M5 regression suite."
+        "Production qualification configuration and lifecycle foundations "
+        "passed with the complete M5 regression suite."
     )
 
 

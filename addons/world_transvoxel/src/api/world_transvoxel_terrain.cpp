@@ -8,6 +8,7 @@
 #include "testing/wt_m3_integration_fixture.h"
 #include "testing/wt_m5_application_benchmark_fixture.h"
 
+#include <godot_cpp/classes/project_settings.hpp>
 #include <godot_cpp/core/class_db.hpp>
 
 #include <algorithm>
@@ -35,6 +36,7 @@ void WorldTransvoxelTerrain::_process(double delta) {
 		*render_sink_,
 		*collision_sink_
 	);
+	notify_lifecycle_state();
 }
 
 void WorldTransvoxelTerrain::_bind_methods() {
@@ -88,6 +90,51 @@ void WorldTransvoxelTerrain::_bind_methods() {
 		"set_configuration",
 		"get_configuration"
 	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("start_world", "world_manifest_path", "object_root"),
+		&WorldTransvoxelTerrain::start_world
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("stop_world"),
+		&WorldTransvoxelTerrain::stop_world
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_world_state"),
+		&WorldTransvoxelTerrain::get_world_state
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_world_state_name"),
+		&WorldTransvoxelTerrain::get_world_state_name
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("is_world_running"),
+		&WorldTransvoxelTerrain::is_world_running
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_world_error"),
+		&WorldTransvoxelTerrain::get_world_error
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_world_source_revision"),
+		&WorldTransvoxelTerrain::get_world_source_revision
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_world_revision"),
+		&WorldTransvoxelTerrain::get_world_revision
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_world_page_count"),
+		&WorldTransvoxelTerrain::get_world_page_count
+	);
+	ADD_SIGNAL(godot::MethodInfo(
+		"world_state_changed",
+		godot::PropertyInfo(godot::Variant::INT, "state"),
+		godot::PropertyInfo(godot::Variant::STRING, "state_name")
+	));
+	ADD_SIGNAL(godot::MethodInfo(
+		"world_failed",
+		godot::PropertyInfo(godot::Variant::STRING, "error")
+	));
 	godot::ClassDB::bind_method(
 		godot::D_METHOD("set_render_apply_budget", "budget"),
 		&WorldTransvoxelTerrain::set_render_apply_budget
@@ -206,6 +253,10 @@ godot::String WorldTransvoxelTerrain::get_backend_upstream_revision() const {
 void WorldTransvoxelTerrain::set_configuration(
 	const godot::Ref<WorldTransvoxelConfig> &configuration
 ) {
+	if (lifecycle_ &&
+		lifecycle_->state() != WtWorldLifecycleState::Stopped) {
+		return;
+	}
 	configuration_ = configuration;
 }
 
@@ -222,6 +273,138 @@ godot::String WorldTransvoxelTerrain::get_configuration_error() const {
 	return configuration_.is_valid() ?
 		configuration_->get_validation_error() :
 		godot::String("configuration is required");
+}
+
+namespace {
+
+std::filesystem::path globalized_path(const godot::String &path) {
+	const godot::String global =
+		godot::ProjectSettings::get_singleton()->globalize_path(path);
+	const godot::CharString utf8 = global.utf8();
+	return std::filesystem::u8path(utf8.get_data());
+}
+
+} // namespace
+
+bool WorldTransvoxelTerrain::start_world(
+	const godot::String &world_manifest_path,
+	const godot::String &object_root
+) {
+	if (!is_configuration_valid()) {
+		synchronous_world_error_ = get_configuration_error();
+		return false;
+	}
+	if (lifecycle_ &&
+		lifecycle_->state() != WtWorldLifecycleState::Stopped) {
+		synchronous_world_error_ =
+			"world lifecycle state does not allow startup";
+		return false;
+	}
+	const WtRuntimeConfig config = configuration_->to_native();
+	auto lifecycle = std::make_unique<WtWorldLifecycleService>(config);
+	const WtWorldLifecycleStatus status = lifecycle->start(
+		globalized_path(world_manifest_path),
+		globalized_path(object_root)
+	);
+	if (status != WtWorldLifecycleStatus::Ok) {
+		synchronous_world_error_ =
+			wt_world_lifecycle_status_message(status);
+		return false;
+	}
+	lifecycle_ = std::move(lifecycle);
+	render_apply_budget_ = static_cast<std::size_t>(
+		config.render_apply_budget
+	);
+	collision_apply_budget_ = static_cast<std::size_t>(
+		config.collision_apply_budget
+	);
+	synchronous_world_error_ = "ok";
+	emit_lifecycle_state(WtWorldLifecycleState::Starting);
+	return true;
+}
+
+bool WorldTransvoxelTerrain::stop_world() {
+	if (!lifecycle_) {
+		synchronous_world_error_ = "world is already stopped";
+		return false;
+	}
+	const WtWorldLifecycleStatus status = lifecycle_->request_stop();
+	if (status != WtWorldLifecycleStatus::Ok &&
+		status != WtWorldLifecycleStatus::AlreadyStopping) {
+		synchronous_world_error_ =
+			wt_world_lifecycle_status_message(status);
+		return false;
+	}
+	synchronous_world_error_ = "ok";
+	emit_lifecycle_state(WtWorldLifecycleState::Stopping);
+	return true;
+}
+
+std::int64_t WorldTransvoxelTerrain::get_world_state() const noexcept {
+	return static_cast<std::int64_t>(
+		lifecycle_ ? lifecycle_->state() : WtWorldLifecycleState::Stopped
+	);
+}
+
+godot::String WorldTransvoxelTerrain::get_world_state_name() const {
+	const WtWorldLifecycleState state = lifecycle_ ?
+		lifecycle_->state() : WtWorldLifecycleState::Stopped;
+	return wt_world_lifecycle_state_name(state);
+}
+
+bool WorldTransvoxelTerrain::is_world_running() const noexcept {
+	return lifecycle_ &&
+		lifecycle_->state() == WtWorldLifecycleState::Running;
+}
+
+godot::String WorldTransvoxelTerrain::get_world_error() const {
+	if (lifecycle_ &&
+		lifecycle_->last_storage_status() != WtAsyncStorageStatus::Ok) {
+		return wt_async_storage_status_message(
+			lifecycle_->last_storage_status()
+		);
+	}
+	return synchronous_world_error_;
+}
+
+std::int64_t
+WorldTransvoxelTerrain::get_world_source_revision() const noexcept {
+	return static_cast<std::int64_t>(
+		lifecycle_ ? lifecycle_->source_revision() : 0
+	);
+}
+
+std::int64_t WorldTransvoxelTerrain::get_world_revision() const noexcept {
+	return static_cast<std::int64_t>(
+		lifecycle_ ? lifecycle_->world_revision() : 0
+	);
+}
+
+std::int64_t WorldTransvoxelTerrain::get_world_page_count() const noexcept {
+	return static_cast<std::int64_t>(
+		lifecycle_ ? lifecycle_->page_count() : 0
+	);
+}
+
+void WorldTransvoxelTerrain::notify_lifecycle_state() {
+	const WtWorldLifecycleState state = lifecycle_ ?
+		lifecycle_->state() : WtWorldLifecycleState::Stopped;
+	emit_lifecycle_state(state);
+}
+
+void WorldTransvoxelTerrain::emit_lifecycle_state(
+	WtWorldLifecycleState state
+) {
+	if (state == last_notified_state_) return;
+	last_notified_state_ = state;
+	emit_signal(
+		"world_state_changed",
+		static_cast<std::int64_t>(state),
+		godot::String(wt_world_lifecycle_state_name(state))
+	);
+	if (state == WtWorldLifecycleState::Failed) {
+		emit_signal("world_failed", get_world_error());
+	}
 }
 
 void WorldTransvoxelTerrain::set_render_apply_budget(std::int64_t budget) {
