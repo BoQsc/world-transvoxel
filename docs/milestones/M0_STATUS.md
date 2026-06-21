@@ -89,5 +89,5 @@ M0 contains no regular-cell meshing implementation, transition-cell meshing
 implementation, chunk ownership, streaming, render integration, collision,
 editing, baking, storage, or compute acceleration.
 
-M1 through M4 subsequently completed. The current active milestone is M5:
-streaming production baseline.
+M1 through M5 subsequently completed. Production qualification is the current
+active phase.

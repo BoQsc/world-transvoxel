@@ -95,4 +95,4 @@ This contract completed the first M5 work item. Bounded caches, multi-viewer
 runtime ownership, edit-driven replacement, and representative functional
 workloads, native component budgets, real page-meshing dependency jobs, Godot
 application budgets, and production collision readiness are now also complete.
-Binary traces and soak evidence remain active M5 work.
+Binary traces and the fixed-duration soak now pass, completing M5.

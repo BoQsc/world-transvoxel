@@ -69,6 +69,5 @@ Godot mesh or physics resources, apply results on the main thread, sanitize
 collision geometry, or run a moving-viewer scene. Those finite gates belong to
 M3.
 
-M3 Godot render/collision integration and M4 storage/baking/editing
-subsequently completed. The current active milestone is M5: streaming
-production baseline.
+M3 through M5 subsequently completed. Production qualification is the current
+active phase.

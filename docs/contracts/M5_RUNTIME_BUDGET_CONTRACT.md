@@ -116,9 +116,9 @@ Budgets are not silently rewritten from new measurements. Changing a limit,
 workload shape, percentile method, reference profile, or measured scope
 requires an explicit reviewed update to this contract and budget JSON.
 
-## Remaining M5 measurement work
+## M5 completion
 
 This completes reference-hardware measurement for native runtime orchestration.
-Still required before M5 completion:
-
-- binary telemetry traces and fixed-duration soak evidence.
+`M5_BINARY_TELEMETRY_SOAK_CONTRACT.md` now supplies the checked binary trace
+and 60-second fixed-duration evidence. Together with the page/meshing and Godot
+application profiles, the complete M5 measurement gate passes.

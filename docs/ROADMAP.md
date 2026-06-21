@@ -88,9 +88,7 @@ Exit: bake-load-edit-save-reload produces identical authoritative state.
 
 ## M5 - Streaming production baseline
 
-Status: active; bounded asynchronous storage, caches, multi-viewer runtime
-ownership, edit-driven replacement, representative functional workloads, and
-native/Godot component budgets plus page-backed transition runtime complete.
+Status: complete on 2026-06-21 for Windows x86-64, Godot 4.6.3 and 4.7.
 
 - multiple viewers;
 - asynchronous manifest/page storage with content-addressed validation
@@ -111,12 +109,14 @@ native/Godot component budgets plus page-backed transition runtime complete.
   (complete);
 - Godot render/physics application budgets and production collision/readiness
   policy (complete);
-- binary telemetry and fixed-duration soak evidence (next).
+- binary telemetry and fixed-duration soak evidence (complete).
 
 Exit: fixed-duration motion/edit workload meets queue, memory, seam, collision,
 and frame-time budgets.
 
 ## M6 - Optional compute acceleration
+
+Status: optional and deferred; it is not a production-release prerequisite.
 
 - measured CPU baseline retained;
 - compute density/bake path;
@@ -127,6 +127,8 @@ and frame-time budgets.
 Exit: compute is enabled only where end-to-end measurements beat CPU.
 
 ## Production finish line
+
+Status: active.
 
 - official MIT backend remains the reference;
 - full-world soak test;

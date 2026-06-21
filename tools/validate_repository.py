@@ -164,6 +164,7 @@ REQUIRED_FILES = (
     "docs/milestones/M2_STATUS.md",
     "docs/milestones/M3_STATUS.md",
     "docs/milestones/M4_STATUS.md",
+    "docs/milestones/M5_STATUS.md",
     "docs/contracts/M1_CELL_BACKEND.md",
     "docs/contracts/M2_CHUNK_LOD_CONTRACT.md",
     "docs/contracts/M3_RENDER_COLLISION_CONTRACT.md",
@@ -189,10 +190,13 @@ REQUIRED_FILES = (
     "docs/contracts/M5_TRANSITION_PAGE_SOURCE_CONTRACT.md",
     "docs/contracts/M5_PAGE_MESHING_RUNTIME_CONTRACT.md",
     "docs/contracts/M5_GODOT_APPLICATION_BUDGET_CONTRACT.md",
+    "docs/contracts/M5_BINARY_TELEMETRY_SOAK_CONTRACT.md",
     "docs/evidence/m5_runtime_budget_windows_x86_64.json",
     "docs/evidence/m5_pipeline_budget_windows_x86_64.json",
     "docs/evidence/m5_application_budget_godot_4_6_3_windows_x86_64.json",
     "docs/evidence/m5_application_budget_godot_4_7_windows_x86_64.json",
+    "docs/evidence/m5_soak_windows_x86_64.json",
+    "docs/evidence/m5_soak_windows_x86_64.wttrace",
     "docs/decisions/M4_CODEC_DECISION.md",
     "docs/architecture/API_BOUNDARIES.md",
     "docs/architecture/ARCHITECTURE.md",
@@ -224,11 +228,15 @@ REQUIRED_FILES = (
     "tests/native/test_wt_m5_pipeline_budget.cpp",
     "tests/native/test_wt_m5_page_transition.cpp",
     "tests/native/test_wt_m5_page_meshing_runtime.cpp",
+    "tests/native/test_wt_m5_runtime_trace.cpp",
+    "tests/native/test_wt_m5_soak.cpp",
     "tests/native/wt_m5_workload_fixture.cpp",
     "tests/native/wt_m5_workload_fixture.h",
     "tests/performance/m5_runtime_budget.json",
     "tests/performance/m5_pipeline_budget.json",
     "tests/performance/m5_application_budget.json",
+    "tests/performance/m5_soak_budget.json",
+    "tools/run_m5_soak.py",
     "tests/native/wt_m2_mesh_test_support.cpp",
     "tests/native/wt_m2_mesh_test_support.h",
 )
@@ -386,7 +394,7 @@ def validate_charter(errors: list[str]) -> None:
 
     required_statements = (
         "This document is the single source of truth",
-        "The next and only active milestone is M5.",
+        "The next and only active phase is production qualification.",
         "exact official compatibility is not proven",
     )
     for statement in required_statements:

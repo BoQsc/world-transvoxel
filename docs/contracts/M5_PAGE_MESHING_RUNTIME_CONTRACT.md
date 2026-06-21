@@ -122,5 +122,5 @@ f5509061d2cbc71f70f3ba4f493ad124aa454fe95a9915ec567a05601d6c6b70
 
 This completes native support-page scheduling, pinning, cancellation, and
 invalidation. Godot application budgets and production collision readiness are
-also complete. Remaining M5 work is binary telemetry and fixed-duration soak
-evidence.
+also complete. The binary telemetry and fixed-duration soak evidence now pass,
+so this contract participates in the completed M5 gate.

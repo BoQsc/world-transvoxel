@@ -4,12 +4,11 @@ Status: canonical project direction
 
 Last reviewed: 2026-06-21
 
-Current state: M4 complete; M5 streaming production baseline is active with
-bounded storage/caches, multi-viewer desired sets, and edit-driven runtime
-replacement, representative functional workloads, and native orchestration
-plus real page/native MIT meshing component budgets and page-backed transition
-runtime scheduling/pinning/invalidation plus real Godot render/physics
-application budgets implemented
+Current state: M5 streaming production baseline complete on Windows x86-64
+with bounded storage/caches, multi-viewer/edit runtime ownership, page-backed
+official MIT meshing, real Godot render/physics application budgets, versioned
+binary telemetry, and checked fixed-duration soak evidence. Production
+qualification is the only active phase.
 
 ## 1. Authority of this document
 
@@ -1019,12 +1018,7 @@ all corruption cases fail safely.
 
 ### M5 - Streaming production baseline
 
-Status: active; asynchronous immutable-page storage, authoritative and derived
-caches, multi-viewer runtime ownership, edit-driven replacement,
-representative functional workloads, and reference-hardware native
-orchestration/page/meshing component budgets plus page-backed transition
-runtime scheduling, pinning, cancellation, invalidation, and Godot
-render/physics application budgets complete.
+Status: complete on 2026-06-21 for Windows x86-64, Godot 4.6.3 and 4.7.
 
 Deliverables:
 
@@ -1043,6 +1037,8 @@ memory and queues, zero detected seams, and correct collision readiness.
 
 ### M6 - Optional compute acceleration
 
+Status: optional and deferred. It is not a production-release prerequisite.
+
 Deliverables:
 
 - measured CPU baseline retained;
@@ -1058,6 +1054,8 @@ beats the CPU path without reducing correctness, headless support, or
 maintainability.
 
 ### Production finish line
+
+Status: active.
 
 Required:
 
@@ -1102,7 +1100,7 @@ unstructured experimentation.
 | Decision | Must be fixed by | Required evidence |
 | --- | --- | --- |
 | First compressed storage codec | M4 resolved: none selected | RLE rejected; representative M5 codec benchmark required |
-| Numerical production budgets | M5 | representative hardware traces |
+| Numerical production budgets | M5 resolved | representative hardware traces and fixed-duration soak |
 | First compute-accelerated workload | M6 | end-to-end CPU/GPU comparison |
 
 The default role of root `world_transvoxel/` is resolved: it is thin example
@@ -1174,7 +1172,14 @@ Resolved in M5:
   collision resources per frame;
 - a 32-render/16-collision burst has an eight-frame readiness bound;
 - optimized Godot 4.6.3 and 4.7 application profiles are locked by real
-  `ArrayMesh` and `ConcavePolygonShape3D` evidence.
+  `ArrayMesh` and `ConcavePolygonShape3D` evidence;
+- native trace schema 1 uses an 80-byte metadata section and fixed 128-byte
+  checkpoint/final events with construction-time capacity;
+- the reference orchestration soak runs for 60 seconds, samples every 1,024
+  simulated frames, admits at most 65,536 events, and requires zero runtime
+  rejection/failure paths;
+- M5's exit combines the soak with the locked decoded-page seam, native
+  pipeline, and real Godot application evidence.
 
 ## 22. Change and review discipline
 
@@ -1214,39 +1219,28 @@ measurement requirements.
 
 ## 23. Immediate next work
 
-The next and only active milestone is M5.
+The next and only active phase is production qualification.
 
 Ordered work:
 
-1. Complete: connect immutable `wtworld` manifests and content-addressed
-   `wtchunk` objects to a bounded asynchronous native storage service.
-2. Complete: bounded encoded-page, decoded-sample, mesh, render, and collision
-   caches have explicit ownership, byte/item budgets, and deterministic
-   eviction.
-3. Complete: desired-set scheduling supports bounded multi-viewer unions and
-   typed deltas without full-world idle scans.
-4. Complete: edit invalidation now coordinates loaded-page replacement,
-   generation-token cancellation, remeshing, and independent render/collision
-   readiness.
-5. Complete: deterministic functional workloads cover teleport, fast vehicle,
-   underground, vertical-world, edit, and multi-viewer runtime behavior.
-6. Complete: reference-hardware budgets cover native orchestration, warm real
-   page I/O/decode, decoded-page LOD0 MIT meshing, and native higher-LOD MIT
-   transition meshing.
-7. Complete: higher-LOD transition sample ownership uses four canonical
-   LOD-minus-one pages per active face. Decoded-page face and three-face corner
-   seams pass without changing schema 1.
-8. Complete: real runtime storage/meshing jobs derive support-page dependency
-   requests, pin decoded pages across cache eviction, retry bounded scheduler
-   backpressure, reject cancelled generations, and invalidate dependent coarse
-   generations with typed failures.
-9. Complete: optimized Godot 4.6.3 and 4.7 evidence locks real render/physics
-   application cost, four/two per-frame budgets, eight-frame burst readiness,
-   and the 96/128 collision hysteresis baseline.
-10. Next: add fixed-duration soak testing and binary telemetry traces.
-11. Record exact M5 evidence and only then mark M5 complete.
+1. Audit the current Godot facade and root example against the complete real
+   workflow: bake, load, stream, render, collide, edit, query, save, reload,
+   migrate, and shut down.
+2. Define the smallest missing public/runtime contract needed to connect the
+   existing M0-M5 services into that workflow without introducing a universal
+   manager or GDScript hot path.
+3. Build a clean-install integration project and real baked-world scene using
+   the official MIT backend.
+4. Run a fixed-duration full-world Godot soak with real page I/O, official MIT
+   meshing, render resources, collision resources, edits, save/reload, and
+   telemetry.
+5. Lock save migration, operational limits, supported Godot/platform matrix,
+   clean shutdown, and reproducible release evidence.
+6. Only after those gates pass, mark the official MIT-backed addon
+   production-ready and begin the separate 0BSD backend qualification.
 
-Do not begin optional compute acceleration during M5.
+M6 compute acceleration remains optional. Do not let it delay the measured CPU
+production path unless an end-to-end workload proves that it is required.
 
 ## 24. Final definition of success
 

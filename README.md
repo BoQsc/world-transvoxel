@@ -14,7 +14,7 @@ If another project document conflicts with the charter, the charter controls.
 
 ## Current phase
 
-R0 through M4 are complete. The addon now has the exact native cell backend,
+R0 through M5 are complete. The addon now has the exact native cell backend,
 closed-seam chunk meshing, bounded scheduling, Godot `ArrayMesh` rendering,
 sanitized concave collision, generation-checked application, and readiness
 telemetry. M4 adds the versioned bounded
@@ -30,8 +30,8 @@ inspection, validation, and migration tools are implemented. The practical
 dense-volume command-line baker is also implemented. Editor scaffolding and
 the editor Tools menu use the same Python/native bake path. The controlled
 codec decision retains deterministic zero-copy `none` and rejects byte RLE.
-M5 production streaming is now the only active milestone. Its first bounded
-unit provides native asynchronous manifest/page loading with content-addressed
+M5 production streaming provides native asynchronous manifest/page loading
+with content-addressed
 validation, queue backpressure, and generation-tagged completions. Bounded
 encoded-page and decoded-sample caches now add generation rejection,
 immutable identities, byte/item budgets, and deterministic LRU eviction.
@@ -55,8 +55,12 @@ request and pin those support pages, retry scheduler backpressure, discard late
 cancelled completions, invalidate dependent coarse generations, and release
 pins after official MIT meshing. Optimized Godot 4.6.3 and 4.7 evidence now
 locks real `ArrayMesh`/concave-collision application budgets, eight-frame
-burst readiness, and the 96/128 collision hysteresis policy. The next M5
-boundary is binary telemetry and fixed-duration soak evidence.
+burst readiness, and the 96/128 collision hysteresis policy. A versioned
+bounded `wttrace` format and checked 60-second motion/edit soak now close M5.
+The next and only active phase is production qualification: clean-addon
+installation and a real baked-world stream/render/collide/edit/query/save/
+reload/shutdown workflow. Optional compute acceleration is deferred and does
+not block that release path.
 
 ## Tooling
 

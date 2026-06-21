@@ -121,5 +121,5 @@ and Godot integration matrix pass.
 
 Collision-shape replacement dominates this workload. The locked 4/2
 application budgets bound that cost and intentionally favor frame spreading
-over immediate readiness for a 32/16 burst. Binary telemetry and
-fixed-duration soak evidence are the next active M5 unit.
+over immediate readiness for a 32/16 burst. The completed binary telemetry and
+fixed-duration soak contract now combines with this profile to close M5.

@@ -95,6 +95,8 @@ The p50 gates detect broad steady-state regressions. The larger p95 margins
 allow desktop scheduling noise while still rejecting order-of-magnitude
 regressions. Budgets are not rewritten automatically from new measurements.
 
-## Remaining M5 measurement work
+## M5 completion
 
-- produce binary telemetry and fixed-duration soak evidence.
+`M5_BINARY_TELEMETRY_SOAK_CONTRACT.md` supplies the checked binary telemetry
+and fixed-duration orchestration evidence. This real page/official MIT meshing
+profile remains the component latency and seam side of the completed M5 gate.

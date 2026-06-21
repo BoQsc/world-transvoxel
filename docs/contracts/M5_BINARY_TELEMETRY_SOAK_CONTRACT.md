@@ -1,6 +1,6 @@
 # M5 Binary Telemetry and Soak Contract
 
-Status: implemented; reference-duration evidence pending
+Status: complete and normative for the M5 streaming production baseline
 
 This contract closes the final measurement unit of the M5 streaming production
 baseline. It defines a bounded binary runtime trace and a repeatable
@@ -138,6 +138,24 @@ docs/evidence/m5_soak_windows_x86_64.wttrace
 
 The normal M5 suite runs a short interface smoke test. The 60-second evidence
 capture is explicit so routine tests remain finite and fast.
+
+## Locked reference evidence
+
+The Windows x86-64 reference capture on implementation revision
+`6b11c04d831c8a47c4b3c2508e955ef62de6668e` ran for
+60,000,003,900 ns and completed 3,178,458 simulated frames. It recorded 49,664
+edits, 11,951,871 cancellations, 15,520 handled stale results, 7,174,820 render
+applications, 2,276,746 collision applications, zero rejection/failure paths,
+two-frame maximum readiness, and 4,612,096 bytes peak working set.
+
+The trace contains 3,105 events in 397,752 bytes and has SHA-256:
+
+```text
+cb67f1075ac2ee4e4f581451884d2bd5800816017e0bc347be3649b95513fbaa
+```
+
+The checked JSON and binary trace are under `docs/evidence/`. Exact results and
+the M5 exit decision are summarized in `docs/milestones/M5_STATUS.md`.
 
 ## Acceptance
 

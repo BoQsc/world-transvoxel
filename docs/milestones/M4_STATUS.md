@@ -84,4 +84,5 @@ M4 does not claim production streaming. It has no asynchronous page store,
 bounded production caches, multi-viewer desired-set integration, eviction
 policy, representative motion/edit soak budgets, or telemetry trace schema.
 
-The next and only active milestone is M5: streaming production baseline.
+M5 subsequently completed. Production qualification is the next and only
+active phase.

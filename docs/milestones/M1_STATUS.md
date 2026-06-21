@@ -90,6 +90,5 @@ prove multi-cell vertex reuse, chunk ownership, same-LOD seams, LOD transition
 seams, LOD corners, scheduling, rendering, collision, editing, persistence, or
 streaming. Those gates remain finite roadmap work beginning with M2.
 
-M2 chunk/LOD ownership, M3 Godot resource integration, and M4
-storage/baking/editing subsequently completed. The current active milestone is
-M5: streaming production baseline.
+M2 through M5 subsequently completed. Production qualification is the current
+active phase.

@@ -1,0 +1,93 @@
+{
+  "budget_profile": {
+    "architecture": "x86_64",
+    "limits": {
+      "maximum_collision_max": 16,
+      "maximum_completions_max": 0,
+      "maximum_desired_max": 10,
+      "maximum_jobs_max": 32,
+      "maximum_peak_working_set_bytes": 33554432,
+      "maximum_pending_max": 10,
+      "maximum_readiness_max": 32,
+      "maximum_records_max": 10,
+      "maximum_rejections": 0,
+      "maximum_render_max": 32,
+      "maximum_resources_max": 30,
+      "maximum_trace_bytes": 8388608,
+      "minimum_applied_collision": 1,
+      "minimum_applied_render": 1,
+      "minimum_cancellations": 1,
+      "minimum_duration_ns": 60000000000,
+      "minimum_edit_events": 1,
+      "minimum_frames": 1000,
+      "minimum_stale": 1,
+      "minimum_trace_events": 2,
+      "minimum_viewer_events": 1,
+      "minimum_worker_jobs": 1
+    },
+    "name": "windows-x86_64-reference",
+    "platform": "windows",
+    "reference_host": {
+      "cpu": "Intel64 Family 6 Model 158 Stepping 9, GenuineIntel",
+      "logical_cpu_count": 4,
+      "physical_memory_bytes": 17066790912
+    }
+  },
+  "captured_utc": "2026-06-21T17:52:36.670534+00:00",
+  "host": {
+    "architecture": "x86_64",
+    "cpu": "Intel64 Family 6 Model 158 Stepping 9, GenuineIntel",
+    "logical_cpu_count": 4,
+    "physical_memory_bytes": 17066790912,
+    "platform": "windows",
+    "platform_description": "Windows-10-10.0.19045-SP0"
+  },
+  "measurements": {
+    "applied_collision": 2276746,
+    "applied_render": 7174820,
+    "cancellations": 11951871,
+    "collision_max": 7,
+    "completions_max": 0,
+    "desired_max": 10,
+    "duration_ns": 60000003900,
+    "edit_events": 49664,
+    "frame_max_ns": 128214200,
+    "frames": 3178458,
+    "jobs_max": 11,
+    "peak_working_set_bytes": 4612096,
+    "pending_max": 10,
+    "readiness_max": 2,
+    "records_max": 10,
+    "rejections": 0,
+    "render_max": 0,
+    "resources_max": 21,
+    "stale": 15520,
+    "target_ns": 60000000000,
+    "trace_bytes": 397752,
+    "trace_events": 3105,
+    "viewer_events": 4371946,
+    "worker_jobs": 15979240
+  },
+  "schema": 1,
+  "scope": "fixed_duration_native_runtime_orchestration",
+  "source": {
+    "configuration": "template_release",
+    "executable": "build/native-tests/test_wt_m5_soak.template_release.x86_64.exe",
+    "executable_sha256": "49f795e677a1d3df74661e3356ba5809941062ef17baa2e72c17a0ef187ccc31",
+    "git_describe": "6b11c04",
+    "git_revision": "6b11c04d831c8a47c4b3c2508e955ef62de6668e",
+    "zig_version": "0.16.0"
+  },
+  "trace": {
+    "bytes": 397752,
+    "path": "docs/evidence/m5_soak_windows_x86_64.wttrace",
+    "sha256": "cb67f1075ac2ee4e4f581451884d2bd5800816017e0bc347be3649b95513fbaa"
+  },
+  "workload": {
+    "pattern_revision": 1,
+    "requested_duration_ms": 60000,
+    "sample_period_frames": 1024,
+    "trace_event_size": 128,
+    "trace_schema": 1
+  }
+}
