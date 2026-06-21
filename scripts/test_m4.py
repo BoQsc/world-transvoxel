@@ -8,6 +8,7 @@ import subprocess
 import sys
 
 from build import build
+from download_test_engines import engine_executable, engine_specs
 from test_m3 import test_m3
 from wt_script_common import REPO_ROOT, native_test_path
 
@@ -110,6 +111,32 @@ def run_m4_tests(configuration: str) -> None:
         )
 
 
+def run_editor_bake_tests() -> None:
+    for spec in engine_specs():
+        engine = engine_executable(spec)
+        result = subprocess.run(
+            [
+                str(engine),
+                "--headless",
+                "--path",
+                str(REPO_ROOT),
+                "--script",
+                "res://tests/godot/m4_editor_bake_test.gd",
+            ],
+            cwd=REPO_ROOT,
+            check=False,
+            text=True,
+            capture_output=True,
+            errors="replace",
+        )
+        combined = result.stdout + result.stderr
+        print(combined, end="" if combined.endswith("\n") else "\n")
+        if result.returncode != 0 or "M4_EDITOR_BAKE_PASS" not in combined:
+            raise RuntimeError(
+                f"M4 editor bake scaffolding failed with Godot {spec.version}."
+            )
+
+
 def test_m4(skip_build: bool = False, skip_engine_download: bool = False) -> None:
     if not skip_build:
         build("all")
@@ -125,6 +152,12 @@ def test_m4(skip_build: bool = False, skip_engine_download: bool = False) -> Non
         cwd=REPO_ROOT,
         check=True,
     )
+    subprocess.run(
+        [sys.executable, REPO_ROOT / "tools" / "benchmark_m4_codec.py"],
+        cwd=REPO_ROOT,
+        check=True,
+    )
+    run_editor_bake_tests()
     test_m3(skip_build=True, skip_engine_download=skip_engine_download)
     print("M4 storage, baking, authoritative edit replay, and compaction passed with the complete M3 suite.")
 

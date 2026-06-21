@@ -102,6 +102,6 @@ proves:
 
 No generated bake artifacts remain in the repository.
 
-This is the M4 command-line bake entry point. The editor plugin may launch the
-same Python/native path as non-critical scaffolding; it must not reimplement
+This is the M4 command-line bake entry point. The editor plugin launches the
+same Python/native path as non-critical scaffolding and does not reimplement
 sampling or serialization in GDScript.

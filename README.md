@@ -28,7 +28,9 @@ finite-result rejection. Snapshot compaction now emits audited replacement
 pages and a revisioned world manifest. Native-backed Python storage
 inspection, validation, and migration tools are implemented. The practical
 dense-volume command-line baker is also implemented. Editor scaffolding and
-final M4 closure remain. Production streaming is later work.
+the editor Tools menu use the same Python/native bake path. The controlled
+codec decision retains deterministic zero-copy `none` and rejects byte RLE.
+Final M4 evidence remains. Production streaming is later work.
 
 ## Tooling
 

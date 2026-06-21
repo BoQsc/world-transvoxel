@@ -73,7 +73,8 @@ bounded padded-sample spatial invalidation, append-only journal recovery, and
 deterministic authoritative sample replay and audited snapshot compaction
 complete. Native-backed inspect, validation, and world migration tools are
 also complete, together with the deterministic dense-volume command-line
-baker.
+baker and its thin Godot editor entry point. The schema-1 codec decision is
+resolved as `none` only.
 
 - versioned binary world/chunk/edit formats;
 - deterministic baker;

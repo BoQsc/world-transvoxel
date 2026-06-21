@@ -4,7 +4,7 @@ Status: canonical project direction
 
 Last reviewed: 2026-06-20
 
-Current state: M4 storage/baking/editing in progress; dense command-line baking complete
+Current state: M4 storage/baking/editing in progress; command-line and editor baking complete
 
 ## 1. Authority of this document
 
@@ -1089,7 +1089,7 @@ unstructured experimentation.
 
 | Decision | Must be fixed by | Required evidence |
 | --- | --- | --- |
-| First compressed storage codec | M4 | determinism and throughput tests |
+| First compressed storage codec | M4 resolved: none selected | RLE rejected; representative M5 codec benchmark required |
 | Numerical production budgets | M5 | representative hardware traces |
 | First compute-accelerated workload | M6 | end-to-end CPU/GPU comparison |
 
@@ -1147,6 +1147,13 @@ Resolved in M3:
   payloads retain categorical `uint16_t` values;
 - application telemetry records independent readiness, queue depth, stale
   work, failures, and total/maximum latency in application-frame ticks.
+
+Resolved in M4:
+
+- format schema 1 requires codec `none` and admits no compressed codec;
+- dependency-free byte RLE was rejected because it expanded all locked page
+  fixtures, while another codec requires representative M5 I/O and latency
+  evidence.
 
 ## 22. Change and review discipline
 
