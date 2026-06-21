@@ -105,8 +105,10 @@ native component budgets complete.
   hardware (complete);
 - warm page I/O/decode, decoded LOD0 MIT meshing, and native higher-LOD MIT
   transition-meshing budgets on reference hardware (complete);
-- higher-LOD transition sample ownership plus integrated storage-to-seam
-  evidence (next);
+- higher-LOD transition sample ownership and integrated decoded-page seam
+  evidence (complete);
+- runtime support-page dependency scheduling, pinning, and invalidation
+  (next);
 - Godot render/physics application budgets;
 - binary telemetry and fixed-duration soak evidence.
 

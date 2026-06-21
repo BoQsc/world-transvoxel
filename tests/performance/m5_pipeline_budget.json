@@ -3,13 +3,13 @@
     {
       "architecture": "x86_64",
       "limits": {
-        "io_decode_batch_p50_ns": 20000000,
-        "io_decode_batch_p95_ns": 50000000,
-        "page_mesh_batch_p50_ns": 75000000,
-        "page_mesh_batch_p95_ns": 200000000,
+        "io_decode_batch_p50_ns": 60000000,
+        "io_decode_batch_p95_ns": 150000000,
+        "page_mesh_batch_p50_ns": 100000000,
+        "page_mesh_batch_p95_ns": 400000000,
         "peak_working_set_bytes": 33554432,
-        "transition_mesh_batch_p50_ns": 200000000,
-        "transition_mesh_batch_p95_ns": 500000000
+        "transition_mesh_batch_p50_ns": 75000000,
+        "transition_mesh_batch_p95_ns": 400000000
       },
       "name": "windows-x86_64-reference",
       "platform": "windows",

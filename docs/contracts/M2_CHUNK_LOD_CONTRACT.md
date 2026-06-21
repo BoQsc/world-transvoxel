@@ -90,7 +90,10 @@ Stale viewer revisions and capacity overflow are rejected.
 
 - Scalar and categorical material values come from an immutable
   `WtChunkSampleSource` in signed base-grid coordinates.
-- Gradients use central differences one base-grid unit from each sample.
+- Gradients use central differences at the active sample spacing: `2^L` for
+  regular cells and `2^(L-1)` for transition cells. This permits decoded pages
+  at their declared spacing to supply the complete stencil without inventing
+  absent intermediate values.
 - Regular chunks contain `16 * 16 * 16` cells at spacing `2^L`.
 - A coarse transition face contains `16 * 16` transition cells. Its full face
   samples at spacing `2^(L-1)` and its half face is inset by one quarter of the
@@ -137,7 +140,7 @@ center is the world origin. Closed galleries require every quantized triangle
 edge to have exactly two incident triangles. Individual transition tests also
 require exact matching contours at both full and half faces.
 
-The locked chunk aggregate hash is `8d807e44f0160eec`. Debug and optimized
+The locked chunk aggregate hash is `4e436f833896a1bc`. Debug and optimized
 release builds must produce the same hash. `scripts/test_m2.py` runs both M2
 native contracts, the complete M1 contract, repository validation, and both
 Godot compatibility load tests.

@@ -31,6 +31,7 @@ EXPECTED_EDIT_REPLACEMENT_HASH = (
 EXPECTED_WORKLOAD_HASH = (
     "c5bdf6b8896f0a5e4271c5aeab2e8f552e7b776bccc66e9082595467ff90b2a3"
 )
+EXPECTED_PAGE_TRANSITION_HASH = "7717f75423306cca"
 
 
 def run_hashed_test(
@@ -39,6 +40,7 @@ def run_hashed_test(
     pass_marker: str,
     hash_label: str,
     expected_hash: str,
+    hash_digits: int = 64,
 ) -> None:
     executable = native_test_path(configuration, test_name)
     if not executable.is_file():
@@ -52,7 +54,7 @@ def run_hashed_test(
     )
     combined = result.stdout + result.stderr
     print(combined, end="" if combined.endswith("\n") else "\n")
-    match = re.search(rf"{hash_label} ([0-9a-f]{{64}})", combined)
+    match = re.search(rf"{hash_label} ([0-9a-f]{{{hash_digits}}})", combined)
     if (
         result.returncode != 0
         or pass_marker not in combined
@@ -195,6 +197,14 @@ def test_m5(
             "M5_WORKLOAD_PASS",
             "M5_WORKLOAD_HASH",
             EXPECTED_WORKLOAD_HASH,
+        )
+        run_hashed_test(
+            configuration,
+            "test_wt_m5_page_transition",
+            "M5_PAGE_TRANSITION_PASS",
+            "M5_PAGE_TRANSITION_HASH",
+            EXPECTED_PAGE_TRANSITION_HASH,
+            hash_digits=16,
         )
     run_workload_benchmark_smoke()
     run_pipeline_benchmark_smoke()

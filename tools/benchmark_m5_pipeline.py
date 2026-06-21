@@ -40,7 +40,7 @@ PASS_PATTERN = re.compile(
     r"transition_chunks_per_run=(\d+) bytes_per_run=(\d+) "
     r"page_vertices=(\d+) page_triangles=(\d+) "
     r"transition_vertices=(\d+) transition_triangles=(\d+) "
-    r"backend=([a-z0-9_]+)"
+    r"backend=([a-z0-9_]+) transition_source=([a-z0-9_]+)"
 )
 DEFAULT_OUTPUT = (
     REPO_ROOT / "docs" / "evidence" / "m5_pipeline_budget_windows_x86_64.json"
@@ -103,6 +103,7 @@ def run_native_benchmark(
         "transition_mesh_vertices_per_run": int(pass_match.group(9)),
         "transition_mesh_triangles_per_run": int(pass_match.group(10)),
         "backend": pass_match.group(11),
+        "transition_source": pass_match.group(12),
     }
     return samples, workload, peak_working_set
 
@@ -184,7 +185,7 @@ def main() -> None:
     result = {
         "schema": 1,
         "captured_utc": datetime.now(UTC).isoformat(),
-        "scope": "warm_page_io_decode_and_mit_chunk_meshing",
+        "scope": "warm_page_io_decode_and_integrated_mit_page_meshing",
         "source": {
             "git_revision": output(["git", "rev-parse", "HEAD"]),
             "git_describe": output(["git", "describe", "--always", "--dirty"]),

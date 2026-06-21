@@ -315,7 +315,7 @@ int main() {
 	);
 	test_errors(mesher, scratch);
 
-	constexpr std::uint64_t expected_hash = 0x8d807e44f0160eecULL;
+	constexpr std::uint64_t expected_hash = 0x4e436f833896a1bcULL;
 	check(hash == expected_hash, "M2 chunk aggregate hash mismatch");
 	std::printf("M2_MESH_HASH %016llx\n", static_cast<unsigned long long>(hash));
 	if (failure_count != 0) {

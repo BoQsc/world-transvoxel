@@ -84,6 +84,12 @@ This padding is the M2 meshing contract's one negative and two positive
 samples around the 16-cell chunk. Non-finite densities fail baking, writing,
 and decoding.
 
+Regular gradients use this page's declared spacing. Higher-LOD transition
+faces obtain their half-spacing samples and gradients from the four canonical
+LOD-minus-one support pages defined by
+`M5_TRANSITION_PAGE_SOURCE_CONTRACT.md`; schema 1 is not extended or
+interpolated.
+
 ## Deterministic baker
 
 `WtChunkBaker` accepts a construction-time page capacity, a finite list of

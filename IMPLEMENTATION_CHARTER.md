@@ -1220,13 +1220,14 @@ Ordered work:
 6. Complete: reference-hardware budgets cover native orchestration, warm real
    page I/O/decode, decoded-page LOD0 MIT meshing, and native higher-LOD MIT
    transition meshing.
-7. Next: resolve higher-LOD transition sample ownership. Schema-1 coarse pages
-   do not contain every fine face and gradient sample required by transition
-   meshing; prove an integrated storage-to-transition seam workload before
-   engine application budgets.
-8. Measure Godot render/physics application and readiness budgets.
-9. Add fixed-duration soak testing and binary telemetry traces.
-10. Record exact M5 evidence and only then mark M5 complete.
+7. Complete: higher-LOD transition sample ownership uses four canonical
+   LOD-minus-one pages per active face. Decoded-page face and three-face corner
+   seams pass without changing schema 1.
+8. Next: wire support-page dependency requests, pinning, generation
+   invalidation, and typed failures into real runtime storage/meshing jobs.
+9. Measure Godot render/physics application and readiness budgets.
+10. Add fixed-duration soak testing and binary telemetry traces.
+11. Record exact M5 evidence and only then mark M5 complete.
 
 Do not begin optional compute acceleration during M5.
 

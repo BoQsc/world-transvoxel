@@ -92,6 +92,7 @@ WtChunkMeshingStatus get_scalar_sample(
 
 WtChunkMeshingStatus get_cell_sample(
 	const WtGridPoint &point,
+	std::int64_t gradient_step,
 	const WtChunkSampleSource &source,
 	WtChunkMeshingScratch &scratch,
 	WtCellSample &output
@@ -113,12 +114,12 @@ WtChunkMeshingStatus get_cell_sample(
 	WtScalarSample negative_z;
 	WtScalarSample positive_z;
 	const WtGridPoint offsets[6] = {
-		{ point.x - 1, point.y, point.z },
-		{ point.x + 1, point.y, point.z },
-		{ point.x, point.y - 1, point.z },
-		{ point.x, point.y + 1, point.z },
-		{ point.x, point.y, point.z - 1 },
-		{ point.x, point.y, point.z + 1 },
+		{ point.x - gradient_step, point.y, point.z },
+		{ point.x + gradient_step, point.y, point.z },
+		{ point.x, point.y - gradient_step, point.z },
+		{ point.x, point.y + gradient_step, point.z },
+		{ point.x, point.y, point.z - gradient_step },
+		{ point.x, point.y, point.z + gradient_step },
 	};
 	WtScalarSample *neighbors[6] = {
 		&negative_x, &positive_x, &negative_y, &positive_y, &negative_z, &positive_z
@@ -291,7 +292,13 @@ WtChunkMeshingStatus mesh_regular_cells(
 						bounds.minimum.z + static_cast<std::int64_t>(z + ((corner & 4U) != 0U)) * spacing_integer,
 					};
 					const WtChunkMeshingStatus sample_status =
-						get_cell_sample(point, source, scratch, cell_input.samples[corner]);
+						get_cell_sample(
+							point,
+							spacing_integer,
+							source,
+							scratch,
+							cell_input.samples[corner]
+						);
 					if (sample_status != WtChunkMeshingStatus::Ok) {
 						return sample_status;
 					}
@@ -387,7 +394,11 @@ WtChunkMeshingStatus mesh_transition_face(
 						static_cast<unsigned int>(v_sample * 3 + u_sample);
 					endpoint_positions[sample_index] = to_vec3(sample_local);
 					const WtChunkMeshingStatus sample_status = get_cell_sample(
-						sample_world, source, scratch, cell_input.samples[sample_index]
+						sample_world,
+						fine_spacing,
+						source,
+						scratch,
+						cell_input.samples[sample_index]
 					);
 					if (sample_status != WtChunkMeshingStatus::Ok) {
 						return sample_status;
@@ -539,6 +550,7 @@ WtChunkMeshingStatus WtChunkMesher::mesh(
 	WtChunkMeshingStatus status = mesh_regular_cells(
 		input, source, backend_, output, scratch
 	);
+	scratch.cell_samples.clear();
 	for (unsigned int face_index = 0;
 		status == WtChunkMeshingStatus::Ok && face_index < 6;
 		++face_index) {

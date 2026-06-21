@@ -3,9 +3,11 @@
 #include "meshing/wt_chunk_mesher.h"
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_chunk_page.h"
+#include "storage/wt_chunk_page_sample_source.h"
 #include "storage/wt_hash256.h"
 #include "storage/wt_world_manifest.h"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -24,9 +26,19 @@ namespace wt = world_transvoxel;
 
 namespace {
 
-constexpr std::size_t kPageCount = 4;
-constexpr std::size_t kTransitionChunkCount = 7;
+constexpr std::size_t kPageCount = 17;
+constexpr std::size_t kPageMeshChunkCount = 4;
+constexpr std::size_t kTransitionChunkCount = 1;
 constexpr std::uint64_t kSourceRevision = 5001;
+constexpr wt::WtChunkKey kTransitionKey = { 0, 0, 0, 1 };
+constexpr std::uint8_t kTransitionMask = 0x2aU;
+constexpr std::array<wt::WtChunkKey, kPageMeshChunkCount>
+	kPageMeshKeys = {{
+		{ 0, 0, 0, 0 },
+		{ 1, 0, 0, 0 },
+		{ 0, 0, 1, 0 },
+		{ 1, 0, 1, 0 },
+	}};
 
 struct MeshSummary {
 	std::uint64_t checksum = 14695981039346656037ULL;
@@ -108,66 +120,9 @@ bool write_file(
 	return static_cast<bool>(output);
 }
 
-class TerrainSource final : public wt::WtChunkSampleSource {
-public:
-	bool sample(
-		const wt::WtGridPoint &point,
-		wt::WtScalarSample &output
-	) const noexcept override {
-		const double x = static_cast<double>(point.x);
-		const double z = static_cast<double>(point.z);
-		const double height =
-			8.0 +
-			std::sin(x * 0.17) * 2.5 +
-			std::cos(z * 0.13) * 2.0 +
-			std::sin((x + z) * 0.07) * 1.25;
-		output.density = static_cast<float>(
-			static_cast<double>(point.y) - height
-		);
-		output.material = static_cast<std::uint16_t>(
-			(static_cast<std::uint64_t>(point.x) * 73856093ULL) ^
-			(static_cast<std::uint64_t>(point.z) * 83492791ULL)
-		);
-		return true;
-	}
-};
-
-class DecodedPageSource final : public wt::WtChunkSampleSource {
-public:
-	explicit DecodedPageSource(const wt::WtChunkPage &page) noexcept :
-			page_(page),
-			bounds_(wt::wt_chunk_bounds(page.metadata.key)) {
-	}
-
-	bool sample(
-		const wt::WtGridPoint &point,
-		wt::WtScalarSample &output
-	) const noexcept override {
-		if (page_.metadata.key.lod != 0 ||
-			page_.samples.size() != wt::kWtChunkPageSampleCount) {
-			return false;
-		}
-		const std::int64_t x = point.x - bounds_.minimum.x;
-		const std::int64_t y = point.y - bounds_.minimum.y;
-		const std::int64_t z = point.z - bounds_.minimum.z;
-		if (x < -1 || x > 17 || y < -1 || y > 17 || z < -1 || z > 17) {
-			return false;
-		}
-		const std::size_t index = static_cast<std::size_t>(
-			((z + 1) * 19 + (y + 1)) * 19 + (x + 1)
-		);
-		output = page_.samples[index];
-		return true;
-	}
-
-private:
-	const wt::WtChunkPage &page_;
-	wt::WtChunkBounds bounds_;
-};
-
 class SphereSource final : public wt::WtChunkSampleSource {
 public:
-	wt::WtGridPoint center;
+	wt::WtGridPoint center = { 16, 16, 16 };
 	double radius = 18.0;
 
 	bool sample(
@@ -184,6 +139,35 @@ public:
 		return true;
 	}
 };
+
+bool page_mesh_key(const wt::WtChunkKey &key) noexcept {
+	return std::find(
+		kPageMeshKeys.begin(),
+		kPageMeshKeys.end(),
+		key
+	) != kPageMeshKeys.end();
+}
+
+bool append_transition_support_keys(
+	std::vector<wt::WtChunkKey> &keys
+) {
+	for (wt::WtChunkFace face : {
+		wt::WtChunkFace::PositiveX,
+		wt::WtChunkFace::PositiveY,
+		wt::WtChunkFace::PositiveZ,
+	}) {
+		std::array<wt::WtChunkKey, 4> support{};
+		if (!wt::wt_transition_support_page_keys(
+				kTransitionKey,
+				face,
+				support
+			)) {
+			return false;
+		}
+		keys.insert(keys.end(), support.begin(), support.end());
+	}
+	return true;
+}
 
 struct Fixture {
 	std::filesystem::path root;
@@ -220,13 +204,16 @@ bool make_fixture(Fixture &fixture) {
 	if (!std::filesystem::create_directories(fixture.root, error) || error) {
 		return false;
 	}
-	const std::vector<wt::WtChunkKey> keys = {
-		{ -1, 0, -1, 0 },
-		{ 0, 0, -1, 0 },
-		{ -1, 0, 0, 0 },
-		{ 0, 0, 0, 0 },
-	};
-	const TerrainSource source;
+	std::vector<wt::WtChunkKey> keys(
+		kPageMeshKeys.begin(),
+		kPageMeshKeys.end()
+	);
+	keys.push_back(kTransitionKey);
+	if (!append_transition_support_keys(keys) ||
+		keys.size() != kPageCount) {
+		return false;
+	}
+	const SphereSource source;
 	wt::WtChunkBaker baker(keys.size());
 	if (baker.bake(keys, kSourceRevision, source, fixture.pages) !=
 			wt::WtChunkBakeStatus::Ok ||
@@ -343,7 +330,10 @@ bool mesh_decoded_pages(
 ) {
 	summary = {};
 	for (const wt::WtChunkPage &page : pages) {
-		const DecodedPageSource source(page);
+		if (!page_mesh_key(page.metadata.key)) {
+			continue;
+		}
+		const wt::WtChunkPageSampleSource source(page);
 		if (mesher.mesh(
 				{ page.metadata.key, 0, 0.0F, 0.25F },
 				source,
@@ -358,56 +348,50 @@ bool mesh_decoded_pages(
 	return true;
 }
 
-std::array<wt::WtChunkMeshingInput, kTransitionChunkCount>
-transition_inputs() {
-	return {{
-		{ { 0, 0, 0, 1 }, wt::wt_face_bit(wt::WtChunkFace::NegativeX), 0.0F, 0.25F },
-		{ { 1, 0, 0, 1 }, wt::wt_face_bit(wt::WtChunkFace::PositiveX), 0.0F, 0.25F },
-		{ { 2, 0, 0, 1 }, wt::wt_face_bit(wt::WtChunkFace::NegativeY), 0.0F, 0.25F },
-		{ { 3, 0, 0, 1 }, wt::wt_face_bit(wt::WtChunkFace::PositiveY), 0.0F, 0.25F },
-		{ { 4, 0, 0, 1 }, wt::wt_face_bit(wt::WtChunkFace::NegativeZ), 0.0F, 0.25F },
-		{ { 5, 0, 0, 1 }, wt::wt_face_bit(wt::WtChunkFace::PositiveZ), 0.0F, 0.25F },
-		{ { 6, 0, 0, 1 },
-			static_cast<std::uint8_t>(
-				wt::wt_face_bit(wt::WtChunkFace::PositiveX) |
-				wt::wt_face_bit(wt::WtChunkFace::PositiveY) |
-				wt::wt_face_bit(wt::WtChunkFace::PositiveZ)
-			),
-			0.0F,
-			0.25F },
-	}};
-}
-
 bool mesh_transition_chunks(
+	const std::vector<wt::WtChunkPage> &pages,
 	const wt::WtChunkMesher &mesher,
 	wt::WtChunkMeshingScratch &scratch,
 	wt::WtChunkMeshResult &output,
 	MeshSummary &summary
 ) {
 	summary = {};
-	for (const wt::WtChunkMeshingInput &input : transition_inputs()) {
-		const wt::WtChunkBounds bounds = wt::wt_chunk_bounds(input.key);
-		SphereSource source;
-		source.center = {
-			(bounds.minimum.x + bounds.maximum.x) / 2,
-			(bounds.minimum.y + bounds.maximum.y) / 2,
-			(bounds.minimum.z + bounds.maximum.z) / 2,
-		};
-		source.radius = 18.0;
-		if (mesher.mesh(input, source, output, scratch) !=
-				wt::WtChunkMeshingStatus::Ok ||
-			output.regular.indices.empty()) {
+	const wt::WtChunkPage *coarse_page = nullptr;
+	for (const wt::WtChunkPage &page : pages) {
+		if (page.metadata.key == kTransitionKey) {
+			coarse_page = &page;
+			break;
+		}
+	}
+	if (coarse_page == nullptr) {
+		return false;
+	}
+	wt::WtChunkPageSampleSource source(*coarse_page);
+	for (const wt::WtChunkPage &page : pages) {
+		if (page.metadata.key.lod == 0 &&
+			!page_mesh_key(page.metadata.key) &&
+			source.add_transition_support_page(page) !=
+				wt::WtChunkPageSampleSourceStatus::Ok) {
 			return false;
 		}
-		for (std::size_t face = 0; face < output.transitions.size(); ++face) {
-			const bool expected =
-				(input.transition_mask & (1U << face)) != 0;
-			if (expected && output.transitions[face].indices.empty()) {
-				return false;
-			}
-		}
-		add_result(summary, output);
 	}
+	if (!source.has_transition_support(kTransitionMask) ||
+		mesher.mesh(
+			{ kTransitionKey, kTransitionMask, 0.0F, 0.25F },
+			source,
+			output,
+			scratch
+		) != wt::WtChunkMeshingStatus::Ok ||
+		output.regular.indices.empty()) {
+		return false;
+	}
+	for (std::size_t face = 0; face < output.transitions.size(); ++face) {
+		const bool expected = (kTransitionMask & (1U << face)) != 0;
+		if (expected && output.transitions[face].indices.empty()) {
+			return false;
+		}
+	}
+	add_result(summary, output);
 	return true;
 }
 
@@ -514,6 +498,7 @@ int main(int argc, char **argv) {
 		MeshSummary transition_mesh;
 		const auto transition_mesh_start = std::chrono::steady_clock::now();
 		if (!mesh_transition_chunks(
+				decoded,
 				mesher,
 				scratch,
 				mesh_output,
@@ -567,11 +552,12 @@ int main(int argc, char **argv) {
 		"M5_PIPELINE_BENCHMARK_PASS runs=%zu warmup=%zu pages_per_run=%zu "
 		"page_mesh_chunks_per_run=%zu transition_chunks_per_run=%zu "
 		"bytes_per_run=%zu page_vertices=%llu page_triangles=%llu "
-		"transition_vertices=%llu transition_triangles=%llu backend=%s\n",
+		"transition_vertices=%llu transition_triangles=%llu backend=%s "
+		"transition_source=decoded_pages\n",
 		measured_runs,
 		warmup_runs,
 		kPageCount,
-		kPageCount,
+		kPageMeshChunkCount,
 		kTransitionChunkCount,
 		fixture.bytes_per_batch,
 		static_cast<unsigned long long>(expected_page_mesh.vertices),

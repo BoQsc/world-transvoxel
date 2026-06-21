@@ -48,10 +48,11 @@ underground and vertical traversal, two viewers, collision-demand changes, and
 edits while moving without record or queue growth.
 Reference-hardware budgets now cover native orchestration, real
 content-addressed warm page I/O/decode, decoded-page LOD0 MIT meshing, and
-higher-LOD MIT transition meshing. The next M5 boundary is explicit:
-schema-1 coarse pages do not independently contain every fine transition
-sample, so transition-sample ownership and integrated storage-to-seam evidence
-must be completed before engine-level budgets.
+higher-LOD MIT transition meshing. Schema-1 remains unchanged: each coarse
+transition face deterministically owns four adjacent LOD-minus-one pages, and
+decoded-page seams now pass all face and corner contracts. The next M5
+boundary is wiring those support dependencies into real runtime jobs before
+engine-level budgets.
 
 ## Tooling
 
