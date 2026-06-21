@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -97,8 +98,10 @@ public:
 		WtPageLoadCompletion &completion,
 		std::chrono::milliseconds timeout
 	);
+	void set_completion_notifier(std::function<void()> notifier);
 
 	bool is_open() const noexcept;
+	bool has_page(const WtChunkKey &key) const noexcept;
 	std::uint64_t source_revision() const noexcept;
 	std::uint64_t world_revision() const noexcept;
 	std::size_t page_count() const noexcept;
@@ -149,6 +152,7 @@ private:
 	std::filesystem::path object_root_;
 	std::vector<std::uint8_t> manifest_bytes_;
 	WtWorldManifestView manifest_;
+	std::function<void()> completion_notifier_;
 	WtAsyncStorageMetrics metrics_;
 };
 

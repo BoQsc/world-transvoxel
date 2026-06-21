@@ -134,7 +134,8 @@ Finite qualification gates are tracked in
 `docs/production/QUALIFICATION_AUDIT.md`:
 
 - PQ0 configuration and lifecycle (complete);
-- PQ1 read-only real baked-world streaming (next);
+- PQ1 read-only real baked-world streaming (active: LOD0 coordinator complete,
+  balanced multi-LOD planner and root example remain);
 - PQ2 editing, query, and persistence;
 - PQ3 clean install and fixed-duration full-world soak;
 - PQ4 release qualification.

@@ -30,6 +30,7 @@ WorldTransvoxelTerrain::~WorldTransvoxelTerrain() = default;
 
 void WorldTransvoxelTerrain::_process(double delta) {
 	(void)delta;
+	drain_world_publications();
 	application_->apply(
 		render_apply_budget_,
 		collision_apply_budget_,
@@ -125,6 +126,25 @@ void WorldTransvoxelTerrain::_bind_methods() {
 	godot::ClassDB::bind_method(
 		godot::D_METHOD("get_world_page_count"),
 		&WorldTransvoxelTerrain::get_world_page_count
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"update_viewer", "viewer_id", "revision", "position",
+			"radius_chunks"
+		),
+		&WorldTransvoxelTerrain::update_viewer
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("remove_viewer", "viewer_id", "revision"),
+		&WorldTransvoxelTerrain::remove_viewer
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_rendered_chunk_count"),
+		&WorldTransvoxelTerrain::get_rendered_chunk_count
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_collision_chunk_count"),
+		&WorldTransvoxelTerrain::get_collision_chunk_count
 	);
 	ADD_SIGNAL(godot::MethodInfo(
 		"world_state_changed",
@@ -312,6 +332,11 @@ bool WorldTransvoxelTerrain::start_world(
 		return false;
 	}
 	lifecycle_ = std::move(lifecycle);
+	render_sink_->clear();
+	collision_sink_->clear();
+	reset_world_application(static_cast<std::size_t>(
+		config.active_chunk_capacity
+	));
 	render_apply_budget_ = static_cast<std::size_t>(
 		config.render_apply_budget
 	);
@@ -364,6 +389,12 @@ godot::String WorldTransvoxelTerrain::get_world_error() const {
 			lifecycle_->last_storage_status()
 		);
 	}
+	if (lifecycle_ &&
+		lifecycle_->last_runtime_status() != WtReadOnlyRuntimeStatus::Ok) {
+		return wt_read_only_runtime_status_message(
+			lifecycle_->last_runtime_status()
+		);
+	}
 	return synchronous_world_error_;
 }
 
@@ -397,6 +428,15 @@ void WorldTransvoxelTerrain::emit_lifecycle_state(
 ) {
 	if (state == last_notified_state_) return;
 	last_notified_state_ = state;
+	if (state == WtWorldLifecycleState::Stopped) {
+		render_sink_->clear();
+		collision_sink_->clear();
+		const std::size_t capacity = configuration_.is_valid() ?
+			static_cast<std::size_t>(
+				configuration_->to_native().active_chunk_capacity
+			) : 256U;
+		reset_world_application(capacity);
+	}
 	emit_signal(
 		"world_state_changed",
 		static_cast<std::int64_t>(state),

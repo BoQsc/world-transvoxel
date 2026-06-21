@@ -66,8 +66,10 @@ The current production audit is
 [`docs/production/QUALIFICATION_AUDIT.md`](docs/production/QUALIFICATION_AUDIT.md).
 Its first completed foundation is the schema-1 native/Godot runtime
 configuration. Asynchronous manifest startup, failure, restart, and storage
-shutdown now complete PQ0. PQ1 read-only streaming of non-empty baked pages is
-next; the addon is not yet represented as production-ready.
+shutdown now complete PQ0. PQ1 now streams real non-empty LOD0 pages from
+native viewer events through official MIT meshing into bounded Godot resources.
+Balanced multi-LOD planning and the root example remain; the addon is not yet
+represented as production-ready.
 
 ## Tooling
 

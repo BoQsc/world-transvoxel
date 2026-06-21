@@ -1,0 +1,161 @@
+#pragma once
+
+#include "physics/wt_collision_apply_queue.h"
+#include "render/wt_render_apply_queue.h"
+#include "services/wt_runtime_config.h"
+#include "streaming/wt_multi_viewer_desired_set.h"
+
+#include <atomic>
+#include <condition_variable>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <mutex>
+#include <vector>
+
+namespace world_transvoxel {
+
+class WtAsyncStorageService;
+class WtChunkApplicationService;
+class WtChunkResourceCache;
+class WtDesiredSetRuntimeService;
+class WtChunkMesher;
+struct WtChunkMeshingScratch;
+class WtPageMeshingRuntimeService;
+class WtStoragePageCache;
+class WtStreamScheduler;
+
+enum class WtReadOnlyRuntimeStatus : std::uint8_t {
+	Ok,
+	InvalidConfiguration,
+	NotRunning,
+	InvalidViewer,
+	ViewerQueueFull,
+	DesiredSetFailure,
+	RuntimeDeltaFailure,
+	PipelineFailure,
+	PublicationFailure,
+};
+
+enum class WtReadOnlyPublicationKind : std::uint8_t {
+	ExpectChunk,
+	SetCollisionRequired,
+	RemoveChunk,
+	RenderPayload,
+	CollisionPayload,
+};
+
+struct WtReadOnlyPublication {
+	WtReadOnlyPublicationKind kind =
+		WtReadOnlyPublicationKind::ExpectChunk;
+	WtChunkKey key;
+	WtGenerationToken generation;
+	bool collision_required = false;
+	WtRenderPayloadPtr render;
+	WtCollisionPayloadPtr collision;
+};
+
+struct WtReadOnlyRuntimeMetrics {
+	std::uint64_t viewer_updates = 0;
+	std::uint64_t viewer_removals = 0;
+	std::uint64_t coalesced_viewer_events = 0;
+	std::uint64_t planned_demands = 0;
+	std::uint64_t sample_jobs = 0;
+	std::uint64_t mesh_jobs = 0;
+	std::uint64_t storage_completions = 0;
+	std::uint64_t mesh_completions = 0;
+	std::uint64_t published_events = 0;
+	std::uint64_t rejected_events = 0;
+};
+
+class WtReadOnlyWorldRuntime {
+public:
+	WtReadOnlyWorldRuntime(
+		WtRuntimeConfig config,
+		WtAsyncStorageService &storage
+	);
+	~WtReadOnlyWorldRuntime();
+
+	WtReadOnlyWorldRuntime(const WtReadOnlyWorldRuntime &) = delete;
+	WtReadOnlyWorldRuntime &operator=(
+		const WtReadOnlyWorldRuntime &
+	) = delete;
+
+	bool valid() const noexcept;
+	WtReadOnlyRuntimeStatus update_viewer(
+		const WtViewerSnapshot &snapshot,
+		std::uint32_t radius_chunks
+	);
+	WtReadOnlyRuntimeStatus remove_viewer(
+		std::uint64_t viewer_id,
+		std::uint64_t revision
+	);
+	WtReadOnlyRuntimeStatus run();
+	void request_stop() noexcept;
+	bool pop_publication(WtReadOnlyPublication &publication);
+
+	WtReadOnlyRuntimeStatus last_status() const noexcept;
+	WtReadOnlyRuntimeMetrics get_metrics() const noexcept;
+
+private:
+	enum class ViewerEventKind : std::uint8_t { Update, Remove };
+	struct ViewerEvent {
+		ViewerEventKind kind = ViewerEventKind::Update;
+		WtViewerSnapshot snapshot;
+		std::uint32_t radius_chunks = 0;
+	};
+
+	bool enqueue_viewer_event(const ViewerEvent &event);
+	bool process_viewer_event();
+	bool process_storage_completions();
+	bool process_scheduler_jobs();
+	bool process_mesh_completions();
+	bool publish_delta(const WtDesiredSetDelta &delta);
+	bool push_publication(WtReadOnlyPublication publication);
+	bool build_demands(
+		const ViewerEvent &event,
+		std::vector<WtViewerChunkDemand> &demands
+	) const;
+	void notify_work() noexcept;
+	void set_failure(WtReadOnlyRuntimeStatus status) noexcept;
+
+	WtRuntimeConfig config_;
+	WtAsyncStorageService &storage_;
+	bool valid_ = false;
+	std::atomic<bool> stop_requested_{ false };
+	std::atomic<WtReadOnlyRuntimeStatus> last_status_{
+		WtReadOnlyRuntimeStatus::Ok
+	};
+
+	mutable std::mutex input_mutex_;
+	std::vector<ViewerEvent> viewer_events_;
+	std::size_t viewer_event_capacity_ = 0;
+
+	mutable std::mutex publication_mutex_;
+	std::condition_variable publication_space_available_;
+	std::vector<WtReadOnlyPublication> publication_slots_;
+	std::size_t publication_head_ = 0;
+	std::size_t publication_count_ = 0;
+
+	mutable std::mutex wake_mutex_;
+	std::condition_variable wake_condition_;
+	std::uint64_t wake_sequence_ = 0;
+
+	std::unique_ptr<WtMultiViewerDesiredSet> desired_;
+	std::unique_ptr<WtStreamScheduler> scheduler_;
+	std::unique_ptr<WtChunkApplicationService> application_;
+	std::unique_ptr<WtStoragePageCache> page_cache_;
+	std::unique_ptr<WtChunkResourceCache> resource_cache_;
+	std::unique_ptr<WtDesiredSetRuntimeService> desired_runtime_;
+	std::unique_ptr<WtPageMeshingRuntimeService> page_runtime_;
+	std::unique_ptr<WtChunkMesher> mesher_;
+	std::unique_ptr<WtChunkMeshingScratch> meshing_scratch_;
+	mutable std::mutex metrics_mutex_;
+	WtReadOnlyRuntimeMetrics metrics_;
+};
+
+const char *wt_read_only_runtime_status_message(
+	WtReadOnlyRuntimeStatus status
+) noexcept;
+
+} // namespace world_transvoxel

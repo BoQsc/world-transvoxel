@@ -5,6 +5,7 @@
 
 #include <godot_cpp/classes/node3d.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
+#include <godot_cpp/variant/vector3.hpp>
 #include <godot_cpp/variant/string.hpp>
 
 #include <cstdint>
@@ -56,6 +57,15 @@ public:
 	std::int64_t get_world_source_revision() const noexcept;
 	std::int64_t get_world_revision() const noexcept;
 	std::int64_t get_world_page_count() const noexcept;
+	bool update_viewer(
+		std::int64_t viewer_id,
+		std::int64_t revision,
+		const godot::Vector3 &position,
+		std::int64_t radius_chunks
+	);
+	bool remove_viewer(std::int64_t viewer_id, std::int64_t revision);
+	std::int64_t get_rendered_chunk_count() const noexcept;
+	std::int64_t get_collision_chunk_count() const noexcept;
 	void set_render_apply_budget(std::int64_t budget);
 	std::int64_t get_render_apply_budget() const noexcept;
 	void set_collision_apply_budget(std::int64_t budget);
@@ -86,12 +96,16 @@ public:
 private:
 	void emit_lifecycle_state(WtWorldLifecycleState state);
 	void notify_lifecycle_state();
+	void drain_world_publications();
+	void reset_world_application(std::size_t capacity);
 
 	godot::Ref<WorldTransvoxelConfig> configuration_;
 	std::unique_ptr<WtWorldLifecycleService> lifecycle_;
 	WtWorldLifecycleState last_notified_state_ =
 		WtWorldLifecycleState::Stopped;
 	godot::String synchronous_world_error_ = "ok";
+	WtReadOnlyPublication deferred_publication_;
+	bool has_deferred_publication_ = false;
 	std::unique_ptr<WtChunkApplicationService> application_;
 	std::unique_ptr<WtGodotRenderSink> render_sink_;
 	std::unique_ptr<WtGodotCollisionSink> collision_sink_;

@@ -182,6 +182,7 @@ void WtAsyncStorageService::close() noexcept {
 	object_root_.clear();
 	manifest_bytes_.clear();
 	manifest_ = {};
+	completion_notifier_ = {};
 }
 
 WtAsyncStorageStatus WtAsyncStorageService::request_page(
@@ -336,6 +337,7 @@ void WtAsyncStorageService::worker_main() noexcept {
 			++metrics_.failed_pages;
 		}
 		completion_available_.notify_one();
+		if (completion_notifier_) completion_notifier_();
 	}
 }
 
@@ -387,6 +389,18 @@ WtPageLoadCompletion WtAsyncStorageService::load_page(
 bool WtAsyncStorageService::is_open() const noexcept {
 	std::lock_guard<std::mutex> lock(mutex_);
 	return open_ && !stop_requested_;
+}
+
+void WtAsyncStorageService::set_completion_notifier(
+	std::function<void()> notifier
+) {
+	std::lock_guard<std::mutex> lock(mutex_);
+	completion_notifier_ = std::move(notifier);
+}
+
+bool WtAsyncStorageService::has_page(const WtChunkKey &key) const noexcept {
+	std::lock_guard<std::mutex> lock(mutex_);
+	return open_ && manifest_.find_page(key) != nullptr;
 }
 
 std::uint64_t WtAsyncStorageService::source_revision() const noexcept {

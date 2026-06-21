@@ -1,0 +1,132 @@
+#include "services/wt_read_only_world_runtime.h"
+
+#include "services/wt_page_meshing_runtime.h"
+#include "storage/wt_async_storage_service.h"
+#include "streaming/wt_stream_scheduler.h"
+
+#include <utility>
+
+namespace world_transvoxel {
+
+WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
+	if (!valid_) return WtReadOnlyRuntimeStatus::InvalidConfiguration;
+	storage_.set_completion_notifier([this]() { notify_work(); });
+	std::uint64_t observed_wake = 0;
+	while (!stop_requested_.load()) {
+		bool progressed = process_viewer_event();
+		progressed = process_storage_completions() || progressed;
+		progressed = page_runtime_->flush_scheduler_results(*scheduler_) != 0 ||
+			progressed;
+		progressed = scheduler_->apply_completions(
+			static_cast<std::size_t>(config_.active_chunk_capacity)
+		) != 0 || progressed;
+		progressed = process_scheduler_jobs() || progressed;
+		progressed = scheduler_->apply_completions(
+			static_cast<std::size_t>(config_.active_chunk_capacity)
+		) != 0 || progressed;
+		progressed = process_mesh_completions() || progressed;
+		if (last_status_.load() != WtReadOnlyRuntimeStatus::Ok) break;
+		if (!progressed) {
+			std::unique_lock<std::mutex> lock(wake_mutex_);
+			observed_wake = wake_sequence_;
+			wake_condition_.wait(lock, [&]() {
+				return stop_requested_.load() ||
+					wake_sequence_ != observed_wake;
+			});
+		}
+	}
+	storage_.set_completion_notifier({});
+	return last_status_.load();
+}
+
+void WtReadOnlyWorldRuntime::request_stop() noexcept {
+	stop_requested_.store(true);
+	notify_work();
+	publication_space_available_.notify_all();
+}
+
+bool WtReadOnlyWorldRuntime::push_publication(
+	WtReadOnlyPublication publication
+) {
+	std::unique_lock<std::mutex> lock(publication_mutex_);
+	publication_space_available_.wait(lock, [&]() {
+		return stop_requested_.load() ||
+			publication_count_ < publication_slots_.size();
+	});
+	if (stop_requested_.load()) return false;
+	const std::size_t tail =
+		(publication_head_ + publication_count_) % publication_slots_.size();
+	publication_slots_[tail] = std::move(publication);
+	++publication_count_;
+	{
+		std::lock_guard<std::mutex> metrics_lock(metrics_mutex_);
+		++metrics_.published_events;
+	}
+	return true;
+}
+
+bool WtReadOnlyWorldRuntime::pop_publication(
+	WtReadOnlyPublication &publication
+) {
+	std::lock_guard<std::mutex> lock(publication_mutex_);
+	if (publication_count_ == 0) return false;
+	publication = std::move(publication_slots_[publication_head_]);
+	publication_slots_[publication_head_] = {};
+	publication_head_ = (publication_head_ + 1U) % publication_slots_.size();
+	--publication_count_;
+	publication_space_available_.notify_one();
+	return true;
+}
+
+void WtReadOnlyWorldRuntime::notify_work() noexcept {
+	{
+		std::lock_guard<std::mutex> lock(wake_mutex_);
+		++wake_sequence_;
+	}
+	wake_condition_.notify_one();
+}
+
+void WtReadOnlyWorldRuntime::set_failure(
+	WtReadOnlyRuntimeStatus status
+) noexcept {
+	WtReadOnlyRuntimeStatus expected = WtReadOnlyRuntimeStatus::Ok;
+	last_status_.compare_exchange_strong(expected, status);
+	notify_work();
+}
+
+WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::last_status() const noexcept {
+	return last_status_.load();
+}
+
+WtReadOnlyRuntimeMetrics
+WtReadOnlyWorldRuntime::get_metrics() const noexcept {
+	std::lock_guard<std::mutex> lock(metrics_mutex_);
+	return metrics_;
+}
+
+const char *wt_read_only_runtime_status_message(
+	WtReadOnlyRuntimeStatus status
+) noexcept {
+	switch (status) {
+		case WtReadOnlyRuntimeStatus::Ok: return "ok";
+		case WtReadOnlyRuntimeStatus::InvalidConfiguration:
+			return "read-only runtime configuration is invalid";
+		case WtReadOnlyRuntimeStatus::NotRunning:
+			return "world is not running";
+		case WtReadOnlyRuntimeStatus::InvalidViewer:
+			return "viewer event is invalid";
+		case WtReadOnlyRuntimeStatus::ViewerQueueFull:
+			return "viewer event queue is full";
+		case WtReadOnlyRuntimeStatus::DesiredSetFailure:
+			return "viewer desired-set update failed";
+		case WtReadOnlyRuntimeStatus::RuntimeDeltaFailure:
+			return "streaming runtime delta failed";
+		case WtReadOnlyRuntimeStatus::PipelineFailure:
+			return "read-only page or meshing pipeline failed";
+		case WtReadOnlyRuntimeStatus::PublicationFailure:
+			return "read-only publication queue failed";
+	}
+	return "unknown read-only runtime status";
+}
+
+} // namespace world_transvoxel

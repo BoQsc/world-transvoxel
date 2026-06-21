@@ -6,8 +6,8 @@ Status: complete for production qualification PQ0
 
 This contract connects `WorldTransvoxelTerrain` to a validated `wtworld`
 manifest and the existing bounded asynchronous storage worker. It owns startup
-and shutdown only. Viewer demand, page requests, official MIT meshing, and
-render/collision publication begin in PQ1.
+and shutdown. The separate `PRODUCTION_READ_ONLY_STREAMING_CONTRACT.md` now
+uses that running ownership for the first PQ1 pipeline.
 
 The lifecycle does not use the M3 or M5 test fixtures. `WorldTransvoxelTerrain`
 owns a focused native `WtWorldLifecycleService`, which in turn owns the M5

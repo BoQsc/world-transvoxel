@@ -82,6 +82,8 @@ addons/world_transvoxel/
       wt_chunk_application.*
       wt_chunk_resource_cache.*
       wt_chunk_resource_payload.*
+      wt_read_only_world_runtime.*
+      wt_read_only_world_runtime_thread.cpp
       wt_runtime_config.*
       wt_world_lifecycle.*
     storage/

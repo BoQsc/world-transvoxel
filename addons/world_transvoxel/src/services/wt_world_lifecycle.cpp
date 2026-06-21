@@ -47,6 +47,7 @@ WtWorldLifecycleStatus WtWorldLifecycleService::start(
 			}
 		);
 		last_storage_status_ = WtAsyncStorageStatus::Ok;
+		last_runtime_status_ = WtReadOnlyRuntimeStatus::Ok;
 		stop_requested_ = false;
 		source_revision_ = 0;
 		world_revision_ = 0;
@@ -71,6 +72,7 @@ WtWorldLifecycleStatus WtWorldLifecycleService::request_stop() noexcept {
 	}
 	stop_requested_ = true;
 	state_ = WtWorldLifecycleState::Stopping;
+	if (runtime_) runtime_->request_stop();
 	state_changed_.notify_all();
 	return WtWorldLifecycleStatus::Ok;
 }
@@ -88,8 +90,9 @@ void WtWorldLifecycleService::control_main() noexcept {
 		world_manifest_path_,
 		object_root_
 	);
+	bool run_runtime = false;
 	{
-		std::unique_lock<std::mutex> lock(state_mutex_);
+		std::lock_guard<std::mutex> lock(state_mutex_);
 		last_storage_status_ = open_status;
 		if (stop_requested_) {
 			state_ = WtWorldLifecycleState::Stopping;
@@ -97,18 +100,44 @@ void WtWorldLifecycleService::control_main() noexcept {
 			source_revision_ = storage_->source_revision();
 			world_revision_ = storage_->world_revision();
 			page_count_ = storage_->page_count();
-			state_ = WtWorldLifecycleState::Running;
+			runtime_ = std::make_unique<WtReadOnlyWorldRuntime>(
+				config_,
+				*storage_
+			);
+			if (runtime_->valid()) {
+				state_ = WtWorldLifecycleState::Running;
+				run_runtime = true;
+			} else {
+				last_runtime_status_ =
+					WtReadOnlyRuntimeStatus::InvalidConfiguration;
+				state_ = WtWorldLifecycleState::Failed;
+			}
 		} else {
 			state_ = WtWorldLifecycleState::Failed;
 		}
 		state_changed_.notify_all();
-		state_changed_.wait(lock, [&]() { return stop_requested_; });
+	}
+	if (run_runtime) {
+		const WtReadOnlyRuntimeStatus runtime_status = runtime_->run();
+		std::lock_guard<std::mutex> lock(state_mutex_);
+		last_runtime_status_ = runtime_status;
+		state_ = stop_requested_ ? WtWorldLifecycleState::Stopping :
+			WtWorldLifecycleState::Failed;
+		state_changed_.notify_all();
+	}
+	{
+		std::unique_lock<std::mutex> lock(state_mutex_);
+		if (!stop_requested_) {
+			state_changed_.wait(lock, [&]() { return stop_requested_; });
+		}
 		state_ = WtWorldLifecycleState::Stopping;
+		if (runtime_) runtime_->request_stop();
 		state_changed_.notify_all();
 	}
 	storage_->close();
 	{
 		std::lock_guard<std::mutex> lock(state_mutex_);
+		runtime_.reset();
 		storage_.reset();
 		world_manifest_path_.clear();
 		object_root_.clear();
@@ -130,6 +159,41 @@ WtAsyncStorageStatus
 WtWorldLifecycleService::last_storage_status() const noexcept {
 	std::lock_guard<std::mutex> lock(state_mutex_);
 	return last_storage_status_;
+}
+
+WtReadOnlyRuntimeStatus
+WtWorldLifecycleService::last_runtime_status() const noexcept {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	return last_runtime_status_;
+}
+
+WtReadOnlyRuntimeStatus WtWorldLifecycleService::update_viewer(
+	const WtViewerSnapshot &snapshot,
+	std::uint32_t radius_chunks
+) {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	if (state_ != WtWorldLifecycleState::Running || !runtime_) {
+		return WtReadOnlyRuntimeStatus::NotRunning;
+	}
+	return runtime_->update_viewer(snapshot, radius_chunks);
+}
+
+WtReadOnlyRuntimeStatus WtWorldLifecycleService::remove_viewer(
+	std::uint64_t viewer_id,
+	std::uint64_t revision
+) {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	if (state_ != WtWorldLifecycleState::Running || !runtime_) {
+		return WtReadOnlyRuntimeStatus::NotRunning;
+	}
+	return runtime_->remove_viewer(viewer_id, revision);
+}
+
+bool WtWorldLifecycleService::pop_publication(
+	WtReadOnlyPublication &publication
+) {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	return runtime_ && runtime_->pop_publication(publication);
 }
 
 std::uint64_t WtWorldLifecycleService::source_revision() const noexcept {

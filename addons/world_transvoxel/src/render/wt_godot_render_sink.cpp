@@ -40,8 +40,10 @@ WtGodotRenderSink::WtGodotRenderSink(godot::Node3D &owner) noexcept :
 }
 
 bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
-	if (!on_owner_thread() || payload.indices.empty()) {
-		return false;
+	if (!on_owner_thread()) return false;
+	if (payload.indices.empty()) {
+		remove_render(payload.key);
+		return true;
 	}
 	godot::PackedVector3Array positions;
 	godot::PackedVector3Array normals;

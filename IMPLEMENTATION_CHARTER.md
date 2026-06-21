@@ -9,8 +9,9 @@ with bounded storage/caches, multi-viewer/edit runtime ownership, page-backed
 official MIT meshing, real Godot render/physics application budgets, versioned
 binary telemetry, and checked fixed-duration soak evidence. Production
 qualification is the only active phase; its workflow audit and schema-1
-runtime configuration plus asynchronous manifest lifecycle are complete, with
-PQ1 read-only non-empty baked-world streaming next.
+runtime configuration plus asynchronous manifest lifecycle are complete. PQ1
+now has a real LOD0 page-to-Godot coordinator; balanced multi-LOD planning and
+the root example remain.
 
 ## 1. Authority of this document
 
@@ -1233,16 +1234,18 @@ Ordered work:
 3. Complete: explicit stopped/starting/running/stopping/failed world lifecycle
    globalizes Godot paths and performs manifest startup/storage shutdown on a
    native control thread.
-4. Next: connect non-empty baked pages through viewer demand, page I/O,
-   official MIT meshing, caches, and Godot render/collision sinks.
-5. Build a clean-install integration project and real baked-world scene using
+4. Complete at LOD0: connect non-empty baked pages through native viewer
+   demand, page I/O, official MIT meshing, caches, and bounded Godot sinks.
+5. Next: add balanced multi-LOD viewer planning and drive transition pages
+   through the same production coordinator.
+6. Build a clean-install integration project and real baked-world scene using
    the official MIT backend.
-6. Run a fixed-duration full-world Godot soak with real page I/O, official MIT
+7. Run a fixed-duration full-world Godot soak with real page I/O, official MIT
    meshing, render resources, collision resources, edits, save/reload, and
    telemetry.
-7. Lock save migration, operational limits, supported Godot/platform matrix,
+8. Lock save migration, operational limits, supported Godot/platform matrix,
    clean shutdown, and reproducible release evidence.
-8. Only after those gates pass, mark the official MIT-backed addon
+9. Only after those gates pass, mark the official MIT-backed addon
    production-ready and begin the separate 0BSD backend qualification.
 
 M6 compute acceleration remains optional. Do not let it delay the measured CPU

@@ -27,8 +27,8 @@ between the completed components and the production finish line.
 | configure runtime | M5 limits and defaults are locked | explicit schema-1 `WorldTransvoxelConfig` now implemented and attached |
 | bake world | deterministic CLI and editor path complete | no example project invokes the result as a terrain world |
 | load world | manifest/page readers and corruption checks complete | asynchronous facade manifest lifecycle complete; page streaming is PQ1 |
-| stream chunks | scheduler, multi-viewer union, caches, and page-meshing runtime complete | no integrated runtime coordinator behind the facade |
-| render/collide | real Godot sinks and budgets complete | driven only by tests, not streamed world state |
+| stream chunks | LOD0 production coordinator now connects viewer union, scheduler, async I/O, caches, and official MIT meshing | balanced multi-LOD planning remains |
+| render/collide | real streamed baked pages now drive bounded Godot sinks | transition-page production path and root example remain |
 | edit world | transaction, spatial invalidation, journal, replay, and replacement complete | no public edit capability or lifecycle ownership |
 | query world | native component inspection exists | public query capability absent |
 | save/reload | journal and compaction round trips complete | no facade save/reload workflow |
@@ -56,13 +56,15 @@ workers/resources.
 
 ### PQ1 - Read-only real world
 
-Status: next.
+Status: active; the LOD0 production coordinator is complete.
 
-- connect viewer events to desired-set, scheduler, page I/O, official MIT
-  meshing, resource caches, and Godot sinks;
-- provide the thin root `world_transvoxel/` example;
-- prove teleport, underground, vertical, and multi-viewer movement in a baked
-  world.
+- complete: connect native viewer events to desired-set, scheduler, async page
+  I/O, official MIT meshing, resource caches, and bounded Godot sinks;
+- complete at LOD0: prove movement, underground, vertical, and multi-viewer
+  operation in a real non-empty baked world;
+- next: add the balanced multi-LOD/transition planner;
+- final PQ1 unit: provide the thin root `world_transvoxel/` example and close
+  its real-scene audit.
 
 Exit: the example streams, renders, and collides against a real baked world
 with bounded queues and correct shutdown.

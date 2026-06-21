@@ -36,8 +36,10 @@ WtGodotCollisionSink::WtGodotCollisionSink(godot::Node3D &owner) noexcept :
 }
 
 bool WtGodotCollisionSink::apply_collision(const WtCollisionPayload &payload) {
-	if (!on_owner_thread() || payload.faces.empty()) {
-		return false;
+	if (!on_owner_thread()) return false;
+	if (payload.faces.empty()) {
+		remove_collision(payload.key);
+		return true;
 	}
 	godot::PackedVector3Array faces;
 	faces.resize(static_cast<std::int64_t>(payload.faces.size()));

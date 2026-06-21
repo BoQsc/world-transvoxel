@@ -18,7 +18,8 @@ High-level `Node3D` facade.
 
 It does not expose internal queues, chunk dictionaries, RIDs, or worker state.
 PQ0 implements explicit asynchronous manifest startup/failure/restart/stop and
-read-only lifecycle metadata. Viewer-driven page streaming remains PQ1.
+read-only lifecycle metadata. The first PQ1 unit adds native LOD0 viewer
+updates and real baked-page publication; balanced multi-LOD planning remains.
 
 ### `WorldTransvoxelConfig`
 

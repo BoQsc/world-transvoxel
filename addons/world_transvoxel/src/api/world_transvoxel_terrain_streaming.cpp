@@ -1,0 +1,152 @@
+#include "api/world_transvoxel_terrain.h"
+
+#include "physics/wt_godot_collision_sink.h"
+#include "render/wt_godot_render_sink.h"
+#include "services/wt_chunk_application.h"
+
+#include <algorithm>
+#include <cmath>
+#include <limits>
+
+namespace world_transvoxel {
+
+bool WorldTransvoxelTerrain::update_viewer(
+	std::int64_t viewer_id,
+	std::int64_t revision,
+	const godot::Vector3 &position,
+	std::int64_t radius_chunks
+) {
+	if (!lifecycle_ || viewer_id <= 0 || revision <= 0 ||
+		radius_chunks < 0 ||
+		radius_chunks > std::numeric_limits<std::uint32_t>::max() ||
+		!std::isfinite(static_cast<double>(position.x)) ||
+		!std::isfinite(static_cast<double>(position.y)) ||
+		!std::isfinite(static_cast<double>(position.z))) {
+		synchronous_world_error_ = "viewer event is invalid";
+		return false;
+	}
+	const WtReadOnlyRuntimeStatus status = lifecycle_->update_viewer(
+		WtViewerSnapshot {
+			static_cast<std::uint64_t>(viewer_id),
+			static_cast<double>(position.x),
+			static_cast<double>(position.y),
+			static_cast<double>(position.z),
+			static_cast<std::uint64_t>(revision),
+		},
+		static_cast<std::uint32_t>(radius_chunks)
+	);
+	synchronous_world_error_ = wt_read_only_runtime_status_message(status);
+	return status == WtReadOnlyRuntimeStatus::Ok;
+}
+
+bool WorldTransvoxelTerrain::remove_viewer(
+	std::int64_t viewer_id,
+	std::int64_t revision
+) {
+	if (!lifecycle_ || viewer_id <= 0 || revision <= 0) {
+		synchronous_world_error_ = "viewer event is invalid";
+		return false;
+	}
+	const WtReadOnlyRuntimeStatus status = lifecycle_->remove_viewer(
+		static_cast<std::uint64_t>(viewer_id),
+		static_cast<std::uint64_t>(revision)
+	);
+	synchronous_world_error_ = wt_read_only_runtime_status_message(status);
+	return status == WtReadOnlyRuntimeStatus::Ok;
+}
+
+std::int64_t
+WorldTransvoxelTerrain::get_rendered_chunk_count() const noexcept {
+	return static_cast<std::int64_t>(render_sink_->resource_count());
+}
+
+std::int64_t
+WorldTransvoxelTerrain::get_collision_chunk_count() const noexcept {
+	return static_cast<std::int64_t>(collision_sink_->resource_count());
+}
+
+void WorldTransvoxelTerrain::drain_world_publications() {
+	if (!lifecycle_) return;
+	std::size_t render_count = 0;
+	std::size_t collision_count = 0;
+	for (std::size_t count = 0; count < 256U; ++count) {
+		WtReadOnlyPublication publication;
+		if (has_deferred_publication_) {
+			publication = std::move(deferred_publication_);
+			has_deferred_publication_ = false;
+		} else if (!lifecycle_->pop_publication(publication)) {
+			break;
+		}
+		if ((publication.kind == WtReadOnlyPublicationKind::RenderPayload &&
+				render_count >= render_apply_budget_) ||
+			(publication.kind == WtReadOnlyPublicationKind::CollisionPayload &&
+				collision_count >= collision_apply_budget_)) {
+			deferred_publication_ = std::move(publication);
+			has_deferred_publication_ = true;
+			break;
+		}
+		WtApplicationStatus status = WtApplicationStatus::Ok;
+		switch (publication.kind) {
+			case WtReadOnlyPublicationKind::ExpectChunk:
+				status = application_->expect_chunk(
+					publication.key,
+					publication.generation,
+					publication.collision_required
+				);
+				break;
+			case WtReadOnlyPublicationKind::SetCollisionRequired: {
+				const WtChunkApplicationRecord *record =
+					application_->find_record(publication.key);
+				if (record == nullptr ||
+					record->generation != publication.generation) {
+					status = WtApplicationStatus::StaleGeneration;
+					break;
+				}
+				status = application_->set_collision_required(
+					publication.key,
+					publication.collision_required
+				);
+				if (!publication.collision_required) {
+					collision_sink_->remove_collision(publication.key);
+				}
+				break;
+			}
+			case WtReadOnlyPublicationKind::RemoveChunk:
+				status = application_->forget_chunk(publication.key);
+				render_sink_->remove_render(publication.key);
+				collision_sink_->remove_collision(publication.key);
+				break;
+			case WtReadOnlyPublicationKind::RenderPayload:
+				++render_count;
+				status = publication.render ?
+					application_->submit_render(publication.render) :
+					WtApplicationStatus::InvalidInput;
+				break;
+			case WtReadOnlyPublicationKind::CollisionPayload:
+				++collision_count;
+				status = publication.collision ?
+					application_->submit_collision(publication.collision) :
+					WtApplicationStatus::InvalidInput;
+				break;
+		}
+		if (status != WtApplicationStatus::Ok &&
+			status != WtApplicationStatus::AlreadyCurrent &&
+			status != WtApplicationStatus::StaleGeneration &&
+			status != WtApplicationStatus::NotFound) {
+			synchronous_world_error_ =
+				"world publication application failed";
+		}
+	}
+}
+
+void WorldTransvoxelTerrain::reset_world_application(std::size_t capacity) {
+	has_deferred_publication_ = false;
+	deferred_publication_ = {};
+	application_ = std::make_unique<WtChunkApplicationService>(
+		capacity,
+		capacity,
+		capacity
+	);
+}
+
+} // namespace world_transvoxel
