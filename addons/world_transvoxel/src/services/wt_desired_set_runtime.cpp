@@ -2,6 +2,7 @@
 
 #include "services/wt_chunk_application.h"
 #include "services/wt_chunk_resource_cache.h"
+#include "services/wt_page_meshing_runtime_owner.h"
 #include "storage/wt_storage_page_cache.h"
 #include "streaming/wt_stream_scheduler.h"
 
@@ -101,7 +102,8 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 	WtStreamScheduler &scheduler,
 	WtStoragePageCache &page_cache,
 	WtChunkResourceCache &resource_cache,
-	WtChunkApplicationService &application
+	WtChunkApplicationService &application,
+	WtPageMeshingRuntimeOwner *page_meshing_runtime
 ) {
 	++metrics_.delta_attempts;
 	if (!valid_) {
@@ -165,6 +167,16 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 	}
 
 	for (const WtChunkKey &key : delta.removed) {
+		if (page_meshing_runtime != nullptr) {
+			const WtPageMeshingRuntimeOwnerStatus status =
+				page_meshing_runtime->release_owned_chunk(key);
+			if (status == WtPageMeshingRuntimeOwnerStatus::Ok) {
+				++metrics_.released_page_meshing_records;
+			} else if (status != WtPageMeshingRuntimeOwnerStatus::NotFound) {
+				++metrics_.page_meshing_runtime_failures;
+				return WtDesiredSetRuntimeStatus::PageMeshingRuntimeFailure;
+			}
+		}
 		if (scheduler.forget_chunk(key) != WtSchedulerStatus::Ok) {
 			++metrics_.scheduler_failures;
 			return WtDesiredSetRuntimeStatus::SchedulerFailure;
@@ -177,6 +189,21 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 		metrics_.evicted_resource_entries += resource_cache.erase_key(key);
 	}
 	for (const WtDesiredChunk &item : delta.updated) {
+		const WtChunkRecord *record = scheduler.find_record(item.key);
+		if (page_meshing_runtime != nullptr && record != nullptr) {
+			const WtPageMeshingRuntimeOwnerStatus status =
+				page_meshing_runtime->reprioritize_owned_chunk(
+					item.key,
+					record->generation,
+					item.priority
+				);
+			if (status == WtPageMeshingRuntimeOwnerStatus::Ok) {
+				++metrics_.reprioritized_page_meshing_records;
+			} else if (status != WtPageMeshingRuntimeOwnerStatus::NotFound) {
+				++metrics_.page_meshing_runtime_failures;
+				return WtDesiredSetRuntimeStatus::PageMeshingRuntimeFailure;
+			}
+		}
 		const WtSchedulerStatus scheduler_status =
 			scheduler.reprioritize_chunk(item.key, item.priority);
 		if (scheduler_status != WtSchedulerStatus::Ok &&

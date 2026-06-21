@@ -93,5 +93,6 @@ store. It proves:
 
 This contract completed the first M5 work item. Bounded caches, multi-viewer
 runtime ownership, edit-driven replacement, and representative functional
-workloads are now also complete. Hardware budgets, binary traces, and soak
-evidence remain active M5 work.
+workloads, native component budgets, and real page-meshing dependency jobs are
+now also complete. Godot application budgets, production collision readiness
+policy, binary traces, and soak evidence remain active M5 work.

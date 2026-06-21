@@ -87,13 +87,12 @@ four LOD0 regular pages, one LOD1 three-face coarse page, and twelve required
 LOD0 support pages. The transition mesh is produced only from those decoded
 pages through the official MIT backend.
 
-## Remaining runtime integration
+## Runtime integration
 
-The ownership function and decoded-page source are production code. The M5
-runtime must still:
-
-- add support-page dependencies to real storage/meshing jobs;
-- pin all pages until meshing completion or generation cancellation;
-- invalidate a coarse transition generation when any support page changes;
-- expose missing/conflicting support as typed telemetry;
-- retain bounded queues and cache ownership under movement and edits.
+`M5_PAGE_MESHING_RUNTIME_CONTRACT.md` completes the production integration.
+Real jobs derive these support keys, request cache misses from asynchronous
+storage, pin every decoded dependency through official MIT meshing, release
+pins on completion/failure/cancellation, and retain dependency identities for
+event-driven coarse-generation invalidation. Missing support and overlap
+conflicts fail through typed runtime status/metrics. Desired-set removal and
+edit replacement notify the page-meshing owner through a narrow interface.

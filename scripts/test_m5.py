@@ -32,6 +32,9 @@ EXPECTED_WORKLOAD_HASH = (
     "c5bdf6b8896f0a5e4271c5aeab2e8f552e7b776bccc66e9082595467ff90b2a3"
 )
 EXPECTED_PAGE_TRANSITION_HASH = "7717f75423306cca"
+EXPECTED_PAGE_MESHING_RUNTIME_HASH = (
+    "f5509061d2cbc71f70f3ba4f493ad124aa454fe95a9915ec567a05601d6c6b70"
+)
 
 
 def run_hashed_test(
@@ -206,12 +209,20 @@ def test_m5(
             EXPECTED_PAGE_TRANSITION_HASH,
             hash_digits=16,
         )
+        run_hashed_test(
+            configuration,
+            "test_wt_m5_page_meshing_runtime",
+            "M5_PAGE_MESHING_RUNTIME_PASS",
+            "M5_PAGE_MESHING_RUNTIME_HASH",
+            EXPECTED_PAGE_MESHING_RUNTIME_HASH,
+        )
     run_workload_benchmark_smoke()
     run_pipeline_benchmark_smoke()
     test_m4(skip_build=True, skip_engine_download=skip_engine_download)
     print(
-        "M5 storage, cache, multi-viewer, edit replacement, and representative "
-        "functional workloads plus runtime and pipeline budget interfaces "
+        "M5 storage, cache, page-meshing runtime, multi-viewer, edit "
+        "replacement, and representative functional workloads plus runtime "
+        "and pipeline budget interfaces "
         "passed with the complete M4 suite."
     )
 

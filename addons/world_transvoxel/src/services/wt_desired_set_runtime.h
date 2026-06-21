@@ -9,6 +9,7 @@ namespace world_transvoxel {
 
 class WtChunkApplicationService;
 class WtChunkResourceCache;
+class WtPageMeshingRuntimeOwner;
 class WtStoragePageCache;
 class WtStreamScheduler;
 
@@ -22,6 +23,7 @@ enum class WtDesiredSetRuntimeStatus : std::uint8_t {
 	JobQueueCapacityExceeded,
 	SchedulerFailure,
 	ApplicationFailure,
+	PageMeshingRuntimeFailure,
 };
 
 struct WtDesiredSetRuntimeMetrics {
@@ -38,6 +40,9 @@ struct WtDesiredSetRuntimeMetrics {
 	std::uint64_t state_rejections = 0;
 	std::uint64_t scheduler_failures = 0;
 	std::uint64_t application_failures = 0;
+	std::uint64_t page_meshing_runtime_failures = 0;
+	std::uint64_t released_page_meshing_records = 0;
+	std::uint64_t reprioritized_page_meshing_records = 0;
 };
 
 class WtDesiredSetRuntimeService {
@@ -52,7 +57,8 @@ public:
 		WtStreamScheduler &scheduler,
 		WtStoragePageCache &page_cache,
 		WtChunkResourceCache &resource_cache,
-		WtChunkApplicationService &application
+		WtChunkApplicationService &application,
+		WtPageMeshingRuntimeOwner *page_meshing_runtime
 	);
 
 	std::size_t change_capacity() const noexcept;

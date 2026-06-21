@@ -97,7 +97,6 @@ regressions. Budgets are not rewritten automatically from new measurements.
 
 ## Remaining M5 measurement work
 
-- wire support-page dependency pinning and invalidation into runtime jobs;
 - measure Godot render and physics application frame cost;
 - lock production collision distance/readiness policy;
 - produce binary telemetry and fixed-duration soak evidence.

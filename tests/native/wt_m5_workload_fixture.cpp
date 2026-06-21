@@ -124,7 +124,8 @@ bool WtM5WorkloadFixture::apply_runtime_delta(
 			scheduler_,
 			page_cache_,
 			resource_cache_,
-			application_
+			application_,
+			nullptr
 		) != WtDesiredSetRuntimeStatus::Ok) {
 		return false;
 	}
@@ -184,7 +185,8 @@ bool WtM5WorkloadFixture::apply_edit(const WtGridPoint &center) {
 			scheduler_,
 			page_cache_,
 			resource_cache_,
-			application_
+			application_,
+			nullptr
 		) != WtEditRuntimeReplacementStatus::Ok) {
 		return false;
 	}

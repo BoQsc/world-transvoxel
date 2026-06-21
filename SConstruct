@@ -548,6 +548,39 @@ m5_page_transition_test = native_test_env.Program(
     ],
 )
 
+m5_page_meshing_runtime_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_m5_page_meshing_runtime.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_m5_page_meshing_runtime.cpp",
+        "tests/native/wt_m2_mesh_test_support.cpp",
+        "addons/world_transvoxel/src/backend/wt_cell_types.cpp",
+        "addons/world_transvoxel/src/backend/wt_transvoxel_mit_backend.cpp",
+        "addons/world_transvoxel/src/bake/wt_chunk_baker.cpp",
+        "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/meshing/wt_chunk_mesh_geometry.cpp",
+        "addons/world_transvoxel/src/meshing/wt_chunk_mesher.cpp",
+        "addons/world_transvoxel/src/services/wt_page_meshing_runtime.cpp",
+        "addons/world_transvoxel/src/services/wt_page_meshing_runtime_control.cpp",
+        "addons/world_transvoxel/src/storage/wt_async_storage_service.cpp",
+        "addons/world_transvoxel/src/storage/wt_binary_io.cpp",
+        "addons/world_transvoxel/src/storage/wt_chunk_page.cpp",
+        "addons/world_transvoxel/src/storage/wt_chunk_page_sample_source.cpp",
+        "addons/world_transvoxel/src/storage/wt_container_format.cpp",
+        "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+        "addons/world_transvoxel/src/storage/wt_storage_page_cache.cpp",
+        "addons/world_transvoxel/src/storage/wt_world_manifest.cpp",
+        "addons/world_transvoxel/src/streaming/wt_stream_scheduler.cpp",
+    ],
+)
+
 storage_tool = native_test_env.Program(
     os.path.join(
         "build",
@@ -712,6 +745,11 @@ if env["platform"] == "windows":
     )
 
     env.AddPostAction(
+        m5_page_meshing_runtime_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
+    env.AddPostAction(
         storage_tool,
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
@@ -743,6 +781,7 @@ Default([
     m5_workload_test,
     m5_pipeline_budget_test,
     m5_page_transition_test,
+    m5_page_meshing_runtime_test,
     storage_tool,
     bake_tool,
 ])

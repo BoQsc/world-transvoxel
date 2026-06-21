@@ -15,7 +15,9 @@ coordinates:
 - queued-job and future-stage reprioritization for updates;
 - collision-demand changes without remeshing unchanged geometry;
 - scheduler/application record release for removals;
-- page/sample and derived-resource cache release for removals.
+- page/sample and derived-resource cache release for removals;
+- explicit page-meshing record release and matching-generation repriority when
+  that runtime owner exists.
 
 It does not choose viewer demand shapes, execute storage or meshing workers,
 create Godot resources, or measure wall-clock performance.
@@ -63,7 +65,8 @@ record for callers that still own that key.
 
 `reprioritize_chunk()` updates the record and every queued job for its current
 generation. If the sample job is already running, its later mesh job inherits
-the new record priority.
+the new record priority. The caller must explicitly provide either the
+page-meshing owner or `nullptr` when no page-backed meshing record can exist.
 
 ## Deterministic workload
 
@@ -118,6 +121,7 @@ These are deterministic functional bounds, not production hardware budgets.
 The fixture uses immediate synthetic worker completions and native payload
 builders; it does not measure filesystem latency, real terrain meshing cost,
 Godot frame time, physics-server cost, seam geometry, or percentile wall-clock
-latency. Native orchestration and real page/native-meshing component budgets
-are defined separately in `M5_RUNTIME_BUDGET_CONTRACT.md` and
-`M5_PIPELINE_BUDGET_CONTRACT.md`.
+latency. Native orchestration, real page/native-meshing component budgets, and
+the real asynchronous page-meshing lifecycle are defined separately in
+`M5_RUNTIME_BUDGET_CONTRACT.md`, `M5_PIPELINE_BUDGET_CONTRACT.md`, and
+`M5_PAGE_MESHING_RUNTIME_CONTRACT.md`.

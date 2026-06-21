@@ -5,6 +5,7 @@
 #include "services/wt_chunk_application.h"
 #include "services/wt_chunk_resource_cache.h"
 #include "services/wt_edit_runtime_replacement.h"
+#include "services/wt_page_meshing_runtime_owner.h"
 #include "storage/wt_hash256.h"
 #include "storage/wt_storage_page_cache.h"
 #include "streaming/wt_stream_scheduler.h"
@@ -18,6 +19,34 @@
 namespace wt = world_transvoxel;
 
 namespace {
+
+class RecordingPageMeshingOwner final :
+		public wt::WtPageMeshingRuntimeOwner {
+public:
+	wt::WtPageMeshingRuntimeOwnerStatus cancel_owned_generation(
+		const wt::WtChunkKey &,
+		wt::WtGenerationToken
+	) override {
+		++cancelled;
+		return wt::WtPageMeshingRuntimeOwnerStatus::Ok;
+	}
+
+	wt::WtPageMeshingRuntimeOwnerStatus release_owned_chunk(
+		const wt::WtChunkKey &
+	) override {
+		return wt::WtPageMeshingRuntimeOwnerStatus::NotFound;
+	}
+
+	wt::WtPageMeshingRuntimeOwnerStatus reprioritize_owned_chunk(
+		const wt::WtChunkKey &,
+		wt::WtGenerationToken,
+		std::int32_t
+	) override {
+		return wt::WtPageMeshingRuntimeOwnerStatus::NotFound;
+	}
+
+	std::size_t cancelled = 0;
+};
 
 int failure_count = 0;
 
@@ -312,9 +341,10 @@ void test_end_to_end(std::vector<std::uint8_t> &evidence) {
 			wt::WtApplicationStatus::Ok,
 		"stale application fixture submission failed");
 	wt::WtEditRuntimeReplacementService service(keys.size());
+	RecordingPageMeshingOwner page_meshing_owner;
 	check(service.replace_loaded_chunks(
 		transaction(source_revision, 7, 8, 1), spatial, scheduler,
-		page_cache, resource_cache, application
+		page_cache, resource_cache, application, &page_meshing_owner
 	) == wt::WtEditRuntimeReplacementStatus::Ok,
 		"loaded edit replacement failed");
 	const auto &replacements = service.get_last_replacements();
@@ -430,7 +460,9 @@ void test_end_to_end(std::vector<std::uint8_t> &evidence) {
 	const wt::WtEditRuntimeReplacementMetrics metrics = service.get_metrics();
 	check(metrics.completed_transactions == 1 && metrics.replaced_chunks == 2 &&
 		metrics.evicted_page_entries == 4 &&
-		metrics.evicted_resource_entries == 6,
+		metrics.evicted_resource_entries == 6 &&
+		metrics.cancelled_page_meshing_generations == 2 &&
+		page_meshing_owner.cancelled == 2,
 		"edit replacement metrics mismatch");
 	append_u64(evidence, metrics.replaced_chunks);
 	append_u64(evidence, metrics.evicted_page_entries);
@@ -471,7 +503,7 @@ void test_atomic_rejections() {
 	wt::WtEditRuntimeReplacementService service(keys.size());
 	check(service.replace_loaded_chunks(
 		transaction(source_revision, 7, 8, 20), spatial, scheduler,
-		page_cache, resource_cache, application
+		page_cache, resource_cache, application, nullptr
 	) == wt::WtEditRuntimeReplacementStatus::JobQueueCapacityExceeded,
 		"insufficient batch queue capacity was accepted");
 	check(scheduler.queued_job_count() == 0 &&
@@ -490,7 +522,7 @@ void test_atomic_rejections() {
 		"missing-state fixture application setup failed");
 	check(service.replace_loaded_chunks(
 		transaction(source_revision, 7, 8, 30), spatial, scheduler,
-		page_cache, resource_cache, missing_application
+		page_cache, resource_cache, missing_application, nullptr
 	) == wt::WtEditRuntimeReplacementStatus::RuntimeStateMismatch,
 		"missing application state was accepted");
 	for (std::size_t index = 0; index < keys.size(); ++index) {
@@ -531,7 +563,7 @@ void test_repeated_bounded_replacement(std::vector<std::uint8_t> &evidence) {
 		const std::uint64_t base = 7 + cycle;
 		check(service.replace_loaded_chunks(
 			transaction(source_revision, base, 8, 100 + cycle),
-			spatial, scheduler, page_cache, resource_cache, application
+			spatial, scheduler, page_cache, resource_cache, application, nullptr
 		) == wt::WtEditRuntimeReplacementStatus::Ok,
 			"bounded repeated edit replacement failed");
 		check(scheduler.pop_job(job) && job.world_revision == base + 1,

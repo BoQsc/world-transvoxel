@@ -65,13 +65,15 @@ For each canonical affected key, a successful replacement:
 
 1. requests a new sample job with the original source revision, committed
    world revision, existing priority, and a new generation token;
-2. makes queued or in-flight storage, sample, mesh, render, and collision work
+2. cancels matching page-meshing ownership before replacement when that owner
+   exists;
+3. makes queued or in-flight storage, sample, mesh, render, and collision work
    from the previous generation stale;
-3. resets visual and collision readiness to false while preserving whether
+4. resets visual and collision readiness to false while preserving whether
    collision is currently required;
-4. releases encoded and decoded page-cache ownership for the key;
-5. releases mesh, render, and collision cache ownership for the key;
-6. records the old/new generations and exact eviction counts.
+5. releases encoded and decoded page-cache ownership for the key;
+6. releases mesh, render, and collision cache ownership for the key;
+7. records the old/new generations and exact eviction counts.
 
 The normal scheduler lifecycle then executes `Sample -> Mesh -> Ready` for the
 new world revision. Generation checks prevent old completions from entering
@@ -86,7 +88,8 @@ contracts, but cannot publish after their generation is superseded.
 Metrics expose transaction attempts/completions, empty loaded intersections,
 queried and replaced chunks, page/resource entries released, spatial and
 capacity rejections, state/revision rejections, and invariant-level scheduler
-or application failures.
+or application failures. They also report cancelled page-meshing generations
+and page-meshing coordination failures.
 
 ## Evidence
 
@@ -96,6 +99,7 @@ or application failures.
   while leaving an unrelated chunk resident;
 - source and world revisions remain distinct through sample and mesh jobs;
 - page/sample and mesh/render/collision ownership is released and rebuilt;
+- every affected page-meshing generation receives an exact cancellation call;
 - old storage, scheduler, render, and collision completions are stale;
 - visual and collision readiness reset and recover independently;
 - insufficient queue capacity and missing application state reject atomically;
@@ -108,6 +112,8 @@ The locked deterministic evidence hash is:
 03eedad6263963350d32226bd5c59f9aba48e4b35adefa4f2cd774cd70cfb9df
 ```
 
-This completes the edit-driven runtime replacement coordination unit.
-Representative functional workload testing is now also complete. Numerical
-hardware budgets, binary telemetry, and fixed-duration soak evidence remain.
+This completes the edit-driven runtime replacement coordination unit, including
+the page-meshing owner boundary. Representative functional workload and native
+component budgets are also complete. Godot application budgets, production
+collision readiness policy, binary telemetry, and fixed-duration soak evidence
+remain.

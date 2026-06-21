@@ -11,6 +11,7 @@ namespace world_transvoxel {
 
 class WtChunkApplicationService;
 class WtChunkResourceCache;
+class WtPageMeshingRuntimeOwner;
 class WtStoragePageCache;
 class WtStreamScheduler;
 
@@ -27,6 +28,7 @@ enum class WtEditRuntimeReplacementStatus : std::uint8_t {
 	JobQueueCapacityExceeded,
 	SchedulerFailure,
 	ApplicationFailure,
+	PageMeshingRuntimeFailure,
 };
 
 struct WtEditRuntimeReplacementRecord {
@@ -54,6 +56,8 @@ struct WtEditRuntimeReplacementMetrics {
 	std::uint64_t state_rejections = 0;
 	std::uint64_t scheduler_failures = 0;
 	std::uint64_t application_failures = 0;
+	std::uint64_t page_meshing_runtime_failures = 0;
+	std::uint64_t cancelled_page_meshing_generations = 0;
 };
 
 class WtEditRuntimeReplacementService {
@@ -67,7 +71,8 @@ public:
 		WtStreamScheduler &scheduler,
 		WtStoragePageCache &page_cache,
 		WtChunkResourceCache &resource_cache,
-		WtChunkApplicationService &application
+		WtChunkApplicationService &application,
+		WtPageMeshingRuntimeOwner *page_meshing_runtime
 	);
 
 	std::size_t replacement_capacity() const noexcept;

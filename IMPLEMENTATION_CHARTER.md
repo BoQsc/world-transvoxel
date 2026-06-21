@@ -7,7 +7,8 @@ Last reviewed: 2026-06-21
 Current state: M4 complete; M5 streaming production baseline is active with
 bounded storage/caches, multi-viewer desired sets, and edit-driven runtime
 replacement, representative functional workloads, and native orchestration
-plus real page/native MIT meshing component budgets implemented
+plus real page/native MIT meshing component budgets and page-backed transition
+runtime scheduling/pinning/invalidation implemented
 
 ## 1. Authority of this document
 
@@ -1020,7 +1021,8 @@ all corruption cases fail safely.
 Status: active; asynchronous immutable-page storage, authoritative and derived
 caches, multi-viewer runtime ownership, edit-driven replacement,
 representative functional workloads, and reference-hardware native
-orchestration/page/meshing component budgets complete.
+orchestration/page/meshing component budgets plus page-backed transition
+runtime scheduling, pinning, cancellation, and invalidation complete.
 
 Deliverables:
 
@@ -1223,9 +1225,11 @@ Ordered work:
 7. Complete: higher-LOD transition sample ownership uses four canonical
    LOD-minus-one pages per active face. Decoded-page face and three-face corner
    seams pass without changing schema 1.
-8. Next: wire support-page dependency requests, pinning, generation
-   invalidation, and typed failures into real runtime storage/meshing jobs.
-9. Measure Godot render/physics application and readiness budgets.
+8. Complete: real runtime storage/meshing jobs derive support-page dependency
+   requests, pin decoded pages across cache eviction, retry bounded scheduler
+   backpressure, reject cancelled generations, and invalidate dependent coarse
+   generations with typed failures.
+9. Next: measure Godot render/physics application and readiness budgets.
 10. Add fixed-duration soak testing and binary telemetry traces.
 11. Record exact M5 evidence and only then mark M5 complete.
 

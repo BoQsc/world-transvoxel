@@ -2,6 +2,7 @@
 
 #include "services/wt_chunk_application.h"
 #include "services/wt_chunk_resource_cache.h"
+#include "services/wt_page_meshing_runtime_owner.h"
 #include "storage/wt_storage_page_cache.h"
 #include "streaming/wt_stream_scheduler.h"
 
@@ -31,7 +32,8 @@ WtEditRuntimeReplacementService::replace_loaded_chunks(
 	WtStreamScheduler &scheduler,
 	WtStoragePageCache &page_cache,
 	WtChunkResourceCache &resource_cache,
-	WtChunkApplicationService &application
+	WtChunkApplicationService &application,
+	WtPageMeshingRuntimeOwner *page_meshing_runtime
 ) {
 	++metrics_.transaction_attempts;
 	affected_.clear();
@@ -90,6 +92,19 @@ WtEditRuntimeReplacementService::replace_loaded_chunks(
 	}
 
 	for (const PreparedReplacement &replacement : prepared_) {
+		if (page_meshing_runtime != nullptr) {
+			const WtPageMeshingRuntimeOwnerStatus status =
+				page_meshing_runtime->cancel_owned_generation(
+					replacement.key,
+					replacement.previous_generation
+				);
+			if (status == WtPageMeshingRuntimeOwnerStatus::Ok) {
+				++metrics_.cancelled_page_meshing_generations;
+			} else if (status != WtPageMeshingRuntimeOwnerStatus::NotFound) {
+				++metrics_.page_meshing_runtime_failures;
+				return WtEditRuntimeReplacementStatus::PageMeshingRuntimeFailure;
+			}
+		}
 		const WtSchedulerStatus scheduler_status =
 			scheduler.request_chunk_version(
 				replacement.key,

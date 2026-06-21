@@ -120,7 +120,6 @@ requires an explicit reviewed update to this contract and budget JSON.
 This completes reference-hardware measurement for native runtime orchestration.
 Still required before M5 completion:
 
-- runtime scheduling/pinning for higher-LOD transition support pages;
 - Godot render and physics application frame cost;
 - production collision distance/readiness policy;
 - binary telemetry traces and fixed-duration soak evidence.

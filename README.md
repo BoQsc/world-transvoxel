@@ -50,9 +50,11 @@ Reference-hardware budgets now cover native orchestration, real
 content-addressed warm page I/O/decode, decoded-page LOD0 MIT meshing, and
 higher-LOD MIT transition meshing. Schema-1 remains unchanged: each coarse
 transition face deterministically owns four adjacent LOD-minus-one pages, and
-decoded-page seams now pass all face and corner contracts. The next M5
-boundary is wiring those support dependencies into real runtime jobs before
-engine-level budgets.
+decoded-page seams pass all face and corner contracts. Real runtime jobs now
+request and pin those support pages, retry scheduler backpressure, discard late
+cancelled completions, invalidate dependent coarse generations, and release
+pins after official MIT meshing. The next M5 boundary is engine-level
+render/physics application and readiness budgeting.
 
 ## Tooling
 

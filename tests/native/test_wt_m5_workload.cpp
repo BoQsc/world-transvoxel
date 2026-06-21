@@ -1,5 +1,6 @@
 #include "wt_m5_workload_fixture.h"
 
+#include "services/wt_page_meshing_runtime_owner.h"
 #include "storage/wt_hash256.h"
 
 #include <algorithm>
@@ -16,6 +17,38 @@ namespace wt = world_transvoxel;
 namespace wtt = world_transvoxel::testing;
 
 namespace {
+
+class RecordingPageMeshingOwner final :
+		public wt::WtPageMeshingRuntimeOwner {
+public:
+	wt::WtPageMeshingRuntimeOwnerStatus cancel_owned_generation(
+		const wt::WtChunkKey &,
+		wt::WtGenerationToken
+	) override {
+		++cancelled;
+		return wt::WtPageMeshingRuntimeOwnerStatus::Ok;
+	}
+
+	wt::WtPageMeshingRuntimeOwnerStatus release_owned_chunk(
+		const wt::WtChunkKey &
+	) override {
+		++released;
+		return wt::WtPageMeshingRuntimeOwnerStatus::Ok;
+	}
+
+	wt::WtPageMeshingRuntimeOwnerStatus reprioritize_owned_chunk(
+		const wt::WtChunkKey &,
+		wt::WtGenerationToken,
+		std::int32_t
+	) override {
+		++reprioritized;
+		return wt::WtPageMeshingRuntimeOwnerStatus::Ok;
+	}
+
+	std::size_t cancelled = 0;
+	std::size_t released = 0;
+	std::size_t reprioritized = 0;
+};
 
 int failure_count = 0;
 
@@ -108,10 +141,12 @@ void test_runtime_delta_contract(std::vector<std::uint8_t> &evidence) {
 		2, wt::kWtMaximumResourceCacheBytes,
 	});
 	wt::WtDesiredSetRuntimeService runtime(4);
+	RecordingPageMeshingOwner page_meshing_owner;
 	wt::WtDesiredSetDelta delta;
 	delta.added = { { key, 10, 1, false } };
 	check(runtime.apply_delta(
-		delta, 7, 3, scheduler, page_cache, resource_cache, application
+		delta, 7, 3, scheduler, page_cache, resource_cache, application,
+		&page_meshing_owner
 	) == wt::WtDesiredSetRuntimeStatus::Ok,
 		"runtime delta addition failed");
 	const wt::WtChunkRecord *record = scheduler.find_record(key);
@@ -123,7 +158,8 @@ void test_runtime_delta_contract(std::vector<std::uint8_t> &evidence) {
 	delta.clear();
 	delta.updated = { { key, 25, 2, true } };
 	check(runtime.apply_delta(
-		delta, 7, 3, scheduler, page_cache, resource_cache, application
+		delta, 7, 3, scheduler, page_cache, resource_cache, application,
+		&page_meshing_owner
 	) == wt::WtDesiredSetRuntimeStatus::Ok,
 		"runtime delta update failed");
 	record = scheduler.find_record(key);
@@ -154,7 +190,8 @@ void test_runtime_delta_contract(std::vector<std::uint8_t> &evidence) {
 	delta.clear();
 	delta.removed = { { 1, 0, 0, 0 } };
 	check(runtime.apply_delta(
-		delta, 7, 3, scheduler, page_cache, resource_cache, application
+		delta, 7, 3, scheduler, page_cache, resource_cache, application,
+		&page_meshing_owner
 	) == wt::WtDesiredSetRuntimeStatus::Ok &&
 		scheduler.find_record({ 1, 0, 0, 0 }) == nullptr &&
 		application.find_record({ 1, 0, 0, 0 }) == nullptr &&
@@ -166,7 +203,7 @@ void test_runtime_delta_contract(std::vector<std::uint8_t> &evidence) {
 
 	wt::WtDesiredSetRuntimeService invalid(0);
 	check(!invalid.valid() && invalid.apply_delta(
-		{}, 7, 3, scheduler, page_cache, resource_cache, application
+		{}, 7, 3, scheduler, page_cache, resource_cache, application, nullptr
 	) == wt::WtDesiredSetRuntimeStatus::InvalidConfiguration,
 		"invalid runtime service accepted a delta");
 	wt::WtDesiredSetRuntimeService small(1);
@@ -176,7 +213,7 @@ void test_runtime_delta_contract(std::vector<std::uint8_t> &evidence) {
 		{ { 3, 0, 0, 0 }, 1, 1, false },
 	};
 	check(small.apply_delta(
-		delta, 7, 3, scheduler, page_cache, resource_cache, application
+		delta, 7, 3, scheduler, page_cache, resource_cache, application, nullptr
 	) == wt::WtDesiredSetRuntimeStatus::ChangeCapacityExceeded,
 		"runtime change capacity overflow was accepted");
 	delta.added = {
@@ -184,13 +221,13 @@ void test_runtime_delta_contract(std::vector<std::uint8_t> &evidence) {
 		{ { 2, 0, 0, 0 }, 1, 1, false },
 	};
 	check(runtime.apply_delta(
-		delta, 7, 3, scheduler, page_cache, resource_cache, application
+		delta, 7, 3, scheduler, page_cache, resource_cache, application, nullptr
 	) == wt::WtDesiredSetRuntimeStatus::InvalidDelta,
 		"noncanonical runtime delta was accepted");
 	delta.clear();
 	delta.updated = { { { 9, 0, 0, 0 }, 1, 1, false } };
 	check(runtime.apply_delta(
-		delta, 7, 3, scheduler, page_cache, resource_cache, application
+		delta, 7, 3, scheduler, page_cache, resource_cache, application, nullptr
 	) == wt::WtDesiredSetRuntimeStatus::RuntimeStateMismatch,
 		"missing runtime update state was accepted");
 	delta.clear();
@@ -205,7 +242,8 @@ void test_runtime_delta_contract(std::vector<std::uint8_t> &evidence) {
 		record_limited_scheduler,
 		page_cache,
 		resource_cache,
-		record_limited_application
+		record_limited_application,
+		nullptr
 	) == wt::WtDesiredSetRuntimeStatus::RecordCapacityExceeded &&
 		record_limited_scheduler.get_records().empty() &&
 		record_limited_application.get_records().empty(),
@@ -217,7 +255,8 @@ void test_runtime_delta_contract(std::vector<std::uint8_t> &evidence) {
 		queue_limited_scheduler,
 		page_cache,
 		resource_cache,
-		queue_limited_application
+		queue_limited_application,
+		nullptr
 	) == wt::WtDesiredSetRuntimeStatus::JobQueueCapacityExceeded &&
 		queue_limited_scheduler.get_records().empty() &&
 		queue_limited_application.get_records().empty(),
@@ -227,7 +266,11 @@ void test_runtime_delta_contract(std::vector<std::uint8_t> &evidence) {
 	check(metrics.applied_deltas == 3 && metrics.added_chunks == 1 &&
 		metrics.removed_chunks == 1 && metrics.updated_chunks == 1 &&
 		metrics.invalid_deltas == 1 && metrics.state_rejections == 1 &&
-		metrics.capacity_rejections == 2,
+		metrics.capacity_rejections == 2 &&
+		metrics.released_page_meshing_records == 1 &&
+		metrics.reprioritized_page_meshing_records == 1 &&
+		page_meshing_owner.released == 1 &&
+		page_meshing_owner.reprioritized == 1,
 		"runtime delta metrics mismatch");
 	append_u64(evidence, metrics.applied_deltas);
 	append_u64(evidence, metrics.added_chunks);
