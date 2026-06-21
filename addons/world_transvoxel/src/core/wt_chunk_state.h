@@ -31,6 +31,7 @@ struct WtChunkRecord {
 	WtChunkKey key;
 	WtGenerationToken generation;
 	std::uint64_t source_revision = 0;
+	std::uint64_t world_revision = 0;
 	std::int32_t priority = 0;
 	WtChunkLifecycle lifecycle = WtChunkLifecycle::Requested;
 	std::uint8_t transition_mask = 0;

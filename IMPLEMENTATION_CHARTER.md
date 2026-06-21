@@ -5,7 +5,8 @@ Status: canonical project direction
 Last reviewed: 2026-06-21
 
 Current state: M4 complete; M5 streaming production baseline is active with
-bounded storage/caches and multi-viewer desired-set scheduling implemented
+bounded storage/caches, multi-viewer desired sets, and edit-driven runtime
+replacement implemented
 
 ## 1. Authority of this document
 
@@ -1015,8 +1016,8 @@ all corruption cases fail safely.
 
 ### M5 - Streaming production baseline
 
-Status: active; asynchronous immutable-page storage and authoritative
-page/sample plus derived resource cache and multi-viewer foundations complete.
+Status: active; asynchronous immutable-page storage, authoritative and derived
+caches, multi-viewer desired sets, and edit-driven runtime replacement complete.
 
 Deliverables:
 
@@ -1208,9 +1209,10 @@ Ordered work:
    eviction.
 3. Complete: desired-set scheduling supports bounded multi-viewer unions and
    typed deltas without full-world idle scans.
-4. Integrate edit invalidation with loaded-page replacement, generation-token
-   cancellation, remeshing, render readiness, and collision readiness.
-5. Test teleport, fast vehicle, underground, vertical-world, edit, and
+4. Complete: edit invalidation now coordinates loaded-page replacement,
+   generation-token cancellation, remeshing, and independent render/collision
+   readiness.
+5. Next: test teleport, fast vehicle, underground, vertical-world, edit, and
    multi-viewer workloads.
 6. Measure and fix numerical frame, memory, queue, cache, and readiness
    budgets on representative hardware.

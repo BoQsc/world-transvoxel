@@ -38,6 +38,10 @@ immutable identities, byte/item budgets, and deterministic LRU eviction.
 Derived mesh, render, and collision payloads now use the same bounded
 generation-safe ownership model. Multi-viewer demand events now produce a
 deterministic priority union and typed scheduling deltas without idle scans.
+Committed edits now replace only spatially affected loaded generations,
+preserve separate source/world revisions, evict authoritative and derived
+cache ownership, reject stale pipeline results, and reset visual/collision
+readiness until remeshing and application complete.
 
 ## Tooling
 

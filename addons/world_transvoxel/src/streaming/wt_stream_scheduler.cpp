@@ -43,6 +43,11 @@ std::size_t WtStreamScheduler::JobQueue::size() const noexcept {
 	return jobs_.size();
 }
 
+std::size_t WtStreamScheduler::JobQueue::available() const noexcept {
+	std::lock_guard<std::mutex> lock(mutex_);
+	return capacity_ - jobs_.size();
+}
+
 WtStreamScheduler::CompletionQueue::CompletionQueue(std::size_t capacity) :
 		capacity_(capacity), slots_(capacity) {
 }
@@ -93,11 +98,21 @@ WtSchedulerStatus WtStreamScheduler::request_chunk(
 	std::uint64_t source_revision,
 	std::int32_t priority
 ) {
+	return request_chunk_version(key, source_revision, 0, priority);
+}
+
+WtSchedulerStatus WtStreamScheduler::request_chunk_version(
+	const WtChunkKey &key,
+	std::uint64_t source_revision,
+	std::uint64_t world_revision,
+	std::int32_t priority
+) {
 	if (!wt_is_valid_chunk_key(key)) {
 		return WtSchedulerStatus::InvalidKey;
 	}
 	WtChunkRecord *record = find_record_mutable(key);
 	if (record != nullptr && record->source_revision == source_revision &&
+		record->world_revision == world_revision &&
 		record->lifecycle == WtChunkLifecycle::Ready) {
 		return WtSchedulerStatus::AlreadyCurrent;
 	}
@@ -109,6 +124,7 @@ WtSchedulerStatus WtStreamScheduler::request_chunk(
 	candidate.key = key;
 	candidate.generation = next_generation();
 	candidate.source_revision = source_revision;
+	candidate.world_revision = world_revision;
 	candidate.priority = priority;
 	candidate.lifecycle = WtChunkLifecycle::Sampling;
 	const WtChunkJob job = make_job(candidate, WtChunkJobStage::Sample);
@@ -252,6 +268,10 @@ std::size_t WtStreamScheduler::queued_job_count() const noexcept {
 	return jobs_.size();
 }
 
+std::size_t WtStreamScheduler::available_job_capacity() const noexcept {
+	return jobs_.available();
+}
+
 std::size_t WtStreamScheduler::queued_completion_count() const noexcept {
 	return completions_.size();
 }
@@ -272,6 +292,7 @@ WtChunkJob WtStreamScheduler::make_job(
 		record.key,
 		record.generation,
 		record.source_revision,
+		record.world_revision,
 		++sequence_counter_,
 		record.priority,
 		stage,

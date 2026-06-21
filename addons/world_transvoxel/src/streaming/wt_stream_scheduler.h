@@ -19,6 +19,7 @@ struct WtChunkJob {
 	WtChunkKey key;
 	WtGenerationToken generation;
 	std::uint64_t source_revision = 0;
+	std::uint64_t world_revision = 0;
 	std::uint64_t sequence = 0;
 	std::int32_t priority = 0;
 	WtChunkJobStage stage = WtChunkJobStage::Sample;
@@ -65,6 +66,12 @@ public:
 		std::uint64_t source_revision,
 		std::int32_t priority
 	);
+	WtSchedulerStatus request_chunk_version(
+		const WtChunkKey &key,
+		std::uint64_t source_revision,
+		std::uint64_t world_revision,
+		std::int32_t priority
+	);
 	WtSchedulerStatus cancel_chunk(const WtChunkKey &key);
 	bool pop_job(WtChunkJob &job);
 	WtSchedulerStatus submit_completion(const WtChunkJobResult &result);
@@ -76,6 +83,7 @@ public:
 	const std::vector<WtViewerSnapshot> &get_viewers() const noexcept;
 	WtSchedulerMetrics get_metrics() const noexcept;
 	std::size_t queued_job_count() const noexcept;
+	std::size_t available_job_capacity() const noexcept;
 	std::size_t queued_completion_count() const noexcept;
 
 private:
@@ -85,6 +93,7 @@ private:
 		bool push(const WtChunkJob &job);
 		bool pop(WtChunkJob &job);
 		std::size_t size() const noexcept;
+		std::size_t available() const noexcept;
 
 	private:
 		std::size_t capacity_ = 0;
