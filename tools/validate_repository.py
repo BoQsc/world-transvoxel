@@ -191,6 +191,8 @@ REQUIRED_FILES = (
     "docs/contracts/M5_GODOT_APPLICATION_BUDGET_CONTRACT.md",
     "docs/evidence/m5_runtime_budget_windows_x86_64.json",
     "docs/evidence/m5_pipeline_budget_windows_x86_64.json",
+    "docs/evidence/m5_application_budget_godot_4_6_3_windows_x86_64.json",
+    "docs/evidence/m5_application_budget_godot_4_7_windows_x86_64.json",
     "docs/decisions/M4_CODEC_DECISION.md",
     "docs/architecture/API_BOUNDARIES.md",
     "docs/architecture/ARCHITECTURE.md",

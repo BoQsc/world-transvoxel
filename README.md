@@ -53,8 +53,10 @@ transition face deterministically owns four adjacent LOD-minus-one pages, and
 decoded-page seams pass all face and corner contracts. Real runtime jobs now
 request and pin those support pages, retry scheduler backpressure, discard late
 cancelled completions, invalidate dependent coarse generations, and release
-pins after official MIT meshing. The next M5 boundary is engine-level
-render/physics application and readiness budgeting.
+pins after official MIT meshing. Optimized Godot 4.6.3 and 4.7 evidence now
+locks real `ArrayMesh`/concave-collision application budgets, eight-frame
+burst readiness, and the 96/128 collision hysteresis policy. The next M5
+boundary is binary telemetry and fixed-duration soak evidence.
 
 ## Tooling
 

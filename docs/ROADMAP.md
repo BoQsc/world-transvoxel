@@ -90,7 +90,7 @@ Exit: bake-load-edit-save-reload produces identical authoritative state.
 
 Status: active; bounded asynchronous storage, caches, multi-viewer runtime
 ownership, edit-driven replacement, representative functional workloads, and
-native component budgets plus page-backed transition runtime complete.
+native/Godot component budgets plus page-backed transition runtime complete.
 
 - multiple viewers;
 - asynchronous manifest/page storage with content-addressed validation
@@ -109,8 +109,9 @@ native component budgets plus page-backed transition runtime complete.
   evidence (complete);
 - runtime support-page dependency scheduling, pinning, and invalidation
   (complete);
-- Godot render/physics application budgets (next);
-- binary telemetry and fixed-duration soak evidence.
+- Godot render/physics application budgets and production collision/readiness
+  policy (complete);
+- binary telemetry and fixed-duration soak evidence (next).
 
 Exit: fixed-duration motion/edit workload meets queue, memory, seam, collision,
 and frame-time budgets.

@@ -64,8 +64,10 @@ currently required:     retain through distance <= 128 base units
 
 Both distances are validated finite and nonnegative, and deactivation must be
 at least activation. These defaults prevent boundary oscillation in the M3
-integration fixture. Representative production distances remain an M5 budget
-decision.
+integration fixture. M5 locks them as the production CPU baseline together
+with per-frame defaults of four render and two collision applications.
+Projects may configure another validated policy while preserving hysteresis
+and bounded readiness.
 
 ## Bounded application and readiness
 
@@ -91,7 +93,7 @@ readiness bits.
 Queue submission is worker-safe. Expectations, application, readiness access,
 and Godot sinks are main-thread operations.
 
-## Current proof and remaining gate
+## Proof
 
 `tests/native/test_wt_m3_application.cpp` proves deterministic render-buffer
 combination, inactive-face rejection, collision sanitation and metrics,
@@ -108,3 +110,7 @@ in-flight eviction, and shutdown with queued work.
 The integration runner executes this contract against debug and optimized
 addon builds on both supported Godot versions. No GPU readback or frame-thread
 wait is used.
+
+`M5_GODOT_APPLICATION_BUDGET_CONTRACT.md` adds 101-run optimized evidence for
+real `ArrayMesh`, `ConcavePolygonShape3D`, replacement, teardown, and
+eight-frame burst readiness on both supported engines.

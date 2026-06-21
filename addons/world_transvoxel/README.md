@@ -30,9 +30,10 @@ M5 production streaming is active. Its asynchronous immutable-page storage
 and all five bounded native cache tiers are implemented. The bounded
 multi-viewer desired-set union, edit-driven generation replacement,
 representative native budgets, and page-backed transition job scheduling,
-pinning, cancellation, and invalidation are also complete. Godot application
-budgets, binary telemetry, and soak evidence remain. Compute acceleration is
-later work.
+pinning, cancellation, and invalidation are also complete. Real Godot
+render/physics application budgets and the collision/readiness baseline are
+locked on both supported engines. Binary telemetry and soak evidence remain.
+Compute acceleration is later work.
 
 Build from the repository root:
 

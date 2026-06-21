@@ -113,7 +113,7 @@ The locked deterministic evidence hash is:
 ```
 
 This completes the edit-driven runtime replacement coordination unit, including
-the page-meshing owner boundary. Representative functional workload and native
-component budgets are also complete. Godot application budgets, production
-collision readiness policy, binary telemetry, and fixed-duration soak evidence
+the page-meshing owner boundary. Representative functional workload, native
+component budgets, Godot application budgets, and production collision
+readiness are also complete. Binary telemetry and fixed-duration soak evidence
 remain.

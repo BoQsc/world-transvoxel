@@ -1,6 +1,6 @@
 # M5 Godot Application Budget Contract
 
-Status: implemented; clean reference-hardware capture pending
+Status: complete with locked Windows x86-64 evidence
 
 ## Scope
 
@@ -93,13 +93,33 @@ python tools/benchmark_m5_application.py --engine-version 4.7
 `scripts/test_m5.py` performs a three-sample interface and correctness smoke
 run on both engines before the existing complete Godot integration matrix.
 
-## Completion gate
+## Locked evidence
 
-This unit is complete only after:
+Both optimized captures use 101 measured runs after 10 warmup runs:
 
-- debug and release addon builds pass;
-- both engine smoke runs pass;
-- clean 101-sample evidence is committed for both engine profiles;
-- the complete M5-through-M0 regression suite passes;
-- the roadmap and implementation charter identify binary telemetry and soak
-  evidence as the next active unit.
+| Measurement | Godot 4.6.3 | Godot 4.7 |
+| --- | ---: | ---: |
+| replacement scenario p50 | 64,345,000 ns | 69,227,800 ns |
+| replacement scenario p95 | 148,857,000 ns | 97,189,300 ns |
+| maximum frame p95 | 55,008,900 ns | 28,519,200 ns |
+| render sink p95 | 12,825,200 ns | 18,189,700 ns |
+| collision sink p95 | 134,687,500 ns | 86,355,400 ns |
+| cold scenario | 62,499,700 ns | 84,268,500 ns |
+| teardown | 197,300 ns | 158,300 ns |
+| peak process working set | 101,085,184 bytes | 106,741,760 bytes |
+| maximum readiness | 8 frames | 8 frames |
+
+The evidence files are:
+
+- `docs/evidence/m5_application_budget_godot_4_6_3_windows_x86_64.json`;
+- `docs/evidence/m5_application_budget_godot_4_7_windows_x86_64.json`.
+
+Both captures identify implementation revision
+`eaa47b37a130a7e23c98865661ca250424d275b5`. The complete debug/release build,
+both budget profiles, the M5 smoke interfaces, and the M5-through-M0 regression
+and Godot integration matrix pass.
+
+Collision-shape replacement dominates this workload. The locked 4/2
+application budgets bound that cost and intentionally favor frame spreading
+over immediate readiness for a 32/16 burst. Binary telemetry and
+fixed-duration soak evidence are the next active M5 unit.

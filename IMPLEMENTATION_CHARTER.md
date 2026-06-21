@@ -8,7 +8,8 @@ Current state: M4 complete; M5 streaming production baseline is active with
 bounded storage/caches, multi-viewer desired sets, and edit-driven runtime
 replacement, representative functional workloads, and native orchestration
 plus real page/native MIT meshing component budgets and page-backed transition
-runtime scheduling/pinning/invalidation implemented
+runtime scheduling/pinning/invalidation plus real Godot render/physics
+application budgets implemented
 
 ## 1. Authority of this document
 
@@ -1022,7 +1023,8 @@ Status: active; asynchronous immutable-page storage, authoritative and derived
 caches, multi-viewer runtime ownership, edit-driven replacement,
 representative functional workloads, and reference-hardware native
 orchestration/page/meshing component budgets plus page-backed transition
-runtime scheduling, pinning, cancellation, and invalidation complete.
+runtime scheduling, pinning, cancellation, invalidation, and Godot
+render/physics application budgets complete.
 
 Deliverables:
 
@@ -1148,8 +1150,7 @@ Resolved in M3:
 - collision removes degenerate triangles and triangles with scale-independent
   squared shape ratio at or below `1e-12`;
 - collision demand uses 96-unit activation and 128-unit deactivation
-  hysteresis for the integration baseline, while production distances remain
-  an M5 budget decision;
+  hysteresis for the integration baseline;
 - worker-safe render and collision submission queues are separate, bounded,
   and consumed only on the Godot main thread;
 - stale generations are rejected before `ArrayMesh` or physics mutation;
@@ -1164,6 +1165,16 @@ Resolved in M4:
 - dependency-free byte RLE was rejected because it expanded all locked page
   fixtures, while another codec requires representative M5 I/O and latency
   evidence.
+
+Resolved in M5:
+
+- production collision hysteresis retains the M3 96-unit activation and
+  128-unit deactivation defaults;
+- production main-thread application defaults are four render and two
+  collision resources per frame;
+- a 32-render/16-collision burst has an eight-frame readiness bound;
+- optimized Godot 4.6.3 and 4.7 application profiles are locked by real
+  `ArrayMesh` and `ConcavePolygonShape3D` evidence.
 
 ## 22. Change and review discipline
 
@@ -1229,8 +1240,10 @@ Ordered work:
    requests, pin decoded pages across cache eviction, retry bounded scheduler
    backpressure, reject cancelled generations, and invalidate dependent coarse
    generations with typed failures.
-9. Next: measure Godot render/physics application and readiness budgets.
-10. Add fixed-duration soak testing and binary telemetry traces.
+9. Complete: optimized Godot 4.6.3 and 4.7 evidence locks real render/physics
+   application cost, four/two per-frame budgets, eight-frame burst readiness,
+   and the 96/128 collision hysteresis baseline.
+10. Next: add fixed-duration soak testing and binary telemetry traces.
 11. Record exact M5 evidence and only then mark M5 complete.
 
 Do not begin optional compute acceleration during M5.
