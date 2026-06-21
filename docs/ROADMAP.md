@@ -89,8 +89,8 @@ Exit: bake-load-edit-save-reload produces identical authoritative state.
 ## M5 - Streaming production baseline
 
 Status: active; bounded asynchronous storage, caches, multi-viewer runtime
-ownership, edit-driven replacement, and representative functional workloads
-complete.
+ownership, edit-driven replacement, representative functional workloads, and
+native component budgets complete.
 
 - multiple viewers;
 - asynchronous manifest/page storage with content-addressed validation
@@ -103,8 +103,11 @@ complete.
   functional workloads (complete);
 - native orchestration latency and process-memory budgets on reference
   hardware (complete);
-- real page I/O/decode, MIT chunk meshing, and Godot render/physics budgets
-  (next);
+- warm page I/O/decode, decoded LOD0 MIT meshing, and native higher-LOD MIT
+  transition-meshing budgets on reference hardware (complete);
+- higher-LOD transition sample ownership plus integrated storage-to-seam
+  evidence (next);
+- Godot render/physics application budgets;
 - binary telemetry and fixed-duration soak evidence.
 
 Exit: fixed-duration motion/edit workload meets queue, memory, seam, collision,

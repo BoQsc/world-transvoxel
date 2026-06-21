@@ -7,7 +7,7 @@ Last reviewed: 2026-06-21
 Current state: M4 complete; M5 streaming production baseline is active with
 bounded storage/caches, multi-viewer desired sets, and edit-driven runtime
 replacement, representative functional workloads, and native orchestration
-budgets implemented
+plus real page/native MIT meshing component budgets implemented
 
 ## 1. Authority of this document
 
@@ -1018,9 +1018,9 @@ all corruption cases fail safely.
 ### M5 - Streaming production baseline
 
 Status: active; asynchronous immutable-page storage, authoritative and derived
-caches, multi-viewer runtime ownership, edit-driven replacement, and
-representative functional workloads plus reference-hardware native
-orchestration budgets complete.
+caches, multi-viewer runtime ownership, edit-driven replacement,
+representative functional workloads, and reference-hardware native
+orchestration/page/meshing component budgets complete.
 
 Deliverables:
 
@@ -1217,11 +1217,16 @@ Ordered work:
    readiness.
 5. Complete: deterministic functional workloads cover teleport, fast vehicle,
    underground, vertical-world, edit, and multi-viewer runtime behavior.
-6. In progress: native orchestration latency and process-memory budgets are
-   complete on reference hardware; next measure real page I/O/decode, MIT chunk
-   meshing, and Godot render/physics application.
-7. Add fixed-duration soak testing and binary telemetry traces.
-8. Record exact M5 evidence and only then mark M5 complete.
+6. Complete: reference-hardware budgets cover native orchestration, warm real
+   page I/O/decode, decoded-page LOD0 MIT meshing, and native higher-LOD MIT
+   transition meshing.
+7. Next: resolve higher-LOD transition sample ownership. Schema-1 coarse pages
+   do not contain every fine face and gradient sample required by transition
+   meshing; prove an integrated storage-to-transition seam workload before
+   engine application budgets.
+8. Measure Godot render/physics application and readiness budgets.
+9. Add fixed-duration soak testing and binary telemetry traces.
+10. Record exact M5 evidence and only then mark M5 complete.
 
 Do not begin optional compute acceleration during M5.
 

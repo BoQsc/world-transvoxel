@@ -25,7 +25,8 @@ excluded. Peak working set covers the native benchmark process.
 This is an orchestration and payload-preparation budget. It does not include
 filesystem page latency, full Transvoxel chunk meshing, Godot `ArrayMesh`
 creation, RenderingServer/PhysicsServer work, scene-tree cost, or actual frame
-pacing. Those remain separate M5 measurements.
+pacing. Page and native MIT meshing costs are now measured separately by
+`M5_PIPELINE_BUDGET_CONTRACT.md`; engine application remains outstanding.
 
 ## Reference host
 
@@ -119,8 +120,7 @@ requires an explicit reviewed update to this contract and budget JSON.
 This completes reference-hardware measurement for native runtime orchestration.
 Still required before M5 completion:
 
-- content-addressed page I/O and decode latency under cache hit/miss pressure;
-- real MIT-backed chunk sample/mesh throughput and seam-preserving workload;
+- integrated higher-LOD page-to-transition sample ownership and seam workload;
 - Godot render and physics application frame cost;
 - production collision distance/readiness policy;
 - binary telemetry traces and fixed-duration soak evidence.

@@ -46,6 +46,12 @@ Desired-set deltas now create, reprioritize, and release bounded runtime
 ownership. A deterministic workload covers fast movement, teleportation,
 underground and vertical traversal, two viewers, collision-demand changes, and
 edits while moving without record or queue growth.
+Reference-hardware budgets now cover native orchestration, real
+content-addressed warm page I/O/decode, decoded-page LOD0 MIT meshing, and
+higher-LOD MIT transition meshing. The next M5 boundary is explicit:
+schema-1 coarse pages do not independently contain every fine transition
+sample, so transition-sample ownership and integrated storage-to-seam evidence
+must be completed before engine-level budgets.
 
 ## Tooling
 
@@ -58,6 +64,7 @@ python scripts/bootstrap_toolchain.py
 python scripts/build.py
 python scripts/test_m5.py
 python tools/benchmark_m5_runtime.py
+python tools/benchmark_m5_pipeline.py
 python tools/wt_storage.py inspect path/to/world.wtworld
 python tools/wt_storage.py validate path/to/page.wtchunk
 python tools/wt_storage.py migrate-world old.wtworld current.wtworld

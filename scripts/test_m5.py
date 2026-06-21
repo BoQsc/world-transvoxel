@@ -67,6 +67,7 @@ def run_hashed_test(
 
 def run_workload_benchmark_smoke() -> None:
     evidence = REPO_ROOT / "build" / "m5_runtime_budget_smoke.json"
+    evidence.unlink(missing_ok=True)
     result = subprocess.run(
         [
             sys.executable,
@@ -99,6 +100,51 @@ def run_workload_benchmark_smoke() -> None:
         or "M5_RUNTIME_BUDGET_PASS" not in combined
     ):
         raise RuntimeError("M5 workload benchmark interface failed.")
+
+
+def run_pipeline_benchmark_smoke() -> None:
+    evidence = REPO_ROOT / "build" / "m5_pipeline_budget_smoke.json"
+    evidence.unlink(missing_ok=True)
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "tools" / "benchmark_m5_pipeline.py"),
+            "--skip-build",
+            "--no-budget-check",
+            "--iterations",
+            "3",
+            "--warmup",
+            "1",
+            "--output",
+            str(evidence),
+        ],
+        check=False,
+        text=True,
+        capture_output=True,
+        errors="replace",
+    )
+    combined = result.stdout + result.stderr
+    print(combined, end="" if combined.endswith("\n") else "\n")
+    document = (
+        json.loads(evidence.read_text(encoding="utf-8"))
+        if evidence.is_file()
+        else {}
+    )
+    samples = document.get("samples_ns", {})
+    if (
+        result.returncode != 0
+        or document.get("schema") != 1
+        or any(
+            len(samples.get(key, [])) != 3
+            for key in (
+                "io_decode_batch",
+                "page_mesh_batch",
+                "transition_mesh_batch",
+            )
+        )
+        or "M5_PIPELINE_BUDGET_PASS" not in combined
+    ):
+        raise RuntimeError("M5 pipeline benchmark interface failed.")
 
 
 def test_m5(
@@ -151,11 +197,12 @@ def test_m5(
             EXPECTED_WORKLOAD_HASH,
         )
     run_workload_benchmark_smoke()
+    run_pipeline_benchmark_smoke()
     test_m4(skip_build=True, skip_engine_download=skip_engine_download)
     print(
         "M5 storage, cache, multi-viewer, edit replacement, and representative "
-        "functional workloads plus the runtime-budget interface passed with "
-        "the complete M4 suite."
+        "functional workloads plus runtime and pipeline budget interfaces "
+        "passed with the complete M4 suite."
     )
 
 
