@@ -120,8 +120,8 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 	meshing_scratch_ = std::make_unique<WtChunkMeshingScratch>();
 	viewer_event_capacity_ = std::max<std::size_t>(viewers * 2U, 2U);
 	viewer_events_.reserve(viewer_event_capacity_);
-	edit_event_capacity_ = std::max<std::size_t>(viewers * 2U, 4U);
-	edit_events_.reserve(edit_event_capacity_);
+	world_operation_capacity_ = kWtProductionWorldOperationCapacity;
+	world_operations_.reserve(world_operation_capacity_);
 	const std::size_t publication_capacity = std::max<std::size_t>(
 		active * 4U,
 		16U

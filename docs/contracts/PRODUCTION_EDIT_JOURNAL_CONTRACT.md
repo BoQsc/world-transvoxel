@@ -70,7 +70,8 @@ The production journal is bounded to:
 - 64 MiB of canonical transaction bytes.
 
 Compaction is required before those limits are exceeded. Public lifecycle
-compaction and authoritative scalar/material queries remain the next PQ2 unit.
+compaction and authoritative scalar/material queries are implemented by the
+final PQ2 unit.
 
 ## Proof
 

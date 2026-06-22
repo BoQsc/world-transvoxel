@@ -128,6 +128,7 @@ void WorldTransvoxelTerrain::_bind_methods() {
 		&WorldTransvoxelTerrain::get_world_page_count
 	);
 	bind_edit_methods();
+	bind_query_snapshot_methods();
 	godot::ClassDB::bind_method(
 		godot::D_METHOD(
 			"update_viewer", "viewer_id", "revision", "position",

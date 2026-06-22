@@ -136,11 +136,10 @@ Finite qualification gates are tracked in
 - PQ0 configuration and lifecycle (complete);
 - PQ1 read-only real baked-world streaming (complete: LOD0, balanced
   multi-LOD transitions, and root real-scene example);
-- PQ2 editing, query, and persistence (active: chunk/readiness query,
-  lifecycle journal ownership, atomic edits, edited-page replacement, and
-  restart replay complete; authoritative sample queries, compaction, and
-  migration remain);
-- PQ3 clean install and fixed-duration full-world soak;
+- PQ2 editing, query, and persistence (complete: readiness and authoritative
+  sample queries, lifecycle journal ownership, atomic edits, edited-page
+  replacement, restart replay, side-by-side compaction, and migration);
+- PQ3 clean install and fixed-duration full-world soak (active);
 - PQ4 release qualification.
 
 - official MIT backend remains the reference;

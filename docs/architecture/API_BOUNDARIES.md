@@ -72,11 +72,17 @@ Read-only world queries.
 - loaded/collision readiness;
 - chunk and LOD inspection.
 
-The first PQ2 query capability is implemented as immutable
-`WorldTransvoxelChunkState` snapshots returned by the terrain facade. It
-reports active generation and visual/collision readiness without exposing
-internal records. Authoritative scalar/material queries remain in the final
-PQ2 integration unit.
+PQ2 provides immutable `WorldTransvoxelChunkState` readiness snapshots plus
+asynchronous exact-grid `WorldTransvoxelSample` results. Authoritative queries
+are ordered with edits, replay the current journal, and compare every
+overlapping indexed page before publishing density/material values.
+
+The terrain facade also queues side-by-side world snapshot operations:
+
+- compaction materializes a nonempty journal into a greater source revision;
+- migration canonicalizes an empty-journal world into the current schema;
+- both publish a new self-contained directory and never mutate the live world
+  in place.
 
 ### `WorldTransvoxelBakeAPI`
 

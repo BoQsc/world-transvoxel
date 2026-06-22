@@ -223,6 +223,39 @@ WtReadOnlyRuntimeStatus WtWorldLifecycleService::submit_edit(
 	return runtime_->submit_edit(transaction);
 }
 
+WtReadOnlyRuntimeStatus
+WtWorldLifecycleService::request_authoritative_sample(
+	const WtGridPoint &point,
+	std::uint8_t lod,
+	std::uint64_t &request_id
+) {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	if (state_ != WtWorldLifecycleState::Running || !runtime_) {
+		request_id = 0;
+		return WtReadOnlyRuntimeStatus::NotRunning;
+	}
+	return runtime_->request_authoritative_sample(point, lod, request_id);
+}
+
+WtReadOnlyRuntimeStatus WtWorldLifecycleService::request_world_snapshot(
+	const std::filesystem::path &output_directory,
+	std::uint64_t new_source_revision,
+	bool compact,
+	std::uint64_t &request_id
+) {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	if (state_ != WtWorldLifecycleState::Running || !runtime_) {
+		request_id = 0;
+		return WtReadOnlyRuntimeStatus::NotRunning;
+	}
+	return runtime_->request_world_snapshot(
+		output_directory,
+		new_source_revision,
+		compact,
+		request_id
+	);
+}
+
 bool WtWorldLifecycleService::pop_publication(
 	WtReadOnlyPublication &publication
 ) {

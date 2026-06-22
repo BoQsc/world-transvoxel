@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <string>
 
 namespace world_transvoxel {
 
@@ -142,6 +143,58 @@ void WorldTransvoxelTerrain::drain_world_publications() {
 				synchronous_world_error_ =
 					wt_read_only_edit_status_message(publication.edit_status);
 				emit_signal("edit_failed", synchronous_world_error_);
+				break;
+			case WtReadOnlyPublicationKind::AuthoritativeSampleReady: {
+				godot::Ref<WorldTransvoxelSample> sample;
+				sample.instantiate();
+				sample->set_sample(publication.authoritative_sample);
+				synchronous_world_error_ = "ok";
+				emit_signal(
+					"authoritative_sample_ready",
+					static_cast<std::int64_t>(publication.request_id),
+					sample
+				);
+				break;
+			}
+			case WtReadOnlyPublicationKind::AuthoritativeSampleRejected:
+				synchronous_world_error_ =
+					wt_authoritative_sample_query_status_message(
+						publication.sample_status
+					);
+				emit_signal(
+					"authoritative_sample_failed",
+					static_cast<std::int64_t>(publication.request_id),
+					synchronous_world_error_
+				);
+				break;
+			case WtReadOnlyPublicationKind::WorldSnapshotReady: {
+				const std::string utf8 =
+					publication.snapshot_manifest_path.u8string();
+				synchronous_world_error_ = "ok";
+				emit_signal(
+					"world_snapshot_ready",
+					static_cast<std::int64_t>(publication.request_id),
+					godot::String::utf8(utf8.c_str()),
+					static_cast<std::int64_t>(
+						publication.snapshot_source_revision
+					),
+					static_cast<std::int64_t>(publication.world_revision),
+					static_cast<std::int64_t>(
+						publication.snapshot_page_count
+					)
+				);
+				break;
+			}
+			case WtReadOnlyPublicationKind::WorldSnapshotRejected:
+				synchronous_world_error_ =
+					wt_world_snapshot_store_status_message(
+						publication.snapshot_status
+					);
+				emit_signal(
+					"world_snapshot_failed",
+					static_cast<std::int64_t>(publication.request_id),
+					synchronous_world_error_
+				);
 				break;
 		}
 		if (status != WtApplicationStatus::Ok &&

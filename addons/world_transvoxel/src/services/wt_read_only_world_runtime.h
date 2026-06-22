@@ -2,7 +2,9 @@
 
 #include "physics/wt_collision_apply_queue.h"
 #include "render/wt_render_apply_queue.h"
+#include "services/wt_authoritative_sample_query.h"
 #include "services/wt_runtime_config.h"
+#include "storage/wt_world_snapshot_store.h"
 #include "streaming/wt_balanced_lod_planner.h"
 #include "editing/wt_edit_transaction.h"
 #include "streaming/wt_multi_viewer_desired_set.h"
@@ -11,11 +13,14 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <vector>
 
 namespace world_transvoxel {
+
+constexpr std::size_t kWtProductionWorldOperationCapacity = 16;
 
 class WtAsyncStorageService;
 class WtChunkApplicationService;
@@ -39,6 +44,9 @@ enum class WtReadOnlyRuntimeStatus : std::uint8_t {
 	InvalidEdit,
 	EditQueueFull,
 	EditFailure,
+	InvalidQuery,
+	InvalidSnapshot,
+	OperationQueueFull,
 	DesiredSetFailure,
 	RuntimeDeltaFailure,
 	PipelineFailure,
@@ -53,6 +61,10 @@ enum class WtReadOnlyPublicationKind : std::uint8_t {
 	CollisionPayload,
 	EditCommitted,
 	EditRejected,
+	AuthoritativeSampleReady,
+	AuthoritativeSampleRejected,
+	WorldSnapshotReady,
+	WorldSnapshotRejected,
 };
 
 enum class WtReadOnlyEditStatus : std::uint8_t {
@@ -74,6 +86,15 @@ struct WtReadOnlyPublication {
 	WtCollisionPayloadPtr collision;
 	std::uint64_t world_revision = 0;
 	WtReadOnlyEditStatus edit_status = WtReadOnlyEditStatus::Ok;
+	std::uint64_t request_id = 0;
+	WtAuthoritativeSampleQueryStatus sample_status =
+		WtAuthoritativeSampleQueryStatus::Ok;
+	WtAuthoritativeSample authoritative_sample;
+	WtWorldSnapshotStoreStatus snapshot_status =
+		WtWorldSnapshotStoreStatus::Ok;
+	std::filesystem::path snapshot_manifest_path;
+	std::uint64_t snapshot_source_revision = 0;
+	std::size_t snapshot_page_count = 0;
 };
 
 struct WtReadOnlyRuntimeMetrics {
@@ -89,6 +110,10 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t edit_commits = 0;
 	std::uint64_t edit_rejections = 0;
 	std::uint64_t edit_replacements = 0;
+	std::uint64_t sample_queries = 0;
+	std::uint64_t sample_query_rejections = 0;
+	std::uint64_t world_snapshots = 0;
+	std::uint64_t world_snapshot_rejections = 0;
 	std::uint64_t published_events = 0;
 	std::uint64_t rejected_events = 0;
 };
@@ -120,6 +145,17 @@ public:
 	WtReadOnlyRuntimeStatus submit_edit(
 		const WtEditTransaction &transaction
 	);
+	WtReadOnlyRuntimeStatus request_authoritative_sample(
+		const WtGridPoint &point,
+		std::uint8_t lod,
+		std::uint64_t &request_id
+	);
+	WtReadOnlyRuntimeStatus request_world_snapshot(
+		const std::filesystem::path &output_directory,
+		std::uint64_t new_source_revision,
+		bool compact,
+		std::uint64_t &request_id
+	);
 	WtReadOnlyRuntimeStatus run();
 	void request_stop() noexcept;
 	bool pop_publication(WtReadOnlyPublication &publication);
@@ -136,10 +172,29 @@ private:
 		std::uint32_t radius_chunks = 0;
 		std::uint8_t maximum_lod = 0;
 	};
+	enum class WorldOperationKind : std::uint8_t {
+		Edit,
+		AuthoritativeSample,
+		CompactSnapshot,
+		MigrateSnapshot,
+	};
+	struct WorldOperation {
+		WorldOperationKind kind = WorldOperationKind::Edit;
+		WtEditTransaction transaction;
+		WtGridPoint point;
+		std::uint8_t lod = 0;
+		std::uint64_t request_id = 0;
+		std::filesystem::path output_directory;
+		std::uint64_t new_source_revision = 0;
+	};
 
 	bool enqueue_viewer_event(const ViewerEvent &event);
 	bool process_viewer_event();
-	bool process_edit_event();
+	bool enqueue_world_operation(WorldOperation &operation);
+	bool process_world_operation_event();
+	bool process_edit_operation(const WtEditTransaction &transaction);
+	bool process_sample_query_operation(const WorldOperation &operation);
+	bool process_snapshot_operation(const WorldOperation &operation);
 	bool process_storage_completions();
 	bool process_scheduler_jobs();
 	bool process_mesh_completions();
@@ -162,8 +217,9 @@ private:
 	mutable std::mutex input_mutex_;
 	std::vector<ViewerEvent> viewer_events_;
 	std::size_t viewer_event_capacity_ = 0;
-	std::vector<WtEditTransaction> edit_events_;
-	std::size_t edit_event_capacity_ = 0;
+	std::vector<WorldOperation> world_operations_;
+	std::size_t world_operation_capacity_ = 0;
+	std::uint64_t next_request_id_ = 0;
 
 	mutable std::mutex publication_mutex_;
 	std::condition_variable publication_space_available_;

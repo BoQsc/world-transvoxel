@@ -54,6 +54,25 @@ bool write_file(
 	return output.good();
 }
 
+bool read_file(
+	const std::filesystem::path &path,
+	std::vector<std::uint8_t> &bytes
+) {
+	std::ifstream input(path, std::ios::binary | std::ios::ate);
+	if (!input) return false;
+	const std::streamoff size = input.tellg();
+	if (size < 0) return false;
+	bytes.resize(static_cast<std::size_t>(size));
+	input.seekg(0);
+	if (!bytes.empty()) {
+		input.read(
+			reinterpret_cast<char *>(bytes.data()),
+			static_cast<std::streamsize>(bytes.size())
+		);
+	}
+	return input.good() || input.eof();
+}
+
 bool write_baked_fixture(
 	const std::filesystem::path &root,
 	const std::vector<WtChunkKey> &keys,
@@ -211,6 +230,87 @@ bool wt_write_production_transition_fixture(
 		"production-transition-streaming-config-v1",
 		"transition.wtworld", world_manifest_path
 	);
+}
+
+bool wt_write_production_legacy_fixture(
+	const std::filesystem::path &root,
+	std::uint64_t source_revision,
+	std::filesystem::path &world_manifest_path
+) {
+	const std::vector<WtChunkKey> keys = {
+		{ -1, 0, 0, 0 },
+		{ 0, 0, 0, 0 },
+		{ 1, 0, 0, 0 },
+		{ 2, 0, 0, 0 },
+	};
+	std::filesystem::path current_path;
+	if (!write_baked_fixture(
+			root, keys, source_revision, 0,
+			"production-legacy-plane", "production-legacy-plane-v1",
+			"production-legacy-streaming",
+			"production-legacy-streaming-config-v1",
+			"legacy-current.wtworld", current_path
+		)) {
+		return false;
+	}
+	std::vector<std::uint8_t> current_bytes;
+	WtWorldManifestView current;
+	if (!read_file(current_path, current_bytes) ||
+		wt_open_world_manifest(
+			{ current_bytes.data(), current_bytes.size() },
+			current
+		) != WtWorldManifestStatus::Ok) {
+		return false;
+	}
+	const WtContainerSection *metadata =
+		current.container.find_section(kWtWorldMetadataSection);
+	const WtContainerSection *dependencies =
+		current.container.find_section(kWtWorldDependencySection);
+	const WtContainerSection *index =
+		current.container.find_section(kWtWorldIndexSection);
+	if (metadata == nullptr || dependencies == nullptr || index == nullptr) {
+		return false;
+	}
+	std::vector<std::uint8_t> legacy_metadata(
+		metadata->payload.data,
+		metadata->payload.data + kWtWorldMetadataV1_0Size
+	);
+	std::vector<std::uint8_t> legacy_dependencies(
+		dependencies->payload.data,
+		dependencies->payload.data + dependencies->payload.size
+	);
+	std::vector<std::uint8_t> legacy_index(
+		index->payload.data,
+		index->payload.data + index->payload.size
+	);
+	legacy_metadata[2] = 0;
+	legacy_metadata[3] = 0;
+	legacy_dependencies[2] = 0;
+	legacy_dependencies[3] = 0;
+	legacy_index[2] = 0;
+	legacy_index[3] = 0;
+	const std::vector<WtContainerSectionInput> sections = {
+		{ kWtWorldMetadataSection, 0, WtStorageCodec::None,
+			{ legacy_metadata.data(), legacy_metadata.size() } },
+		{ kWtWorldDependencySection, 0, WtStorageCodec::None,
+			{ legacy_dependencies.data(), legacy_dependencies.size() } },
+		{ kWtWorldIndexSection, 0, WtStorageCodec::None,
+			{ legacy_index.data(), legacy_index.size() } },
+	};
+	std::vector<std::uint8_t> legacy_bytes;
+	if (wt_write_container(
+			kWtWorldMagic,
+			0,
+			source_revision,
+			sections,
+			legacy_bytes
+		) != WtContainerStatus::Ok) {
+		return false;
+	}
+	world_manifest_path = root / "legacy.wtworld";
+	std::error_code error;
+	std::filesystem::remove(current_path, error);
+	return !error && write_file(world_manifest_path, legacy_bytes);
 }
 
 } // namespace world_transvoxel::testing

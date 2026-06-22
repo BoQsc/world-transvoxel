@@ -100,6 +100,10 @@ bool collect_until(
 				case wt::WtReadOnlyPublicationKind::SetCollisionRequired:
 				case wt::WtReadOnlyPublicationKind::EditCommitted:
 				case wt::WtReadOnlyPublicationKind::EditRejected:
+				case wt::WtReadOnlyPublicationKind::AuthoritativeSampleReady:
+				case wt::WtReadOnlyPublicationKind::AuthoritativeSampleRejected:
+				case wt::WtReadOnlyPublicationKind::WorldSnapshotReady:
+				case wt::WtReadOnlyPublicationKind::WorldSnapshotRejected:
 					break;
 			}
 		}

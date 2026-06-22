@@ -57,14 +57,14 @@ The underlying sorted application records, generation replacement, stale
 result rejection, and independent visual/collision readiness are already
 covered by the M3 and M5 native contracts.
 
-## Exact remaining PQ2 sequence
+## Completed PQ2 sequence
 
 1. complete: immutable active-chunk/readiness query snapshots;
 2. complete: lifecycle-owned journal loading and atomic public transactions;
 3. complete: apply journal commands to decoded pages, remesh affected
    generations, and replay them after restart;
-4. next: expose authoritative scalar/material query plus compaction and
+4. complete: expose authoritative scalar/material query plus compaction and
    migration workflow.
 
-PQ2 closes only when a real scene edit survives save/reload and returns
-identical authoritative query results.
+PQ2 is closed. A real scene edit survives journal reload and compacted-snapshot
+reopen and returns identical authoritative query results.

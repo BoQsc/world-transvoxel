@@ -105,40 +105,6 @@ bool is_transition_support_key(
 	return false;
 }
 
-bool page_sample(
-	const WtChunkPage &page,
-	const WtGridPoint &point,
-	WtScalarSample &output
-) noexcept {
-	const std::int64_t spacing =
-		static_cast<std::int64_t>(page.metadata.cell_spacing);
-	if (spacing <= 0) {
-		return false;
-	}
-	const WtGridPoint minimum = wt_chunk_bounds(page.metadata.key).minimum;
-	const std::int64_t difference[3] = {
-		point.x - minimum.x,
-		point.y - minimum.y,
-		point.z - minimum.z,
-	};
-	std::int64_t coordinate[3]{};
-	for (unsigned int axis = 0; axis < 3; ++axis) {
-		if ((difference[axis] % spacing) != 0) {
-			return false;
-		}
-		coordinate[axis] = difference[axis] / spacing;
-		if (coordinate[axis] < -1 || coordinate[axis] > 17) {
-			return false;
-		}
-	}
-	const std::size_t index = static_cast<std::size_t>(
-		((coordinate[2] + 1) * 19 + (coordinate[1] + 1)) * 19 +
-		(coordinate[0] + 1)
-	);
-	output = page.samples[index];
-	return true;
-}
-
 bool same_sample(
 	const WtScalarSample &left,
 	const WtScalarSample &right
@@ -306,7 +272,7 @@ bool WtChunkPageSampleSource::sample(
 		const WtChunkPage *page = index < support_page_count_ ?
 			support_pages_[index] : primary_page_;
 		WtScalarSample candidate;
-		if (!page_sample(*page, point, candidate)) {
+		if (!wt_sample_chunk_page(*page, point, candidate)) {
 			continue;
 		}
 		if (found && !same_sample(selected, candidate)) {

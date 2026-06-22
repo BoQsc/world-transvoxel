@@ -93,6 +93,13 @@ public:
 		WtGenerationToken generation,
 		std::int32_t priority
 	);
+	WtPageLoadStatus load_page_now(
+		const WtChunkKey &key,
+		std::shared_ptr<const std::vector<std::uint8_t>> &page_bytes
+	) const;
+	bool snapshot_manifest(
+		std::vector<std::uint8_t> &manifest_bytes
+	) const;
 	bool pop_completion(WtPageLoadCompletion &completion);
 	bool wait_pop_completion(
 		WtPageLoadCompletion &completion,

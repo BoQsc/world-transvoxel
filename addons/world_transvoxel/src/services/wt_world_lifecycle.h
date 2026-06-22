@@ -59,6 +59,17 @@ public:
 	WtReadOnlyRuntimeStatus submit_edit(
 		const WtEditTransaction &transaction
 	);
+	WtReadOnlyRuntimeStatus request_authoritative_sample(
+		const WtGridPoint &point,
+		std::uint8_t lod,
+		std::uint64_t &request_id
+	);
+	WtReadOnlyRuntimeStatus request_world_snapshot(
+		const std::filesystem::path &output_directory,
+		std::uint64_t new_source_revision,
+		bool compact,
+		std::uint64_t &request_id
+	);
 	bool pop_publication(WtReadOnlyPublication &publication);
 
 	WtWorldLifecycleState state() const noexcept;

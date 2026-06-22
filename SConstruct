@@ -662,9 +662,42 @@ production_edit_journal_test = native_test_env.Program(
     ],
 )
 
+production_snapshot_query_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_production_snapshot_query.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_production_snapshot_query.cpp",
+        "tests/native/wt_production_world_fixture.cpp",
+        "addons/world_transvoxel/src/bake/wt_chunk_baker.cpp",
+        "addons/world_transvoxel/src/bake/wt_snapshot_compactor.cpp",
+        "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/editing/wt_chunk_edit_state.cpp",
+        "addons/world_transvoxel/src/editing/wt_edit_journal.cpp",
+        "addons/world_transvoxel/src/editing/wt_edit_transaction.cpp",
+        "addons/world_transvoxel/src/editing/wt_edit_types.cpp",
+        "addons/world_transvoxel/src/services/wt_authoritative_sample_query.cpp",
+        "addons/world_transvoxel/src/storage/wt_async_storage_service.cpp",
+        "addons/world_transvoxel/src/storage/wt_binary_io.cpp",
+        "addons/world_transvoxel/src/storage/wt_chunk_page.cpp",
+        "addons/world_transvoxel/src/storage/wt_container_format.cpp",
+        "addons/world_transvoxel/src/storage/wt_edit_journal_store.cpp",
+        "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+        "addons/world_transvoxel/src/storage/wt_world_manifest.cpp",
+        "addons/world_transvoxel/src/storage/wt_world_snapshot_store.cpp",
+    ],
+)
+
 production_read_only_runtime_sources = [
     "addons/world_transvoxel/src/backend/wt_cell_types.cpp",
     "addons/world_transvoxel/src/backend/wt_transvoxel_mit_backend.cpp",
+    "addons/world_transvoxel/src/bake/wt_snapshot_compactor.cpp",
     "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
     "addons/world_transvoxel/src/editing/wt_chunk_edit_state.cpp",
     "addons/world_transvoxel/src/editing/wt_edit_journal.cpp",
@@ -678,6 +711,7 @@ production_read_only_runtime_sources = [
     "addons/world_transvoxel/src/render/wt_render_apply_queue.cpp",
     "addons/world_transvoxel/src/render/wt_render_payload.cpp",
     "addons/world_transvoxel/src/services/wt_chunk_application.cpp",
+    "addons/world_transvoxel/src/services/wt_authoritative_sample_query.cpp",
     "addons/world_transvoxel/src/services/wt_chunk_resource_cache.cpp",
     "addons/world_transvoxel/src/services/wt_chunk_resource_payload.cpp",
     "addons/world_transvoxel/src/services/wt_desired_set_runtime.cpp",
@@ -686,6 +720,7 @@ production_read_only_runtime_sources = [
     "addons/world_transvoxel/src/services/wt_page_meshing_runtime_control.cpp",
     "addons/world_transvoxel/src/services/wt_read_only_world_runtime.cpp",
     "addons/world_transvoxel/src/services/wt_read_only_world_runtime_edit.cpp",
+    "addons/world_transvoxel/src/services/wt_read_only_world_runtime_operations.cpp",
     "addons/world_transvoxel/src/services/wt_read_only_world_runtime_thread.cpp",
     "addons/world_transvoxel/src/services/wt_runtime_config.cpp",
     "addons/world_transvoxel/src/storage/wt_async_storage_service.cpp",
@@ -697,6 +732,7 @@ production_read_only_runtime_sources = [
     "addons/world_transvoxel/src/storage/wt_hash256.cpp",
     "addons/world_transvoxel/src/storage/wt_storage_page_cache.cpp",
     "addons/world_transvoxel/src/storage/wt_world_manifest.cpp",
+    "addons/world_transvoxel/src/storage/wt_world_snapshot_store.cpp",
     "addons/world_transvoxel/src/streaming/wt_balanced_lod_planner.cpp",
     "addons/world_transvoxel/src/streaming/wt_lod_map.cpp",
     "addons/world_transvoxel/src/streaming/wt_multi_viewer_desired_set.cpp",
@@ -944,6 +980,11 @@ if env["platform"] == "windows":
     )
 
     env.AddPostAction(
+        production_snapshot_query_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
+    env.AddPostAction(
         production_lifecycle_test,
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
@@ -995,6 +1036,7 @@ Default([
     m5_page_meshing_runtime_test,
     production_config_test,
     production_edit_journal_test,
+    production_snapshot_query_test,
     production_lifecycle_test,
     production_streaming_test,
     production_lod_streaming_test,

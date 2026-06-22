@@ -240,6 +240,38 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 	return WtAsyncStorageStatus::Ok;
 }
 
+WtPageLoadStatus WtAsyncStorageService::load_page_now(
+	const WtChunkKey &key,
+	std::shared_ptr<const std::vector<std::uint8_t>> &page_bytes
+) const {
+	page_bytes.reset();
+	Request request;
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		if (!open_ || stop_requested_) return WtPageLoadStatus::IoFailure;
+		const WtWorldPageIndexEntry *entry = manifest_.find_page(key);
+		if (entry == nullptr) return WtPageLoadStatus::PageFailure;
+		request.key = key;
+		request.entry = *entry;
+	}
+	std::uint64_t bytes_read = 0;
+	WtPageLoadCompletion completion = load_page(request, bytes_read);
+	if (completion.status == WtPageLoadStatus::Ok) {
+		page_bytes = std::move(completion.page_bytes);
+	}
+	return completion.status;
+}
+
+bool WtAsyncStorageService::snapshot_manifest(
+	std::vector<std::uint8_t> &manifest_bytes
+) const {
+	std::lock_guard<std::mutex> lock(mutex_);
+	manifest_bytes.clear();
+	if (!open_ || stop_requested_) return false;
+	manifest_bytes = manifest_bytes_;
+	return true;
+}
+
 bool WtAsyncStorageService::pop_completion_locked(
 	WtPageLoadCompletion &completion
 ) {

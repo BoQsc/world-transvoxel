@@ -78,4 +78,10 @@ WtChunkPageStatus wt_decode_chunk_page(
 	WtChunkPage &output
 );
 
+bool wt_sample_chunk_page(
+	const WtChunkPage &page,
+	const WtGridPoint &point,
+	WtScalarSample &output
+) noexcept;
+
 } // namespace world_transvoxel

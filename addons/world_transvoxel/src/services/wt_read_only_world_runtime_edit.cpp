@@ -34,23 +34,17 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::submit_edit(
 			WtEditTransactionStatus::Ok) {
 		return WtReadOnlyRuntimeStatus::InvalidEdit;
 	}
-	std::lock_guard<std::mutex> lock(input_mutex_);
-	if (edit_events_.size() >= edit_event_capacity_) {
-		return WtReadOnlyRuntimeStatus::EditQueueFull;
-	}
-	edit_events_.push_back(transaction);
-	notify_work();
-	return WtReadOnlyRuntimeStatus::Ok;
+	WorldOperation operation;
+	operation.kind = WorldOperationKind::Edit;
+	operation.transaction = transaction;
+	return enqueue_world_operation(operation) ?
+		WtReadOnlyRuntimeStatus::Ok :
+		WtReadOnlyRuntimeStatus::EditQueueFull;
 }
 
-bool WtReadOnlyWorldRuntime::process_edit_event() {
-	WtEditTransaction transaction;
-	{
-		std::lock_guard<std::mutex> lock(input_mutex_);
-		if (edit_events_.empty()) return false;
-		transaction = std::move(edit_events_.front());
-		edit_events_.erase(edit_events_.begin());
-	}
+bool WtReadOnlyWorldRuntime::process_edit_operation(
+	const WtEditTransaction &transaction
+) {
 	const auto reject = [&](WtReadOnlyEditStatus status) {
 		{
 			std::lock_guard<std::mutex> lock(metrics_mutex_);

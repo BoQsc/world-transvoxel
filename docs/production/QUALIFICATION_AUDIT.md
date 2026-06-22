@@ -2,7 +2,7 @@
 
 Date: 2026-06-22
 
-Status: PQ1 complete; PQ2 query and durable-edit units complete
+Status: PQ2 complete; PQ3 is the active finite gate
 
 ## Result
 
@@ -12,9 +12,8 @@ planning, asynchronous baked-page I/O, official MIT regular/transition
 meshing, bounded render/collision application, and shutdown.
 
 The root `world_transvoxel/` scene proves that path as thin application code.
-The addon is still not production-ready because authoritative sample queries,
-compaction/migration integration, clean-install soak, and release
-qualification remain explicit PQ2-PQ4 work.
+The addon is still not production-ready because clean-install soak and release
+qualification remain explicit PQ3-PQ4 work.
 
 ## Workflow audit
 
@@ -27,9 +26,9 @@ qualification remain explicit PQ2-PQ4 work.
 | stream chunks | global balanced viewer planning, scheduler, async I/O, caches, and official MIT meshing complete | root transform events prove real movement |
 | render/collide | real regular and transition baked pages drive bounded Godot sinks | root scene audit passes both supported engines/builds |
 | edit world | transaction, spatial invalidation, journal, replay, and replacement complete | typed public transactions now durably append and replace affected loaded generations |
-| query world | native component inspection exists | immutable active-chunk/readiness snapshots complete; scalar/material query remains |
-| save/reload | journal and compaction round trips complete | committed edits automatically reload and replay; public compaction remains |
-| migrate | native/Python migration tooling complete | not exercised by a clean application workflow |
+| query world | native component inspection exists | readiness snapshots plus exact asynchronous scalar/material queries complete |
+| save/reload | journal and compaction round trips complete | committed edits reload/replay and public side-by-side compaction reopens equivalently |
+| migrate | native/Python migration tooling complete | schema-1.0 load, public migration, and current-schema reopen complete |
 | telemetry | bounded binary trace and 60-second orchestration soak complete | not exposed through a public runtime capability |
 | shutdown | queued Godot application teardown is tested | PQ1 root scene stops with zero retained resources |
 
@@ -71,20 +70,27 @@ world with bounded queues and correct shutdown.
 
 ### PQ2 - Editing, query, and persistence
 
-Status: active; query snapshots and the durable public-edit unit are complete.
+Status: complete on 2026-06-22.
 
 - complete: expose typed immutable active-chunk/readiness snapshots;
 - complete: own journal load/append in the lifecycle and expose atomic public
   edit transactions;
 - complete: connect durable edits to invalidation, replacement, edited-page
   replay, readiness recovery, stale rejection, and restart reload;
-- next: expose authoritative scalar/material queries;
-- compact and migrate through the application lifecycle.
+- complete: expose exact authoritative scalar/material queries that reject
+  invalid, absent, corrupt, and disagreeing overlapping samples;
+- complete: compact edited worlds and migrate empty-journal worlds through the
+  ordered application lifecycle into atomically published side-by-side
+  directories;
+- complete: reopen compacted and migrated snapshots and prove identical
+  authoritative values.
 
 Exit: a real application edit survives save/reload and returns identical
 authoritative query results.
 
 ### PQ3 - Clean install and full-world soak
+
+Status: active.
 
 - copy only the distributable addon and required notices into a clean Godot
   project;

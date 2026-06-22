@@ -26,6 +26,9 @@ EXPECTED_CONFIG_HASH = (
 EXPECTED_EDIT_JOURNAL_HASH = (
     "f6331a4a71a1c1ddb4bfd2aca61562dd5358710a9888eabd6b1b9308229e64e6"
 )
+EXPECTED_SNAPSHOT_QUERY_HASH = (
+    "9a4ce34af59755151263cf902f8ef9d47704ac338fb7634d282475195dad02dc"
+)
 EXPECTED_LIFECYCLE_HASH = (
     "ccdb1e1ad000f824ebd4628e640a6c1d95f9d734cc1298f738de3d0c98f3a126"
 )
@@ -96,9 +99,11 @@ def prepare_lifecycle_fixture() -> None:
         or "PRODUCTION_LIFECYCLE_FIXTURE_PASS" not in combined
         or "PRODUCTION_STREAMING_FIXTURE_PASS" not in combined
         or "PRODUCTION_TRANSITION_FIXTURE_PASS" not in combined
+        or "PRODUCTION_LEGACY_FIXTURE_PASS" not in combined
         or not (LIFECYCLE_FIXTURE_ROOT / "world.wtworld").is_file()
         or not (LIFECYCLE_FIXTURE_ROOT / "streaming.wtworld").is_file()
         or not (LIFECYCLE_FIXTURE_ROOT / "transition.wtworld").is_file()
+        or not (LIFECYCLE_FIXTURE_ROOT / "legacy.wtworld").is_file()
     ):
         raise RuntimeError("Production lifecycle fixture generation failed.")
 
@@ -209,6 +214,12 @@ def run_engine_tests(engine: Path, name: str) -> None:
         "res://tests/godot/production_edit_journal_test.gd",
         "PRODUCTION_GODOT_EDIT_JOURNAL_PASS",
     )
+    run_godot_test(
+        engine,
+        f"{name}-snapshot-query",
+        "res://tests/godot/production_snapshot_query_test.gd",
+        "PRODUCTION_GODOT_SNAPSHOT_QUERY_PASS",
+    )
 
 
 def run_godot_matrix() -> None:
@@ -255,6 +266,13 @@ def test_production_qualification(
         )
         run_hashed_native(
             configuration,
+            "test_wt_production_snapshot_query",
+            "PRODUCTION_SNAPSHOT_QUERY_PASS",
+            "PRODUCTION_SNAPSHOT_QUERY_HASH",
+            EXPECTED_SNAPSHOT_QUERY_HASH,
+        )
+        run_hashed_native(
+            configuration,
             "test_wt_production_lifecycle",
             "PRODUCTION_LIFECYCLE_PASS",
             "PRODUCTION_LIFECYCLE_HASH",
@@ -281,8 +299,8 @@ def test_production_qualification(
     print(
         "Production qualification configuration, lifecycle, balanced multi-LOD "
         "streaming, durable editing/restart replay, root example, and complete "
-        "M5 regression suite passed; PQ1 and the first two PQ2 units are "
-        "complete."
+        "M5 regression suite passed; PQ2 editing, authoritative query, "
+        "compaction, and migration are complete."
     )
 
 

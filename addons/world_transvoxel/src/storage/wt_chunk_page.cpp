@@ -205,4 +205,41 @@ WtChunkPageStatus wt_decode_chunk_page(
 		WtChunkPageStatus::Ok : WtChunkPageStatus::InvalidMetadata;
 }
 
+bool wt_sample_chunk_page(
+	const WtChunkPage &page,
+	const WtGridPoint &point,
+	WtScalarSample &output
+) noexcept {
+	if (!valid_metadata(page.metadata) ||
+		page.samples.size() != kWtChunkPageSampleCount) {
+		return false;
+	}
+	const std::int64_t spacing =
+		static_cast<std::int64_t>(page.metadata.cell_spacing);
+	const WtGridPoint minimum = wt_chunk_bounds(page.metadata.key).minimum;
+	const std::int64_t difference[3] = {
+		point.x - minimum.x,
+		point.y - minimum.y,
+		point.z - minimum.z,
+	};
+	std::int64_t coordinate[3]{};
+	for (unsigned int axis = 0; axis < 3; ++axis) {
+		if ((difference[axis] % spacing) != 0) return false;
+		coordinate[axis] = difference[axis] / spacing;
+		if (coordinate[axis] < page.metadata.sample_minimum ||
+			coordinate[axis] > page.metadata.sample_maximum) {
+			return false;
+		}
+	}
+	const std::size_t dimension = page.metadata.dimension_x;
+	const std::size_t index = static_cast<std::size_t>(
+		((coordinate[2] - page.metadata.sample_minimum) * dimension +
+			(coordinate[1] - page.metadata.sample_minimum)) * dimension +
+		(coordinate[0] - page.metadata.sample_minimum)
+	);
+	if (index >= page.samples.size()) return false;
+	output = page.samples[index];
+	return true;
+}
+
 } // namespace world_transvoxel

@@ -11,10 +11,11 @@ binary telemetry, and checked fixed-duration soak evidence. Production
 qualification is the only active phase; its workflow audit and schema-1
 runtime configuration plus asynchronous manifest lifecycle are complete. PQ1
 is complete with real LOD0/balanced transition page-to-Godot coordination and
-the thin root real-scene example. PQ2 editing, query, and persistence
-integration is the active finite gate. Immutable active-chunk/readiness
-queries plus lifecycle-owned durable edit transactions, affected-generation
-replacement, and restart replay are complete.
+the thin root real-scene example. PQ2 editing, query, and persistence is
+complete: immutable readiness snapshots, lifecycle-owned durable edits,
+authoritative sample queries, affected-generation replacement, restart replay,
+atomic side-by-side compaction, and schema migration all pass. PQ3 clean
+install and fixed-duration full-world soak is the active finite gate.
 
 ## 1. Authority of this document
 
@@ -1249,9 +1250,9 @@ Ordered work:
    transactions.
 9. Complete: replay journal commands into decoded dependency pages, replace
    affected loaded generations, and prove durable restart replay.
-10. Next: expose authoritative scalar/material queries and connect compaction
-   and migration to the running lifecycle.
-11. Run a fixed-duration full-world Godot soak with real page I/O, official MIT
+10. Complete: expose authoritative scalar/material queries and connect atomic
+   side-by-side compaction and migration to the running lifecycle.
+11. Next: run a fixed-duration full-world Godot soak with real page I/O, official MIT
    meshing, render resources, collision resources, edits, save/reload, and
    telemetry.
 12. Lock save migration, operational limits, supported Godot/platform matrix,

@@ -3,6 +3,7 @@
 #include "api/world_transvoxel_chunk_state.h"
 #include "api/world_transvoxel_config.h"
 #include "api/world_transvoxel_edit_transaction.h"
+#include "api/world_transvoxel_sample.h"
 #include "services/wt_world_lifecycle.h"
 
 #include <godot_cpp/classes/node3d.hpp>
@@ -31,6 +32,7 @@ class WorldTransvoxelTerrain : public godot::Node3D {
 protected:
 	static void _bind_methods();
 	static void bind_edit_methods();
+	static void bind_query_snapshot_methods();
 
 public:
 	WorldTransvoxelTerrain();
@@ -79,6 +81,17 @@ public:
 		const godot::Vector3i &chunk_coordinate,
 		std::int64_t lod
 	) const;
+	std::int64_t request_authoritative_sample(
+		const godot::Vector3i &grid_point,
+		std::int64_t lod = 0
+	);
+	std::int64_t request_world_compaction(
+		const godot::String &output_directory,
+		std::int64_t new_source_revision
+	);
+	std::int64_t request_world_migration(
+		const godot::String &output_directory
+	);
 	std::int64_t get_rendered_chunk_count() const noexcept;
 	std::int64_t get_collision_chunk_count() const noexcept;
 	void set_render_apply_budget(std::int64_t budget);

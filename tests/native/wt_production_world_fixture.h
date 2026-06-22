@@ -26,4 +26,10 @@ bool wt_write_production_transition_fixture(
 	std::filesystem::path &world_manifest_path
 );
 
+bool wt_write_production_legacy_fixture(
+	const std::filesystem::path &root,
+	std::uint64_t source_revision,
+	std::filesystem::path &world_manifest_path
+);
+
 } // namespace world_transvoxel::testing

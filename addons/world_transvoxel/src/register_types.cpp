@@ -3,6 +3,7 @@
 #include "api/world_transvoxel_chunk_state.h"
 #include "api/world_transvoxel_config.h"
 #include "api/world_transvoxel_edit_transaction.h"
+#include "api/world_transvoxel_sample.h"
 #include "api/world_transvoxel_terrain.h"
 
 #include <gdextension_interface.h>
@@ -21,6 +22,7 @@ void initialize_world_transvoxel_module(
 	GDREGISTER_CLASS(world_transvoxel::WorldTransvoxelChunkState);
 	GDREGISTER_CLASS(world_transvoxel::WorldTransvoxelConfig);
 	GDREGISTER_CLASS(world_transvoxel::WorldTransvoxelEditTransaction);
+	GDREGISTER_CLASS(world_transvoxel::WorldTransvoxelSample);
 	GDREGISTER_CLASS(world_transvoxel::WorldTransvoxelTerrain);
 }
 

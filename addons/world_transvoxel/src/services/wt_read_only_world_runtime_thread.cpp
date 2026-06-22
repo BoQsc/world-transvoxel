@@ -14,7 +14,7 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 	std::uint64_t observed_wake = 0;
 	while (!stop_requested_.load()) {
 		bool progressed = process_viewer_event();
-		progressed = process_edit_event() || progressed;
+		progressed = process_world_operation_event() || progressed;
 		progressed = process_storage_completions() || progressed;
 		progressed = page_runtime_->flush_scheduler_results(*scheduler_) != 0 ||
 			progressed;
@@ -128,6 +128,12 @@ const char *wt_read_only_runtime_status_message(
 			return "edit transaction queue is full";
 		case WtReadOnlyRuntimeStatus::EditFailure:
 			return "edit transaction runtime integration failed";
+		case WtReadOnlyRuntimeStatus::InvalidQuery:
+			return "authoritative sample query is invalid";
+		case WtReadOnlyRuntimeStatus::InvalidSnapshot:
+			return "world snapshot request is invalid";
+		case WtReadOnlyRuntimeStatus::OperationQueueFull:
+			return "world operation queue is full";
 		case WtReadOnlyRuntimeStatus::DesiredSetFailure:
 			return "viewer desired-set update failed";
 		case WtReadOnlyRuntimeStatus::RuntimeDeltaFailure:
