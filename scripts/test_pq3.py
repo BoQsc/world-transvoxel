@@ -64,10 +64,11 @@ NOTICE_PATHS = (
 def copy_clean_project(
     case_root: Path,
     configuration: str,
+    distribution_root: Path,
 ) -> dict[str, object]:
     remove_tree(case_root, CLEAN_ROOT)
     case_root.mkdir(parents=True)
-    source_addon = REPO_ROOT / "addons" / "world_transvoxel"
+    source_addon = distribution_root / "addons" / "world_transvoxel"
     target_addon = case_root / "addons" / "world_transvoxel"
     shutil.copytree(
         source_addon,
@@ -76,8 +77,12 @@ def copy_clean_project(
     )
     target_bin = target_addon / "bin"
     target_bin.mkdir()
-    debug_binary = addon_binary_path("template_debug")
-    release_binary = addon_binary_path("template_release")
+    debug_binary = distribution_binary_path(
+        distribution_root, "template_debug"
+    )
+    release_binary = distribution_binary_path(
+        distribution_root, "template_release"
+    )
     if not debug_binary.is_file() or not release_binary.is_file():
         raise RuntimeError("PQ3 requires both addon runtime binaries.")
     shutil.copy2(debug_binary, target_bin / debug_binary.name)
@@ -88,7 +93,7 @@ def copy_clean_project(
     for relative in NOTICE_PATHS:
         target = case_root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(REPO_ROOT / relative, target)
+        shutil.copy2(distribution_root / relative, target)
     (case_root / "project.godot").write_text(PROJECT_TEXT, encoding="utf-8")
     test_root = case_root / "tests" / "godot"
     test_root.mkdir(parents=True)
@@ -105,11 +110,27 @@ def copy_clean_project(
     if not (fixture_root / "world.wtworld").is_file():
         raise RuntimeError("PQ3 baked-world fixture is missing.")
     shutil.copytree(fixture_root, case_root / "world")
-    verify_clean_project(case_root)
+    verify_clean_project(case_root, distribution_root)
     return distribution_identity(case_root)
 
 
-def verify_clean_project(case_root: Path) -> None:
+def distribution_binary_path(
+    distribution_root: Path,
+    configuration: str,
+) -> Path:
+    return (
+        distribution_root
+        / "addons"
+        / "world_transvoxel"
+        / "bin"
+        / addon_binary_path(configuration).name
+    )
+
+
+def verify_clean_project(
+    case_root: Path,
+    distribution_root: Path,
+) -> None:
     expected_top_level = {
         "LICENSE",
         "LICENSE_SCOPE.md",
@@ -144,11 +165,13 @@ def verify_clean_project(case_root: Path) -> None:
             raise RuntimeError(f"PQ3 clean project contains a link: {path}")
     if (
         (case_root / "LICENSE").read_bytes()
-        != (REPO_ROOT / "LICENSE").read_bytes()
+        != (distribution_root / "LICENSE").read_bytes()
         or (case_root / "LICENSE_SCOPE.md").read_bytes()
-        != (REPO_ROOT / "LICENSE_SCOPE.md").read_bytes()
+        != (distribution_root / "LICENSE_SCOPE.md").read_bytes()
         or (case_root / "LICENSES" / "MIT-Transvoxel.txt").read_bytes()
-        != (REPO_ROOT / "LICENSES" / "MIT-Transvoxel.txt").read_bytes()
+        != (
+            distribution_root / "LICENSES" / "MIT-Transvoxel.txt"
+        ).read_bytes()
         or (
             case_root
             / "addons"
@@ -158,7 +181,7 @@ def verify_clean_project(case_root: Path) -> None:
             / "LICENSE"
         ).read_text(encoding="utf-8").splitlines()
         != (
-            REPO_ROOT / "LICENSES" / "MIT-Transvoxel.txt"
+            distribution_root / "LICENSES" / "MIT-Transvoxel.txt"
         ).read_text(encoding="utf-8").splitlines()
     ):
         raise RuntimeError("PQ3 clean project license notices are incomplete.")
@@ -196,10 +219,13 @@ def run_case(
     engine_version: str,
     configuration: str,
     duration_ms: int,
+    distribution_root: Path,
 ) -> dict[str, object]:
     case_name = f"godot-{engine_version}-{configuration}"
     case_root = CLEAN_ROOT / case_name
-    package = copy_clean_project(case_root, configuration)
+    package = copy_clean_project(
+        case_root, configuration, distribution_root
+    )
     import_result = subprocess.run(
         [
             str(engine),
@@ -289,7 +315,7 @@ def run_case(
         "configuration": configuration,
         "engine_sha256": sha256(engine),
         "runtime_binary_sha256": sha256(
-            addon_binary_path(configuration)
+            distribution_binary_path(distribution_root, configuration)
         ),
         "distribution": package,
         "runtime": runtime,
@@ -303,8 +329,19 @@ def test_pq3(
     duration_ms: int = DEFAULT_DURATION_MS,
     write_reference_evidence: bool = False,
     prepare_fixture: bool = True,
+    distribution_root: Path = REPO_ROOT,
 ) -> dict[str, object]:
     require_supported_python()
+    distribution_root = distribution_root.resolve()
+    if not (
+        distribution_root
+        / "addons"
+        / "world_transvoxel"
+        / "world_transvoxel.gdextension"
+    ).is_file():
+        raise RuntimeError(
+            f"PQ3 distribution root is incomplete: {distribution_root}"
+        )
     if duration_ms < 1000 or duration_ms > 300000:
         raise RuntimeError("PQ3 duration must be between 1,000 and 300,000 ms.")
     if not skip_build:
@@ -326,7 +363,13 @@ def test_pq3(
             if not engine.is_file():
                 raise RuntimeError(f"Required PQ3 engine is missing: {engine}")
             cases.append(
-                run_case(engine, spec.version, configuration, duration_ms)
+                run_case(
+                    engine,
+                    spec.version,
+                    configuration,
+                    duration_ms,
+                    distribution_root,
+                )
             )
     host = host_platform()
     evidence: dict[str, object] = {
@@ -340,6 +383,11 @@ def test_pq3(
             "python": platform.python_version(),
         },
         "requested_duration_ms_per_case": duration_ms,
+        "distribution_manifest_sha256": (
+            sha256(distribution_root / "RELEASE_MANIFEST.json")
+            if (distribution_root / "RELEASE_MANIFEST.json").is_file()
+            else None
+        ),
         "case_count": len(cases),
         "cases": cases,
         "acceptance": {
@@ -387,6 +435,9 @@ def main() -> None:
         "--duration-ms", type=int, default=DEFAULT_DURATION_MS
     )
     parser.add_argument("--write-reference-evidence", action="store_true")
+    parser.add_argument(
+        "--distribution-root", type=Path, default=REPO_ROOT
+    )
     arguments = parser.parse_args()
     test_pq3(
         skip_build=arguments.skip_build,
@@ -394,6 +445,7 @@ def main() -> None:
         duration_ms=arguments.duration_ms,
         write_reference_evidence=arguments.write_reference_evidence,
         prepare_fixture=True,
+        distribution_root=arguments.distribution_root,
     )
 
 

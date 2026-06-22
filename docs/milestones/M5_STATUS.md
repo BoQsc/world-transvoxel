@@ -84,7 +84,7 @@ terrain soak. That belongs to production qualification.
 
 ## Next boundary
 
-The next and only active phase is production qualification. It must prove a
+The subsequent production qualification phase proved a
 clean installed addon and a real baked-world workflow that streams, renders,
 collides, edits, queries, saves, reloads, migrates, and shuts down correctly.
 

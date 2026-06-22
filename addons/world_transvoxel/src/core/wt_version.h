@@ -2,7 +2,7 @@
 
 namespace world_transvoxel {
 
-inline constexpr const char *kAddonVersion = "0.6.0-m5";
-inline constexpr const char *kMilestone = "M5";
+inline constexpr const char *kAddonVersion = "1.0.0";
+inline constexpr const char *kMilestone = "PQ4";
 
 } // namespace world_transvoxel

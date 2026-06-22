@@ -28,7 +28,7 @@ GDScript or committed as binary example data.
 The debug/release bake identity is locked to:
 
 ```text
-75f6d50160e091a0a3ccff5c5cffa8902e339d8a611da6b7d862256b5125889d
+6af119cdb1ab47b7d230bc8c4cef1532281597bfc7abb5534d23f6ed3d5ce6df
 ```
 
 The example is the repository development/application scene. PQ3 separately

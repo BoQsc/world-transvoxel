@@ -37,8 +37,10 @@ locked on both supported engines. Versioned binary telemetry and the checked
 lifecycle, real baked-world streaming, public editing, authoritative queries,
 compaction, migration, and reopen equivalence. PQ3 is complete: a copied addon
 passes a 15-second full-world workflow on Godot 4.6.3 and 4.7 with debug and
-release binaries. PQ4 release qualification is active. Compute acceleration
-is optional later work.
+release binaries. PQ4 is complete. Version 1.0.0 is production-ready for
+Windows x86-64 with both engines. The release ships API/limit documentation,
+addon-local bake/storage wrappers, runtime DLLs, and native tools. Compute
+acceleration is optional later work.
 
 Build from the repository root:
 
@@ -46,11 +48,11 @@ Build from the repository root:
 python scripts/build.py
 ```
 
-Validate the active production qualification foundation and all prior
-milestone contracts:
+Validate the production release and all prior milestone contracts:
 
 ```console
 python scripts/test_production_qualification.py
 python scripts/test_pq3.py
+python scripts/test_pq4.py
 python tools/benchmark_m5_application.py --engine-version 4.6.3
 ```

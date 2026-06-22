@@ -1,0 +1,119 @@
+# World Transvoxel 1.0 Public API
+
+This document defines the supported Godot-facing API for the official
+MIT-backed release. Methods whose names begin with `_m3_` or `_m5_` are
+qualification hooks, not public API, and may change or disappear.
+
+## `WorldTransvoxelTerrain`
+
+`WorldTransvoxelTerrain` is a `Node3D`. Set a valid
+`WorldTransvoxelConfig` before starting a world.
+
+Identity and capability:
+
+- `get_addon_version() -> String`
+- `get_milestone() -> String`
+- `is_mit_backend_available() -> bool`
+- `get_backend_id() -> String`
+- `get_backend_license() -> String`
+- `get_backend_upstream_revision() -> String`
+
+Configuration and lifecycle:
+
+- `configuration: WorldTransvoxelConfig`
+- `is_configuration_valid() -> bool`
+- `get_configuration_error() -> String`
+- `start_world(world_manifest_path, object_root) -> bool`
+- `stop_world() -> bool`
+- `get_world_state() -> int`
+- `get_world_state_name() -> String`
+- `is_world_running() -> bool`
+- `get_world_error() -> String`
+- `get_world_source_revision() -> int`
+- `get_world_revision() -> int`
+- `get_world_page_count() -> int`
+
+Lifecycle state values are `0 stopped`, `1 starting`, `2 running`,
+`3 stopping`, and `4 failed`. Startup and shutdown are asynchronous; observe
+`world_state_changed`.
+
+Streaming and readiness:
+
+- `update_viewer(viewer_id, revision, position, radius_chunks, maximum_lod=0) -> bool`
+- `remove_viewer(viewer_id, revision) -> bool`
+- `query_chunk_state(chunk_coordinate, lod) -> WorldTransvoxelChunkState`
+- `get_rendered_chunk_count() -> int`
+- `get_collision_chunk_count() -> int`
+
+Viewer IDs and revisions are positive. Revisions must increase for each
+viewer. `position` is in world sample coordinates.
+
+Editing:
+
+- `begin_edit_transaction(author_id=0) -> WorldTransvoxelEditTransaction`
+- `commit_edit_transaction(transaction) -> bool`
+
+Queries and side-by-side snapshots:
+
+- `request_authoritative_sample(grid_point, lod=0) -> int`
+- `request_world_compaction(output_directory, new_source_revision) -> int`
+- `request_world_migration(output_directory) -> int`
+
+Successful asynchronous requests return a positive request ID. Zero indicates
+immediate rejection; inspect `get_world_error()`.
+
+Application budgets and metrics:
+
+- `set_render_apply_budget(budget)` / `get_render_apply_budget()`
+- `set_collision_apply_budget(budget)` / `get_collision_apply_budget()`
+- `get_render_resource_count() -> int`
+- `get_collision_resource_count() -> int`
+- `get_queued_render_count() -> int`
+- `get_queued_collision_count() -> int`
+- `get_render_latency_frames_maximum() -> int`
+- `get_collision_latency_frames_maximum() -> int`
+- `get_runtime_metrics() -> Dictionary`
+
+Signals:
+
+- `world_state_changed(state, state_name)`
+- `world_failed(error)`
+- `edit_committed(world_revision)`
+- `edit_failed(error)`
+- `authoritative_sample_ready(request_id, sample)`
+- `authoritative_sample_failed(request_id, error)`
+- `world_snapshot_ready(request_id, manifest_path, source_revision, world_revision, page_count)`
+- `world_snapshot_failed(request_id, error)`
+
+## `WorldTransvoxelConfig`
+
+This `Resource` exposes the construction-time capacities documented in
+`OPERATING_LIMITS.md`. It provides `get_schema_version()`, `is_valid()`, and
+`get_validation_error()`. Configuration is copied when startup begins; stop
+the world before replacing it.
+
+## `WorldTransvoxelEditTransaction`
+
+Supported commands:
+
+- `add_density_sphere(center, radius, value)`
+- `set_density_sphere(center, radius, value)`
+- `paint_material_sphere(center, radius, material)`
+- `add_density_box(minimum, maximum, value)`
+- `set_density_box(minimum, maximum, value)`
+- `paint_material_box(minimum, maximum, material)`
+
+All return `bool`. Inspect `get_error()` after rejection. Transactions also
+expose base/committed revision, command count, and submitted state. A
+transaction is single-use and stale base revisions are rejected.
+
+## Immutable snapshots
+
+`WorldTransvoxelChunkState` exposes presence, chunk coordinate, LOD,
+generation, visual readiness, collision requirement/readiness, and full
+readiness.
+
+`WorldTransvoxelSample` exposes grid point, LOD, density, material, source
+revision, world revision, and agreeing-page count.
+
+These objects are point-in-time snapshots; they do not update in place.

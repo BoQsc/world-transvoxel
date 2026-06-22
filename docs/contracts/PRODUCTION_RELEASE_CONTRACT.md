@@ -1,0 +1,56 @@
+# Production Release Contract
+
+Status: normative PQ4 gate
+
+World Transvoxel 1.0.0 is released as a deterministic directory, not an
+archive:
+
+```text
+artifacts/release/world-transvoxel-1.0.0-windows-x86_64/
+```
+
+The directory contains the complete `addons/world_transvoxel` install,
+runtime debug/release DLLs, packaged release/debug bake and storage tools,
+root 0BSD and MIT notices, and `RELEASE_MANIFEST.json`.
+
+The release GDExtension descriptor advertises only the qualified Windows
+x86-64 debug/release mappings. Source-checkout mappings for unqualified future
+targets are not copied into the release descriptor.
+
+## Determinism
+
+`scripts/test_pq4.py` removes only verified release build outputs, performs
+two independent Zig/SCons builds, materializes two release directories, and
+compares every relative path and every byte. PE timestamps are normalized by
+the build. The manifest contains no timestamp, absolute path, or mutable Git
+metadata.
+
+The manifest records stable product/toolchain/backend identity plus path,
+size, and SHA-256 for every payload file. A deterministic content-root hash
+covers the same ordered file set.
+
+## Installed boundary
+
+The installed editor defaults to:
+
+```text
+res://addons/world_transvoxel/tools/wt_bake.py
+```
+
+Both packaged Python tools locate native executables under the addon's `bin/`
+directory and have no repository script/build dependency. Root `tools/`
+scripts are compatibility shims for source checkouts.
+
+## Acceptance
+
+PQ4 passes only when:
+
+- the two clean release directories are byte-identical;
+- all required 0BSD/MIT notices and pinned upstream bytes pass audit;
+- the packaged bake and storage tools produce and validate a real world;
+- the exact release addon passes the complete PQ3 Godot 4.6.3/4.7
+  debug/release clean-install workflow;
+- public API, supported matrix, and operational limits ship inside the addon.
+
+Reference evidence is
+`docs/evidence/pq4_release_windows_x86_64.json`.

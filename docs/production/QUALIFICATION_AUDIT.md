@@ -2,7 +2,7 @@
 
 Date: 2026-06-22
 
-Status: PQ3 complete; PQ4 is the active finite gate
+Status: PQ4 complete; World Transvoxel 1.0.0 production release qualified
 
 ## Result
 
@@ -14,8 +14,10 @@ meshing, bounded render/collision application, and shutdown.
 
 The root `world_transvoxel/` scene proves that path as thin application code,
 and the isolated PQ3 project proves that the addon does not depend on that
-repository integration. The addon is still not production-ready because PQ4
-release qualification remains explicit work.
+repository integration. PQ4 proves that the exact installed 1.0.0 directory is
+reproducible, self-contained, licensed, documented, and passes that same
+matrix. The official MIT-backed addon is production-ready within its recorded
+support limits.
 
 ## Workflow audit
 
@@ -34,9 +36,7 @@ release qualification remains explicit work.
 | telemetry | bounded binary trace and 60-second orchestration soak complete | immutable public runtime/application metrics snapshot is checked by PQ3 |
 | shutdown | queued Godot application teardown is tested | source, compacted, and migrated clean-project worlds stop with zero retained resources |
 
-The addon version was stale at `0.5.0-m4`; the configuration foundation moves
-it to `0.6.0-m5`, matching the completed milestone without claiming a
-production release.
+The addon version is `1.0.0` with milestone identity `PQ4`.
 
 ## Finite qualification gates
 
@@ -113,14 +113,21 @@ Exit: passed. Reference evidence is
 
 ### PQ4 - Release qualification
 
-Status: active.
+Status: complete on 2026-06-22.
 
-- document public API and operational limits;
-- lock supported Godot/platform matrix;
-- reproduce and compare release artifacts;
-- verify license/provenance contents in the installed addon.
+- complete: ship public API and operational-limit documentation inside the
+  addon;
+- complete: lock Windows x86-64 with Godot 4.6.3/4.7 and debug/release
+  runtime binaries;
+- complete: perform two clean builds and compare complete directory artifacts
+  byte-for-byte;
+- complete: verify license/provenance contents in the installed addon;
+- complete: execute packaged bake/storage tools outside the repository;
+- complete: rerun the full PQ3 matrix against the exact release directory.
 
-Exit: the official MIT-backed addon is production-ready.
+Exit: passed. Reference evidence is
+`docs/evidence/pq4_release_windows_x86_64.json`; the ignored local release is
+`artifacts/release/world-transvoxel-1.0.0-windows-x86_64/`.
 
 M6 compute acceleration is optional and outside these required gates. The
-independent 0BSD backend enters its separate qualification only after PQ4.
+independent 0BSD backend may now enter its separate qualification.

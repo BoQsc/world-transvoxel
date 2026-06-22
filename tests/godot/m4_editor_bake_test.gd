@@ -8,7 +8,7 @@ const BakeCommand := preload(
 func _initialize() -> void:
 	var command: Dictionary = BakeCommand.build({
 		"python_executable": "python",
-		"script_path": "res://tools/wt_bake.py",
+		"script_path": "res://addons/world_transvoxel/tools/wt_bake.py",
 		"density_path": "res://density.f32",
 		"material_path": "res://materials.u16",
 		"key_path": "res://keys.txt",
@@ -31,7 +31,7 @@ func _initialize() -> void:
 		return
 	var invalid: Dictionary = BakeCommand.build({
 		"python_executable": "python",
-		"script_path": "res://tools/wt_bake.py",
+		"script_path": "res://addons/world_transvoxel/tools/wt_bake.py",
 		"density_path": "res://density.f32",
 		"key_path": "res://keys.txt",
 		"output_path": "res://baked",

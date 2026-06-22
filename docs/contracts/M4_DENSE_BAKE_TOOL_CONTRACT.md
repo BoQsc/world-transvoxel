@@ -7,7 +7,7 @@ the native `WtChunkBaker` to produce standalone content-addressed pages and a
 world manifest.
 
 ```console
-python tools/wt_bake.py density.f32 keys.txt output-directory \
+python addons/world_transvoxel/tools/wt_bake.py density.f32 keys.txt output-directory \
   --materials materials.u16 \
   --origin -1 -1 -1 \
   --dimensions 35 19 19 \
@@ -15,6 +15,7 @@ python tools/wt_bake.py density.f32 keys.txt output-directory \
   --source-revision 7
 ```
 
+The root `tools/wt_bake.py` remains a source-checkout compatibility shim.
 Python owns argument validation, canonical configuration identity, provenance,
 and native process launch. Density/material loading, source lookup, chunk
 sampling, page writing, hashing, and world-manifest generation are native.

@@ -52,7 +52,11 @@ func _start_dense_bake() -> void:
 
 func _define_settings() -> void:
 	_define_setting("python_executable", "python", TYPE_STRING)
-	_define_setting("script_path", "res://tools/wt_bake.py", TYPE_STRING)
+	_define_setting(
+		"script_path",
+		"res://addons/world_transvoxel/tools/wt_bake.py",
+		TYPE_STRING
+	)
 	_define_setting("density_path", "", TYPE_STRING)
 	_define_setting("material_path", "", TYPE_STRING)
 	_define_setting("key_path", "", TYPE_STRING)

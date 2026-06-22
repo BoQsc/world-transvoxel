@@ -77,7 +77,7 @@ streaming-compaction work tracked by PQ3 rather than risking unbounded memory.
 `test_wt_production_snapshot_query` locks this debug/release hash:
 
 ```text
-PRODUCTION_SNAPSHOT_QUERY_HASH 9a4ce34af59755151263cf902f8ef9d47704ac338fb7634d282475195dad02dc
+PRODUCTION_SNAPSHOT_QUERY_HASH b7eb3601b35571ad4c701205be4a4f5b918ab12f142c357abf0c15453f6440f9
 ```
 
 It proves base and edited sample values, overlap agreement and disagreement,

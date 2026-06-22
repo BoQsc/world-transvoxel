@@ -128,7 +128,7 @@ Exit: compute is enabled only where end-to-end measurements beat CPU.
 
 ## Production finish line
 
-Status: active.
+Status: complete on 2026-06-22 for World Transvoxel 1.0.0.
 
 Finite qualification gates are tracked in
 `docs/production/QUALIFICATION_AUDIT.md`:
@@ -140,7 +140,9 @@ Finite qualification gates are tracked in
   sample queries, lifecycle journal ownership, atomic edits, edited-page
   replacement, restart replay, side-by-side compaction, and migration);
 - PQ3 clean install and fixed-duration full-world soak (complete);
-- PQ4 release qualification (active).
+- PQ4 release qualification (complete: deterministic directory release,
+  installed tool audit, notices/provenance, shipped API/limits, and exact
+  release install matrix).
 
 - official MIT backend remains the reference;
 - full-world soak test;
@@ -149,6 +151,5 @@ Finite qualification gates are tracked in
 - documented operational limits;
 - reproducible release artifact.
 
-After this point, the 0BSD backend may enter the same contract and production
-qualification suite. It does not replace MIT based on isolated case tests
-alone.
+The 0BSD backend may now enter the same contract and production qualification
+suite. It does not replace MIT based on isolated case tests alone.

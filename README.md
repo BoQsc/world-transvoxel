@@ -3,6 +3,21 @@
 Production-oriented Godot terrain research and implementation using the
 official upstream MIT Transvoxel tables behind an isolated native addon.
 
+## Release status
+
+World Transvoxel 1.0.0 is the production-ready official MIT-backed addon for
+Windows x86-64 with Godot 4.6.3 and 4.7. The deterministic install directory
+is generated at:
+
+```text
+artifacts/release/world-transvoxel-1.0.0-windows-x86_64/
+```
+
+Copy its `addons/world_transvoxel/` directory and retain the included license
+notices. The independent 0BSD backend is not the production backend and is not
+claimed to be an exact replacement; it may now enter separate qualification
+against this baseline.
+
 ## Canonical direction
 
 Read [IMPLEMENTATION_CHARTER.md](IMPLEMENTATION_CHARTER.md) before changing the
@@ -58,9 +73,10 @@ locks real `ArrayMesh`/concave-collision application budgets, eight-frame
 burst readiness, and the 96/128 collision hysteresis policy. A versioned
 bounded `wttrace` format and checked 60-second motion/edit soak now close M5.
 Clean-addon installation and the real baked-world
-stream/render/collide/edit/query/save/reload/migrate/shutdown workflow now
-close PQ3. PQ4 release qualification is the only active phase. Optional
-compute acceleration is deferred and does not block that release path.
+stream/render/collide/edit/query/save/reload/migrate/shutdown workflow close
+PQ3. PQ4 adds two-build byte reproducibility, installed tool validation,
+license/provenance audit, shipped API/limit documentation, and exact-release
+Godot matrix evidence. Optional compute acceleration remains deferred.
 
 The current production audit is
 [`docs/production/QUALIFICATION_AUDIT.md`](docs/production/QUALIFICATION_AUDIT.md).
@@ -76,8 +92,9 @@ replay, stale rejection, exact authoritative scalar/material queries,
 side-by-side snapshot compaction, schema-1.0 migration, and reopen
 equivalence. PQ3 is complete: an isolated copied-addon project now passes the
 15-second full-world edit/query/compact/migrate/reopen soak on Godot 4.6.3 and
-4.7 with debug and release binaries. PQ4 release qualification is active. The
-addon is not yet production-ready.
+4.7 with debug and release binaries. PQ4 is complete, and the official
+MIT-backed addon is production-ready within the documented Windows x86-64
+support matrix.
 
 ## Tooling
 
@@ -91,6 +108,8 @@ python scripts/build.py
 python scripts/prepare_example_world.py
 python scripts/test_m5.py
 python scripts/test_pq3.py
+python scripts/test_pq4.py
+python scripts/build_release.py
 python tools/benchmark_m5_runtime.py
 python tools/benchmark_m5_pipeline.py
 python tools/benchmark_m5_application.py --engine-version 4.6.3

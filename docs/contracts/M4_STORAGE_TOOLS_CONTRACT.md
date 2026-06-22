@@ -7,13 +7,14 @@ orchestration and a native executable for authoritative parsing, hashing,
 journal validation, and migration.
 
 ```console
-python tools/wt_storage.py inspect <path>
-python tools/wt_storage.py validate <path>
-python tools/wt_storage.py migrate-world <input.wtworld> <output.wtworld>
+python addons/world_transvoxel/tools/wt_storage.py inspect <path>
+python addons/world_transvoxel/tools/wt_storage.py validate <path>
+python addons/world_transvoxel/tools/wt_storage.py migrate-world <input.wtworld> <output.wtworld>
 ```
 
-The wrapper selects the built release tool first and falls back to the debug
-tool. Project orchestration remains cross-platform Python.
+The installed wrapper selects the packaged release tool first and falls back
+to the packaged debug tool. The root `tools/wt_storage.py` is a source-checkout
+compatibility shim. Project orchestration remains cross-platform Python.
 
 ## Inspect and validate
 

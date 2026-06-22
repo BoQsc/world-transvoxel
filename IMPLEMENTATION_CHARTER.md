@@ -7,16 +7,13 @@ Last reviewed: 2026-06-22
 Current state: M5 streaming production baseline complete on Windows x86-64
 with bounded storage/caches, multi-viewer/edit runtime ownership, page-backed
 official MIT meshing, real Godot render/physics application budgets, versioned
-binary telemetry, and checked fixed-duration soak evidence. Production
-qualification is the only active phase; its workflow audit and schema-1
-runtime configuration plus asynchronous manifest lifecycle are complete. PQ1
-is complete with real LOD0/balanced transition page-to-Godot coordination and
-the thin root real-scene example. PQ2 editing, query, and persistence is
-complete: immutable readiness snapshots, lifecycle-owned durable edits,
-authoritative sample queries, affected-generation replacement, restart replay,
-atomic side-by-side compaction, and schema migration all pass. PQ3 is complete
-with isolated clean-addon installation and the fixed-duration full-world
-Godot matrix. PQ4 release qualification is the active finite gate.
+binary telemetry, and checked fixed-duration soak evidence. PQ0-PQ3 complete
+configuration, lifecycle, real-world streaming, editing, query, persistence,
+clean installation, and the fixed-duration full-world Godot matrix. PQ4
+qualifies the deterministic World Transvoxel 1.0.0 directory release,
+installed native tools, license/provenance boundary, public API, operational
+limits, and exact release install matrix. The official MIT-backed addon is
+production-ready on Windows x86-64 with Godot 4.6.3 and 4.7.
 
 ## 1. Authority of this document
 
@@ -1063,7 +1060,7 @@ maintainability.
 
 ### Production finish line
 
-Status: active.
+Status: complete on 2026-06-22 for World Transvoxel 1.0.0.
 
 Required:
 
@@ -1227,7 +1224,9 @@ measurement requirements.
 
 ## 23. Immediate next work
 
-The next and only active phase is production qualification.
+Production qualification is complete. The next controlled phase is the
+separate 0BSD backend qualification; it must not alter the default MIT backend
+until every replacement gate passes.
 
 Ordered work:
 
@@ -1257,10 +1256,13 @@ Ordered work:
    official MIT meshing, render resources, collision resources, edits,
    save/reload, migration, public metrics, and clean shutdown from an isolated
    copied-addon project.
-12. Next: lock operational limits, the supported Godot/platform matrix,
+12. Complete: lock operational limits, the supported Godot/platform matrix,
    license/provenance contents, and reproducible release evidence.
-13. Only after those gates pass, mark the official MIT-backed addon
+13. Complete: mark the official MIT-backed addon
    production-ready and begin the separate 0BSD backend qualification.
+14. Next: build the license-isolated 0BSD adapter and run the complete backend,
+   seam, integration, persistence, and production qualification suite before
+   considering any default-backend change.
 
 M6 compute acceleration remains optional. Do not let it delay the measured CPU
 production path unless an end-to-end workload proves that it is required.

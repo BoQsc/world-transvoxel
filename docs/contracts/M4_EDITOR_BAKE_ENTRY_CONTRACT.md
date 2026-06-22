@@ -9,9 +9,10 @@ Tools > World Transvoxel: Bake Dense Volume
 ```
 
 This is intentionally thin scaffolding. It reads typed project settings,
-constructs the same `tools/wt_bake.py` command used at the command line, and
-starts it as a separate process. GDScript does not load scalar arrays, sample
-chunks, serialize pages, hash artifacts, or perform native bake work.
+constructs the same addon-owned `tools/wt_bake.py` command used at the command
+line, and starts it as a separate process. GDScript does not load scalar
+arrays, sample chunks, serialize pages, hash artifacts, or perform native bake
+work.
 
 ## Project settings
 
@@ -31,8 +32,11 @@ source_revision
 default_material
 ```
 
-The script defaults to `res://tools/wt_bake.py`. Paths may use Godot project
+The script defaults to
+`res://addons/world_transvoxel/tools/wt_bake.py`. Paths may use Godot project
 paths and are globalized before process launch. Material input is optional.
+Release-native tools live under `res://addons/world_transvoxel/bin/`, so the
+installed addon does not depend on repository-root build or script folders.
 
 Dimensions and spacing must be positive, source revision nonnegative, and
 default material must fit `uint16_t`. Missing required paths or invalid values

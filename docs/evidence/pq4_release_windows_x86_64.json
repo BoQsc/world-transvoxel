@@ -1,0 +1,78 @@
+{
+  "acceptance": {
+    "byte_identical_clean_builds": true,
+    "directory_release_no_archive": true,
+    "exact_release_install_matrix_passed": true,
+    "license_notices_complete": true,
+    "official_mit_provenance_verified": true,
+    "operational_limits_documented": true,
+    "public_api_documented": true,
+    "qualified_support_matrix_only": true,
+    "self_contained_bake_and_storage_tools": true
+  },
+  "artifact": {
+    "bytes": 24574522,
+    "content_sha256": "24616c542ae52578f1c564b9480637adaaa1c7f6c810f9d2d919ba54dd8e5455",
+    "file_count": 236,
+    "format": "directory",
+    "manifest_sha256": "6b6fe3bdf343f482f238471f0aa33e4fa638804e25d16e7c9e2414dcf139577e",
+    "official_transvoxel_cpp_sha256": "83a5511346b54c42e4e66dec916d3971c92f4fbda1c7878cbad5901a820dcab4",
+    "path": "artifacts/release/world-transvoxel-1.0.0-windows-x86_64",
+    "reproducible_builds": 2,
+    "sha256": "4104b46fc40458b3b0505037fdc1946808435d2b97e4db22ecd68c09c719a674"
+  },
+  "clean_install_soak": {
+    "case_count": 4,
+    "cases": [
+      {
+        "actual_duration_ms": 15012,
+        "configuration": "template_debug",
+        "distribution_sha256": "582f2d50fb57b1c52ba08db7cba9b1e2fc9e993b3f5cb2e07a6811c59cdb4064",
+        "engine_version": "4.6.3",
+        "runtime_binary_sha256": "dbd52edd6025f16d7efd8289420852d916d9b181fbc52894cdfb6fc7e2f04b87",
+        "shutdown": "clean"
+      },
+      {
+        "actual_duration_ms": 15066,
+        "configuration": "template_debug",
+        "distribution_sha256": "582f2d50fb57b1c52ba08db7cba9b1e2fc9e993b3f5cb2e07a6811c59cdb4064",
+        "engine_version": "4.7",
+        "runtime_binary_sha256": "dbd52edd6025f16d7efd8289420852d916d9b181fbc52894cdfb6fc7e2f04b87",
+        "shutdown": "clean"
+      },
+      {
+        "actual_duration_ms": 15078,
+        "configuration": "template_release",
+        "distribution_sha256": "0c9c8b2aa821faaf61c9e826587c8bae7875afaa2dca49c64a4c4607df2f62f2",
+        "engine_version": "4.6.3",
+        "runtime_binary_sha256": "c9a2066ba98af64fefdc55cad396af1ea5e070f8d3da5f1ea8708b510531796a",
+        "shutdown": "clean"
+      },
+      {
+        "actual_duration_ms": 15109,
+        "configuration": "template_release",
+        "distribution_sha256": "0c9c8b2aa821faaf61c9e826587c8bae7875afaa2dca49c64a4c4607df2f62f2",
+        "engine_version": "4.7",
+        "runtime_binary_sha256": "c9a2066ba98af64fefdc55cad396af1ea5e070f8d3da5f1ea8708b510531796a",
+        "shutdown": "clean"
+      }
+    ],
+    "distribution_manifest_sha256": "6b6fe3bdf343f482f238471f0aa33e4fa638804e25d16e7c9e2414dcf139577e",
+    "requested_duration_ms_per_case": 15000
+  },
+  "host": {
+    "architecture": "AMD64",
+    "godot_arch": "x86_64",
+    "godot_platform": "windows",
+    "python": "3.13.7",
+    "system": "Windows"
+  },
+  "packaged_tools": {
+    "bake_report_sha256": "9c8bf062a7c1b44c078399b073ecf1ead7da4972d5d154a36ff05af20a3a3099",
+    "pages": 1,
+    "world_sha256": "9c8bf062a7c1b44c078399b073ecf1ead7da4972d5d154a36ff05af20a3a3099"
+  },
+  "schema": 1,
+  "scope": "pq4_production_release",
+  "version": "1.0.0"
+}
