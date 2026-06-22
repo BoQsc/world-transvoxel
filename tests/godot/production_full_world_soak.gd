@@ -456,6 +456,8 @@ func _wait_for_counts(render_count: int, collision_count: int) -> bool:
 				terrain.call("get_collision_chunk_count") == collision_count and \
 				terrain.call("get_queued_render_count") == 0 and \
 				terrain.call("get_queued_collision_count") == 0 and \
+				int(metrics.get("fully_ready_chunk_records", -1)) == \
+				int(metrics.get("active_chunk_records", 0)) and \
 				int(metrics.get("pending_chunk_retirements", 0)) == 0:
 			await _advance_frame()
 			return true

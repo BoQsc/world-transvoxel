@@ -30,6 +30,12 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	const WtReadOnlyRuntimeMetrics runtime = lifecycle_ ?
 		lifecycle_->runtime_metrics() : WtReadOnlyRuntimeMetrics{};
 	const WtApplicationMetrics application = application_->get_metrics();
+	std::uint64_t visual_ready_records = 0;
+	std::uint64_t fully_ready_records = 0;
+	for (const WtChunkApplicationRecord &record : application_->get_records()) {
+		visual_ready_records += record.visual_ready ? 1U : 0U;
+		fully_ready_records += record.fully_ready() ? 1U : 0U;
+	}
 	godot::Dictionary output;
 	output["world_running"] = is_world_running();
 	set_metric(output, "viewer_updates", runtime.viewer_updates);
@@ -104,6 +110,8 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	output["active_chunk_records"] = static_cast<std::int64_t>(
 		application_->get_records().size()
 	);
+	set_metric(output, "visual_ready_chunk_records", visual_ready_records);
+	set_metric(output, "fully_ready_chunk_records", fully_ready_records);
 	output["pending_chunk_retirements"] = static_cast<std::int64_t>(
 		pending_chunk_retirements_.size()
 	);
