@@ -451,10 +451,12 @@ func _wait_for_state(expected: String) -> bool:
 
 func _wait_for_counts(render_count: int, collision_count: int) -> bool:
 	for _frame in range(1800):
+		var metrics: Dictionary = terrain.call("get_runtime_metrics")
 		if terrain.call("get_rendered_chunk_count") == render_count and \
 				terrain.call("get_collision_chunk_count") == collision_count and \
 				terrain.call("get_queued_render_count") == 0 and \
-				terrain.call("get_queued_collision_count") == 0:
+				terrain.call("get_queued_collision_count") == 0 and \
+				int(metrics.get("pending_chunk_retirements", 0)) == 0:
 			await _advance_frame()
 			return true
 		if terrain.call("get_world_state_name") == "failed":

@@ -1,8 +1,8 @@
-# World Transvoxel 1.0.1 Operating Limits
+# World Transvoxel 1.0.2 Operating Limits
 
 ## Qualified release matrix
 
-The 1.0.1 corrective release is qualified only for:
+The 1.0.2 release is qualified only for:
 
 | Component | Supported value |
 | --- | --- |
@@ -74,6 +74,10 @@ through a controlled stop/start before it becomes active.
 - Keep viewer revisions monotonic and remove viewers when no longer active.
 - Polling readiness is allowed, but signals and event-driven application code
   are preferred.
+- Moving-viewer plan changes retain retiring render/collision chunks until the
+  current replacement set is fully ready. During sustained movement, resource
+  and application-record ownership can temporarily approach twice the active
+  chunk capacity; it returns to the current desired set after streaming settles.
 - Authoritative sample queries can fail for absent, corrupt, misaligned, or
   disagreeing overlapping pages.
 - Output paths for bake, migration, and compaction must not already exist.

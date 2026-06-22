@@ -39,7 +39,9 @@ compaction, migration, and reopen equivalence. PQ3 is complete: a copied addon
 passes a 15-second full-world workflow on Godot 4.6.3 and 4.7 with debug and
 release binaries. PQ4 is complete. Version 1.0.0 is withdrawn because its
 Godot render/collision winding and convex mixed-LOD corner deformation were
-incorrect. Version 1.0.1 is the qualified corrective release for Windows
+incorrect. Version 1.0.1 is superseded because moving-viewer plan changes
+could expose transient replacement holes. Version 1.0.2 stages old chunks
+until replacement render/collision readiness and is qualified for Windows
 x86-64 with both engines. The release ships API/limit documentation,
 addon-local bake/storage wrappers, runtime DLLs, and native tools. Compute
 acceleration is optional later work.

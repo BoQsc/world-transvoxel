@@ -10,12 +10,12 @@ official MIT meshing, real Godot render/physics application budgets, versioned
 binary telemetry, and checked fixed-duration soak evidence. PQ0-PQ3 complete
 configuration, lifecycle, real-world streaming, editing, query, persistence,
 clean installation, and the fixed-duration full-world Godot matrix. PQ4
-qualifies the deterministic World Transvoxel 1.0.1 corrective directory release,
+qualifies the deterministic World Transvoxel 1.0.2 directory release,
 installed native tools, license/provenance boundary, public API, operational
 limits, and exact release install matrix. The official MIT-backed addon is
 production-ready on Windows x86-64 with Godot 4.6.3 and 4.7. Version 1.0.0 is
-withdrawn because its Godot-facing winding and convex mixed-LOD corner
-deformation were incorrect.
+withdrawn for topology errors, and 1.0.1 is superseded because moving-viewer
+replacement could expose transient render/collision holes.
 
 ## 1. Authority of this document
 
@@ -1062,7 +1062,7 @@ maintainability.
 
 ### Production finish line
 
-Status: complete on 2026-06-22 for corrective World Transvoxel 1.0.1.
+Status: complete on 2026-06-22 for World Transvoxel 1.0.2.
 
 Required:
 

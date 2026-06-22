@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 namespace world_transvoxel {
 
@@ -127,6 +128,9 @@ private:
 	void emit_lifecycle_state(WtWorldLifecycleState state);
 	void notify_lifecycle_state();
 	void drain_world_publications();
+	void stage_chunk_retirement(const WtChunkKey &key);
+	void cancel_chunk_retirement(const WtChunkKey &key);
+	void flush_ready_chunk_retirements();
 	void reset_world_application(std::size_t capacity);
 
 	godot::Ref<WorldTransvoxelConfig> configuration_;
@@ -136,6 +140,7 @@ private:
 	godot::String synchronous_world_error_ = "ok";
 	WtReadOnlyPublication deferred_publication_;
 	bool has_deferred_publication_ = false;
+	std::vector<WtChunkKey> pending_chunk_retirements_;
 	std::unique_ptr<WtChunkApplicationService> application_;
 	std::unique_ptr<WtGodotRenderSink> render_sink_;
 	std::unique_ptr<WtGodotCollisionSink> collision_sink_;

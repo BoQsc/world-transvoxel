@@ -28,18 +28,6 @@ WorldTransvoxelTerrain::WorldTransvoxelTerrain() {
 
 WorldTransvoxelTerrain::~WorldTransvoxelTerrain() = default;
 
-void WorldTransvoxelTerrain::_process(double delta) {
-	(void)delta;
-	drain_world_publications();
-	application_->apply(
-		render_apply_budget_,
-		collision_apply_budget_,
-		*render_sink_,
-		*collision_sink_
-	);
-	notify_lifecycle_state();
-}
-
 void WorldTransvoxelTerrain::_bind_methods() {
 	godot::ClassDB::bind_method(
 		godot::D_METHOD("get_addon_version"),

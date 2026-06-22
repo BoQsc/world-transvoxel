@@ -119,8 +119,12 @@ func _wait_for_state(terrain: Node, expected: String) -> bool:
 
 func _wait_for_counts(terrain: Node, render_count: int, collision_count: int) -> bool:
 	for _frame in range(900):
+		var metrics: Dictionary = terrain.call("get_runtime_metrics")
 		if terrain.call("get_rendered_chunk_count") == render_count and \
-				terrain.call("get_collision_chunk_count") == collision_count:
+				terrain.call("get_collision_chunk_count") == collision_count and \
+				int(metrics.get("queued_render", 0)) == 0 and \
+				int(metrics.get("queued_collision", 0)) == 0 and \
+				int(metrics.get("pending_chunk_retirements", 0)) == 0:
 			await process_frame
 			return true
 		await process_frame

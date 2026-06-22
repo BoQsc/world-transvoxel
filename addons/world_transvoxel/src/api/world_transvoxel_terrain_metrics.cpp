@@ -104,6 +104,9 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	output["active_chunk_records"] = static_cast<std::int64_t>(
 		application_->get_records().size()
 	);
+	output["pending_chunk_retirements"] = static_cast<std::int64_t>(
+		pending_chunk_retirements_.size()
+	);
 	output["queued_render"] = get_queued_render_count();
 	output["queued_collision"] = get_queued_collision_count();
 	output["render_resources"] = get_render_resource_count();

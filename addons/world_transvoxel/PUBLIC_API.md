@@ -74,6 +74,10 @@ Application budgets and metrics:
 - `get_collision_latency_frames_maximum() -> int`
 - `get_runtime_metrics() -> Dictionary`
 
+The metrics dictionary includes `pending_chunk_retirements`, the number of old
+chunk records/resources retained until the current replacement set is fully
+ready. It must return to zero after viewer motion and streaming settle.
+
 Signals:
 
 - `world_state_changed(state, state_name)`

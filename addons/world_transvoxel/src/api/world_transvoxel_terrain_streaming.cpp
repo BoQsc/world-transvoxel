@@ -11,6 +11,19 @@
 
 namespace world_transvoxel {
 
+void WorldTransvoxelTerrain::_process(double delta) {
+	(void)delta;
+	drain_world_publications();
+	application_->apply(
+		render_apply_budget_,
+		collision_apply_budget_,
+		*render_sink_,
+		*collision_sink_
+	);
+	flush_ready_chunk_retirements();
+	notify_lifecycle_state();
+}
+
 bool WorldTransvoxelTerrain::update_viewer(
 	std::int64_t viewer_id,
 	std::int64_t revision,
@@ -97,6 +110,10 @@ void WorldTransvoxelTerrain::drain_world_publications() {
 					publication.generation,
 					publication.collision_required
 				);
+				if (status == WtApplicationStatus::Ok ||
+					status == WtApplicationStatus::AlreadyCurrent) {
+					cancel_chunk_retirement(publication.key);
+				}
 				break;
 			case WtReadOnlyPublicationKind::SetCollisionRequired: {
 				const WtChunkApplicationRecord *record =
@@ -116,9 +133,7 @@ void WorldTransvoxelTerrain::drain_world_publications() {
 				break;
 			}
 			case WtReadOnlyPublicationKind::RemoveChunk:
-				status = application_->forget_chunk(publication.key);
-				render_sink_->remove_render(publication.key);
-				collision_sink_->remove_collision(publication.key);
+				stage_chunk_retirement(publication.key);
 				break;
 			case WtReadOnlyPublicationKind::RenderPayload:
 				++render_count;
@@ -207,11 +222,62 @@ void WorldTransvoxelTerrain::drain_world_publications() {
 	}
 }
 
+void WorldTransvoxelTerrain::stage_chunk_retirement(
+	const WtChunkKey &key
+) {
+	const auto iterator = std::lower_bound(
+		pending_chunk_retirements_.begin(),
+		pending_chunk_retirements_.end(),
+		key
+	);
+	if (iterator == pending_chunk_retirements_.end() || *iterator != key) {
+		pending_chunk_retirements_.insert(iterator, key);
+	}
+}
+
+void WorldTransvoxelTerrain::cancel_chunk_retirement(
+	const WtChunkKey &key
+) {
+	const auto iterator = std::lower_bound(
+		pending_chunk_retirements_.begin(),
+		pending_chunk_retirements_.end(),
+		key
+	);
+	if (iterator != pending_chunk_retirements_.end() && *iterator == key) {
+		pending_chunk_retirements_.erase(iterator);
+	}
+}
+
+void WorldTransvoxelTerrain::flush_ready_chunk_retirements() {
+	if (pending_chunk_retirements_.empty()) return;
+	for (const WtChunkApplicationRecord &record : application_->get_records()) {
+		if (std::binary_search(
+			pending_chunk_retirements_.begin(),
+			pending_chunk_retirements_.end(),
+			record.key
+		)) {
+			continue;
+		}
+		if (!record.fully_ready()) return;
+	}
+	for (const WtChunkKey &key : pending_chunk_retirements_) {
+		application_->forget_chunk(key);
+		render_sink_->remove_render(key);
+		collision_sink_->remove_collision(key);
+	}
+	pending_chunk_retirements_.clear();
+}
+
 void WorldTransvoxelTerrain::reset_world_application(std::size_t capacity) {
 	has_deferred_publication_ = false;
 	deferred_publication_ = {};
+	const std::size_t staging_capacity = capacity <=
+		std::numeric_limits<std::size_t>::max() / 2U ?
+		capacity * 2U : std::numeric_limits<std::size_t>::max();
+	pending_chunk_retirements_.clear();
+	pending_chunk_retirements_.reserve(staging_capacity);
 	application_ = std::make_unique<WtChunkApplicationService>(
-		capacity,
+		staging_capacity,
 		capacity,
 		capacity
 	);

@@ -50,22 +50,55 @@ func _run_test() -> void:
 		_fail("initial fine/coarse resource identity mismatch")
 		return
 	var first_bridge_id := bridge.get_instance_id()
+	var first_bridge_mesh_rid: RID = bridge.mesh.get_rid()
 
+	var render_budget: int = terrain.call("get_render_apply_budget")
+	var collision_budget: int = terrain.call("get_collision_apply_budget")
+	terrain.call("set_render_apply_budget", 0)
+	terrain.call("set_collision_apply_budget", 0)
+	var plan_count := int(
+		terrain.call("get_runtime_metrics").get("planned_demands", 0)
+	)
 	if not terrain.call("update_viewer", 2, 1, Vector3(80, 8, 8), 1, 1):
 		_fail("second multi-LOD viewer event was rejected")
 		return
+	if not await _wait_for_plan(terrain, plan_count):
+		_fail("second viewer plan was not published")
+		return
+	bridge = terrain.get_node_or_null("WT_Render_1_0_0_L1")
+	if bridge == null or bridge.get_instance_id() != first_bridge_id:
+		_fail("transition replacement removed the prior render before apply")
+		return
+	terrain.call("set_render_apply_budget", render_budget)
+	terrain.call("set_collision_apply_budget", collision_budget)
 	if not await _wait_for_counts(terrain, 10, 10):
 		_fail("two-viewer balanced resources did not settle")
 		return
 	bridge = terrain.get_node_or_null("WT_Render_1_0_0_L1")
-	if bridge == null or bridge.get_instance_id() == first_bridge_id or \
+	if bridge == null or bridge.get_instance_id() != first_bridge_id or \
+			bridge.mesh.get_rid() == first_bridge_mesh_rid or \
 			terrain.get_node_or_null("WT_Render_3_0_0_L1") == null:
 		_fail("transition-mask change did not replace the coarse bridge")
 		return
 
+	terrain.call("set_render_apply_budget", 0)
+	terrain.call("set_collision_apply_budget", 0)
+	plan_count = int(
+		terrain.call("get_runtime_metrics").get("planned_demands", 0)
+	)
 	if not terrain.call("update_viewer", 1, 2, Vector3(40, 8, 8), 1, 1):
 		_fail("moving multi-LOD viewer event was rejected")
 		return
+	if not await _wait_for_plan(terrain, plan_count):
+		_fail("moving viewer plan was not published")
+		return
+	var staged_metrics: Dictionary = terrain.call("get_runtime_metrics")
+	if int(staged_metrics.get("pending_chunk_retirements", 0)) <= 0 or \
+			terrain.call("get_rendered_chunk_count") < 10:
+		_fail("moving plan did not retain old chunks until replacement apply")
+		return
+	terrain.call("set_render_apply_budget", render_budget)
+	terrain.call("set_collision_apply_budget", collision_budget)
 	if not await _wait_for_counts(terrain, 13, 13):
 		_fail("moving multi-LOD resources did not settle")
 		return
@@ -103,8 +136,22 @@ func _wait_for_state(terrain: Node, expected: String) -> bool:
 
 func _wait_for_counts(terrain: Node, render_count: int, collision_count: int) -> bool:
 	for _frame in range(900):
+		var metrics: Dictionary = terrain.call("get_runtime_metrics")
 		if terrain.call("get_rendered_chunk_count") == render_count and \
-				terrain.call("get_collision_chunk_count") == collision_count:
+				terrain.call("get_collision_chunk_count") == collision_count and \
+				int(metrics.get("queued_render", 0)) == 0 and \
+				int(metrics.get("queued_collision", 0)) == 0 and \
+				int(metrics.get("pending_chunk_retirements", 0)) == 0:
+			await process_frame
+			return true
+		await process_frame
+	return false
+
+
+func _wait_for_plan(terrain: Node, previous_count: int) -> bool:
+	for _frame in range(900):
+		var metrics: Dictionary = terrain.call("get_runtime_metrics")
+		if int(metrics.get("planned_demands", 0)) > previous_count:
 			await process_frame
 			return true
 		await process_frame

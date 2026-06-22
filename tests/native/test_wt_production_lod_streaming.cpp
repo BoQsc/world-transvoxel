@@ -270,6 +270,17 @@ int main() {
 			failure_count);
 		return 1;
 	}
+	std::printf(
+		"PRODUCTION_LOD_STREAMING_EVIDENCE entries=%zu mask=%u "
+		"bridge0=%llu/%llu bridge1=%llu/%llu transition_completions=%llu\n",
+		plan.entries.size(),
+		bridge == nullptr ? 0U : static_cast<unsigned int>(bridge->transition_mask),
+		static_cast<unsigned long long>(publications.bridge_vertices[0]),
+		static_cast<unsigned long long>(publications.bridge_indices[0]),
+		static_cast<unsigned long long>(publications.bridge_vertices[1]),
+		static_cast<unsigned long long>(publications.bridge_indices[1]),
+		static_cast<unsigned long long>(metrics.transition_mesh_completions)
+	);
 	std::printf("PRODUCTION_LOD_STREAMING_HASH ");
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
