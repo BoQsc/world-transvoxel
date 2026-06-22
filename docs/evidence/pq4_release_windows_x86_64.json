@@ -11,53 +11,53 @@
     "self_contained_bake_and_storage_tools": true
   },
   "artifact": {
-    "bytes": 24574522,
-    "content_sha256": "24616c542ae52578f1c564b9480637adaaa1c7f6c810f9d2d919ba54dd8e5455",
-    "file_count": 236,
+    "bytes": 6185055,
+    "content_sha256": "1fbbe3451d4388c18eafa38982771f9ca78e4c3c34f83354b8c3bc826406aac4",
+    "file_count": 143,
     "format": "directory",
-    "manifest_sha256": "6b6fe3bdf343f482f238471f0aa33e4fa638804e25d16e7c9e2414dcf139577e",
+    "manifest_sha256": "713f242ebbed0ce9e0a1c4f3d78e60ede0b55ba5844b51aaa7be522b2fa38a65",
     "official_transvoxel_cpp_sha256": "83a5511346b54c42e4e66dec916d3971c92f4fbda1c7878cbad5901a820dcab4",
     "path": "artifacts/release/world-transvoxel-1.0.0-windows-x86_64",
     "reproducible_builds": 2,
-    "sha256": "4104b46fc40458b3b0505037fdc1946808435d2b97e4db22ecd68c09c719a674"
+    "sha256": "d27a4aba28738d3be0ea8cec0e0f06143729ddda03dc7d6b5d8166d04fea3768"
   },
   "clean_install_soak": {
     "case_count": 4,
     "cases": [
       {
-        "actual_duration_ms": 15012,
+        "actual_duration_ms": 15103,
         "configuration": "template_debug",
-        "distribution_sha256": "582f2d50fb57b1c52ba08db7cba9b1e2fc9e993b3f5cb2e07a6811c59cdb4064",
+        "distribution_sha256": "28e17da5f60c1385e87c53e15618032ca9fe51aeda64c63e3b2f7da192365755",
         "engine_version": "4.6.3",
         "runtime_binary_sha256": "dbd52edd6025f16d7efd8289420852d916d9b181fbc52894cdfb6fc7e2f04b87",
         "shutdown": "clean"
       },
       {
-        "actual_duration_ms": 15066,
+        "actual_duration_ms": 15014,
         "configuration": "template_debug",
-        "distribution_sha256": "582f2d50fb57b1c52ba08db7cba9b1e2fc9e993b3f5cb2e07a6811c59cdb4064",
+        "distribution_sha256": "28e17da5f60c1385e87c53e15618032ca9fe51aeda64c63e3b2f7da192365755",
         "engine_version": "4.7",
         "runtime_binary_sha256": "dbd52edd6025f16d7efd8289420852d916d9b181fbc52894cdfb6fc7e2f04b87",
         "shutdown": "clean"
       },
       {
-        "actual_duration_ms": 15078,
+        "actual_duration_ms": 15057,
         "configuration": "template_release",
-        "distribution_sha256": "0c9c8b2aa821faaf61c9e826587c8bae7875afaa2dca49c64a4c4607df2f62f2",
+        "distribution_sha256": "cd5c66571bfaa84cef9eaf2760ba1ab10149957dfb8ecf8548452771bb1886df",
         "engine_version": "4.6.3",
         "runtime_binary_sha256": "c9a2066ba98af64fefdc55cad396af1ea5e070f8d3da5f1ea8708b510531796a",
         "shutdown": "clean"
       },
       {
-        "actual_duration_ms": 15109,
+        "actual_duration_ms": 15092,
         "configuration": "template_release",
-        "distribution_sha256": "0c9c8b2aa821faaf61c9e826587c8bae7875afaa2dca49c64a4c4607df2f62f2",
+        "distribution_sha256": "cd5c66571bfaa84cef9eaf2760ba1ab10149957dfb8ecf8548452771bb1886df",
         "engine_version": "4.7",
         "runtime_binary_sha256": "c9a2066ba98af64fefdc55cad396af1ea5e070f8d3da5f1ea8708b510531796a",
         "shutdown": "clean"
       }
     ],
-    "distribution_manifest_sha256": "6b6fe3bdf343f482f238471f0aa33e4fa638804e25d16e7c9e2414dcf139577e",
+    "distribution_manifest_sha256": "713f242ebbed0ce9e0a1c4f3d78e60ede0b55ba5844b51aaa7be522b2fa38a65",
     "requested_duration_ms_per_case": 15000
   },
   "host": {

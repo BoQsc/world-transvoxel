@@ -43,6 +43,16 @@ REFERENCE_EVIDENCE = (
 TRANSVOXEL_CPP_SHA256 = (
     "83a5511346b54c42e4e66dec916d3971c92f4fbda1c7878cbad5901a820dcab4"
 )
+FORBIDDEN_RELEASE_SUFFIXES = {
+    ".a",
+    ".exp",
+    ".idb",
+    ".ilk",
+    ".lib",
+    ".o",
+    ".obj",
+    ".pdb",
+}
 
 
 def clean_release_outputs() -> None:
@@ -128,6 +138,11 @@ def audit_release(root: Path) -> dict[str, object]:
     for path in root.rglob("*"):
         if path.is_symlink():
             raise RuntimeError(f"PQ4 release contains a link: {path}")
+        if path.is_file() and path.suffix.lower() in FORBIDDEN_RELEASE_SUFFIXES:
+            relative = path.relative_to(root).as_posix()
+            raise RuntimeError(
+                f"PQ4 release contains a native build intermediate: {relative}"
+            )
 
     addon = root / "addons" / "world_transvoxel"
     required = (
@@ -187,6 +202,24 @@ def audit_release(root: Path) -> dict[str, object]:
     ):
         raise RuntimeError("PQ4 release manifest identity is invalid.")
     records = manifest.get("files", [])
+    record_paths = [record.get("path") for record in records]
+    if not all(isinstance(path, str) for path in record_paths):
+        raise RuntimeError("PQ4 release manifest contains an invalid path.")
+    if len(record_paths) != len(set(record_paths)):
+        raise RuntimeError("PQ4 release manifest contains duplicate paths.")
+    payload_paths = {
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_file() and path != manifest_path
+    }
+    listed_paths = set(record_paths)
+    if payload_paths != listed_paths:
+        missing = sorted(listed_paths - payload_paths)
+        unlisted = sorted(payload_paths - listed_paths)
+        raise RuntimeError(
+            "PQ4 release payload and manifest differ; "
+            f"missing={missing[:20]}, unlisted={unlisted[:20]}"
+        )
     for record in records:
         path = root / record["path"]
         if (
@@ -197,6 +230,12 @@ def audit_release(root: Path) -> dict[str, object]:
             raise RuntimeError(
                 f"PQ4 release manifest file mismatch: {record['path']}"
             )
+    if (
+        manifest["artifact"].get("file_count") != len(records)
+        or manifest["artifact"].get("bytes")
+        != sum(int(record["bytes"]) for record in records)
+    ):
+        raise RuntimeError("PQ4 release manifest aggregate metadata is invalid.")
     return {
         "manifest_sha256": sha256(manifest_path),
         "content_sha256": manifest["artifact"]["content_sha256"],

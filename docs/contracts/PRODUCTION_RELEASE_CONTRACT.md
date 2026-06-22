@@ -29,6 +29,10 @@ The manifest records stable product/toolchain/backend identity plus path,
 size, and SHA-256 for every payload file. A deterministic content-root hash
 covers the same ordered file set.
 
+The directory contains no compiler object, static/import library, linker
+database, or debug-symbol intermediate. PQ4 compares the complete payload to
+the manifest in both directions, so unlisted files also fail qualification.
+
 ## Installed boundary
 
 The installed editor defaults to:
@@ -46,6 +50,8 @@ scripts are compatibility shims for source checkouts.
 PQ4 passes only when:
 
 - the two clean release directories are byte-identical;
+- the payload exactly matches the manifest and contains no native build
+  intermediates;
 - all required 0BSD/MIT notices and pinned upstream bytes pass audit;
 - the packaged bake and storage tools produce and validate a real world;
 - the exact release addon passes the complete PQ3 Godot 4.6.3/4.7

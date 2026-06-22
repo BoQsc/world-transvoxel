@@ -122,7 +122,19 @@ def materialize_release(destination: Path) -> dict[str, object]:
     shutil.copytree(
         source_addon,
         target_addon,
-        ignore=shutil.ignore_patterns("bin", "__pycache__", "*.pyc"),
+        ignore=shutil.ignore_patterns(
+            "bin",
+            "__pycache__",
+            "*.pyc",
+            "*.o",
+            "*.obj",
+            "*.a",
+            "*.lib",
+            "*.pdb",
+            "*.exp",
+            "*.idb",
+            "*.ilk",
+        ),
     )
     (target_addon / "world_transvoxel.gdextension").write_text(
         SUPPORTED_GDEXTENSION, encoding="utf-8"
