@@ -602,6 +602,10 @@ m5_page_meshing_runtime_test = native_test_env.Program(
         "addons/world_transvoxel/src/backend/wt_transvoxel_mit_backend.cpp",
         "addons/world_transvoxel/src/bake/wt_chunk_baker.cpp",
         "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/editing/wt_chunk_edit_state.cpp",
+        "addons/world_transvoxel/src/editing/wt_edit_journal.cpp",
+        "addons/world_transvoxel/src/editing/wt_edit_transaction.cpp",
+        "addons/world_transvoxel/src/editing/wt_edit_types.cpp",
         "addons/world_transvoxel/src/meshing/wt_chunk_mesh_geometry.cpp",
         "addons/world_transvoxel/src/meshing/wt_chunk_mesher.cpp",
         "addons/world_transvoxel/src/services/wt_page_meshing_runtime.cpp",
@@ -635,10 +639,38 @@ production_config_test = native_test_env.Program(
     ],
 )
 
+production_edit_journal_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_production_edit_journal.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_production_edit_journal.cpp",
+        "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/editing/wt_edit_journal.cpp",
+        "addons/world_transvoxel/src/editing/wt_edit_transaction.cpp",
+        "addons/world_transvoxel/src/editing/wt_edit_types.cpp",
+        "addons/world_transvoxel/src/storage/wt_binary_io.cpp",
+        "addons/world_transvoxel/src/storage/wt_container_format.cpp",
+        "addons/world_transvoxel/src/storage/wt_edit_journal_store.cpp",
+        "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+    ],
+)
+
 production_read_only_runtime_sources = [
     "addons/world_transvoxel/src/backend/wt_cell_types.cpp",
     "addons/world_transvoxel/src/backend/wt_transvoxel_mit_backend.cpp",
     "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+    "addons/world_transvoxel/src/editing/wt_chunk_edit_state.cpp",
+    "addons/world_transvoxel/src/editing/wt_edit_journal.cpp",
+    "addons/world_transvoxel/src/editing/wt_edit_spatial_index.cpp",
+    "addons/world_transvoxel/src/editing/wt_edit_transaction.cpp",
+    "addons/world_transvoxel/src/editing/wt_edit_types.cpp",
     "addons/world_transvoxel/src/meshing/wt_chunk_mesh_geometry.cpp",
     "addons/world_transvoxel/src/meshing/wt_chunk_mesher.cpp",
     "addons/world_transvoxel/src/physics/wt_collision_apply_queue.cpp",
@@ -649,9 +681,11 @@ production_read_only_runtime_sources = [
     "addons/world_transvoxel/src/services/wt_chunk_resource_cache.cpp",
     "addons/world_transvoxel/src/services/wt_chunk_resource_payload.cpp",
     "addons/world_transvoxel/src/services/wt_desired_set_runtime.cpp",
+    "addons/world_transvoxel/src/services/wt_edit_runtime_replacement.cpp",
     "addons/world_transvoxel/src/services/wt_page_meshing_runtime.cpp",
     "addons/world_transvoxel/src/services/wt_page_meshing_runtime_control.cpp",
     "addons/world_transvoxel/src/services/wt_read_only_world_runtime.cpp",
+    "addons/world_transvoxel/src/services/wt_read_only_world_runtime_edit.cpp",
     "addons/world_transvoxel/src/services/wt_read_only_world_runtime_thread.cpp",
     "addons/world_transvoxel/src/services/wt_runtime_config.cpp",
     "addons/world_transvoxel/src/storage/wt_async_storage_service.cpp",
@@ -659,6 +693,7 @@ production_read_only_runtime_sources = [
     "addons/world_transvoxel/src/storage/wt_chunk_page.cpp",
     "addons/world_transvoxel/src/storage/wt_chunk_page_sample_source.cpp",
     "addons/world_transvoxel/src/storage/wt_container_format.cpp",
+    "addons/world_transvoxel/src/storage/wt_edit_journal_store.cpp",
     "addons/world_transvoxel/src/storage/wt_hash256.cpp",
     "addons/world_transvoxel/src/storage/wt_storage_page_cache.cpp",
     "addons/world_transvoxel/src/storage/wt_world_manifest.cpp",
@@ -904,6 +939,11 @@ if env["platform"] == "windows":
     )
 
     env.AddPostAction(
+        production_edit_journal_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
+    env.AddPostAction(
         production_lifecycle_test,
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
@@ -954,6 +994,7 @@ Default([
     m5_page_transition_test,
     m5_page_meshing_runtime_test,
     production_config_test,
+    production_edit_journal_test,
     production_lifecycle_test,
     production_streaming_test,
     production_lod_streaming_test,

@@ -98,6 +98,8 @@ bool collect_until(
 					++counts.collisions;
 					break;
 				case wt::WtReadOnlyPublicationKind::SetCollisionRequired:
+				case wt::WtReadOnlyPublicationKind::EditCommitted:
+				case wt::WtReadOnlyPublicationKind::EditRejected:
 					break;
 			}
 		}

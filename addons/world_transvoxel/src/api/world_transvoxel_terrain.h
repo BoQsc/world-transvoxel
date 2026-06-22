@@ -2,6 +2,7 @@
 
 #include "api/world_transvoxel_chunk_state.h"
 #include "api/world_transvoxel_config.h"
+#include "api/world_transvoxel_edit_transaction.h"
 #include "services/wt_world_lifecycle.h"
 
 #include <godot_cpp/classes/node3d.hpp>
@@ -29,6 +30,7 @@ class WorldTransvoxelTerrain : public godot::Node3D {
 
 protected:
 	static void _bind_methods();
+	static void bind_edit_methods();
 
 public:
 	WorldTransvoxelTerrain();
@@ -59,6 +61,12 @@ public:
 	std::int64_t get_world_source_revision() const noexcept;
 	std::int64_t get_world_revision() const noexcept;
 	std::int64_t get_world_page_count() const noexcept;
+	godot::Ref<WorldTransvoxelEditTransaction> begin_edit_transaction(
+		std::int64_t author_id = 0
+	);
+	bool commit_edit_transaction(
+		const godot::Ref<WorldTransvoxelEditTransaction> &transaction
+	);
 	bool update_viewer(
 		std::int64_t viewer_id,
 		std::int64_t revision,

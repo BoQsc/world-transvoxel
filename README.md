@@ -69,8 +69,12 @@ configuration. Asynchronous manifest startup, failure, restart, and storage
 shutdown completes PQ0. PQ1 is complete: the root `world_transvoxel/` scene
 streams real baked LOD0 and balanced multi-LOD transition pages through
 official MIT meshing into bounded Godot resources. PQ2 public editing, query,
-and persistence integration is active; immutable active-chunk/readiness query
-snapshots are its first completed unit. The addon is not yet production-ready.
+and persistence integration is active. Immutable active-chunk/readiness
+snapshots are complete. Lifecycle-owned `world.wtedit` loading, typed public
+transactions, durable commits, affected-generation replacement, edited-page
+replay, stale rejection, and restart persistence are also complete.
+Authoritative scalar/material queries plus lifecycle compaction and migration
+remain. The addon is not yet production-ready.
 
 ## Tooling
 

@@ -2,7 +2,7 @@
 
 Status: canonical project direction
 
-Last reviewed: 2026-06-21
+Last reviewed: 2026-06-22
 
 Current state: M5 streaming production baseline complete on Windows x86-64
 with bounded storage/caches, multi-viewer/edit runtime ownership, page-backed
@@ -12,8 +12,9 @@ qualification is the only active phase; its workflow audit and schema-1
 runtime configuration plus asynchronous manifest lifecycle are complete. PQ1
 is complete with real LOD0/balanced transition page-to-Godot coordination and
 the thin root real-scene example. PQ2 editing, query, and persistence
-integration is the active finite gate; its immutable active-chunk/readiness
-query unit is complete.
+integration is the active finite gate. Immutable active-chunk/readiness
+queries plus lifecycle-owned durable edit transactions, affected-generation
+replacement, and restart replay are complete.
 
 ## 1. Authority of this document
 
@@ -1244,11 +1245,12 @@ Ordered work:
    using the official MIT backend.
 7. Complete: expose immutable active-chunk/readiness query snapshots without
    leaking runtime containers.
-8. Next: add lifecycle-owned journal load/append and atomic public edit
+8. Complete: add lifecycle-owned journal load/append and atomic public edit
    transactions.
-9. Apply journal commands to decoded pages, replace affected generations, and
-   expose authoritative scalar/material queries.
-10. Connect save/reload, compaction, and migration to the running lifecycle.
+9. Complete: replay journal commands into decoded dependency pages, replace
+   affected loaded generations, and prove durable restart replay.
+10. Next: expose authoritative scalar/material queries and connect compaction
+   and migration to the running lifecycle.
 11. Run a fixed-duration full-world Godot soak with real page I/O, official MIT
    meshing, render resources, collision resources, edits, save/reload, and
    telemetry.

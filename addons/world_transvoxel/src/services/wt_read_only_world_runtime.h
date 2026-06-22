@@ -4,6 +4,7 @@
 #include "render/wt_render_apply_queue.h"
 #include "services/wt_runtime_config.h"
 #include "streaming/wt_balanced_lod_planner.h"
+#include "editing/wt_edit_transaction.h"
 #include "streaming/wt_multi_viewer_desired_set.h"
 
 #include <atomic>
@@ -20,6 +21,9 @@ class WtAsyncStorageService;
 class WtChunkApplicationService;
 class WtChunkResourceCache;
 class WtDesiredSetRuntimeService;
+class WtEditJournalStore;
+class WtEditRuntimeReplacementService;
+class WtEditSpatialIndex;
 class WtChunkMesher;
 struct WtChunkMeshingScratch;
 class WtPageMeshingRuntimeService;
@@ -32,6 +36,9 @@ enum class WtReadOnlyRuntimeStatus : std::uint8_t {
 	NotRunning,
 	InvalidViewer,
 	ViewerQueueFull,
+	InvalidEdit,
+	EditQueueFull,
+	EditFailure,
 	DesiredSetFailure,
 	RuntimeDeltaFailure,
 	PipelineFailure,
@@ -44,6 +51,17 @@ enum class WtReadOnlyPublicationKind : std::uint8_t {
 	RemoveChunk,
 	RenderPayload,
 	CollisionPayload,
+	EditCommitted,
+	EditRejected,
+};
+
+enum class WtReadOnlyEditStatus : std::uint8_t {
+	Ok,
+	InvalidTransaction,
+	StaleRevision,
+	SpatialFailure,
+	JournalFailure,
+	ReplacementFailure,
 };
 
 struct WtReadOnlyPublication {
@@ -54,6 +72,8 @@ struct WtReadOnlyPublication {
 	bool collision_required = false;
 	WtRenderPayloadPtr render;
 	WtCollisionPayloadPtr collision;
+	std::uint64_t world_revision = 0;
+	WtReadOnlyEditStatus edit_status = WtReadOnlyEditStatus::Ok;
 };
 
 struct WtReadOnlyRuntimeMetrics {
@@ -66,6 +86,9 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t storage_completions = 0;
 	std::uint64_t mesh_completions = 0;
 	std::uint64_t transition_mesh_completions = 0;
+	std::uint64_t edit_commits = 0;
+	std::uint64_t edit_rejections = 0;
+	std::uint64_t edit_replacements = 0;
 	std::uint64_t published_events = 0;
 	std::uint64_t rejected_events = 0;
 };
@@ -74,7 +97,8 @@ class WtReadOnlyWorldRuntime {
 public:
 	WtReadOnlyWorldRuntime(
 		WtRuntimeConfig config,
-		WtAsyncStorageService &storage
+		WtAsyncStorageService &storage,
+		WtEditJournalStore *edit_journal_store = nullptr
 	);
 	~WtReadOnlyWorldRuntime();
 
@@ -93,12 +117,16 @@ public:
 		std::uint64_t viewer_id,
 		std::uint64_t revision
 	);
+	WtReadOnlyRuntimeStatus submit_edit(
+		const WtEditTransaction &transaction
+	);
 	WtReadOnlyRuntimeStatus run();
 	void request_stop() noexcept;
 	bool pop_publication(WtReadOnlyPublication &publication);
 
 	WtReadOnlyRuntimeStatus last_status() const noexcept;
 	WtReadOnlyRuntimeMetrics get_metrics() const noexcept;
+	std::uint64_t world_revision() const noexcept;
 
 private:
 	enum class ViewerEventKind : std::uint8_t { Update, Remove };
@@ -111,6 +139,7 @@ private:
 
 	bool enqueue_viewer_event(const ViewerEvent &event);
 	bool process_viewer_event();
+	bool process_edit_event();
 	bool process_storage_completions();
 	bool process_scheduler_jobs();
 	bool process_mesh_completions();
@@ -121,6 +150,9 @@ private:
 
 	WtRuntimeConfig config_;
 	WtAsyncStorageService &storage_;
+	WtEditJournalStore *edit_journal_store_ = nullptr;
+	std::uint64_t initial_world_revision_ = 0;
+	std::atomic<std::uint64_t> world_revision_{ 0 };
 	bool valid_ = false;
 	std::atomic<bool> stop_requested_{ false };
 	std::atomic<WtReadOnlyRuntimeStatus> last_status_{
@@ -130,6 +162,8 @@ private:
 	mutable std::mutex input_mutex_;
 	std::vector<ViewerEvent> viewer_events_;
 	std::size_t viewer_event_capacity_ = 0;
+	std::vector<WtEditTransaction> edit_events_;
+	std::size_t edit_event_capacity_ = 0;
 
 	mutable std::mutex publication_mutex_;
 	std::condition_variable publication_space_available_;
@@ -151,6 +185,8 @@ private:
 	std::unique_ptr<WtStoragePageCache> page_cache_;
 	std::unique_ptr<WtChunkResourceCache> resource_cache_;
 	std::unique_ptr<WtDesiredSetRuntimeService> desired_runtime_;
+	std::unique_ptr<WtEditSpatialIndex> edit_spatial_index_;
+	std::unique_ptr<WtEditRuntimeReplacementService> edit_replacement_;
 	std::unique_ptr<WtPageMeshingRuntimeService> page_runtime_;
 	std::unique_ptr<WtChunkMesher> mesher_;
 	std::unique_ptr<WtChunkMeshingScratch> meshing_scratch_;
@@ -160,6 +196,10 @@ private:
 
 const char *wt_read_only_runtime_status_message(
 	WtReadOnlyRuntimeStatus status
+) noexcept;
+
+const char *wt_read_only_edit_status_message(
+	WtReadOnlyEditStatus status
 ) noexcept;
 
 } // namespace world_transvoxel

@@ -131,6 +131,18 @@ void WorldTransvoxelTerrain::drain_world_publications() {
 					application_->submit_collision(publication.collision) :
 					WtApplicationStatus::InvalidInput;
 				break;
+			case WtReadOnlyPublicationKind::EditCommitted:
+				synchronous_world_error_ = "ok";
+				emit_signal(
+					"edit_committed",
+					static_cast<std::int64_t>(publication.world_revision)
+				);
+				break;
+			case WtReadOnlyPublicationKind::EditRejected:
+				synchronous_world_error_ =
+					wt_read_only_edit_status_message(publication.edit_status);
+				emit_signal("edit_failed", synchronous_world_error_);
+				break;
 		}
 		if (status != WtApplicationStatus::Ok &&
 			status != WtApplicationStatus::AlreadyCurrent &&

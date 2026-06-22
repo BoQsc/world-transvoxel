@@ -12,6 +12,7 @@
 namespace world_transvoxel {
 
 class WtAsyncStorageService;
+class WtEditJournal;
 struct WtChunkPage;
 class WtStoragePageCache;
 struct WtPageLoadCompletion;
@@ -44,6 +45,7 @@ enum class WtPageMeshingRuntimeStatus : std::uint8_t {
 	SchedulerBackpressure,
 	NotReady,
 	MeshingFailure,
+	EditReplayFailure,
 	NotFound,
 };
 
@@ -114,7 +116,9 @@ public:
 		const WtChunkJob &job,
 		const WtChunkMesher &mesher,
 		WtChunkMeshingScratch &scratch,
-		WtStreamScheduler &scheduler
+		WtStreamScheduler &scheduler,
+		const WtEditJournal *edit_journal = nullptr,
+		std::uint64_t initial_world_revision = 0
 	);
 
 	std::size_t flush_scheduler_results(

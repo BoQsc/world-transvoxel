@@ -243,8 +243,20 @@ WtEditJournalStatus WtEditJournal::save(
 }
 
 WtEditJournalStatus WtEditJournal::replay(WtEditReplaySink &sink) const {
+	return replay_until(current_world_revision_, sink);
+}
+
+WtEditJournalStatus WtEditJournal::replay_until(
+	std::uint64_t maximum_revision,
+	WtEditReplaySink &sink
+) const {
 	if (!initialized_) return WtEditJournalStatus::NotInitialized;
+	if (maximum_revision < initial_world_revision_ ||
+		maximum_revision > current_world_revision_) {
+		return WtEditJournalStatus::WorldRevisionMismatch;
+	}
 	for (const WtEditTransaction &transaction : transactions_) {
+		if (transaction.committed_revision > maximum_revision) break;
 		for (const WtEditCommand &command : transaction.commands) {
 			if (!sink.apply(command)) {
 				return WtEditJournalStatus::ReplayFailure;

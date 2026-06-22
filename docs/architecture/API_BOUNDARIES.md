@@ -47,15 +47,21 @@ Abstract scalar/material source.
 - support CPU/headless sampling;
 - optionally advertise compute generation.
 
-### `WorldTransvoxelEditAPI`
+### `WorldTransvoxelEditTransaction`
 
-Command-oriented editing.
+Typed command-oriented editing owned by `WorldTransvoxelTerrain`.
 
-- begin transaction;
-- add typed SDF or voxel commands;
-- commit/cancel;
-- undo/redo where supported;
-- return affected bounds and revision.
+- `begin_edit_transaction(author_id)` snapshots the current world revision;
+- sphere and axis-aligned-box commands add/set density or paint material;
+- `commit_edit_transaction(transaction)` queues one atomic durable commit;
+- `edit_committed(world_revision)` and `edit_failed(error)` publish the
+  asynchronous outcome;
+- submitted transaction objects are immutable and cannot be reused.
+
+The production lifecycle owns `object_root/world.wtedit`. A successful commit
+durably appends before advancing the runtime revision and replacing affected
+loaded generations. Restart loads the journal and replays commands into
+decoded dependency pages before official MIT meshing.
 
 ### `WorldTransvoxelQueryAPI`
 

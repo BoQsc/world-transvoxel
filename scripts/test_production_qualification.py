@@ -23,6 +23,9 @@ ARTIFACT_ROOT = REPO_ROOT / "artifacts" / "production-qualification"
 EXPECTED_CONFIG_HASH = (
     "c21861342875b96db0bad453f8251d4586994f579e75188be102af1155af0104"
 )
+EXPECTED_EDIT_JOURNAL_HASH = (
+    "f6331a4a71a1c1ddb4bfd2aca61562dd5358710a9888eabd6b1b9308229e64e6"
+)
 EXPECTED_LIFECYCLE_HASH = (
     "ccdb1e1ad000f824ebd4628e640a6c1d95f9d734cc1298f738de3d0c98f3a126"
 )
@@ -200,6 +203,12 @@ def run_engine_tests(engine: Path, name: str) -> None:
         "res://tests/godot/production_chunk_query_test.gd",
         "PRODUCTION_GODOT_CHUNK_QUERY_PASS",
     )
+    run_godot_test(
+        engine,
+        f"{name}-edit-journal",
+        "res://tests/godot/production_edit_journal_test.gd",
+        "PRODUCTION_GODOT_EDIT_JOURNAL_PASS",
+    )
 
 
 def run_godot_matrix() -> None:
@@ -239,6 +248,13 @@ def test_production_qualification(
         )
         run_hashed_native(
             configuration,
+            "test_wt_production_edit_journal",
+            "PRODUCTION_EDIT_JOURNAL_PASS",
+            "PRODUCTION_EDIT_JOURNAL_HASH",
+            EXPECTED_EDIT_JOURNAL_HASH,
+        )
+        run_hashed_native(
+            configuration,
             "test_wt_production_lifecycle",
             "PRODUCTION_LIFECYCLE_PASS",
             "PRODUCTION_LIFECYCLE_HASH",
@@ -264,8 +280,9 @@ def test_production_qualification(
     test_m5(skip_build=True, skip_engine_download=skip_engine_download)
     print(
         "Production qualification configuration, lifecycle, balanced multi-LOD "
-        "read-only streaming, root example, and complete M5 regression suite "
-        "passed; PQ1 and the first PQ2 query unit are complete."
+        "streaming, durable editing/restart replay, root example, and complete "
+        "M5 regression suite passed; PQ1 and the first two PQ2 units are "
+        "complete."
     )
 
 

@@ -1,5 +1,6 @@
 #include "services/wt_page_meshing_runtime.h"
 
+#include "editing/wt_chunk_edit_state.h"
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_chunk_page_sample_source.h"
 #include "storage/wt_storage_page_cache.h"
@@ -248,7 +249,9 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 	const WtChunkJob &job,
 	const WtChunkMesher &mesher,
 	WtChunkMeshingScratch &scratch,
-	WtStreamScheduler &scheduler
+	WtStreamScheduler &scheduler,
+	const WtEditJournal *edit_journal,
+	std::uint64_t initial_world_revision
 ) {
 	if (!valid_) {
 		return WtPageMeshingRuntimeStatus::InvalidConfiguration;
@@ -279,7 +282,7 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 	const std::size_t record_index = static_cast<std::size_t>(
 		record - records_.begin()
 	);
-	const auto primary = std::lower_bound(
+	auto primary = std::lower_bound(
 		record->dependencies.begin(),
 		record->dependencies.end(),
 		record->key,
@@ -291,6 +294,45 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 		primary != record->dependencies.end() &&
 		primary->key == record->key &&
 		static_cast<bool>(primary->page);
+	if (source_valid && edit_journal != nullptr) {
+		for (Dependency &dependency : record->dependencies) {
+			WtChunkEditState edit_state;
+			if (!dependency.page ||
+				edit_state.initialize(
+					*dependency.page,
+					record->source_revision,
+					initial_world_revision
+				) != WtChunkEditStatus::Ok ||
+				edit_journal->replay_until(
+					record->world_revision,
+					edit_state
+				) != WtEditJournalStatus::Ok ||
+				edit_state.current_world_revision() != record->world_revision) {
+				source_valid = false;
+				break;
+			}
+			dependency.page = std::make_shared<const WtChunkPage>(
+				edit_state.page()
+			);
+		}
+		if (!source_valid) {
+			for (Dependency &dependency : record->dependencies) {
+				dependency.page.reset();
+			}
+			record->phase = WtPageMeshingRuntimePhase::MeshFailedReady;
+			++metrics_.mesh_failures;
+			submit_pending_result(record_index, scheduler);
+			return WtPageMeshingRuntimeStatus::EditReplayFailure;
+		}
+		primary = std::lower_bound(
+			record->dependencies.begin(),
+			record->dependencies.end(),
+			record->key,
+			[](const Dependency &left, const WtChunkKey &right) {
+				return left.key < right;
+			}
+		);
+	}
 	std::unique_ptr<WtChunkPageSampleSource> source;
 	if (source_valid) {
 		source = std::make_unique<WtChunkPageSampleSource>(*primary->page);

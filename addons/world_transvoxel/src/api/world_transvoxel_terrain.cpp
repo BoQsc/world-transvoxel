@@ -127,6 +127,7 @@ void WorldTransvoxelTerrain::_bind_methods() {
 		godot::D_METHOD("get_world_page_count"),
 		&WorldTransvoxelTerrain::get_world_page_count
 	);
+	bind_edit_methods();
 	godot::ClassDB::bind_method(
 		godot::D_METHOD(
 			"update_viewer", "viewer_id", "revision", "position",
@@ -392,6 +393,13 @@ godot::String WorldTransvoxelTerrain::get_world_error() const {
 		lifecycle_->last_storage_status() != WtAsyncStorageStatus::Ok) {
 		return wt_async_storage_status_message(
 			lifecycle_->last_storage_status()
+		);
+	}
+	if (lifecycle_ &&
+		lifecycle_->last_edit_journal_status() !=
+			WtEditJournalStoreStatus::Ok) {
+		return wt_edit_journal_store_status_message(
+			lifecycle_->last_edit_journal_status()
 		);
 	}
 	if (lifecycle_ &&

@@ -60,9 +60,10 @@ covered by the M3 and M5 native contracts.
 ## Exact remaining PQ2 sequence
 
 1. complete: immutable active-chunk/readiness query snapshots;
-2. next: lifecycle-owned journal loading and atomic public transactions;
-3. apply journal commands to decoded pages and remesh affected generations;
-4. expose authoritative scalar/material query plus save/reload/compaction and
+2. complete: lifecycle-owned journal loading and atomic public transactions;
+3. complete: apply journal commands to decoded pages, remesh affected
+   generations, and replay them after restart;
+4. next: expose authoritative scalar/material query plus compaction and
    migration workflow.
 
 PQ2 closes only when a real scene edit survives save/reload and returns

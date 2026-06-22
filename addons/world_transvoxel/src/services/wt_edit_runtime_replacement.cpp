@@ -26,19 +26,17 @@ bool WtEditRuntimeReplacementService::valid() const noexcept {
 }
 
 WtEditRuntimeReplacementStatus
-WtEditRuntimeReplacementService::replace_loaded_chunks(
+WtEditRuntimeReplacementService::prepare_loaded_chunks(
 	const WtEditTransaction &transaction,
 	const WtEditSpatialIndex &spatial_index,
-	WtStreamScheduler &scheduler,
-	WtStoragePageCache &page_cache,
-	WtChunkResourceCache &resource_cache,
-	WtChunkApplicationService &application,
-	WtPageMeshingRuntimeOwner *page_meshing_runtime
+	const WtStreamScheduler &scheduler,
+	const WtChunkApplicationService &application
 ) {
 	++metrics_.transaction_attempts;
 	affected_.clear();
 	prepared_.clear();
 	last_replacements_.clear();
+	has_prepared_ = false;
 	if (!valid_) {
 		++metrics_.capacity_rejections;
 		return WtEditRuntimeReplacementStatus::InvalidConfiguration;
@@ -54,8 +52,10 @@ WtEditRuntimeReplacementService::replace_loaded_chunks(
 		return WtEditRuntimeReplacementStatus::AffectedCapacityExceeded;
 	}
 	if (affected_.empty()) {
-		++metrics_.completed_transactions;
-		++metrics_.empty_transactions;
+		prepared_source_revision_ = transaction.source_revision;
+		prepared_base_revision_ = transaction.base_revision;
+		prepared_committed_revision_ = transaction.committed_revision;
+		has_prepared_ = true;
 		return WtEditRuntimeReplacementStatus::Ok;
 	}
 
@@ -90,7 +90,35 @@ WtEditRuntimeReplacementService::replace_loaded_chunks(
 		++metrics_.capacity_rejections;
 		return WtEditRuntimeReplacementStatus::JobQueueCapacityExceeded;
 	}
+	prepared_source_revision_ = transaction.source_revision;
+	prepared_base_revision_ = transaction.base_revision;
+	prepared_committed_revision_ = transaction.committed_revision;
+	has_prepared_ = true;
+	return WtEditRuntimeReplacementStatus::Ok;
+}
 
+WtEditRuntimeReplacementStatus
+WtEditRuntimeReplacementService::apply_prepared(
+	const WtEditTransaction &transaction,
+	WtStreamScheduler &scheduler,
+	WtStoragePageCache &page_cache,
+	WtChunkResourceCache &resource_cache,
+	WtChunkApplicationService &application,
+	WtPageMeshingRuntimeOwner *page_meshing_runtime
+) {
+	if (!has_prepared_ ||
+		transaction.source_revision != prepared_source_revision_ ||
+		transaction.base_revision != prepared_base_revision_ ||
+		transaction.committed_revision != prepared_committed_revision_) {
+		++metrics_.state_rejections;
+		return WtEditRuntimeReplacementStatus::RuntimeStateMismatch;
+	}
+	has_prepared_ = false;
+	if (prepared_.empty()) {
+		++metrics_.completed_transactions;
+		++metrics_.empty_transactions;
+		return WtEditRuntimeReplacementStatus::Ok;
+	}
 	for (const PreparedReplacement &replacement : prepared_) {
 		if (page_meshing_runtime != nullptr) {
 			const WtPageMeshingRuntimeOwnerStatus status =
@@ -151,6 +179,30 @@ WtEditRuntimeReplacementService::replace_loaded_chunks(
 	++metrics_.completed_transactions;
 	metrics_.replaced_chunks += last_replacements_.size();
 	return WtEditRuntimeReplacementStatus::Ok;
+}
+
+WtEditRuntimeReplacementStatus
+WtEditRuntimeReplacementService::replace_loaded_chunks(
+	const WtEditTransaction &transaction,
+	const WtEditSpatialIndex &spatial_index,
+	WtStreamScheduler &scheduler,
+	WtStoragePageCache &page_cache,
+	WtChunkResourceCache &resource_cache,
+	WtChunkApplicationService &application,
+	WtPageMeshingRuntimeOwner *page_meshing_runtime
+) {
+	const WtEditRuntimeReplacementStatus prepare = prepare_loaded_chunks(
+		transaction, spatial_index, scheduler, application
+	);
+	if (prepare != WtEditRuntimeReplacementStatus::Ok) return prepare;
+	return apply_prepared(
+		transaction,
+		scheduler,
+		page_cache,
+		resource_cache,
+		application,
+		page_meshing_runtime
+	);
 }
 
 std::size_t WtEditRuntimeReplacementService::replacement_capacity() const noexcept {

@@ -3,6 +3,7 @@
 #include "services/wt_runtime_config.h"
 #include "services/wt_read_only_world_runtime.h"
 #include "storage/wt_async_storage_service.h"
+#include "storage/wt_edit_journal_store.h"
 
 #include <chrono>
 #include <condition_variable>
@@ -55,11 +56,15 @@ public:
 		std::uint64_t viewer_id,
 		std::uint64_t revision
 	);
+	WtReadOnlyRuntimeStatus submit_edit(
+		const WtEditTransaction &transaction
+	);
 	bool pop_publication(WtReadOnlyPublication &publication);
 
 	WtWorldLifecycleState state() const noexcept;
 	WtAsyncStorageStatus last_storage_status() const noexcept;
 	WtReadOnlyRuntimeStatus last_runtime_status() const noexcept;
+	WtEditJournalStoreStatus last_edit_journal_status() const noexcept;
 	std::uint64_t source_revision() const noexcept;
 	std::uint64_t world_revision() const noexcept;
 	std::size_t page_count() const noexcept;
@@ -79,6 +84,8 @@ private:
 	WtWorldLifecycleState state_ = WtWorldLifecycleState::Stopped;
 	WtAsyncStorageStatus last_storage_status_ = WtAsyncStorageStatus::Ok;
 	WtReadOnlyRuntimeStatus last_runtime_status_ = WtReadOnlyRuntimeStatus::Ok;
+	WtEditJournalStoreStatus last_edit_journal_status_ =
+		WtEditJournalStoreStatus::Ok;
 	bool stop_requested_ = false;
 	std::uint64_t source_revision_ = 0;
 	std::uint64_t world_revision_ = 0;
@@ -86,6 +93,7 @@ private:
 	std::filesystem::path world_manifest_path_;
 	std::filesystem::path object_root_;
 	std::unique_ptr<WtAsyncStorageService> storage_;
+	std::unique_ptr<WtEditJournalStore> edit_journal_store_;
 	std::unique_ptr<WtReadOnlyWorldRuntime> runtime_;
 	std::thread control_thread_;
 };

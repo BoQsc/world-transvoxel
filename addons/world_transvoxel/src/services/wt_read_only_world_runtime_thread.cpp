@@ -14,6 +14,7 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 	std::uint64_t observed_wake = 0;
 	while (!stop_requested_.load()) {
 		bool progressed = process_viewer_event();
+		progressed = process_edit_event() || progressed;
 		progressed = process_storage_completions() || progressed;
 		progressed = page_runtime_->flush_scheduler_results(*scheduler_) != 0 ||
 			progressed;
@@ -104,6 +105,10 @@ WtReadOnlyWorldRuntime::get_metrics() const noexcept {
 	return metrics_;
 }
 
+std::uint64_t WtReadOnlyWorldRuntime::world_revision() const noexcept {
+	return world_revision_.load();
+}
+
 const char *wt_read_only_runtime_status_message(
 	WtReadOnlyRuntimeStatus status
 ) noexcept {
@@ -117,6 +122,12 @@ const char *wt_read_only_runtime_status_message(
 			return "viewer event is invalid";
 		case WtReadOnlyRuntimeStatus::ViewerQueueFull:
 			return "viewer event queue is full";
+		case WtReadOnlyRuntimeStatus::InvalidEdit:
+			return "edit transaction is invalid";
+		case WtReadOnlyRuntimeStatus::EditQueueFull:
+			return "edit transaction queue is full";
+		case WtReadOnlyRuntimeStatus::EditFailure:
+			return "edit transaction runtime integration failed";
 		case WtReadOnlyRuntimeStatus::DesiredSetFailure:
 			return "viewer desired-set update failed";
 		case WtReadOnlyRuntimeStatus::RuntimeDeltaFailure:
@@ -127,6 +138,25 @@ const char *wt_read_only_runtime_status_message(
 			return "read-only publication queue failed";
 	}
 	return "unknown read-only runtime status";
+}
+
+const char *wt_read_only_edit_status_message(
+	WtReadOnlyEditStatus status
+) noexcept {
+	switch (status) {
+		case WtReadOnlyEditStatus::Ok: return "ok";
+		case WtReadOnlyEditStatus::InvalidTransaction:
+			return "edit transaction is invalid";
+		case WtReadOnlyEditStatus::StaleRevision:
+			return "edit transaction world revision is stale";
+		case WtReadOnlyEditStatus::SpatialFailure:
+			return "edit transaction affected-chunk query failed";
+		case WtReadOnlyEditStatus::JournalFailure:
+			return "edit transaction durable journal append failed";
+		case WtReadOnlyEditStatus::ReplacementFailure:
+			return "edit transaction chunk replacement failed";
+	}
+	return "unknown edit transaction status";
 }
 
 } // namespace world_transvoxel

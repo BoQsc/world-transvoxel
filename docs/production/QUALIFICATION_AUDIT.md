@@ -2,18 +2,19 @@
 
 Date: 2026-06-22
 
-Status: PQ1 complete; PQ2 is the active finite gate
+Status: PQ1 complete; PQ2 query and durable-edit units complete
 
 ## Result
 
-M0 through M5 plus PQ0/PQ1 now provide a tested read-only terrain path.
+M0 through M5 plus PQ0/PQ1 now provide a tested terrain streaming path.
 `WorldTransvoxelTerrain` connects real viewer events, global balanced 2:1 LOD
 planning, asynchronous baked-page I/O, official MIT regular/transition
 meshing, bounded render/collision application, and shutdown.
 
 The root `world_transvoxel/` scene proves that path as thin application code.
-The addon is still not production-ready because editing, query, persistence,
-clean-install soak, and release qualification remain explicit PQ2-PQ4 work.
+The addon is still not production-ready because authoritative sample queries,
+compaction/migration integration, clean-install soak, and release
+qualification remain explicit PQ2-PQ4 work.
 
 ## Workflow audit
 
@@ -25,9 +26,9 @@ clean-install soak, and release qualification remain explicit PQ2-PQ4 work.
 | load world | manifest/page readers and corruption checks complete | root scene starts a validated 28-page hierarchical manifest |
 | stream chunks | global balanced viewer planning, scheduler, async I/O, caches, and official MIT meshing complete | root transform events prove real movement |
 | render/collide | real regular and transition baked pages drive bounded Godot sinks | root scene audit passes both supported engines/builds |
-| edit world | transaction, spatial invalidation, journal, replay, and replacement complete | no public edit capability or lifecycle ownership |
+| edit world | transaction, spatial invalidation, journal, replay, and replacement complete | typed public transactions now durably append and replace affected loaded generations |
 | query world | native component inspection exists | immutable active-chunk/readiness snapshots complete; scalar/material query remains |
-| save/reload | journal and compaction round trips complete | no facade save/reload workflow |
+| save/reload | journal and compaction round trips complete | committed edits automatically reload and replay; public compaction remains |
 | migrate | native/Python migration tooling complete | not exercised by a clean application workflow |
 | telemetry | bounded binary trace and 60-second orchestration soak complete | not exposed through a public runtime capability |
 | shutdown | queued Godot application teardown is tested | PQ1 root scene stops with zero retained resources |
@@ -70,13 +71,15 @@ world with bounded queues and correct shutdown.
 
 ### PQ2 - Editing, query, and persistence
 
-Status: active; immutable active-chunk/readiness query snapshots are complete.
+Status: active; query snapshots and the durable public-edit unit are complete.
 
 - complete: expose typed immutable active-chunk/readiness snapshots;
-- next: own journal load/append in the lifecycle and expose atomic public edit
-  transactions;
-- connect edits to journal append, invalidation, replacement, and readiness;
-- save, reload, compact, and migrate through the application lifecycle.
+- complete: own journal load/append in the lifecycle and expose atomic public
+  edit transactions;
+- complete: connect durable edits to invalidation, replacement, edited-page
+  replay, readiness recovery, stale rejection, and restart reload;
+- next: expose authoritative scalar/material queries;
+- compact and migrate through the application lifecycle.
 
 Exit: a real application edit survives save/reload and returns identical
 authoritative query results.

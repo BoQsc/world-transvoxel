@@ -65,6 +65,20 @@ public:
 	explicit WtEditRuntimeReplacementService(std::size_t replacement_capacity);
 
 	bool valid() const noexcept;
+	WtEditRuntimeReplacementStatus prepare_loaded_chunks(
+		const WtEditTransaction &transaction,
+		const WtEditSpatialIndex &spatial_index,
+		const WtStreamScheduler &scheduler,
+		const WtChunkApplicationService &application
+	);
+	WtEditRuntimeReplacementStatus apply_prepared(
+		const WtEditTransaction &transaction,
+		WtStreamScheduler &scheduler,
+		WtStoragePageCache &page_cache,
+		WtChunkResourceCache &resource_cache,
+		WtChunkApplicationService &application,
+		WtPageMeshingRuntimeOwner *page_meshing_runtime
+	);
 	WtEditRuntimeReplacementStatus replace_loaded_chunks(
 		const WtEditTransaction &transaction,
 		const WtEditSpatialIndex &spatial_index,
@@ -95,6 +109,10 @@ private:
 	std::vector<WtChunkKey> affected_;
 	std::vector<PreparedReplacement> prepared_;
 	std::vector<WtEditRuntimeReplacementRecord> last_replacements_;
+	std::uint64_t prepared_source_revision_ = 0;
+	std::uint64_t prepared_base_revision_ = 0;
+	std::uint64_t prepared_committed_revision_ = 0;
+	bool has_prepared_ = false;
 	WtEditRuntimeReplacementMetrics metrics_;
 };
 

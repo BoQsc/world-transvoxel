@@ -190,6 +190,21 @@ void test_load_and_replay(
 			"journal replay order mismatch"
 		);
 	}
+	RecordingSink prefix_sink;
+	check(
+		loaded.replay_until(12, prefix_sink) ==
+			wt::WtEditJournalStatus::Ok &&
+			prefix_sink.commands.size() == 4 &&
+			prefix_sink.commands.back().world_revision == 12,
+		"journal revision-prefix replay failed"
+	);
+	check(
+		loaded.replay_until(9, prefix_sink) ==
+			wt::WtEditJournalStatus::WorldRevisionMismatch &&
+			loaded.replay_until(14, prefix_sink) ==
+				wt::WtEditJournalStatus::WorldRevisionMismatch,
+		"journal accepted an out-of-range replay revision"
+	);
 	RecordingSink failing_sink(3);
 	check(
 		loaded.replay(failing_sink) == wt::WtEditJournalStatus::ReplayFailure &&

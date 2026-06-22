@@ -7,9 +7,12 @@
 #include "services/wt_chunk_application.h"
 #include "services/wt_chunk_resource_cache.h"
 #include "services/wt_desired_set_runtime.h"
+#include "services/wt_edit_runtime_replacement.h"
 #include "services/wt_page_meshing_runtime.h"
 #include "storage/wt_async_storage_service.h"
+#include "storage/wt_edit_journal_store.h"
 #include "storage/wt_storage_page_cache.h"
+#include "editing/wt_edit_spatial_index.h"
 #include "streaming/wt_stream_scheduler.h"
 
 #include <algorithm>
@@ -44,8 +47,12 @@ const WtLodMapEntry *find_plan_entry(
 
 WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 	WtRuntimeConfig config,
-	WtAsyncStorageService &storage
-) : config_(config), storage_(storage) {
+	WtAsyncStorageService &storage,
+	WtEditJournalStore *edit_journal_store
+) :
+		config_(config),
+		storage_(storage),
+		edit_journal_store_(edit_journal_store) {
 	if (wt_validate_runtime_config(config_) != WtRuntimeConfigStatus::Ok ||
 		!storage_.is_open()) {
 		last_status_.store(WtReadOnlyRuntimeStatus::InvalidConfiguration);
@@ -55,6 +62,12 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 		config_.active_chunk_capacity
 	);
 	const std::size_t viewers = static_cast<std::size_t>(config_.viewer_capacity);
+	initial_world_revision_ = storage_.world_revision();
+	world_revision_.store(
+		edit_journal_store_ != nullptr && edit_journal_store_->is_open() ?
+			edit_journal_store_->current_world_revision() :
+			initial_world_revision_
+	);
 	desired_ = std::make_unique<WtMultiViewerDesiredSet>(
 		WtMultiViewerDesiredSetLimits {
 			1,
@@ -93,6 +106,13 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 		}
 	);
 	desired_runtime_ = std::make_unique<WtDesiredSetRuntimeService>(active);
+	edit_spatial_index_ = std::make_unique<WtEditSpatialIndex>(
+		active,
+		kWtMaximumDesiredChunkCount,
+		active
+	);
+	edit_replacement_ =
+		std::make_unique<WtEditRuntimeReplacementService>(active);
 	page_runtime_ = std::make_unique<WtPageMeshingRuntimeService>(active);
 	mesher_ = std::make_unique<WtChunkMesher>(
 		wt_get_transvoxel_mit_backend()
@@ -100,6 +120,8 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 	meshing_scratch_ = std::make_unique<WtChunkMeshingScratch>();
 	viewer_event_capacity_ = std::max<std::size_t>(viewers * 2U, 2U);
 	viewer_events_.reserve(viewer_event_capacity_);
+	edit_event_capacity_ = std::max<std::size_t>(viewers * 2U, 4U);
+	edit_events_.reserve(edit_event_capacity_);
 	const std::size_t publication_capacity = std::max<std::size_t>(
 		active * 4U,
 		16U
@@ -107,7 +129,7 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 	publication_slots_.resize(publication_capacity);
 	valid_ = desired_->valid() && lod_planner_->valid() && page_cache_->valid() &&
 		resource_cache_->valid() && desired_runtime_->valid() &&
-		page_runtime_->valid();
+		edit_replacement_->valid() && page_runtime_->valid();
 	if (!valid_) {
 		last_status_.store(WtReadOnlyRuntimeStatus::InvalidConfiguration);
 	}
@@ -308,7 +330,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		return desired_runtime_->apply_delta(
 			change,
 			storage_.source_revision(),
-			storage_.world_revision(),
+			world_revision_.load(),
 			*scheduler_,
 			*page_cache_,
 			*resource_cache_,
@@ -331,6 +353,15 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	planner_viewers_ = std::move(candidate_viewers);
 	current_plan_ = std::move(candidate_plan);
 	plan_revision_ = plan_snapshot.revision;
+	std::vector<WtChunkKey> active_keys;
+	active_keys.reserve(current_plan_.entries.size());
+	for (const WtLodMapEntry &entry : current_plan_.entries) {
+		active_keys.push_back(entry.key);
+	}
+	if (edit_spatial_index_->rebuild(active_keys) != WtEditSpatialStatus::Ok) {
+		set_failure(WtReadOnlyRuntimeStatus::EditFailure);
+		return true;
+	}
 	for (const WtDesiredChunk &item : delta.updated) {
 		if (!item.collision_required) continue;
 		const WtChunkRecord *record = scheduler_->find_record(item.key);
@@ -453,7 +484,13 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			++metrics_.sample_jobs;
 		} else {
 			status = page_runtime_->execute_mesh_job(
-				job, *mesher_, *meshing_scratch_, *scheduler_
+				job,
+				*mesher_,
+				*meshing_scratch_,
+				*scheduler_,
+				edit_journal_store_ != nullptr ?
+					&edit_journal_store_->journal() : nullptr,
+				initial_world_revision_
 			);
 			std::lock_guard<std::mutex> lock(metrics_mutex_);
 			++metrics_.mesh_jobs;

@@ -67,6 +67,10 @@ public:
 
 	WtEditJournalStatus save(std::vector<std::uint8_t> &output) const;
 	WtEditJournalStatus replay(WtEditReplaySink &sink) const;
+	WtEditJournalStatus replay_until(
+		std::uint64_t maximum_revision,
+		WtEditReplaySink &sink
+	) const;
 
 	bool initialized() const noexcept;
 	std::uint64_t source_revision() const noexcept;
