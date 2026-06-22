@@ -66,10 +66,10 @@ The current production audit is
 [`docs/production/QUALIFICATION_AUDIT.md`](docs/production/QUALIFICATION_AUDIT.md).
 Its first completed foundation is the schema-1 native/Godot runtime
 configuration. Asynchronous manifest startup, failure, restart, and storage
-shutdown now complete PQ0. PQ1 now streams real baked LOD0 and balanced
-multi-LOD transition pages from native viewer events through official MIT
-meshing into bounded Godot resources. The root example and PQ1 exit audit
-remain; the addon is not yet represented as production-ready.
+shutdown completes PQ0. PQ1 is complete: the root `world_transvoxel/` scene
+streams real baked LOD0 and balanced multi-LOD transition pages through
+official MIT meshing into bounded Godot resources. PQ2 public editing, query,
+and persistence integration is next; the addon is not yet production-ready.
 
 ## Tooling
 
@@ -80,6 +80,7 @@ there are no operating-system shell scripts in the project-owned toolchain.
 ```console
 python scripts/bootstrap_toolchain.py
 python scripts/build.py
+python scripts/prepare_example_world.py
 python scripts/test_m5.py
 python tools/benchmark_m5_runtime.py
 python tools/benchmark_m5_pipeline.py

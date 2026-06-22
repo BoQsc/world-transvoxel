@@ -35,10 +35,11 @@ render/physics application budgets and the collision/readiness baseline are
 locked on both supported engines. Versioned binary telemetry and the checked
 60-second soak also pass. Production qualification is active; schema-1
 `WorldTransvoxelConfig` is the first completed foundation, while real world
-manifest startup/shutdown now completes PQ0. The public facade also streams
-real baked LOD0 and balanced multi-LOD transition pages through native
-scheduling, official MIT meshing, and bounded Godot sinks. The root example
-and PQ1 exit audit remain. Compute acceleration is optional later work.
+manifest startup/shutdown completes PQ0. PQ1 is complete: the root example
+streams real baked LOD0 and balanced multi-LOD transition pages through native
+scheduling, official MIT meshing, and bounded Godot sinks. PQ2 public editing,
+query, and persistence integration is next. Compute acceleration is optional
+later work.
 
 Build from the repository root:
 

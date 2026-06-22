@@ -10,8 +10,9 @@ official MIT meshing, real Godot render/physics application budgets, versioned
 binary telemetry, and checked fixed-duration soak evidence. Production
 qualification is the only active phase; its workflow audit and schema-1
 runtime configuration plus asynchronous manifest lifecycle are complete. PQ1
-now has real LOD0 and balanced multi-LOD transition page-to-Godot
-coordination; the root example and PQ1 exit audit remain.
+is complete with real LOD0/balanced transition page-to-Godot coordination and
+the thin root real-scene example. PQ2 editing, query, and persistence
+integration is the active finite gate.
 
 ## 1. Authority of this document
 
@@ -1226,9 +1227,9 @@ The next and only active phase is production qualification.
 
 Ordered work:
 
-1. Complete: audit the current Godot facade and root example against the complete real
-   workflow: bake, load, stream, render, collide, edit, query, save, reload,
-   migrate, and shut down.
+1. Complete: audit the Godot facade against the complete real workflow and
+   record every missing bake, load, stream, render, collision, edit, query,
+   save, reload, migration, and shutdown gate.
 2. Complete: add schema-1 `WorldTransvoxelConfig` with native validation for
    all construction-time M5 limits and attach it to the terrain facade.
 3. Complete: explicit stopped/starting/running/stopping/failed world lifecycle
@@ -1238,14 +1239,16 @@ Ordered work:
    demand, page I/O, official MIT meshing, caches, and bounded Godot sinks.
 5. Complete: add balanced multi-LOD viewer planning and drive transition pages
    through the same production coordinator.
-6. Next: build the root integration example and real baked-world scene using
-   the official MIT backend.
-7. Run a fixed-duration full-world Godot soak with real page I/O, official MIT
+6. Complete: build the root integration example and real baked-world scene
+   using the official MIT backend.
+7. Next: expose focused editing and query capabilities and connect journaled
+   save/reload to the running world lifecycle.
+8. Run a fixed-duration full-world Godot soak with real page I/O, official MIT
    meshing, render resources, collision resources, edits, save/reload, and
    telemetry.
-8. Lock save migration, operational limits, supported Godot/platform matrix,
+9. Lock save migration, operational limits, supported Godot/platform matrix,
    clean shutdown, and reproducible release evidence.
-9. Only after those gates pass, mark the official MIT-backed addon
+10. Only after those gates pass, mark the official MIT-backed addon
    production-ready and begin the separate 0BSD backend qualification.
 
 M6 compute acceleration remains optional. Do not let it delay the measured CPU

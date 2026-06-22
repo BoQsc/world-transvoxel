@@ -10,6 +10,7 @@ config_version=5
 [application]
 
 config/name="World Transvoxel"
+run/main_scene="res://world_transvoxel/example_world.tscn"
 
 [editor_plugins]
 

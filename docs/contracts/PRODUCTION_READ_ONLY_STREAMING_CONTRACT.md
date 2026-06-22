@@ -1,7 +1,6 @@
 # Production Read-Only Streaming Contract
 
-Status: regular and balanced multi-LOD transition streaming complete; PQ1
-root example remains
+Status: complete; closes with the production example contract
 
 ## Scope
 
@@ -88,8 +87,8 @@ the public API creates, replaces, and removes real `ArrayMesh` and
 addon builds. The production entry point then runs the complete M5-through-M0
 regression chain.
 
-## Exact remaining PQ1 boundary
+## PQ1 exit
 
-The only remaining PQ1 unit is the thin root `world_transvoxel/` example. It
-must consume the addon as an application would, stream this planner in a real
-scene, and close the PQ1 audit. Editing, query, and persistence remain PQ2.
+The thin root `world_transvoxel/` example consumes this coordinator in a real
+scene and passes the debug/release Godot matrix. PQ1 is complete. Editing,
+query, and persistence are the finite PQ2 scope.

@@ -1,0 +1,13 @@
+[gd_resource type="WorldTransvoxelConfig" format=3]
+
+[resource]
+active_chunk_capacity = 40
+viewer_capacity = 2
+demand_capacity_per_viewer = 125
+storage_request_capacity = 64
+storage_completion_capacity = 64
+encoded_page_entry_capacity = 40
+decoded_page_entry_capacity = 40
+mesh_entry_capacity = 40
+render_entry_capacity = 40
+collision_entry_capacity = 40

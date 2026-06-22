@@ -99,8 +99,10 @@ func _run_test() -> void:
 func _wait_for_state(terrain: Node, expected: String) -> bool:
 	for _frame in range(300):
 		if terrain.call("get_world_state_name") == expected:
-			# State changes originate on the native control thread. Give the
-			# terrain's process callback one frame to publish the matching signal.
+			# State changes originate on the native control thread. SceneTree can
+			# resume this coroutine before the terrain node processes that frame,
+			# so cross two frame boundaries before checking signal evidence.
+			await process_frame
 			await process_frame
 			return true
 		await process_frame

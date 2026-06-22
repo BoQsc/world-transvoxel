@@ -2,22 +2,18 @@
 
 Date: 2026-06-22
 
-Status: current production boundary and finite remaining plan
+Status: PQ1 complete; PQ2 is the active finite gate
 
 ## Result
 
-M0 through M5 produced tested native components, but the addon is not yet a
-production terrain system. `WorldTransvoxelTerrain` currently owns the Godot
-render/collision application queues and test fixtures; it does not yet connect
-viewer demand, page meshing, edits, queries, or persistence into the now
-implemented manifest lifecycle.
+M0 through M5 plus PQ0/PQ1 now provide a tested read-only terrain path.
+`WorldTransvoxelTerrain` connects real viewer events, global balanced 2:1 LOD
+planning, asynchronous baked-page I/O, official MIT regular/transition
+meshing, bounded render/collision application, and shutdown.
 
-The repository also has no root `world_transvoxel/` example/application
-directory. Current Godot tests instantiate the addon from the development
-repository rather than from a clean copied-addon project.
-
-This is not a topology or M5 failure. It is the explicit integration work
-between the completed components and the production finish line.
+The root `world_transvoxel/` scene proves that path as thin application code.
+The addon is still not production-ready because editing, query, persistence,
+clean-install soak, and release qualification remain explicit PQ2-PQ4 work.
 
 ## Workflow audit
 
@@ -25,16 +21,16 @@ between the completed components and the production finish line.
 | --- | --- | --- |
 | install addon | debug/release binaries load on Godot 4.6.3 and 4.7 | clean copied-addon project not yet proven |
 | configure runtime | M5 limits and defaults are locked | explicit schema-1 `WorldTransvoxelConfig` now implemented and attached |
-| bake world | deterministic CLI and editor path complete | no example project invokes the result as a terrain world |
-| load world | manifest/page readers and corruption checks complete | asynchronous facade manifest lifecycle complete; page streaming is PQ1 |
-| stream chunks | the production coordinator connects global balanced viewer planning, scheduler, async I/O, caches, and official MIT meshing | root example remains |
-| render/collide | real regular and transition baked pages now drive bounded Godot sinks | root scene audit remains |
+| bake world | deterministic CLI and editor path complete | root example preparation invokes the public native bake path |
+| load world | manifest/page readers and corruption checks complete | root scene starts a validated 28-page hierarchical manifest |
+| stream chunks | global balanced viewer planning, scheduler, async I/O, caches, and official MIT meshing complete | root transform events prove real movement |
+| render/collide | real regular and transition baked pages drive bounded Godot sinks | root scene audit passes both supported engines/builds |
 | edit world | transaction, spatial invalidation, journal, replay, and replacement complete | no public edit capability or lifecycle ownership |
 | query world | native component inspection exists | public query capability absent |
 | save/reload | journal and compaction round trips complete | no facade save/reload workflow |
 | migrate | native/Python migration tooling complete | not exercised by a clean application workflow |
 | telemetry | bounded binary trace and 60-second orchestration soak complete | not exposed through a public runtime capability |
-| shutdown | queued Godot application teardown is tested | manifest/storage lifecycle shutdown complete; meshing/edit ownership follows in PQ1/PQ2 |
+| shutdown | queued Godot application teardown is tested | PQ1 root scene stops with zero retained resources |
 
 The addon version was stale at `0.5.0-m4`; the configuration foundation moves
 it to `0.6.0-m5`, matching the completed milestone without claiming a
@@ -56,8 +52,7 @@ workers/resources.
 
 ### PQ1 - Read-only real world
 
-Status: active; native/Godot regular and balanced transition streaming are
-complete. The root example is the only remaining unit.
+Status: complete on 2026-06-22.
 
 - complete: connect native viewer events to desired-set, scheduler, async page
   I/O, official MIT meshing, resource caches, and bounded Godot sinks;
@@ -67,13 +62,15 @@ complete. The root example is the only remaining unit.
   leaves, assign coarse transition ownership, and remesh changed masks;
 - complete: stream and apply real baked LOD1/LOD0 transition plans in native
   debug/release and Godot 4.6.3/4.7 debug/release tests;
-- final PQ1 unit: provide the thin root `world_transvoxel/` example and close
-  its real-scene audit.
+- complete: provide the thin root `world_transvoxel/` example and close its
+  real-scene audit on the supported engine/build matrix.
 
-Exit: the example streams, renders, and collides against a real baked world
-with bounded queues and correct shutdown.
+Exit: passed. The example streams, renders, and collides against a real baked
+world with bounded queues and correct shutdown.
 
 ### PQ2 - Editing, query, and persistence
+
+Status: active.
 
 - expose focused edit and query capabilities;
 - connect edits to journal append, invalidation, replacement, and readiness;

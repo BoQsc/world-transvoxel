@@ -6,6 +6,7 @@ import argparse
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from build import build
@@ -99,6 +100,35 @@ def prepare_lifecycle_fixture() -> None:
         raise RuntimeError("Production lifecycle fixture generation failed.")
 
 
+def prepare_example_fixture() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts" / "prepare_example_world.py"),
+            "--configuration",
+            "template_release",
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        text=True,
+        capture_output=True,
+        errors="replace",
+    )
+    combined = result.stdout + result.stderr
+    print(combined, end="" if combined.endswith("\n") else "\n")
+    if (
+        result.returncode != 0
+        or "PRODUCTION_EXAMPLE_FIXTURE_PASS" not in combined
+        or not (
+            REPO_ROOT
+            / "build"
+            / "world-transvoxel-example"
+            / "world.wtworld"
+        ).is_file()
+    ):
+        raise RuntimeError("Production example fixture generation failed.")
+
+
 def run_godot_test(
     engine: Path,
     name: str,
@@ -157,6 +187,12 @@ def run_engine_tests(engine: Path, name: str) -> None:
         f"{name}-lod-streaming",
         "res://tests/godot/production_lod_streaming_test.gd",
         "PRODUCTION_GODOT_LOD_STREAMING_PASS",
+    )
+    run_godot_test(
+        engine,
+        f"{name}-example",
+        "res://tests/godot/production_example_test.gd",
+        "PRODUCTION_GODOT_EXAMPLE_PASS",
     )
 
 
@@ -217,11 +253,13 @@ def test_production_qualification(
             EXPECTED_LOD_STREAMING_HASH,
         )
     prepare_lifecycle_fixture()
+    prepare_example_fixture()
     run_godot_matrix()
     test_m5(skip_build=True, skip_engine_download=skip_engine_download)
     print(
         "Production qualification configuration, lifecycle, balanced multi-LOD "
-        "read-only streaming, and complete M5 regression suite passed."
+        "read-only streaming, root example, and complete M5 regression suite "
+        "passed; PQ1 is complete."
     )
 
 

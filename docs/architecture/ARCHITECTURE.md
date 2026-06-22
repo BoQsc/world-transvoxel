@@ -11,6 +11,8 @@ addons/world_transvoxel/
 The root `world_transvoxel/` directory is reserved for thin application-level
 usage: scenes, project configuration, examples, and game-specific adapters. It
 must not contain meshing, streaming, storage, collision, or scheduler logic.
+Its production example now implements only lifecycle configuration and
+transform-notification viewer events over the addon facade.
 
 ## Execution model
 
