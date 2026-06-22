@@ -184,6 +184,12 @@ WtWorldLifecycleService::last_runtime_status() const noexcept {
 	return last_runtime_status_;
 }
 
+WtReadOnlyRuntimeMetrics
+WtWorldLifecycleService::runtime_metrics() const noexcept {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	return runtime_ ? runtime_->get_metrics() : WtReadOnlyRuntimeMetrics{};
+}
+
 WtEditJournalStoreStatus
 WtWorldLifecycleService::last_edit_journal_status() const noexcept {
 	std::lock_guard<std::mutex> lock(state_mutex_);

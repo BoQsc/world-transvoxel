@@ -16,6 +16,8 @@ from download_test_engines import (
     engine_specs,
 )
 from test_m5 import test_m5
+from test_pq3 import DEFAULT_DURATION_MS as PQ3_DURATION_MS
+from test_pq3 import test_pq3
 from wt_script_common import REPO_ROOT, addon_binary_path, native_test_path
 
 
@@ -244,6 +246,8 @@ def run_godot_matrix() -> None:
 def test_production_qualification(
     skip_build: bool = False,
     skip_engine_download: bool = False,
+    pq3_duration_ms: int = PQ3_DURATION_MS,
+    write_pq3_reference_evidence: bool = False,
 ) -> None:
     if not skip_build:
         build("all")
@@ -295,12 +299,19 @@ def test_production_qualification(
     prepare_lifecycle_fixture()
     prepare_example_fixture()
     run_godot_matrix()
+    test_pq3(
+        skip_build=True,
+        skip_engine_download=True,
+        duration_ms=pq3_duration_ms,
+        write_reference_evidence=write_pq3_reference_evidence,
+        prepare_fixture=False,
+    )
     test_m5(skip_build=True, skip_engine_download=skip_engine_download)
     print(
         "Production qualification configuration, lifecycle, balanced multi-LOD "
         "streaming, durable editing/restart replay, root example, and complete "
-        "M5 regression suite passed; PQ2 editing, authoritative query, "
-        "compaction, and migration are complete."
+        "M5 regression suite passed; PQ3 isolated clean-install full-world "
+        "soak, compaction, migration, reopen, and shutdown are complete."
     )
 
 
@@ -310,10 +321,18 @@ def main() -> None:
     )
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument("--skip-engine-download", action="store_true")
+    parser.add_argument(
+        "--pq3-duration-ms", type=int, default=PQ3_DURATION_MS
+    )
+    parser.add_argument(
+        "--write-pq3-reference-evidence", action="store_true"
+    )
     arguments = parser.parse_args()
     test_production_qualification(
         arguments.skip_build,
         arguments.skip_engine_download,
+        arguments.pq3_duration_ms,
+        arguments.write_pq3_reference_evidence,
     )
 
 

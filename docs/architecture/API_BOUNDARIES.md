@@ -14,12 +14,15 @@ High-level `Node3D` facade.
 - attach configuration and data source;
 - add/remove viewers;
 - expose capability handles;
+- expose immutable operational metrics snapshots;
 - emit coarse lifecycle and error signals.
 
 It does not expose internal queues, chunk dictionaries, RIDs, or worker state.
 PQ0 implements explicit asynchronous manifest startup/failure/restart/stop and
 read-only lifecycle metadata. PQ1 now adds native viewer updates, global
 balanced 2:1 LOD planning, and real regular/transition baked-page publication.
+PQ2 adds durable editing, authoritative queries, compaction, and migration.
+PQ3 proves this facade from an isolated copied-addon project.
 
 ### `WorldTransvoxelConfig`
 
@@ -88,9 +91,13 @@ The terrain facade also queues side-by-side world snapshot operations:
 
 Editor/CLI entry point for deterministic binary baking.
 
-### `WorldTransvoxelTelemetry`
+### Runtime telemetry
 
-Snapshot and event-stream access to documented metrics.
+`WorldTransvoxelTerrain.get_runtime_metrics()` returns a copied `Dictionary`
+of documented native runtime/application counters for operational inspection
+and qualification. It does not return queue contents, application records, or
+other mutable ownership. A future event stream may complement this snapshot
+without changing the ownership boundary.
 
 ## Internal interfaces
 

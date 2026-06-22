@@ -31,8 +31,9 @@ The debug/release bake identity is locked to:
 75f6d50160e091a0a3ccff5c5cffa8902e339d8a611da6b7d862256b5125889d
 ```
 
-The example is the repository development/application scene. A clean project
-containing only a copied distributable addon remains the explicit PQ3 gate.
+The example is the repository development/application scene. PQ3 separately
+proves a generated clean project containing the copied distributable addon,
+required notices, deterministic world fixture, and test-only scaffolding.
 
 ## Runtime behavior
 

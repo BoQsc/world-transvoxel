@@ -90,5 +90,5 @@ results, nonempty-journal migration rejection, public compaction and reopen,
 current-schema migration and reopen, and real schema-1.0 lifecycle migration.
 
 PQ2 exits with an application edit surviving reload/compaction and returning
-the same authoritative scalar/material value. PQ3 clean-install and
-fixed-duration full-world soak is now active.
+the same authoritative scalar/material value. PQ3 now additionally proves
+that compaction and migration survive the isolated full-world soak matrix.

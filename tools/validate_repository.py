@@ -92,6 +92,7 @@ REQUIRED_FILES = (
     "addons/world_transvoxel/src/register_types.h",
     "addons/world_transvoxel/src/api/world_transvoxel_terrain.cpp",
     "addons/world_transvoxel/src/api/world_transvoxel_terrain.h",
+    "addons/world_transvoxel/src/api/world_transvoxel_terrain_metrics.cpp",
     "addons/world_transvoxel/src/api/world_transvoxel_terrain_streaming.cpp",
     "addons/world_transvoxel/src/api/world_transvoxel_terrain_query.cpp",
     "addons/world_transvoxel/src/api/world_transvoxel_chunk_state.cpp",
@@ -232,12 +233,14 @@ REQUIRED_FILES = (
     "docs/contracts/PRODUCTION_READ_ONLY_STREAMING_CONTRACT.md",
     "docs/contracts/PRODUCTION_EXAMPLE_CONTRACT.md",
     "docs/contracts/PRODUCTION_CHUNK_QUERY_CONTRACT.md",
+    "docs/contracts/PRODUCTION_CLEAN_INSTALL_SOAK_CONTRACT.md",
     "docs/evidence/m5_runtime_budget_windows_x86_64.json",
     "docs/evidence/m5_pipeline_budget_windows_x86_64.json",
     "docs/evidence/m5_application_budget_godot_4_6_3_windows_x86_64.json",
     "docs/evidence/m5_application_budget_godot_4_7_windows_x86_64.json",
     "docs/evidence/m5_soak_windows_x86_64.json",
     "docs/evidence/m5_soak_windows_x86_64.wttrace",
+    "docs/evidence/pq3_clean_install_soak_windows_x86_64.json",
     "docs/decisions/M4_CODEC_DECISION.md",
     "docs/architecture/API_BOUNDARIES.md",
     "docs/architecture/ARCHITECTURE.md",
@@ -285,6 +288,11 @@ REQUIRED_FILES = (
     "tests/performance/m5_soak_budget.json",
     "tools/run_m5_soak.py",
     "scripts/test_production_qualification.py",
+    "scripts/test_pq3.py",
+    "tests/godot/production_full_world_soak.gd",
+    "tests/godot/production_full_world_soak.gd.uid",
+    "tests/godot/production_full_world_soak_support.gd",
+    "tests/godot/production_full_world_soak_support.gd.uid",
     "tests/native/wt_m2_mesh_test_support.cpp",
     "tests/native/wt_m2_mesh_test_support.h",
 )
@@ -569,10 +577,10 @@ def validate_license_boundaries(errors: list[str]) -> None:
         if normalized.startswith("references/downloaded/"):
             fail(errors, f"downloaded reference is tracked: {normalized}")
 
-    for path in ROOT.rglob("Transvoxel.cpp"):
-        if ".git" in path.parts or "downloaded" in path.parts:
+    for relative_path in tracked:
+        relative_path = relative_path.replace("\\", "/")
+        if not relative_path.endswith("/Transvoxel.cpp"):
             continue
-        relative_path = path.relative_to(ROOT).as_posix()
         allowed_prefix = "addons/world_transvoxel/thirdparty/transvoxel_mit/"
         if not relative_path.startswith(allowed_prefix):
             fail(errors, f"MIT Transvoxel source is outside its boundary: {relative_path}")

@@ -14,8 +14,9 @@ is complete with real LOD0/balanced transition page-to-Godot coordination and
 the thin root real-scene example. PQ2 editing, query, and persistence is
 complete: immutable readiness snapshots, lifecycle-owned durable edits,
 authoritative sample queries, affected-generation replacement, restart replay,
-atomic side-by-side compaction, and schema migration all pass. PQ3 clean
-install and fixed-duration full-world soak is the active finite gate.
+atomic side-by-side compaction, and schema migration all pass. PQ3 is complete
+with isolated clean-addon installation and the fixed-duration full-world
+Godot matrix. PQ4 release qualification is the active finite gate.
 
 ## 1. Authority of this document
 
@@ -1252,11 +1253,12 @@ Ordered work:
    affected loaded generations, and prove durable restart replay.
 10. Complete: expose authoritative scalar/material queries and connect atomic
    side-by-side compaction and migration to the running lifecycle.
-11. Next: run a fixed-duration full-world Godot soak with real page I/O, official MIT
-   meshing, render resources, collision resources, edits, save/reload, and
-   telemetry.
-12. Lock save migration, operational limits, supported Godot/platform matrix,
-   clean shutdown, and reproducible release evidence.
+11. Complete: run a fixed-duration full-world Godot soak with real page I/O,
+   official MIT meshing, render resources, collision resources, edits,
+   save/reload, migration, public metrics, and clean shutdown from an isolated
+   copied-addon project.
+12. Next: lock operational limits, the supported Godot/platform matrix,
+   license/provenance contents, and reproducible release evidence.
 13. Only after those gates pass, mark the official MIT-backed addon
    production-ready and begin the separate 0BSD backend qualification.
 

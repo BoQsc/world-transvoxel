@@ -57,10 +57,10 @@ pins after official MIT meshing. Optimized Godot 4.6.3 and 4.7 evidence now
 locks real `ArrayMesh`/concave-collision application budgets, eight-frame
 burst readiness, and the 96/128 collision hysteresis policy. A versioned
 bounded `wttrace` format and checked 60-second motion/edit soak now close M5.
-The next and only active phase is production qualification: clean-addon
-installation and a real baked-world stream/render/collide/edit/query/save/
-reload/shutdown workflow. Optional compute acceleration is deferred and does
-not block that release path.
+Clean-addon installation and the real baked-world
+stream/render/collide/edit/query/save/reload/migrate/shutdown workflow now
+close PQ3. PQ4 release qualification is the only active phase. Optional
+compute acceleration is deferred and does not block that release path.
 
 The current production audit is
 [`docs/production/QUALIFICATION_AUDIT.md`](docs/production/QUALIFICATION_AUDIT.md).
@@ -74,8 +74,10 @@ active-chunk/readiness snapshots, lifecycle-owned `world.wtedit`, typed public
 transactions, durable commits, affected-generation replacement, edited-page
 replay, stale rejection, exact authoritative scalar/material queries,
 side-by-side snapshot compaction, schema-1.0 migration, and reopen
-equivalence. PQ3 clean-install and fixed-duration full-world soak is active.
-The addon is not yet production-ready.
+equivalence. PQ3 is complete: an isolated copied-addon project now passes the
+15-second full-world edit/query/compact/migrate/reopen soak on Godot 4.6.3 and
+4.7 with debug and release binaries. PQ4 release qualification is active. The
+addon is not yet production-ready.
 
 ## Tooling
 
@@ -88,6 +90,7 @@ python scripts/bootstrap_toolchain.py
 python scripts/build.py
 python scripts/prepare_example_world.py
 python scripts/test_m5.py
+python scripts/test_pq3.py
 python tools/benchmark_m5_runtime.py
 python tools/benchmark_m5_pipeline.py
 python tools/benchmark_m5_application.py --engine-version 4.6.3

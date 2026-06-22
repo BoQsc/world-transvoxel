@@ -33,13 +33,12 @@ representative native budgets, and page-backed transition job scheduling,
 pinning, cancellation, and invalidation are also complete. Real Godot
 render/physics application budgets and the collision/readiness baseline are
 locked on both supported engines. Versioned binary telemetry and the checked
-60-second soak also pass. Production qualification is active; schema-1
-`WorldTransvoxelConfig` is the first completed foundation, while real world
-manifest startup/shutdown completes PQ0. PQ1 is complete: the root example
-streams real baked LOD0 and balanced multi-LOD transition pages through native
-scheduling, official MIT meshing, and bounded Godot sinks. PQ2 public editing,
-query, and persistence integration is active; immutable active-chunk/readiness
-query snapshots are complete. Compute acceleration is optional later work.
+60-second soak also pass. PQ0 through PQ2 complete production configuration,
+lifecycle, real baked-world streaming, public editing, authoritative queries,
+compaction, migration, and reopen equivalence. PQ3 is complete: a copied addon
+passes a 15-second full-world workflow on Godot 4.6.3 and 4.7 with debug and
+release binaries. PQ4 release qualification is active. Compute acceleration
+is optional later work.
 
 Build from the repository root:
 
@@ -52,5 +51,6 @@ milestone contracts:
 
 ```console
 python scripts/test_production_qualification.py
+python scripts/test_pq3.py
 python tools/benchmark_m5_application.py --engine-version 4.6.3
 ```

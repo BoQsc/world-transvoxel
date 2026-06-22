@@ -28,7 +28,7 @@ godot::Ref<WorldTransvoxelEditTransaction>
 WorldTransvoxelTerrain::begin_edit_transaction(std::int64_t author_id) {
 	godot::Ref<WorldTransvoxelEditTransaction> transaction;
 	if (!is_world_running() || author_id < 0 ||
-		get_world_source_revision() <= 0 || get_world_revision() <= 0) {
+		get_world_source_revision() <= 0) {
 		synchronous_world_error_ =
 			"running world and non-negative author id are required";
 		return transaction;

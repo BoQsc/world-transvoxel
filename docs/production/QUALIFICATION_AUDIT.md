@@ -2,24 +2,26 @@
 
 Date: 2026-06-22
 
-Status: PQ2 complete; PQ3 is the active finite gate
+Status: PQ3 complete; PQ4 is the active finite gate
 
 ## Result
 
-M0 through M5 plus PQ0/PQ1 now provide a tested terrain streaming path.
+M0 through M5 plus PQ0-PQ3 now provide a clean-installed, tested terrain
+streaming and persistence path.
 `WorldTransvoxelTerrain` connects real viewer events, global balanced 2:1 LOD
 planning, asynchronous baked-page I/O, official MIT regular/transition
 meshing, bounded render/collision application, and shutdown.
 
-The root `world_transvoxel/` scene proves that path as thin application code.
-The addon is still not production-ready because clean-install soak and release
-qualification remain explicit PQ3-PQ4 work.
+The root `world_transvoxel/` scene proves that path as thin application code,
+and the isolated PQ3 project proves that the addon does not depend on that
+repository integration. The addon is still not production-ready because PQ4
+release qualification remains explicit work.
 
 ## Workflow audit
 
 | Capability | Proven component state | Production integration state |
 | --- | --- | --- |
-| install addon | debug/release binaries load on Godot 4.6.3 and 4.7 | clean copied-addon project not yet proven |
+| install addon | debug/release binaries load on Godot 4.6.3 and 4.7 | isolated copied-addon import and 15-second workflow matrix pass |
 | configure runtime | M5 limits and defaults are locked | explicit schema-1 `WorldTransvoxelConfig` now implemented and attached |
 | bake world | deterministic CLI and editor path complete | root example preparation invokes the public native bake path |
 | load world | manifest/page readers and corruption checks complete | root scene starts a validated 28-page hierarchical manifest |
@@ -29,8 +31,8 @@ qualification remain explicit PQ3-PQ4 work.
 | query world | native component inspection exists | readiness snapshots plus exact asynchronous scalar/material queries complete |
 | save/reload | journal and compaction round trips complete | committed edits reload/replay and public side-by-side compaction reopens equivalently |
 | migrate | native/Python migration tooling complete | schema-1.0 load, public migration, and current-schema reopen complete |
-| telemetry | bounded binary trace and 60-second orchestration soak complete | not exposed through a public runtime capability |
-| shutdown | queued Godot application teardown is tested | PQ1 root scene stops with zero retained resources |
+| telemetry | bounded binary trace and 60-second orchestration soak complete | immutable public runtime/application metrics snapshot is checked by PQ3 |
+| shutdown | queued Godot application teardown is tested | source, compacted, and migrated clean-project worlds stop with zero retained resources |
 
 The addon version was stale at `0.5.0-m4`; the configuration foundation moves
 it to `0.6.0-m5`, matching the completed milestone without claiming a
@@ -90,18 +92,28 @@ authoritative query results.
 
 ### PQ3 - Clean install and full-world soak
 
-Status: active.
+Status: complete on 2026-06-22.
 
-- copy only the distributable addon and required notices into a clean Godot
-  project;
-- run the complete real-world workflow for a fixed duration;
-- lock memory, queue, frame, collision, seam, persistence, and shutdown
-  evidence.
+- complete: copy the distributable addon and required notices into a generated
+  project with no repository application/build/tool dependencies;
+- complete: perform first-run Godot import and verify the copied GDExtension
+  cache;
+- complete: query all 28 pages, stream the complete movement pattern through
+  real regular/transition meshing, render, and collision ownership;
+- complete: commit edits from initial world revision zero and verify ordered
+  authoritative queries;
+- complete: compact, stop, reopen, migrate, stop, reopen, and prove equivalent
+  authoritative values;
+- complete: lock 15-second-per-case memory, queue, frame, latency, transition,
+  persistence, and clean-shutdown evidence on Godot 4.6.3/4.7 with debug and
+  release binaries.
 
-Exit: clean-install and full-world soak gates pass on the supported engine
-matrix.
+Exit: passed. Reference evidence is
+`docs/evidence/pq3_clean_install_soak_windows_x86_64.json`.
 
 ### PQ4 - Release qualification
+
+Status: active.
 
 - document public API and operational limits;
 - lock supported Godot/platform matrix;

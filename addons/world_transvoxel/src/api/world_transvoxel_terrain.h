@@ -32,6 +32,7 @@ class WorldTransvoxelTerrain : public godot::Node3D {
 protected:
 	static void _bind_methods();
 	static void bind_edit_methods();
+	static void bind_metrics_methods();
 	static void bind_query_snapshot_methods();
 
 public:
@@ -104,6 +105,7 @@ public:
 	std::int64_t get_queued_collision_count() const noexcept;
 	std::int64_t get_render_latency_frames_maximum() const noexcept;
 	std::int64_t get_collision_latency_frames_maximum() const noexcept;
+	godot::Dictionary get_runtime_metrics() const;
 
 	bool _m3_test_submit_generation(std::int64_t generation, bool collision_required);
 	bool _m3_test_set_collision_distance(double distance);

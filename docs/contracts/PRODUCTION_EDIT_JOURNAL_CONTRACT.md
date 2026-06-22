@@ -19,6 +19,9 @@ asynchronous through:
 - `edit_committed(world_revision)`;
 - `edit_failed(error)`.
 
+A freshly baked world starts at revision zero. Revision zero is a valid
+transaction base revision; its first successful commit publishes revision one.
+
 A submitted object cannot be edited or submitted again. Transactions created
 at the same base revision may both enter the queue, but only the first valid
 commit advances the world; later stale transactions are rejected without

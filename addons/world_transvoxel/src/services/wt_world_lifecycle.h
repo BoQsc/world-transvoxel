@@ -75,6 +75,7 @@ public:
 	WtWorldLifecycleState state() const noexcept;
 	WtAsyncStorageStatus last_storage_status() const noexcept;
 	WtReadOnlyRuntimeStatus last_runtime_status() const noexcept;
+	WtReadOnlyRuntimeMetrics runtime_metrics() const noexcept;
 	WtEditJournalStoreStatus last_edit_journal_status() const noexcept;
 	std::uint64_t source_revision() const noexcept;
 	std::uint64_t world_revision() const noexcept;

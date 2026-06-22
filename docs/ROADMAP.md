@@ -139,8 +139,8 @@ Finite qualification gates are tracked in
 - PQ2 editing, query, and persistence (complete: readiness and authoritative
   sample queries, lifecycle journal ownership, atomic edits, edited-page
   replacement, restart replay, side-by-side compaction, and migration);
-- PQ3 clean install and fixed-duration full-world soak (active);
-- PQ4 release qualification.
+- PQ3 clean install and fixed-duration full-world soak (complete);
+- PQ4 release qualification (active).
 
 - official MIT backend remains the reference;
 - full-world soak test;
