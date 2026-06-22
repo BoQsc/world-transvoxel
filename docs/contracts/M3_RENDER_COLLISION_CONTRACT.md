@@ -30,6 +30,12 @@ Godot integration maps material IDs to `UV2.x` as exactly representable float
 values for later terrain shaders; topology payloads retain authoritative
 `uint16_t` values.
 
+World Transvoxel payload triangles remain counterclockwise when viewed from
+outside. Godot defines clockwise triangle winding as front-facing, so the
+Godot render sink swaps the second and third index of every triangle. This is
+an engine-boundary conversion; native topology, transition ownership, and
+payload hashes retain the authoritative counterclockwise convention.
+
 ## Collision sanitation
 
 Collision is generated as an unindexed triangle-face array from the immutable
@@ -52,6 +58,11 @@ shape_ratio_squared = |cross(b-a, c-a)|^2 / max_edge_length^4
 The ratio is scale-independent. `1e-12` corresponds approximately to a
 minimum altitude-to-longest-edge ratio of `1e-6`; it is a locked correctness
 baseline, not a final production physics-performance budget.
+
+The Godot collision sink performs the same per-triangle clockwise conversion
+as the render sink. `ConcavePolygonShape3D.backface_collision` remains false,
+so outside-facing collision is validated rather than hiding orientation
+errors with two-sided physics.
 
 ## Collision distance policy
 
@@ -104,8 +115,10 @@ bounded state in debug and optimized builds.
 `tests/godot/m3_integration_test.gd` applies an actual M2-generated sphere to
 Godot `ArrayMesh` and `ConcavePolygonShape3D` resources. It covers zero and
 one-item frame budgets, generation replacement, stale rejection before Godot,
-16 collision activation/deactivation movement cycles, resource bounds,
-in-flight eviction, and shutdown with queued work.
+clockwise Godot front faces aligned with outward vertex normals, an outside
+ray hitting one-sided sphere collision, 16 collision activation/deactivation
+movement cycles, resource bounds, in-flight eviction, and shutdown with
+queued work.
 
 The integration runner executes this contract against debug and optimized
 addon builds on both supported Godot versions. No GPU readback or frame-thread

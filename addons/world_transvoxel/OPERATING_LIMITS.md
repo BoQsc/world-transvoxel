@@ -1,8 +1,8 @@
-# World Transvoxel 1.0 Operating Limits
+# World Transvoxel 1.0.1 Operating Limits
 
 ## Qualified release matrix
 
-The 1.0.0 release is qualified only for:
+The 1.0.1 corrective release is qualified only for:
 
 | Component | Supported value |
 | --- | --- |

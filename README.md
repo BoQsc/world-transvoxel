@@ -5,12 +5,18 @@ official upstream MIT Transvoxel tables behind an isolated native addon.
 
 ## Release status
 
-World Transvoxel 1.0.0 is the production-ready official MIT-backed addon for
-Windows x86-64 with Godot 4.6.3 and 4.7. The deterministic install directory
-is generated at:
+World Transvoxel 1.0.0 is withdrawn and must not be used. It adapted neither
+render nor one-sided collision winding to Godot and did not implement complete
+primary/secondary transition deformation at convex mixed-LOD corners.
+
+World Transvoxel 1.0.1 is the corrective official MIT-backed addon for Windows
+x86-64 with Godot 4.6.3 and 4.7. It adds Godot-facing winding conversion,
+outside collision proof, canonical corner deformation, post-deformation
+outward-winding validation, full mixed-LOD manifold audits, and a real sandbox
+interaction/visual test surface. The deterministic install directory is:
 
 ```text
-artifacts/release/world-transvoxel-1.0.0-windows-x86_64/
+artifacts/release/world-transvoxel-1.0.1-windows-x86_64/
 ```
 
 Copy its `addons/world_transvoxel/` directory and retain the included license
@@ -92,9 +98,9 @@ replay, stale rejection, exact authoritative scalar/material queries,
 side-by-side snapshot compaction, schema-1.0 migration, and reopen
 equivalence. PQ3 is complete: an isolated copied-addon project now passes the
 15-second full-world edit/query/compact/migrate/reopen soak on Godot 4.6.3 and
-4.7 with debug and release binaries. PQ4 is complete, and the official
-MIT-backed addon is production-ready within the documented Windows x86-64
-support matrix.
+4.7 with debug and release binaries. PQ4 is complete for 1.0.1, and the
+official MIT-backed addon is production-ready within the documented Windows
+x86-64 support matrix.
 
 ## Tooling
 

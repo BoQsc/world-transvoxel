@@ -43,8 +43,21 @@ bool WtGodotCollisionSink::apply_collision(const WtCollisionPayload &payload) {
 	}
 	godot::PackedVector3Array faces;
 	faces.resize(static_cast<std::int64_t>(payload.faces.size()));
-	for (std::size_t index = 0; index < payload.faces.size(); ++index) {
-		faces.set(static_cast<std::int64_t>(index), to_godot(payload.faces[index]));
+	for (std::size_t triangle = 0; triangle < payload.faces.size(); triangle += 3) {
+		// Match Godot's clockwise front-face convention so the default
+		// one-sided concave collision accepts rays and bodies from outside.
+		faces.set(
+			static_cast<std::int64_t>(triangle),
+			to_godot(payload.faces[triangle])
+		);
+		faces.set(
+			static_cast<std::int64_t>(triangle + 1),
+			to_godot(payload.faces[triangle + 2])
+		);
+		faces.set(
+			static_cast<std::int64_t>(triangle + 2),
+			to_godot(payload.faces[triangle + 1])
+		);
 	}
 	godot::Ref<godot::ConcavePolygonShape3D> shape;
 	shape.instantiate();

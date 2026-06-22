@@ -61,10 +61,21 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 			static_cast<godot::real_t>(vertex.material), 0.0
 		});
 	}
-	for (std::size_t index = 0; index < payload.indices.size(); ++index) {
+	for (std::size_t triangle = 0; triangle < payload.indices.size(); triangle += 3) {
+		// World Transvoxel stores outward triangles counterclockwise. Godot
+		// defines clockwise triangle winding as front-facing, so adapt only at
+		// the engine boundary while preserving the authoritative payload.
 		indices.set(
-			static_cast<std::int64_t>(index),
-			static_cast<std::int32_t>(payload.indices[index])
+			static_cast<std::int64_t>(triangle),
+			static_cast<std::int32_t>(payload.indices[triangle])
+		);
+		indices.set(
+			static_cast<std::int64_t>(triangle + 1),
+			static_cast<std::int32_t>(payload.indices[triangle + 2])
+		);
+		indices.set(
+			static_cast<std::int64_t>(triangle + 2),
+			static_cast<std::int32_t>(payload.indices[triangle + 1])
 		);
 	}
 	godot::Array arrays;

@@ -277,6 +277,24 @@ void validate_buffer(const wt::WtChunkMeshBuffer &mesh, const char *message) {
 				cross_x * cross_x + cross_y * cross_y + cross_z * cross_z;
 			check(std::isfinite(area_squared) && area_squared > 0.0,
 				"chunk mesh retained a degenerate triangle");
+			const wt::WtVec3 &normal_a =
+				mesh.vertices[mesh.indices[index]].normal;
+			const wt::WtVec3 &normal_b =
+				mesh.vertices[mesh.indices[index + 1]].normal;
+			const wt::WtVec3 &normal_c =
+				mesh.vertices[mesh.indices[index + 2]].normal;
+			const double outward_dot =
+				cross_x * static_cast<double>(
+					normal_a.x + normal_b.x + normal_c.x
+				) +
+				cross_y * static_cast<double>(
+					normal_a.y + normal_b.y + normal_c.y
+				) +
+				cross_z * static_cast<double>(
+					normal_a.z + normal_b.z + normal_c.z
+				);
+			check(std::isfinite(outward_dot) && outward_dot > 0.0,
+				"chunk mesh retained an inward-wound triangle");
 		}
 	}
 	for (bool used : referenced) {

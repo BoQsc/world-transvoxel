@@ -73,12 +73,14 @@ WtVec3 wt_canonical_chunk_position(
 
 WtVec3 wt_deform_chunk_position(
 	WtVec3 position,
+	const WtVec3 &normal,
 	std::uint8_t transition_mask,
 	float cell_size,
 	float width,
 	float extent,
 	int primary_transition_face
 ) noexcept {
+	WtVec3 primary = position;
 	float transition_factor = 1.0F;
 	if (primary_transition_face >= 0) {
 		float primary_distance = 0.0F;
@@ -90,23 +92,64 @@ WtVec3 wt_deform_chunk_position(
 			primary_distance,
 			primary_inward
 		);
-		transition_factor = std::max(0.0F, std::min(1.0F, primary_distance / width));
+		transition_factor = std::max(
+			0.0F,
+			std::min(1.0F, primary_distance / width)
+		);
+		primary = add(position, primary_inward, -primary_distance);
 	}
-	for (unsigned int face_index = 0; face_index < 6; ++face_index) {
-		const WtChunkFace face = static_cast<WtChunkFace>(face_index);
-		if ((transition_mask & wt_face_bit(face)) == 0 ||
-			static_cast<int>(face_index) == primary_transition_face) {
-			continue;
-		}
-		float distance = 0.0F;
-		WtIntegerVector inward{};
-		face_distance_and_inward(position, face, extent, distance, inward);
-		if (distance >= 0.0F && distance < cell_size) {
-			position = add(position, inward,
-				transition_factor * width * (1.0F - distance / cell_size));
-		}
+
+	std::uint8_t near_face_mask = 0;
+	if (primary.x < cell_size) near_face_mask |= wt_face_bit(WtChunkFace::NegativeX);
+	if (primary.x > extent - cell_size) near_face_mask |= wt_face_bit(WtChunkFace::PositiveX);
+	if (primary.y < cell_size) near_face_mask |= wt_face_bit(WtChunkFace::NegativeY);
+	if (primary.y > extent - cell_size) near_face_mask |= wt_face_bit(WtChunkFace::PositiveY);
+	if (primary.z < cell_size) near_face_mask |= wt_face_bit(WtChunkFace::NegativeZ);
+	if (primary.z > extent - cell_size) near_face_mask |= wt_face_bit(WtChunkFace::PositiveZ);
+
+	std::uint8_t vertex_border_mask = 0;
+	if (primary.x == 0.0F) vertex_border_mask |= wt_face_bit(WtChunkFace::NegativeX);
+	if (primary.x == extent) vertex_border_mask |= wt_face_bit(WtChunkFace::PositiveX);
+	if (primary.y == 0.0F) vertex_border_mask |= wt_face_bit(WtChunkFace::NegativeY);
+	if (primary.y == extent) vertex_border_mask |= wt_face_bit(WtChunkFace::PositiveY);
+	if (primary.z == 0.0F) vertex_border_mask |= wt_face_bit(WtChunkFace::NegativeZ);
+	if (primary.z == extent) vertex_border_mask |= wt_face_bit(WtChunkFace::PositiveZ);
+
+	const bool has_active_transition = (near_face_mask & transition_mask) != 0;
+	const bool touches_same_lod_face =
+		(vertex_border_mask & static_cast<std::uint8_t>(~transition_mask)) != 0;
+	if (!has_active_transition || touches_same_lod_face) {
+		return primary;
 	}
-	return position;
+
+	WtVec3 offset;
+	if (primary.x < cell_size) {
+		offset.x = width * (1.0F - primary.x / cell_size);
+	} else if (primary.x > extent - cell_size) {
+		offset.x = -width * (1.0F - (extent - primary.x) / cell_size);
+	}
+	if (primary.y < cell_size) {
+		offset.y = width * (1.0F - primary.y / cell_size);
+	} else if (primary.y > extent - cell_size) {
+		offset.y = -width * (1.0F - (extent - primary.y) / cell_size);
+	}
+	if (primary.z < cell_size) {
+		offset.z = width * (1.0F - primary.z / cell_size);
+	} else if (primary.z > extent - cell_size) {
+		offset.z = -width * (1.0F - (extent - primary.z) / cell_size);
+	}
+	const float normal_offset =
+		normal.x * offset.x + normal.y * offset.y + normal.z * offset.z;
+	const WtVec3 projected = {
+		offset.x - normal.x * normal_offset,
+		offset.y - normal.y * normal_offset,
+		offset.z - normal.z * normal_offset,
+	};
+	return {
+		primary.x + transition_factor * projected.x,
+		primary.y + transition_factor * projected.y,
+		primary.z + transition_factor * projected.z,
+	};
 }
 
 WtVec3 wt_snap_chunk_position(WtVec3 position) noexcept {

@@ -43,6 +43,8 @@ The M2 suite covers:
 - all 12 signed two-face LOD-edge orientations;
 - all eight signed three-face LOD-corner orientations plus a translated
   negative-coordinate/world-origin corner;
+- one convex refined-region corner where three coarse blocks meet one fine
+  octant, using primary/secondary tangent-projected boundary positions;
 - buffer bounds, index validity, vertex use, failure clearing, and invalid
   meshing input.
 
@@ -53,7 +55,7 @@ and non-manifold transition overlap in the tested worlds.
 Locked aggregate hash:
 
 ```text
-chunk mesh  4e436f833896a1bc
+chunk mesh  79140621c205ca23
 ```
 
 Debug and optimized release configurations produce the same M1 and M2 hashes.

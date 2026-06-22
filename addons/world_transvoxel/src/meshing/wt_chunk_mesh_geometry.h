@@ -16,6 +16,7 @@ WtVec3 wt_canonical_chunk_position(
 
 WtVec3 wt_deform_chunk_position(
 	WtVec3 position,
+	const WtVec3 &normal,
 	std::uint8_t transition_mask,
 	float cell_size,
 	float width,

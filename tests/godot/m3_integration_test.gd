@@ -30,6 +30,17 @@ func _run_test() -> void:
 	if terrain.get_render_resource_count() != 1 or \
 			terrain.get_collision_resource_count() != 1:
 		return _fail("current resources were not created")
+	var geometry_error := _validate_godot_geometry(terrain)
+	if not geometry_error.is_empty():
+		return _fail(geometry_error)
+	await physics_frame
+	await physics_frame
+	var ray := PhysicsRayQueryParameters3D.create(
+		Vector3(8, 8, 24),
+		Vector3(8, 8, 8)
+	)
+	if terrain.get_world_3d().direct_space_state.intersect_ray(ray).is_empty():
+		return _fail("outside ray did not hit the front of the sphere collision")
 	if not terrain.call("_m3_test_fully_ready"):
 		return _fail("chunk did not become fully ready")
 	if terrain.call("_m3_test_render_generation") != 2 or \
@@ -92,6 +103,46 @@ func _run_test() -> void:
 	await process_frame
 	print("M3_GODOT_INTEGRATION_PASS movement_cycles=16")
 	quit(0)
+
+
+func _validate_godot_geometry(terrain: Node) -> String:
+	var render := terrain.get_node_or_null("WT_Render_0_0_0_L0") as MeshInstance3D
+	if render == null or render.mesh == null or render.mesh.get_surface_count() != 1:
+		return "Godot render mesh is missing"
+	var arrays := render.mesh.surface_get_arrays(0)
+	var positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	if positions.is_empty() or positions.size() != normals.size() or \
+			indices.is_empty() or indices.size() % 3 != 0:
+		return "Godot render arrays are invalid"
+	for triangle in range(0, indices.size(), 3):
+		var a_index := indices[triangle]
+		var b_index := indices[triangle + 1]
+		var c_index := indices[triangle + 2]
+		var geometric := (
+			positions[b_index] - positions[a_index]
+		).cross(positions[c_index] - positions[a_index])
+		var outward := (
+			normals[a_index] + normals[b_index] + normals[c_index]
+		)
+		if geometric.length_squared() <= 0.0 or outward.length_squared() <= 0.0:
+			return "Godot render mesh contains a degenerate orientation anchor"
+		if geometric.normalized().dot(outward.normalized()) >= -0.5:
+			return "Godot ArrayMesh front-face winding is not clockwise/outward"
+
+	var body := terrain.get_node_or_null("WT_Collision_0_0_0_L0") as StaticBody3D
+	if body == null:
+		return "Godot collision body is missing"
+	var collision := body.get_node_or_null("Shape") as CollisionShape3D
+	if collision == null or not collision.shape is ConcavePolygonShape3D:
+		return "Godot concave collision shape is missing"
+	var shape := collision.shape as ConcavePolygonShape3D
+	if shape.backface_collision:
+		return "Godot collision unexpectedly accepts back faces"
+	if shape.get_faces().is_empty():
+		return "Godot collision shape has no faces"
+	return ""
 
 
 func _fail(message: String) -> void:

@@ -22,12 +22,12 @@ notice text that differs from the repository authority. It performs a fresh
 headless Godot import and verifies that the generated extension cache names
 only the copied addon GDExtension before running the workload.
 
-The checked distributions contain 228 files. Their current identities are:
+The checked distributions contain 143 files. Their current identities are:
 
 | Runtime image | Bytes | Distribution SHA-256 |
 | --- | ---: | --- |
-| Windows x86-64 template debug | 22,285,950 | `a1b71307c27c553d51715ebc02800d9a3ab98fa08dda00ce5c873ae0d80e16cb` |
-| Windows x86-64 template release | 22,237,310 | `8fc8ed16354c8fbde7e3a78fce2c938041e3c7f7c31c16a85283a7392164a578` |
+| Windows x86-64 template debug | 3,922,766 | `0ec14d15979972d8ab60ea119074d29653a74be78bd24e2c5fa2bdbcc54a66f3` |
+| Windows x86-64 template release | 3,874,126 | `7c78903886d65ce89b2421193142cb21e7a0bd8be6b7df9d269bb055e73d7966` |
 
 These are clean-install test-image identities, not the final reproducible
 release artifact. PQ4 owns the release artifact definition.

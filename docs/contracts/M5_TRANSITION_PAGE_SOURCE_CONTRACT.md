@@ -79,7 +79,7 @@ single-face transition seam, multi-face edge, and corner closure test.
 The locked debug/release aggregate hash is:
 
 ```text
-7717f75423306cca
+82a8664caa10e5f6
 ```
 
 The integrated performance workload loads 17 real content-addressed files:

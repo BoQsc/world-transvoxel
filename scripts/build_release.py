@@ -20,7 +20,7 @@ from wt_script_common import (
 )
 
 
-RELEASE_VERSION = "1.0.0"
+RELEASE_VERSION = "1.0.1"
 RELEASE_NAME = f"world-transvoxel-{RELEASE_VERSION}-windows-x86_64"
 DEFAULT_RELEASE_ROOT = REPO_ROOT / "artifacts" / "release" / RELEASE_NAME
 NOTICE_PATHS = (
@@ -103,7 +103,7 @@ def materialize_release(destination: Path) -> dict[str, object]:
     require_supported_python()
     host = host_platform()
     if (host.godot_platform, host.godot_arch) != ("windows", "x86_64"):
-        raise RuntimeError("World Transvoxel 1.0 release is Windows x86-64 only.")
+        raise RuntimeError("World Transvoxel 1.0.x release is Windows x86-64 only.")
     if read_version() != RELEASE_VERSION:
         raise RuntimeError("Release script and addon versions disagree.")
     destination = destination.resolve()

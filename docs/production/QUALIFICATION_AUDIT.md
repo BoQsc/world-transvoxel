@@ -2,7 +2,7 @@
 
 Date: 2026-06-22
 
-Status: PQ4 complete; World Transvoxel 1.0.0 production release qualified
+Status: PQ4 complete; World Transvoxel 1.0.1 corrective release qualified
 
 ## Result
 
@@ -14,10 +14,16 @@ meshing, bounded render/collision application, and shutdown.
 
 The root `world_transvoxel/` scene proves that path as thin application code,
 and the isolated PQ3 project proves that the addon does not depend on that
-repository integration. PQ4 proves that the exact installed 1.0.0 directory is
+repository integration. PQ4 proves that the exact installed 1.0.1 directory is
 reproducible, self-contained, licensed, documented, and passes that same
 matrix. The official MIT-backed addon is production-ready within its recorded
 support limits.
+
+Version 1.0.0 is withdrawn. The corrective 1.0.1 qualification adds explicit
+Godot clockwise render winding, matching one-sided collision winding, outside
+ray proof, canonical primary/secondary transition deformation, convex refined
+corner closure, post-deformation outward-winding checks, and full-world
+mixed-LOD manifold validation.
 
 ## Workflow audit
 
@@ -36,7 +42,7 @@ support limits.
 | telemetry | bounded binary trace and 60-second orchestration soak complete | immutable public runtime/application metrics snapshot is checked by PQ3 |
 | shutdown | queued Godot application teardown is tested | source, compacted, and migrated clean-project worlds stop with zero retained resources |
 
-The addon version is `1.0.0` with milestone identity `PQ4`.
+The addon version is `1.0.1` with milestone identity `PQ4`.
 
 ## Finite qualification gates
 
@@ -127,7 +133,7 @@ Status: complete on 2026-06-22.
 
 Exit: passed. Reference evidence is
 `docs/evidence/pq4_release_windows_x86_64.json`; the ignored local release is
-`artifacts/release/world-transvoxel-1.0.0-windows-x86_64/`.
+`artifacts/release/world-transvoxel-1.0.1-windows-x86_64/`.
 
 M6 compute acceleration is optional and outside these required gates. The
 independent 0BSD backend may now enter its separate qualification.

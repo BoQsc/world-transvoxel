@@ -117,7 +117,7 @@ owner interface.
 The locked aggregate hash is:
 
 ```text
-f5509061d2cbc71f70f3ba4f493ad124aa454fe95a9915ec567a05601d6c6b70
+6a48df5bc3b9b3111e054893fcae59be6558ed5d82aeaf93d74ed4f8fc65bf4c
 ```
 
 This completes native support-page scheduling, pinning, cancellation, and

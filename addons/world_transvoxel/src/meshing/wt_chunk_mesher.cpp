@@ -1,10 +1,11 @@
 #include "meshing/wt_chunk_mesher.h"
 
+#include "meshing/wt_chunk_mesh_finalize.h"
 #include "meshing/wt_chunk_mesh_geometry.h"
+#include "meshing/wt_chunk_mesh_key.h"
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 
 namespace world_transvoxel {
 namespace {
@@ -21,37 +22,6 @@ struct WtFaceBasis {
 	WtIntegerVector w;
 	WtTransitionOrientation orientation;
 };
-
-std::size_t mix_hash(std::size_t hash, std::uint64_t value) noexcept {
-	value ^= value >> 30;
-	value *= 0xbf58476d1ce4e5b9ULL;
-	value ^= value >> 27;
-	value *= 0x94d049bb133111ebULL;
-	value ^= value >> 31;
-	return hash ^ static_cast<std::size_t>(value + 0x9e3779b97f4a7c15ULL +
-		(hash << 6) + (hash >> 2));
-}
-
-std::uint32_t float_bits(float value) noexcept {
-	std::uint32_t bits = 0;
-	static_assert(sizeof(bits) == sizeof(value));
-	std::memcpy(&bits, &value, sizeof(bits));
-	return bits;
-}
-
-WtChunkVertexKey make_vertex_key(const WtCellVertex &vertex) noexcept {
-	return {
-		{
-			float_bits(vertex.position.x),
-			float_bits(vertex.position.y),
-			float_bits(vertex.position.z),
-			float_bits(vertex.normal.x),
-			float_bits(vertex.normal.y),
-			float_bits(vertex.normal.z),
-		},
-		vertex.material,
-	};
-}
 
 WtGridPoint add(const WtGridPoint &point, const WtIntegerVector &vector, std::int64_t scale) noexcept {
 	return {
@@ -90,22 +60,13 @@ WtChunkMeshingStatus get_scalar_sample(
 	return WtChunkMeshingStatus::Ok;
 }
 
-WtChunkMeshingStatus get_cell_sample(
+WtChunkMeshingStatus calculate_cell_sample(
 	const WtGridPoint &point,
 	std::int64_t gradient_step,
 	const WtChunkSampleSource &source,
 	WtChunkMeshingScratch &scratch,
 	WtCellSample &output
 ) {
-	const auto found = scratch.cell_samples.find(point);
-	if (found != scratch.cell_samples.end()) {
-		output = found->second;
-		return WtChunkMeshingStatus::Ok;
-	}
-	if (scratch.cell_samples.size() >= kWtMaximumCachedCellSamples) {
-		return WtChunkMeshingStatus::SampleCacheOverflow;
-	}
-
 	WtScalarSample center;
 	WtScalarSample negative_x;
 	WtScalarSample positive_x;
@@ -141,6 +102,30 @@ WtChunkMeshingStatus get_cell_sample(
 		},
 		center.material,
 	};
+	return WtChunkMeshingStatus::Ok;
+}
+
+WtChunkMeshingStatus get_cell_sample(
+	const WtGridPoint &point,
+	std::int64_t gradient_step,
+	const WtChunkSampleSource &source,
+	WtChunkMeshingScratch &scratch,
+	WtCellSample &output
+) {
+	const auto found = scratch.cell_samples.find(point);
+	if (found != scratch.cell_samples.end()) {
+		output = found->second;
+		return WtChunkMeshingStatus::Ok;
+	}
+	if (scratch.cell_samples.size() >= kWtMaximumCachedCellSamples) {
+		return WtChunkMeshingStatus::SampleCacheOverflow;
+	}
+	const WtChunkMeshingStatus status = calculate_cell_sample(
+		point, gradient_step, source, scratch, output
+	);
+	if (status != WtChunkMeshingStatus::Ok) {
+		return status;
+	}
 	scratch.cell_samples.emplace(point, output);
 	return WtChunkMeshingStatus::Ok;
 }
@@ -228,8 +213,14 @@ WtChunkMeshingStatus append_cell_mesh(
 			vertex.position = wt_canonical_chunk_position(
 				vertex, endpoint_positions, samples, isovalue
 			);
+			vertex.normal = wt_interpolated_mesh_normal(
+				samples[vertex.endpoint_a],
+				samples[vertex.endpoint_b],
+				isovalue
+			);
 			vertex.position = wt_deform_chunk_position(
 				vertex.position,
+				vertex.normal,
 				deformation_mask,
 				cell_size,
 				width,
@@ -239,7 +230,7 @@ WtChunkMeshingStatus append_cell_mesh(
 			vertex.position = wt_snap_chunk_position(vertex.position);
 			vertex.endpoint_a = 0;
 			vertex.endpoint_b = 0;
-			const WtChunkVertexKey key = make_vertex_key(vertex);
+			const WtChunkVertexKey key = wt_make_chunk_vertex_key(vertex);
 			const auto found = scratch.vertices.find(key);
 			if (found != scratch.vertices.end()) {
 				mapped[source_index] = found->second;
@@ -373,6 +364,7 @@ WtChunkMeshingStatus mesh_transition_face(
 			);
 			WtTransitionCellInput cell_input;
 			std::array<WtVec3, kWtTransitionTopologySampleCount> endpoint_positions{};
+			std::array<WtGridPoint, 9> full_sample_world_positions{};
 			cell_input.isovalue = input.isovalue;
 			cell_input.full_resolution_origin = to_vec3(local_origin);
 			cell_input.sample_spacing = static_cast<float>(fine_spacing);
@@ -392,6 +384,7 @@ WtChunkMeshingStatus mesh_transition_face(
 					};
 					const unsigned int sample_index =
 						static_cast<unsigned int>(v_sample * 3 + u_sample);
+					full_sample_world_positions[sample_index] = sample_world;
 					endpoint_positions[sample_index] = to_vec3(sample_local);
 					const WtChunkMeshingStatus sample_status = get_cell_sample(
 						sample_world,
@@ -411,10 +404,20 @@ WtChunkMeshingStatus mesh_transition_face(
 				endpoint_samples[sample_index] = cell_input.samples[sample_index];
 			}
 			for (unsigned int alias_index = 0; alias_index < aliases.size(); ++alias_index) {
+				const unsigned int sample_index = aliases[alias_index];
 				endpoint_positions[9 + alias_index] = add(
-					endpoint_positions[aliases[alias_index]], basis.w, width
+					endpoint_positions[sample_index], basis.w, width
 				);
-				endpoint_samples[9 + alias_index] = cell_input.samples[aliases[alias_index]];
+				const WtChunkMeshingStatus sample_status = calculate_cell_sample(
+					full_sample_world_positions[sample_index],
+					coarse_spacing,
+					source,
+					scratch,
+					endpoint_samples[9 + alias_index]
+				);
+				if (sample_status != WtChunkMeshingStatus::Ok) {
+					return sample_status;
+				}
 			}
 			WtCellMesh cell_mesh;
 			const WtCellStatus cell_status = backend.mesh_transition_cell(
@@ -476,25 +479,6 @@ void WtChunkMeshResult::clear() noexcept {
 	for (WtChunkMeshBuffer &transition : transitions) {
 		transition.clear();
 	}
-}
-
-std::size_t WtGridPointHash::operator()(const WtGridPoint &point) const noexcept {
-	std::size_t hash = 0;
-	hash = mix_hash(hash, static_cast<std::uint64_t>(point.x));
-	hash = mix_hash(hash, static_cast<std::uint64_t>(point.y));
-	return mix_hash(hash, static_cast<std::uint64_t>(point.z));
-}
-
-bool WtChunkVertexKey::operator==(const WtChunkVertexKey &other) const noexcept {
-	return vector_bits == other.vector_bits && material == other.material;
-}
-
-std::size_t WtChunkVertexKeyHash::operator()(const WtChunkVertexKey &key) const noexcept {
-	std::size_t hash = 0;
-	for (std::uint32_t bits : key.vector_bits) {
-		hash = mix_hash(hash, bits);
-	}
-	return mix_hash(hash, key.material);
 }
 
 WtChunkMeshingScratch::WtChunkMeshingScratch() {
@@ -559,6 +543,12 @@ WtChunkMeshingStatus WtChunkMesher::mesh(
 			status = mesh_transition_face(
 				face, input, source, backend_, output, scratch
 			);
+		}
+	}
+	if (status == WtChunkMeshingStatus::Ok) {
+		wt_finalize_deformed_triangles(output.regular);
+		for (WtChunkMeshBuffer &transition : output.transitions) {
+			wt_finalize_deformed_triangles(transition);
 		}
 	}
 	if (status != WtChunkMeshingStatus::Ok) {

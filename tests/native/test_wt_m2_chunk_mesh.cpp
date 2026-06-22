@@ -240,6 +240,53 @@ void test_multi_face_gallery(
 	);
 }
 
+void test_convex_refined_corner_gallery(
+	const wt::WtChunkMesher &mesher,
+	wt::WtChunkMeshingScratch &scratch,
+	std::uint64_t &hash
+) {
+	SphereSource source;
+	source.center = { 32, 16, 32 };
+	source.radius = 12.25;
+	std::map<Edge, unsigned int> edge_counts;
+	const std::array<std::pair<wt::WtChunkKey, std::uint8_t>, 3> coarse = {{
+		{ { 0, 0, 0, 1 }, 0 },
+		{ { 1, 0, 0, 1 }, wt::wt_face_bit(wt::WtChunkFace::PositiveZ) },
+		{ { 0, 0, 1, 1 }, wt::wt_face_bit(wt::WtChunkFace::PositiveX) },
+	}};
+	for (const auto &[key, mask] : coarse) {
+		wt::WtChunkMeshResult result;
+		check(mesher.mesh({ key, mask, 0.0F, 0.25F }, source, result, scratch) ==
+			wt::WtChunkMeshingStatus::Ok,
+			"convex-corner coarse chunk failed");
+		validate_buffer(result.regular, "invalid convex-corner coarse regular mesh");
+		add_result_edges(result, edge_counts);
+		hash_result(hash, result);
+	}
+	for (std::int32_t z = 2; z < 4; ++z) {
+		for (std::int32_t y = 0; y < 2; ++y) {
+			for (std::int32_t x = 2; x < 4; ++x) {
+				wt::WtChunkMeshResult result;
+				check(mesher.mesh(
+					{ { x, y, z, 0 }, 0, 0.0F, 0.25F },
+					source,
+					result,
+					scratch
+				) == wt::WtChunkMeshingStatus::Ok,
+					"convex-corner fine chunk failed");
+				validate_buffer(result.regular,
+					"invalid convex-corner fine regular mesh");
+				add_result_edges(result, edge_counts);
+				hash_result(hash, result);
+			}
+		}
+	}
+	check_closed_surface(
+		edge_counts,
+		"convex refined-region LOD corner is open"
+	);
+}
+
 void test_errors(const wt::WtChunkMesher &mesher, wt::WtChunkMeshingScratch &scratch) {
 	LinearSource source;
 	wt::WtChunkMeshResult output;
@@ -313,9 +360,10 @@ int main() {
 	test_multi_face_gallery(
 		mesher, scratch, hash, { -1, -1, -1, 1 }, { 1, 1, 1 }
 	);
+	test_convex_refined_corner_gallery(mesher, scratch, hash);
 	test_errors(mesher, scratch);
 
-	constexpr std::uint64_t expected_hash = 0x4e436f833896a1bcULL;
+	constexpr std::uint64_t expected_hash = 0x79140621c205ca23ULL;
 	check(hash == expected_hash, "M2 chunk aggregate hash mismatch");
 	std::printf("M2_MESH_HASH %016llx\n", static_cast<unsigned long long>(hash));
 	if (failure_count != 0) {
@@ -323,6 +371,6 @@ int main() {
 		return 1;
 	}
 	std::printf("M2_CHUNK_MESH_PASS same_lod=3 transition_faces=6 edge_galleries=12 "
-		"corner_galleries=9\n");
+		"corner_galleries=9 convex_refined_corners=1 winding=outward\n");
 	return 0;
 }

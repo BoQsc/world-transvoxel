@@ -128,7 +128,10 @@ Exit: compute is enabled only where end-to-end measurements beat CPU.
 
 ## Production finish line
 
-Status: complete on 2026-06-22 for World Transvoxel 1.0.0.
+Status: complete on 2026-06-22 for corrective World Transvoxel 1.0.1.
+
+World Transvoxel 1.0.0 is withdrawn due to incorrect Godot-facing winding and
+incomplete convex mixed-LOD corner deformation.
 
 Finite qualification gates are tracked in
 `docs/production/QUALIFICATION_AUDIT.md`:
