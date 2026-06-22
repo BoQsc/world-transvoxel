@@ -100,5 +100,5 @@ fixture through the native format writer before running Godot. No binary
 fixture is hand-maintained or decoded in GDScript.
 
 PQ0 is complete when this contract and the configuration contract pass
-together. The next finite gate is PQ1 read-only streaming of real non-empty
-baked pages through the same lifecycle.
+together. PQ1 regular and transition streaming use this same lifecycle; its
+remaining gate is the root example and exit audit.

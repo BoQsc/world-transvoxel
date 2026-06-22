@@ -403,6 +403,17 @@ bool WtAsyncStorageService::has_page(const WtChunkKey &key) const noexcept {
 	return open_ && manifest_.find_page(key) != nullptr;
 }
 
+std::vector<WtChunkKey> WtAsyncStorageService::page_keys() const {
+	std::lock_guard<std::mutex> lock(mutex_);
+	std::vector<WtChunkKey> keys;
+	if (!open_) return keys;
+	keys.reserve(manifest_.pages.size());
+	for (const WtWorldPageIndexEntry &entry : manifest_.pages) {
+		keys.push_back(entry.key);
+	}
+	return keys;
+}
+
 std::uint64_t WtAsyncStorageService::source_revision() const noexcept {
 	std::lock_guard<std::mutex> lock(mutex_);
 	return open_ ? manifest_.source_revision : 0;

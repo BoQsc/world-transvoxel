@@ -662,6 +662,8 @@ production_read_only_runtime_sources = [
     "addons/world_transvoxel/src/storage/wt_hash256.cpp",
     "addons/world_transvoxel/src/storage/wt_storage_page_cache.cpp",
     "addons/world_transvoxel/src/storage/wt_world_manifest.cpp",
+    "addons/world_transvoxel/src/streaming/wt_balanced_lod_planner.cpp",
+    "addons/world_transvoxel/src/streaming/wt_lod_map.cpp",
     "addons/world_transvoxel/src/streaming/wt_multi_viewer_desired_set.cpp",
     "addons/world_transvoxel/src/streaming/wt_stream_scheduler.cpp",
 ]
@@ -696,6 +698,23 @@ production_streaming_test = native_test_env.Program(
     ),
     source=[
         "tests/native/test_wt_production_streaming.cpp",
+        "tests/native/wt_production_world_fixture.cpp",
+        "addons/world_transvoxel/src/bake/wt_chunk_baker.cpp",
+    ] + production_read_only_runtime_sources,
+)
+
+production_lod_streaming_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_production_lod_streaming.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_production_lod_streaming.cpp",
         "tests/native/wt_production_world_fixture.cpp",
         "addons/world_transvoxel/src/bake/wt_chunk_baker.cpp",
     ] + production_read_only_runtime_sources,
@@ -895,6 +914,11 @@ if env["platform"] == "windows":
     )
 
     env.AddPostAction(
+        production_lod_streaming_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
+    env.AddPostAction(
         storage_tool,
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
@@ -932,6 +956,7 @@ Default([
     production_config_test,
     production_lifecycle_test,
     production_streaming_test,
+    production_lod_streaming_test,
     storage_tool,
     bake_tool,
 ])

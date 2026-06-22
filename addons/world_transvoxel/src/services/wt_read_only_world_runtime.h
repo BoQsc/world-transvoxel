@@ -3,6 +3,7 @@
 #include "physics/wt_collision_apply_queue.h"
 #include "render/wt_render_apply_queue.h"
 #include "services/wt_runtime_config.h"
+#include "streaming/wt_balanced_lod_planner.h"
 #include "streaming/wt_multi_viewer_desired_set.h"
 
 #include <atomic>
@@ -64,6 +65,7 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t mesh_jobs = 0;
 	std::uint64_t storage_completions = 0;
 	std::uint64_t mesh_completions = 0;
+	std::uint64_t transition_mesh_completions = 0;
 	std::uint64_t published_events = 0;
 	std::uint64_t rejected_events = 0;
 };
@@ -84,7 +86,8 @@ public:
 	bool valid() const noexcept;
 	WtReadOnlyRuntimeStatus update_viewer(
 		const WtViewerSnapshot &snapshot,
-		std::uint32_t radius_chunks
+		std::uint32_t radius_chunks,
+		std::uint8_t maximum_lod = 0
 	);
 	WtReadOnlyRuntimeStatus remove_viewer(
 		std::uint64_t viewer_id,
@@ -103,6 +106,7 @@ private:
 		ViewerEventKind kind = ViewerEventKind::Update;
 		WtViewerSnapshot snapshot;
 		std::uint32_t radius_chunks = 0;
+		std::uint8_t maximum_lod = 0;
 	};
 
 	bool enqueue_viewer_event(const ViewerEvent &event);
@@ -112,10 +116,6 @@ private:
 	bool process_mesh_completions();
 	bool publish_delta(const WtDesiredSetDelta &delta);
 	bool push_publication(WtReadOnlyPublication publication);
-	bool build_demands(
-		const ViewerEvent &event,
-		std::vector<WtViewerChunkDemand> &demands
-	) const;
 	void notify_work() noexcept;
 	void set_failure(WtReadOnlyRuntimeStatus status) noexcept;
 
@@ -142,6 +142,10 @@ private:
 	std::uint64_t wake_sequence_ = 0;
 
 	std::unique_ptr<WtMultiViewerDesiredSet> desired_;
+	std::unique_ptr<WtBalancedLodPlanner> lod_planner_;
+	std::vector<WtLodPlannerViewer> planner_viewers_;
+	WtBalancedLodPlan current_plan_;
+	std::uint64_t plan_revision_ = 0;
 	std::unique_ptr<WtStreamScheduler> scheduler_;
 	std::unique_ptr<WtChunkApplicationService> application_;
 	std::unique_ptr<WtStoragePageCache> page_cache_;

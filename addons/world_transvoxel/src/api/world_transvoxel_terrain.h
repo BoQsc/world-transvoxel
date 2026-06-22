@@ -61,7 +61,8 @@ public:
 		std::int64_t viewer_id,
 		std::int64_t revision,
 		const godot::Vector3 &position,
-		std::int64_t radius_chunks
+		std::int64_t radius_chunks,
+		std::int64_t maximum_lod = 0
 	);
 	bool remove_viewer(std::int64_t viewer_id, std::int64_t revision);
 	std::int64_t get_rendered_chunk_count() const noexcept;

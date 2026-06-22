@@ -48,7 +48,8 @@ public:
 	void shutdown_blocking() noexcept;
 	WtReadOnlyRuntimeStatus update_viewer(
 		const WtViewerSnapshot &snapshot,
-		std::uint32_t radius_chunks
+		std::uint32_t radius_chunks,
+		std::uint8_t maximum_lod = 0
 	);
 	WtReadOnlyRuntimeStatus remove_viewer(
 		std::uint64_t viewer_id,

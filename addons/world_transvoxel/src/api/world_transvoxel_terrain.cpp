@@ -130,9 +130,10 @@ void WorldTransvoxelTerrain::_bind_methods() {
 	godot::ClassDB::bind_method(
 		godot::D_METHOD(
 			"update_viewer", "viewer_id", "revision", "position",
-			"radius_chunks"
+			"radius_chunks", "maximum_lod"
 		),
-		&WorldTransvoxelTerrain::update_viewer
+		&WorldTransvoxelTerrain::update_viewer,
+		DEFVAL(0)
 	);
 	godot::ClassDB::bind_method(
 		godot::D_METHOD("remove_viewer", "viewer_id", "revision"),

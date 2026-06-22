@@ -10,8 +10,8 @@ official MIT meshing, real Godot render/physics application budgets, versioned
 binary telemetry, and checked fixed-duration soak evidence. Production
 qualification is the only active phase; its workflow audit and schema-1
 runtime configuration plus asynchronous manifest lifecycle are complete. PQ1
-now has a real LOD0 page-to-Godot coordinator; balanced multi-LOD planning and
-the root example remain.
+now has real LOD0 and balanced multi-LOD transition page-to-Godot
+coordination; the root example and PQ1 exit audit remain.
 
 ## 1. Authority of this document
 
@@ -1236,9 +1236,9 @@ Ordered work:
    native control thread.
 4. Complete at LOD0: connect non-empty baked pages through native viewer
    demand, page I/O, official MIT meshing, caches, and bounded Godot sinks.
-5. Next: add balanced multi-LOD viewer planning and drive transition pages
+5. Complete: add balanced multi-LOD viewer planning and drive transition pages
    through the same production coordinator.
-6. Build a clean-install integration project and real baked-world scene using
+6. Next: build the root integration example and real baked-world scene using
    the official MIT backend.
 7. Run a fixed-duration full-world Godot soak with real page I/O, official MIT
    meshing, render resources, collision resources, edits, save/reload, and

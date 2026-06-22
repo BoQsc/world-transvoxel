@@ -179,10 +179,19 @@ int write_godot_fixture(const std::filesystem::path &root) {
 		std::fprintf(stderr, "PRODUCTION_STREAMING_FIXTURE_FAIL\n");
 		return 1;
 	}
+	std::filesystem::path transition_path;
+	if (!wtt::wt_write_production_transition_fixture(
+			root, 8001, 13, transition_path
+		)) {
+		std::fprintf(stderr, "PRODUCTION_TRANSITION_FIXTURE_FAIL\n");
+		return 1;
+	}
 	std::printf("PRODUCTION_LIFECYCLE_FIXTURE_PASS %s\n",
 		world_path.string().c_str());
 	std::printf("PRODUCTION_STREAMING_FIXTURE_PASS %s\n",
 		streaming_path.string().c_str());
+	std::printf("PRODUCTION_TRANSITION_FIXTURE_PASS %s\n",
+		transition_path.string().c_str());
 	return 0;
 }
 

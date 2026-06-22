@@ -28,6 +28,9 @@ EXPECTED_LIFECYCLE_HASH = (
 EXPECTED_STREAMING_HASH = (
     "39db05c67fc2f4b8d8beaab2e7da927ae968efb3d75118bcd80c5523116d9b3b"
 )
+EXPECTED_LOD_STREAMING_HASH = (
+    "cf0d7ca3f67013d99d0f909368d179aa6878a0bbd7b57ee409ac5c8994681102"
+)
 LIFECYCLE_FIXTURE_ROOT = REPO_ROOT / "build" / "production-lifecycle-fixture"
 
 
@@ -88,8 +91,10 @@ def prepare_lifecycle_fixture() -> None:
         result.returncode != 0
         or "PRODUCTION_LIFECYCLE_FIXTURE_PASS" not in combined
         or "PRODUCTION_STREAMING_FIXTURE_PASS" not in combined
+        or "PRODUCTION_TRANSITION_FIXTURE_PASS" not in combined
         or not (LIFECYCLE_FIXTURE_ROOT / "world.wtworld").is_file()
         or not (LIFECYCLE_FIXTURE_ROOT / "streaming.wtworld").is_file()
+        or not (LIFECYCLE_FIXTURE_ROOT / "transition.wtworld").is_file()
     ):
         raise RuntimeError("Production lifecycle fixture generation failed.")
 
@@ -147,6 +152,12 @@ def run_engine_tests(engine: Path, name: str) -> None:
         "res://tests/godot/production_streaming_test.gd",
         "PRODUCTION_GODOT_STREAMING_PASS",
     )
+    run_godot_test(
+        engine,
+        f"{name}-lod-streaming",
+        "res://tests/godot/production_lod_streaming_test.gd",
+        "PRODUCTION_GODOT_LOD_STREAMING_PASS",
+    )
 
 
 def run_godot_matrix() -> None:
@@ -198,12 +209,19 @@ def test_production_qualification(
             "PRODUCTION_STREAMING_HASH",
             EXPECTED_STREAMING_HASH,
         )
+        run_hashed_native(
+            configuration,
+            "test_wt_production_lod_streaming",
+            "PRODUCTION_LOD_STREAMING_PASS",
+            "PRODUCTION_LOD_STREAMING_HASH",
+            EXPECTED_LOD_STREAMING_HASH,
+        )
     prepare_lifecycle_fixture()
     run_godot_matrix()
     test_m5(skip_build=True, skip_engine_download=skip_engine_download)
     print(
-        "Production qualification configuration, lifecycle, and LOD0 "
-        "read-only streaming passed with the complete M5 regression suite."
+        "Production qualification configuration, lifecycle, balanced multi-LOD "
+        "read-only streaming, and complete M5 regression suite passed."
     )
 
 

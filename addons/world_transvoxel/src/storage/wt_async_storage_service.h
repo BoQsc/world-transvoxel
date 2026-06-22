@@ -102,6 +102,7 @@ public:
 
 	bool is_open() const noexcept;
 	bool has_page(const WtChunkKey &key) const noexcept;
+	std::vector<WtChunkKey> page_keys() const;
 	std::uint64_t source_revision() const noexcept;
 	std::uint64_t world_revision() const noexcept;
 	std::size_t page_count() const noexcept;

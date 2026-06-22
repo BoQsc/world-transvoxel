@@ -26,49 +26,18 @@ bool valid_radius(std::uint32_t radius, std::uint64_t capacity) noexcept {
 		width * width <= capacity / width;
 }
 
-bool chunk_coordinate(
-	double position,
-	std::int32_t &coordinate
-) noexcept {
-	if (!std::isfinite(position)) return false;
-	const double value = std::floor(
-		position / static_cast<double>(kWtChunkCellsPerAxis)
-	);
-	if (value < static_cast<double>(std::numeric_limits<std::int32_t>::min()) ||
-		value > static_cast<double>(std::numeric_limits<std::int32_t>::max())) {
-		return false;
-	}
-	coordinate = static_cast<std::int32_t>(value);
-	return true;
-}
-
-double axis_distance(double point, double minimum, double maximum) noexcept {
-	if (point < minimum) return minimum - point;
-	if (point > maximum) return point - maximum;
-	return 0.0;
-}
-
-double distance_to_chunk(
-	const WtViewerSnapshot &viewer,
+const WtLodMapEntry *find_plan_entry(
+	const std::vector<WtLodMapEntry> &entries,
 	const WtChunkKey &key
 ) noexcept {
-	const WtChunkBounds bounds = wt_chunk_bounds(key);
-	const double dx = axis_distance(
-		viewer.x,
-		static_cast<double>(bounds.minimum.x),
-		static_cast<double>(bounds.maximum.x)
+	const auto iterator = std::lower_bound(
+		entries.begin(), entries.end(), key,
+		[](const WtLodMapEntry &entry, const WtChunkKey &value) {
+			return entry.key < value;
+		}
 	);
-	const double dy = axis_distance(
-		viewer.y,
-		static_cast<double>(bounds.minimum.y),
-		static_cast<double>(bounds.maximum.y)
-	);
-	const double dz = axis_distance(
-		viewer.z,
-		static_cast<double>(bounds.minimum.z),
-		static_cast<double>(bounds.maximum.z)
-	);
-	return std::sqrt(dx * dx + dy * dy + dz * dz);
+	return iterator != entries.end() && iterator->key == key ? &*iterator :
+		nullptr;
 }
 
 } // namespace
@@ -86,17 +55,19 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 		config_.active_chunk_capacity
 	);
 	const std::size_t viewers = static_cast<std::size_t>(config_.viewer_capacity);
-	const std::size_t per_viewer = static_cast<std::size_t>(
-		config_.demand_capacity_per_viewer
-	);
 	desired_ = std::make_unique<WtMultiViewerDesiredSet>(
 		WtMultiViewerDesiredSetLimits {
-			viewers,
-			per_viewer,
-			viewers * per_viewer,
+			1,
+			active,
+			active,
 			active,
 		}
 	);
+	lod_planner_ = std::make_unique<WtBalancedLodPlanner>(
+		active,
+		storage_.page_keys()
+	);
+	planner_viewers_.reserve(viewers);
 	scheduler_ = std::make_unique<WtStreamScheduler>(
 		active, active, active, viewers
 	);
@@ -134,7 +105,7 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 		16U
 	);
 	publication_slots_.resize(publication_capacity);
-	valid_ = desired_->valid() && page_cache_->valid() &&
+	valid_ = desired_->valid() && lod_planner_->valid() && page_cache_->valid() &&
 		resource_cache_->valid() && desired_runtime_->valid() &&
 		page_runtime_->valid();
 	if (!valid_) {
@@ -152,18 +123,21 @@ bool WtReadOnlyWorldRuntime::valid() const noexcept {
 
 WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::update_viewer(
 	const WtViewerSnapshot &snapshot,
-	std::uint32_t radius_chunks
+	std::uint32_t radius_chunks,
+	std::uint8_t maximum_lod
 ) {
 	if (!valid_ || snapshot.id == 0 || snapshot.revision == 0 ||
 		!std::isfinite(snapshot.x) || !std::isfinite(snapshot.y) ||
 		!std::isfinite(snapshot.z) ||
-		!valid_radius(radius_chunks, config_.demand_capacity_per_viewer)) {
+		!valid_radius(radius_chunks, config_.demand_capacity_per_viewer) ||
+		maximum_lod > kWtMaximumLod) {
 		return WtReadOnlyRuntimeStatus::InvalidViewer;
 	}
 	return enqueue_viewer_event({
 		ViewerEventKind::Update,
 		snapshot,
 		radius_chunks,
+		maximum_lod,
 	}) ? WtReadOnlyRuntimeStatus::Ok :
 		WtReadOnlyRuntimeStatus::ViewerQueueFull;
 }
@@ -178,7 +152,7 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::remove_viewer(
 	WtViewerSnapshot snapshot;
 	snapshot.id = viewer_id;
 	snapshot.revision = revision;
-	return enqueue_viewer_event({ ViewerEventKind::Remove, snapshot, 0 }) ?
+	return enqueue_viewer_event({ ViewerEventKind::Remove, snapshot, 0, 0 }) ?
 		WtReadOnlyRuntimeStatus::Ok :
 		WtReadOnlyRuntimeStatus::ViewerQueueFull;
 }
@@ -212,67 +186,6 @@ bool WtReadOnlyWorldRuntime::enqueue_viewer_event(
 	return true;
 }
 
-bool WtReadOnlyWorldRuntime::build_demands(
-	const ViewerEvent &event,
-	std::vector<WtViewerChunkDemand> &demands
-) const {
-	demands.clear();
-	std::int32_t center_x = 0;
-	std::int32_t center_y = 0;
-	std::int32_t center_z = 0;
-	if (!chunk_coordinate(event.snapshot.x, center_x) ||
-		!chunk_coordinate(event.snapshot.y, center_y) ||
-		!chunk_coordinate(event.snapshot.z, center_z)) {
-		return false;
-	}
-	const std::int64_t radius = event.radius_chunks;
-	const WtCollisionPolicy policy {
-		kWtDefaultCollisionThinRatioSquared,
-		config_.collision_activation_distance,
-		config_.collision_deactivation_distance,
-	};
-	for (std::int64_t z = -radius; z <= radius; ++z) {
-		for (std::int64_t y = -radius; y <= radius; ++y) {
-			for (std::int64_t x = -radius; x <= radius; ++x) {
-				const std::int64_t key_x = static_cast<std::int64_t>(center_x) + x;
-				const std::int64_t key_y = static_cast<std::int64_t>(center_y) + y;
-				const std::int64_t key_z = static_cast<std::int64_t>(center_z) + z;
-				if (key_x < std::numeric_limits<std::int32_t>::min() ||
-					key_x > std::numeric_limits<std::int32_t>::max() ||
-					key_y < std::numeric_limits<std::int32_t>::min() ||
-					key_y > std::numeric_limits<std::int32_t>::max() ||
-					key_z < std::numeric_limits<std::int32_t>::min() ||
-					key_z > std::numeric_limits<std::int32_t>::max()) {
-					continue;
-				}
-				const WtChunkKey key {
-					static_cast<std::int32_t>(key_x),
-					static_cast<std::int32_t>(key_y),
-					static_cast<std::int32_t>(key_z),
-					0,
-				};
-				if (!storage_.has_page(key)) continue;
-				const WtDesiredChunk *current = desired_->find_desired(key);
-				const WtCollisionRequirement collision =
-					wt_evaluate_collision_requirement(
-						policy,
-						current != nullptr && current->collision_required,
-						distance_to_chunk(event.snapshot, key)
-					);
-				if (collision == WtCollisionRequirement::Invalid) return false;
-				const std::int64_t distance_squared = x * x + y * y + z * z;
-				demands.push_back({
-					key,
-					std::numeric_limits<std::int32_t>::max() -
-						static_cast<std::int32_t>(distance_squared),
-					collision == WtCollisionRequirement::Required,
-				});
-			}
-		}
-	}
-	return true;
-}
-
 bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	ViewerEvent event;
 	{
@@ -281,35 +194,119 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		event = viewer_events_.front();
 		viewer_events_.erase(viewer_events_.begin());
 	}
-	WtMultiViewerDesiredSet candidate = *desired_;
-	WtDesiredSetDelta delta;
-	WtMultiViewerDesiredSetStatus desired_status;
-	std::vector<WtViewerChunkDemand> demands;
+	std::vector<WtLodPlannerViewer> candidate_viewers = planner_viewers_;
+	const auto viewer = std::lower_bound(
+		candidate_viewers.begin(), candidate_viewers.end(), event.snapshot.id,
+		[](const WtLodPlannerViewer &item, std::uint64_t id) {
+			return item.snapshot.id < id;
+		}
+	);
 	if (event.kind == ViewerEventKind::Update) {
-		if (!build_demands(event, demands)) {
+		if (viewer != candidate_viewers.end() &&
+			viewer->snapshot.id == event.snapshot.id) {
+			if (event.snapshot.revision <= viewer->snapshot.revision) {
+				std::lock_guard<std::mutex> lock(metrics_mutex_);
+				++metrics_.rejected_events;
+				return true;
+			}
+			*viewer = {
+				event.snapshot, event.radius_chunks, event.maximum_lod
+			};
+		} else if (candidate_viewers.size() >= config_.viewer_capacity) {
+			std::lock_guard<std::mutex> lock(metrics_mutex_);
+			++metrics_.rejected_events;
+			return true;
+		} else {
+			candidate_viewers.insert(viewer, {
+				event.snapshot, event.radius_chunks, event.maximum_lod
+			});
+		}
+	} else {
+		if (viewer == candidate_viewers.end() ||
+			viewer->snapshot.id != event.snapshot.id ||
+			event.snapshot.revision <= viewer->snapshot.revision) {
 			std::lock_guard<std::mutex> lock(metrics_mutex_);
 			++metrics_.rejected_events;
 			return true;
 		}
-		desired_status = candidate.update_viewer(
-			event.snapshot,
-			demands,
-			delta
-		);
-	} else {
-		desired_status = candidate.remove_viewer(
-			event.snapshot.id,
-			event.snapshot.revision,
-			delta
-		);
+		candidate_viewers.erase(viewer);
 	}
-	if (desired_status != WtMultiViewerDesiredSetStatus::Ok) {
+
+	const WtCollisionPolicy collision_policy {
+		kWtDefaultCollisionThinRatioSquared,
+		config_.collision_activation_distance,
+		config_.collision_deactivation_distance,
+	};
+	WtBalancedLodPlan candidate_plan;
+	if (lod_planner_->plan(
+			candidate_viewers,
+			desired_->get_desired_chunks(),
+			collision_policy,
+			candidate_plan
+		) != WtBalancedLodPlannerStatus::Ok ||
+		plan_revision_ == std::numeric_limits<std::uint64_t>::max()) {
 		std::lock_guard<std::mutex> lock(metrics_mutex_);
 		++metrics_.rejected_events;
 		return true;
 	}
-	if (desired_runtime_->apply_delta(
-			delta,
+
+	WtMultiViewerDesiredSet candidate_desired = *desired_;
+	WtDesiredSetDelta delta;
+	WtViewerSnapshot plan_snapshot;
+	plan_snapshot.id = 1;
+	plan_snapshot.x = event.snapshot.x;
+	plan_snapshot.y = event.snapshot.y;
+	plan_snapshot.z = event.snapshot.z;
+	plan_snapshot.revision = plan_revision_ + 1;
+	if (candidate_desired.update_viewer(
+			plan_snapshot, candidate_plan.demands, delta
+		) != WtMultiViewerDesiredSetStatus::Ok) {
+		std::lock_guard<std::mutex> lock(metrics_mutex_);
+		++metrics_.rejected_events;
+		return true;
+	}
+
+	WtDesiredSetDelta transition_removals;
+	for (const WtLodMapEntry &current : current_plan_.entries) {
+		const WtLodMapEntry *next = find_plan_entry(
+			candidate_plan.entries, current.key
+		);
+		if (next == nullptr ||
+			next->transition_mask == current.transition_mask) continue;
+		transition_removals.removed.push_back(current.key);
+		const WtDesiredChunk *desired = candidate_desired.find_desired(
+			current.key
+		);
+		if (desired == nullptr) {
+			set_failure(WtReadOnlyRuntimeStatus::DesiredSetFailure);
+			return true;
+		}
+		delta.added.push_back(*desired);
+	}
+	if (!transition_removals.removed.empty()) {
+		delta.updated.erase(
+			std::remove_if(
+				delta.updated.begin(), delta.updated.end(),
+				[&](const WtDesiredChunk &item) {
+					return std::binary_search(
+						transition_removals.removed.begin(),
+						transition_removals.removed.end(),
+						item.key
+					);
+				}
+			),
+			delta.updated.end()
+		);
+		std::sort(delta.added.begin(), delta.added.end(),
+			[](const WtDesiredChunk &a, const WtDesiredChunk &b) {
+				return a.key < b.key;
+			}
+		);
+	}
+
+	const auto apply_delta = [&](const WtDesiredSetDelta &change) {
+		return desired_runtime_->apply_delta(
+			change,
 			storage_.source_revision(),
 			storage_.world_revision(),
 			*scheduler_,
@@ -317,17 +314,23 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			*resource_cache_,
 			*application_,
 			page_runtime_.get()
-		) != WtDesiredSetRuntimeStatus::Ok) {
+		) == WtDesiredSetRuntimeStatus::Ok;
+	};
+	if (!apply_delta(transition_removals) || !apply_delta(delta)) {
 		set_failure(WtReadOnlyRuntimeStatus::RuntimeDeltaFailure);
 		return true;
 	}
-	*desired_ = std::move(candidate);
-	if (!publish_delta(delta)) {
+	if (!publish_delta(transition_removals) || !publish_delta(delta)) {
 		if (!stop_requested_.load()) {
 			set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
 		}
 		return true;
 	}
+	const std::size_t planned_demand_count = candidate_plan.demands.size();
+	*desired_ = std::move(candidate_desired);
+	planner_viewers_ = std::move(candidate_viewers);
+	current_plan_ = std::move(candidate_plan);
+	plan_revision_ = plan_snapshot.revision;
 	for (const WtDesiredChunk &item : delta.updated) {
 		if (!item.collision_required) continue;
 		const WtChunkRecord *record = scheduler_->find_record(item.key);
@@ -354,7 +357,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		std::lock_guard<std::mutex> lock(metrics_mutex_);
 		if (event.kind == ViewerEventKind::Update) {
 			++metrics_.viewer_updates;
-			metrics_.planned_demands += demands.size();
+			metrics_.planned_demands += planned_demand_count;
 		} else {
 			++metrics_.viewer_removals;
 		}
@@ -432,8 +435,19 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 		progressed = true;
 		WtPageMeshingRuntimeStatus status;
 		if (job.stage == WtChunkJobStage::Sample) {
+			const WtLodMapEntry *entry = find_plan_entry(
+				current_plan_.entries, job.key
+			);
+			if (entry == nullptr) {
+				set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
+				break;
+			}
 			status = page_runtime_->begin_sample_job(
-				job, 0, storage_, *page_cache_, *scheduler_
+				job,
+				entry->transition_mask,
+				storage_,
+				*page_cache_,
+				*scheduler_
 			);
 			std::lock_guard<std::mutex> lock(metrics_mutex_);
 			++metrics_.sample_jobs;
@@ -526,6 +540,9 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 		}
 		std::lock_guard<std::mutex> lock(metrics_mutex_);
 		++metrics_.mesh_completions;
+		if (completion.mesh->transition_mask != 0) {
+			++metrics_.transition_mesh_completions;
+		}
 	}
 	return progressed;
 }

@@ -169,13 +169,14 @@ WtWorldLifecycleService::last_runtime_status() const noexcept {
 
 WtReadOnlyRuntimeStatus WtWorldLifecycleService::update_viewer(
 	const WtViewerSnapshot &snapshot,
-	std::uint32_t radius_chunks
+	std::uint32_t radius_chunks,
+	std::uint8_t maximum_lod
 ) {
 	std::lock_guard<std::mutex> lock(state_mutex_);
 	if (state_ != WtWorldLifecycleState::Running || !runtime_) {
 		return WtReadOnlyRuntimeStatus::NotRunning;
 	}
-	return runtime_->update_viewer(snapshot, radius_chunks);
+	return runtime_->update_viewer(snapshot, radius_chunks, maximum_lod);
 }
 
 WtReadOnlyRuntimeStatus WtWorldLifecycleService::remove_viewer(

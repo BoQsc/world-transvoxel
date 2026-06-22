@@ -14,11 +14,13 @@ bool WorldTransvoxelTerrain::update_viewer(
 	std::int64_t viewer_id,
 	std::int64_t revision,
 	const godot::Vector3 &position,
-	std::int64_t radius_chunks
+	std::int64_t radius_chunks,
+	std::int64_t maximum_lod
 ) {
 	if (!lifecycle_ || viewer_id <= 0 || revision <= 0 ||
 		radius_chunks < 0 ||
 		radius_chunks > std::numeric_limits<std::uint32_t>::max() ||
+		maximum_lod < 0 || maximum_lod > kWtMaximumLod ||
 		!std::isfinite(static_cast<double>(position.x)) ||
 		!std::isfinite(static_cast<double>(position.y)) ||
 		!std::isfinite(static_cast<double>(position.z))) {
@@ -33,7 +35,8 @@ bool WorldTransvoxelTerrain::update_viewer(
 			static_cast<double>(position.z),
 			static_cast<std::uint64_t>(revision),
 		},
-		static_cast<std::uint32_t>(radius_chunks)
+		static_cast<std::uint32_t>(radius_chunks),
+		static_cast<std::uint8_t>(maximum_lod)
 	);
 	synchronous_world_error_ = wt_read_only_runtime_status_message(status);
 	return status == WtReadOnlyRuntimeStatus::Ok;
