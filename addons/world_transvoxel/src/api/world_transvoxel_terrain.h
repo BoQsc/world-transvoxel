@@ -1,11 +1,13 @@
 #pragma once
 
+#include "api/world_transvoxel_chunk_state.h"
 #include "api/world_transvoxel_config.h"
 #include "services/wt_world_lifecycle.h"
 
 #include <godot_cpp/classes/node3d.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/vector3.hpp>
+#include <godot_cpp/variant/vector3i.hpp>
 #include <godot_cpp/variant/string.hpp>
 
 #include <cstdint>
@@ -65,6 +67,10 @@ public:
 		std::int64_t maximum_lod = 0
 	);
 	bool remove_viewer(std::int64_t viewer_id, std::int64_t revision);
+	godot::Ref<WorldTransvoxelChunkState> query_chunk_state(
+		const godot::Vector3i &chunk_coordinate,
+		std::int64_t lod
+	) const;
 	std::int64_t get_rendered_chunk_count() const noexcept;
 	std::int64_t get_collision_chunk_count() const noexcept;
 	void set_render_apply_budget(std::int64_t budget);

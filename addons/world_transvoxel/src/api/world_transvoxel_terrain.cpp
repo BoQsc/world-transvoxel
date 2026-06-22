@@ -140,6 +140,10 @@ void WorldTransvoxelTerrain::_bind_methods() {
 		&WorldTransvoxelTerrain::remove_viewer
 	);
 	godot::ClassDB::bind_method(
+		godot::D_METHOD("query_chunk_state", "chunk_coordinate", "lod"),
+		&WorldTransvoxelTerrain::query_chunk_state
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD("get_rendered_chunk_count"),
 		&WorldTransvoxelTerrain::get_rendered_chunk_count
 	);

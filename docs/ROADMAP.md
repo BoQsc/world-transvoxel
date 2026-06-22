@@ -136,7 +136,8 @@ Finite qualification gates are tracked in
 - PQ0 configuration and lifecycle (complete);
 - PQ1 read-only real baked-world streaming (complete: LOD0, balanced
   multi-LOD transitions, and root real-scene example);
-- PQ2 editing, query, and persistence (active);
+- PQ2 editing, query, and persistence (active: chunk/readiness query complete;
+  journal ownership, edited-page replacement, and save/reload remain);
 - PQ3 clean install and fixed-duration full-world soak;
 - PQ4 release qualification.
 

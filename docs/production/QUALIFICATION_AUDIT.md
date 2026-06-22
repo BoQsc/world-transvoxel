@@ -26,7 +26,7 @@ clean-install soak, and release qualification remain explicit PQ2-PQ4 work.
 | stream chunks | global balanced viewer planning, scheduler, async I/O, caches, and official MIT meshing complete | root transform events prove real movement |
 | render/collide | real regular and transition baked pages drive bounded Godot sinks | root scene audit passes both supported engines/builds |
 | edit world | transaction, spatial invalidation, journal, replay, and replacement complete | no public edit capability or lifecycle ownership |
-| query world | native component inspection exists | public query capability absent |
+| query world | native component inspection exists | immutable active-chunk/readiness snapshots complete; scalar/material query remains |
 | save/reload | journal and compaction round trips complete | no facade save/reload workflow |
 | migrate | native/Python migration tooling complete | not exercised by a clean application workflow |
 | telemetry | bounded binary trace and 60-second orchestration soak complete | not exposed through a public runtime capability |
@@ -70,9 +70,11 @@ world with bounded queues and correct shutdown.
 
 ### PQ2 - Editing, query, and persistence
 
-Status: active.
+Status: active; immutable active-chunk/readiness query snapshots are complete.
 
-- expose focused edit and query capabilities;
+- complete: expose typed immutable active-chunk/readiness snapshots;
+- next: own journal load/append in the lifecycle and expose atomic public edit
+  transactions;
 - connect edits to journal append, invalidation, replacement, and readiness;
 - save, reload, compact, and migrate through the application lifecycle.
 

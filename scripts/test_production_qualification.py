@@ -194,6 +194,12 @@ def run_engine_tests(engine: Path, name: str) -> None:
         "res://tests/godot/production_example_test.gd",
         "PRODUCTION_GODOT_EXAMPLE_PASS",
     )
+    run_godot_test(
+        engine,
+        f"{name}-chunk-query",
+        "res://tests/godot/production_chunk_query_test.gd",
+        "PRODUCTION_GODOT_CHUNK_QUERY_PASS",
+    )
 
 
 def run_godot_matrix() -> None:
@@ -259,7 +265,7 @@ def test_production_qualification(
     print(
         "Production qualification configuration, lifecycle, balanced multi-LOD "
         "read-only streaming, root example, and complete M5 regression suite "
-        "passed; PQ1 is complete."
+        "passed; PQ1 and the first PQ2 query unit are complete."
     )
 
 

@@ -66,6 +66,12 @@ Read-only world queries.
 - loaded/collision readiness;
 - chunk and LOD inspection.
 
+The first PQ2 query capability is implemented as immutable
+`WorldTransvoxelChunkState` snapshots returned by the terrain facade. It
+reports active generation and visual/collision readiness without exposing
+internal records. Authoritative scalar/material queries remain in the final
+PQ2 integration unit.
+
 ### `WorldTransvoxelBakeAPI`
 
 Editor/CLI entry point for deterministic binary baking.

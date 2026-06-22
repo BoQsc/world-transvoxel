@@ -1,5 +1,6 @@
 #include "register_types.h"
 
+#include "api/world_transvoxel_chunk_state.h"
 #include "api/world_transvoxel_config.h"
 #include "api/world_transvoxel_terrain.h"
 
@@ -16,6 +17,7 @@ void initialize_world_transvoxel_module(
 		return;
 	}
 
+	GDREGISTER_CLASS(world_transvoxel::WorldTransvoxelChunkState);
 	GDREGISTER_CLASS(world_transvoxel::WorldTransvoxelConfig);
 	GDREGISTER_CLASS(world_transvoxel::WorldTransvoxelTerrain);
 }

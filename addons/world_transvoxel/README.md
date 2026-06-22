@@ -38,8 +38,8 @@ locked on both supported engines. Versioned binary telemetry and the checked
 manifest startup/shutdown completes PQ0. PQ1 is complete: the root example
 streams real baked LOD0 and balanced multi-LOD transition pages through native
 scheduling, official MIT meshing, and bounded Godot sinks. PQ2 public editing,
-query, and persistence integration is next. Compute acceleration is optional
-later work.
+query, and persistence integration is active; immutable active-chunk/readiness
+query snapshots are complete. Compute acceleration is optional later work.
 
 Build from the repository root:
 
