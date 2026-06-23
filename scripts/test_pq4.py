@@ -308,6 +308,9 @@ def test_packaged_tools(root: Path) -> dict[str, object]:
         world = json.loads(validation.stdout)
         if (
             bake.get("pages") != 1
+            or bake.get("bounded") is not True
+            or bake.get("peak_page_payloads") != 1
+            or bake.get("source_cache_bytes") != 196_608
             or world.get("pages") != 1
             or world.get("source_revision") != 9001
         ):
@@ -316,6 +319,9 @@ def test_packaged_tools(root: Path) -> dict[str, object]:
             "pages": 1,
             "world_sha256": world["sha256"],
             "bake_report_sha256": bake["world_sha256"],
+            "bounded": True,
+            "peak_page_payloads": 1,
+            "source_cache_bytes": 196_608,
         }
 
 

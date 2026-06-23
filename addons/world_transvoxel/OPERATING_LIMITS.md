@@ -1,8 +1,8 @@
-# World Transvoxel 1.0.2 Operating Limits
+# World Transvoxel 1.0.3 Operating Limits
 
 ## Qualified release matrix
 
-The 1.0.2 release is qualified only for:
+The 1.0.3 release is qualified only for:
 
 | Component | Supported value |
 | --- | --- |
@@ -61,6 +61,11 @@ Viewer capacity multiplied by demand capacity per viewer may not exceed
   bytes maximum.
 - Storage CLI input: 1 GiB maximum, while common containers retain the
   stricter 256 MiB limit.
+- Dense bake input is file-backed: finite-density validation uses a fixed
+  1 MiB buffer, source sampling uses a 192 KiB explicit block cache, and one
+  encoded page payload is retained at a time.
+- Bake key and manifest metadata still scale with requested pages and remain
+  bounded by the 262,144-page world-manifest limit.
 - Schema-1 storage codec is `none`; compressed storage is not supported.
 
 Compaction and migration never overwrite the live world. The output directory

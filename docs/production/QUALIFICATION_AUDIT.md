@@ -1,8 +1,8 @@
 # Production Qualification Audit
 
-Date: 2026-06-22
+Date: 2026-06-23
 
-Status: PQ4 complete; World Transvoxel 1.0.2 release qualified
+Status: PQ4 complete; World Transvoxel 1.0.3 release qualified
 
 ## Result
 
@@ -14,7 +14,7 @@ meshing, bounded render/collision application, and shutdown.
 
 The root `world_transvoxel/` scene proves that path as thin application code,
 and the isolated PQ3 project proves that the addon does not depend on that
-repository integration. PQ4 proves that the exact installed 1.0.2 directory is
+repository integration. PQ4 proves that the exact installed 1.0.3 directory is
 reproducible, self-contained, licensed, documented, and passes that same
 matrix. The official MIT-backed addon is production-ready within its recorded
 support limits.
@@ -22,7 +22,9 @@ support limits.
 Version 1.0.0 is withdrawn. Version 1.0.1 corrected winding and topology but is
 superseded because moving-viewer plan changes could retire old chunks before
 replacement application. Version 1.0.2 adds bounded staged retirement and a
-continuous-motion render/collision regression. The topology qualification adds explicit
+continuous-motion render/collision regression. Version 1.0.3 retains that
+runtime and makes dense-volume baking bounded through file-backed source
+sampling and one-page-at-a-time output. The topology qualification adds explicit
 Godot clockwise render winding, matching one-sided collision winding, outside
 ray proof, canonical primary/secondary transition deformation, convex refined
 corner closure, post-deformation outward-winding checks, and full-world
@@ -34,7 +36,7 @@ mixed-LOD manifold validation.
 | --- | --- | --- |
 | install addon | debug/release binaries load on Godot 4.6.3 and 4.7 | isolated copied-addon import and 15-second workflow matrix pass |
 | configure runtime | M5 limits and defaults are locked | explicit schema-1 `WorldTransvoxelConfig` now implemented and attached |
-| bake world | deterministic CLI and editor path complete | root example preparation invokes the public native bake path |
+| bake world | deterministic bounded CLI and editor path complete | root example preparation invokes the file-backed, one-page native bake path |
 | load world | manifest/page readers and corruption checks complete | root scene starts a validated 28-page hierarchical manifest |
 | stream chunks | global balanced viewer planning, scheduler, async I/O, caches, and official MIT meshing complete | root transform events prove real movement |
 | render/collide | real regular and transition baked pages drive bounded Godot sinks | root scene audit passes both supported engines/builds |
@@ -45,7 +47,7 @@ mixed-LOD manifold validation.
 | telemetry | bounded binary trace and 60-second orchestration soak complete | immutable public runtime/application metrics snapshot is checked by PQ3 |
 | shutdown | queued Godot application teardown is tested | source, compacted, and migrated clean-project worlds stop with zero retained resources |
 
-The addon version is `1.0.2` with milestone identity `PQ4`.
+The addon version is `1.0.3` with milestone identity `PQ4`.
 
 ## Finite qualification gates
 
@@ -136,7 +138,7 @@ Status: complete on 2026-06-22.
 
 Exit: passed. Reference evidence is
 `docs/evidence/pq4_release_windows_x86_64.json`; the ignored local release is
-`artifacts/release/world-transvoxel-1.0.2-windows-x86_64/`.
+`artifacts/release/world-transvoxel-1.0.3-windows-x86_64/`.
 
 M6 compute acceleration is optional and outside these required gates. The
 independent 0BSD backend may now enter its separate qualification.

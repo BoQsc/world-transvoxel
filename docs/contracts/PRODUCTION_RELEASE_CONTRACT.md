@@ -6,11 +6,12 @@ World Transvoxel 1.0.0 is withdrawn because it had incorrect Godot-facing
 render/collision winding and incomplete convex mixed-LOD corner deformation.
 
 World Transvoxel 1.0.1 is superseded because it could expose transient holes
-during moving-viewer LOD replacement. World Transvoxel 1.0.2 is released as a
-deterministic directory, not an archive:
+during moving-viewer LOD replacement. World Transvoxel 1.0.2 is superseded by
+1.0.3's byte-compatible bounded bake lifetime. World Transvoxel 1.0.3 is
+released as a deterministic directory, not an archive:
 
 ```text
-artifacts/release/world-transvoxel-1.0.2-windows-x86_64/
+artifacts/release/world-transvoxel-1.0.3-windows-x86_64/
 ```
 
 The directory contains the complete `addons/world_transvoxel` install,
