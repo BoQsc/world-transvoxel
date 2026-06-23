@@ -78,15 +78,22 @@ def addon_version() -> str:
     return match.group(1)
 
 
-def configuration_hash(arguments: argparse.Namespace) -> str:
+def source_hashes(arguments: argparse.Namespace) -> tuple[str, str | None]:
+    return (
+        sha256(arguments.density),
+        sha256(arguments.materials) if arguments.materials is not None else None,
+    )
+
+
+def configuration_hash(
+    arguments: argparse.Namespace,
+    density_hash: str,
+    material_hash: str | None,
+) -> str:
     payload = {
         "schema": "world-transvoxel.dense-bake.v1",
-        "density_sha256": sha256(arguments.density),
-        "materials_sha256": (
-            sha256(arguments.materials)
-            if arguments.materials is not None
-            else None
-        ),
+        "density_sha256": density_hash,
+        "materials_sha256": material_hash,
         "keys_sha256": sha256(arguments.keys),
         "origin": arguments.origin,
         "dimensions": arguments.dimensions,
@@ -134,6 +141,7 @@ def main() -> None:
     ):
         raise RuntimeError("Invalid dimensions, spacing, revision, or material.")
 
+    density_hash, material_hash = source_hashes(arguments)
     command = [
         str(native_tool_path(arguments.configuration)),
         "dense",
@@ -150,7 +158,9 @@ def main() -> None:
         str(arguments.spacing),
         str(arguments.source_revision),
         str(arguments.default_material),
-        configuration_hash(arguments),
+        configuration_hash(arguments, density_hash, material_hash),
+        density_hash,
+        material_hash or "-",
         TRANSVOXEL_CPP_SHA256,
         addon_version(),
         GODOT_SUPPORTED_MATRIX,

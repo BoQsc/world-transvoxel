@@ -4,7 +4,8 @@ Status: normative M4 component
 
 The command-line baker accepts a finite dense scalar/material volume and uses
 the native `WtChunkBaker` to produce standalone content-addressed pages and a
-world manifest.
+world manifest. Dense describes the input layout, not an unbounded allocation:
+the production implementation is file-backed and page-bounded.
 
 ```console
 python addons/world_transvoxel/tools/wt_bake.py density.f32 keys.txt output-directory \
@@ -16,9 +17,10 @@ python addons/world_transvoxel/tools/wt_bake.py density.f32 keys.txt output-dire
 ```
 
 The root `tools/wt_bake.py` remains a source-checkout compatibility shim.
-Python owns argument validation, canonical configuration identity, provenance,
-and native process launch. Density/material loading, source lookup, chunk
-sampling, page writing, hashing, and world-manifest generation are native.
+Python owns argument validation, streaming source hashing, canonical
+configuration identity, provenance, and native process launch. Native code
+owns source-size and finite-density validation, bounded file-backed source
+lookup, chunk sampling, page writing, and world-manifest generation.
 
 ## Dense input
 
@@ -42,6 +44,22 @@ The grid descriptor contains:
 Requested sample points must be inside the volume and exactly aligned to its
 spacing. Non-finite density, malformed byte counts, overflow, unaligned
 samples, and uncovered chunk padding fail.
+
+## Bounded lifetime
+
+The native tool must not retain complete source arrays or all encoded pages.
+
+- density validation uses a fixed 1 MiB streaming buffer;
+- source lookup uses a fixed 512-slot cache of 64-sample density/material
+  blocks: 192 KiB of explicit sample payload;
+- exactly one encoded page payload is live during page output;
+- completed page bytes are written immediately into the temporary directory;
+- only the bounded key list and compact manifest page index grow with page
+  count, up to the schema limit of 262,144 pages.
+
+This replaces the original raw-source plus decoded-source plus all-page
+lifetime without changing dense input bytes, page bytes, world schema, source
+hashes, configuration identity, or deterministic key ordering.
 
 ## Chunk key input
 
@@ -95,11 +113,21 @@ proves:
 
 - two requested chunks bake successfully;
 - debug and release output directories are byte-identical;
+- the tool reports bounded operation, one peak page payload, and a 192 KiB
+  explicit source cache;
 - the world and page artifacts validate through the native storage tool;
 - decoded center density/material values match source coordinates;
 - default-material baking works without a material volume;
-- non-finite density fails without partial output;
-- uncovered padded sampling fails without partial output.
+- non-finite density outside requested chunks still fails before output;
+- a later uncovered chunk fails and removes already-written temporary pages.
+
+The bounded release fixture was compared byte-for-byte with the installed
+World Transvoxel 1.0.2 release baker. All three files matched, and the locked
+world SHA-256 is:
+
+```text
+9ab9d7c9dba2ef01717d9cf5bd952bb6c21451d668f0502d3cbfa88e1204762c
+```
 
 No generated bake artifacts remain in the repository.
 

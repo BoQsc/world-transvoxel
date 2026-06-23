@@ -56,6 +56,8 @@ REQUIRED_FILES = (
     "tools/wt_benchmark_common.py",
     "tools/native/wt_storage_tool.cpp",
     "tools/native/wt_bake_tool.cpp",
+    "tools/native/wt_dense_file_grid_source.cpp",
+    "tools/native/wt_dense_file_grid_source.h",
     "tests/godot/addon_load_test.gd",
     "tests/godot/addon_load_test.gd.uid",
     "tests/godot/m3_integration_test.gd",

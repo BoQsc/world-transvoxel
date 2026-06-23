@@ -13,6 +13,11 @@ from pathlib import Path
 from wt_script_common import REPO_ROOT, native_tool_path
 
 
+EXPECTED_RELEASE_COMPAT_WORLD_SHA256 = (
+    "9ab9d7c9dba2ef01717d9cf5bd952bb6c21451d668f0502d3cbfa88e1204762c"
+)
+
+
 def write_volume(
     density_path: Path,
     material_path: Path,
@@ -30,7 +35,11 @@ def write_volume(
             for x_index in range(dimensions[0]):
                 x = origin[0] + x_index
                 density = float(x + y + z)
-                if invalid_density and not densities:
+                if invalid_density and (
+                    x_index == dimensions[0] - 1
+                    and y_index == dimensions[1] - 1
+                    and z_index == dimensions[2] - 1
+                ):
                     density = math.nan
                 densities.extend(struct.pack("<f", density))
                 materials.extend(struct.pack("<H", (x - y + z) & 0xFFFF))
@@ -143,7 +152,15 @@ def test_baker() -> None:
                 configuration,
             )
             bake_info = json.loads(result.stdout)
-            if bake_info["type"] != "wtbake" or bake_info["pages"] != 2:
+            if (
+                bake_info["type"] != "wtbake"
+                or bake_info["pages"] != 2
+                or bake_info.get("bounded") is not True
+                or bake_info.get("peak_page_payloads") != 1
+                or bake_info.get("source_cache_bytes") != 196_608
+                or bake_info.get("world_sha256")
+                != EXPECTED_RELEASE_COMPAT_WORLD_SHA256
+            ):
                 raise RuntimeError("Baker JSON output mismatch.")
             files = directory_bytes(output)
             if "world.wtworld" not in files or len(files) != 3:
@@ -212,7 +229,7 @@ def test_baker() -> None:
             raise RuntimeError("Failed bake left output artifacts.")
 
         uncovered_keys = root / "uncovered-keys.txt"
-        uncovered_keys.write_text("2 0 0 0\n", encoding="utf-8")
+        uncovered_keys.write_text("0 0 0 0\n2 0 0 0\n", encoding="utf-8")
         uncovered_output = root / "uncovered-output"
         run_baker(
             density,
@@ -225,8 +242,10 @@ def test_baker() -> None:
         if uncovered_output.exists():
             raise RuntimeError("Uncovered bake left an output directory.")
     print(
-        "M4_BAKE_TOOL_PASS pages=2 cross_build=1 "
-        "default_material=1 failure_cases=2"
+        "M4_BAKE_TOOL_PASS pages=2 cross_build=1 bounded=1 "
+        "peak_page_payloads=1 source_cache_bytes=196608 "
+        "default_material=1 failure_cases=2 "
+        f"world_sha256={EXPECTED_RELEASE_COMPAT_WORLD_SHA256}"
     )
 
 

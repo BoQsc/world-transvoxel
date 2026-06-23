@@ -49,7 +49,8 @@ Ordered commands now mutate authoritative chunk samples with overlap tests and
 finite-result rejection. Snapshot compaction now emits audited replacement
 pages and a revisioned world manifest. Native-backed Python storage
 inspection, validation, and migration tools are implemented. The practical
-dense-volume command-line baker is also implemented. Editor scaffolding and
+dense-volume command-line baker is also implemented with file-backed source
+sampling and one-page-at-a-time output. Editor scaffolding and
 the editor Tools menu use the same Python/native bake path. The controlled
 codec decision retains deterministic zero-copy `none` and rejects byte RLE.
 M5 production streaming provides native asynchronous manifest/page loading

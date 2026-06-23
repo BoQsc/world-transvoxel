@@ -837,6 +837,7 @@ bake_tool = native_test_env.Program(
     ),
     source=[
         "tools/native/wt_bake_tool.cpp",
+        "tools/native/wt_dense_file_grid_source.cpp",
         "addons/world_transvoxel/src/bake/wt_chunk_baker.cpp",
         "addons/world_transvoxel/src/bake/wt_dense_grid_source.cpp",
         "addons/world_transvoxel/src/core/wt_chunk_key.cpp",

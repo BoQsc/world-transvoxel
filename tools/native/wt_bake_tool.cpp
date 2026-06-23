@@ -1,12 +1,15 @@
 #include "bake/wt_chunk_baker.h"
-#include "bake/wt_dense_grid_source.h"
-#include "storage/wt_binary_io.h"
+#include "wt_dense_file_grid_source.h"
 #include "storage/wt_world_manifest.h"
 
+#include <algorithm>
+#include <array>
 #include <cerrno>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -18,31 +21,6 @@
 namespace wt = world_transvoxel;
 
 namespace {
-
-constexpr std::uint64_t kMaximumInputFileSize = 1024ULL * 1024ULL * 1024ULL;
-
-bool read_file(
-	const std::filesystem::path &path,
-	std::vector<std::uint8_t> &output
-) {
-	output.clear();
-	std::ifstream input(path, std::ios::binary | std::ios::ate);
-	if (!input) return false;
-	const std::streamoff size = input.tellg();
-	if (size < 0 ||
-		static_cast<std::uint64_t>(size) > kMaximumInputFileSize) {
-		return false;
-	}
-	output.resize(static_cast<std::size_t>(size));
-	input.seekg(0);
-	if (!output.empty()) {
-		input.read(
-			reinterpret_cast<char *>(output.data()),
-			static_cast<std::streamsize>(output.size())
-		);
-	}
-	return input.good() || input.eof();
-}
 
 bool parse_i64(const char *text, std::int64_t &output) {
 	errno = 0;
@@ -138,39 +116,31 @@ bool read_keys(
 	return input.eof() && !output.empty();
 }
 
-bool decode_densities(
-	const std::vector<std::uint8_t> &bytes,
-	std::size_t count,
-	std::vector<float> &output
-) {
-	if (count > std::numeric_limits<std::size_t>::max() / sizeof(float) ||
-		bytes.size() != count * sizeof(float)) {
-		return false;
+bool validate_density_values(const std::filesystem::path &path) {
+	std::ifstream input(path, std::ios::binary);
+	if (!input) return false;
+	std::array<std::uint8_t, 1024 * 1024> bytes{};
+	while (input) {
+		input.read(
+			reinterpret_cast<char *>(bytes.data()),
+			static_cast<std::streamsize>(bytes.size())
+		);
+		const std::streamsize read = input.gcount();
+		if (read < 0 || read % static_cast<std::streamsize>(sizeof(float)) != 0) {
+			return false;
+		}
+		for (std::streamsize offset = 0; offset < read; offset += sizeof(float)) {
+			const std::uint32_t bits =
+				static_cast<std::uint32_t>(bytes[offset]) |
+				(static_cast<std::uint32_t>(bytes[offset + 1]) << 8) |
+				(static_cast<std::uint32_t>(bytes[offset + 2]) << 16) |
+				(static_cast<std::uint32_t>(bytes[offset + 3]) << 24);
+			float value = 0.0F;
+			std::memcpy(&value, &bits, sizeof(value));
+			if (!std::isfinite(value)) return false;
+		}
 	}
-	wt::WtBinaryReader reader({ bytes.data(), bytes.size() });
-	output.resize(count);
-	for (float &value : output) {
-		if (reader.read_f32(value) != wt::WtBinaryStatus::Ok) return false;
-	}
-	return reader.remaining() == 0;
-}
-
-bool decode_materials(
-	const std::vector<std::uint8_t> &bytes,
-	std::size_t count,
-	std::vector<std::uint16_t> &output
-) {
-	if (count > std::numeric_limits<std::size_t>::max() /
-			sizeof(std::uint16_t) ||
-		bytes.size() != count * sizeof(std::uint16_t)) {
-		return false;
-	}
-	wt::WtBinaryReader reader({ bytes.data(), bytes.size() });
-	output.resize(count);
-	for (std::uint16_t &value : output) {
-		if (reader.read_u16(value) != wt::WtBinaryStatus::Ok) return false;
-	}
-	return reader.remaining() == 0;
+	return input.eof();
 }
 
 bool write_file(
@@ -189,7 +159,7 @@ bool write_file(
 }
 
 int bake_dense(int argc, char **argv) {
-	if (argc != 21) return 1;
+	if (argc != 23) return 1;
 	const std::filesystem::path density_path = argv[2];
 	const std::string material_argument = argv[3];
 	const std::filesystem::path key_path = argv[4];
@@ -219,64 +189,48 @@ int bake_dense(int argc, char **argv) {
 	descriptor.default_material =
 		static_cast<std::uint16_t>(default_material);
 	wt::WtHash256 configuration_hash{};
+	wt::WtHash256 density_hash{};
+	wt::WtHash256 material_hash{};
 	wt::WtHash256 backend_hash{};
 	if (!parse_hash(argv[15], configuration_hash) ||
-		!parse_hash(argv[16], backend_hash)) {
+		!parse_hash(argv[16], density_hash) ||
+		(material_argument == "-" ?
+			std::string(argv[17]) != "-" :
+			!parse_hash(argv[17], material_hash)) ||
+		!parse_hash(argv[18], backend_hash)) {
 		return 2;
 	}
-	const std::string generator_version = argv[17];
-	const std::string godot_version = argv[18];
-	const std::string godot_cpp_version = argv[19];
-	const std::string toolchain_version = argv[20];
+	const std::string generator_version = argv[19];
+	const std::string godot_version = argv[20];
+	const std::string godot_cpp_version = argv[21];
+	const std::string toolchain_version = argv[22];
 	if (generator_version.empty() || godot_version.empty() ||
 		godot_cpp_version.empty() || toolchain_version.empty()) {
 		return 2;
 	}
-	if (descriptor.dimension_x == 0 || descriptor.dimension_y == 0 ||
-		descriptor.dimension_z == 0 ||
-		descriptor.dimension_x >
-			std::numeric_limits<std::size_t>::max() /
-				descriptor.dimension_y) {
-		return 2;
+	std::filesystem::path material_path;
+	const std::filesystem::path *material_path_pointer = nullptr;
+	if (material_argument != "-") {
+		material_path = material_argument;
+		material_path_pointer = &material_path;
 	}
-	const std::size_t plane =
-		static_cast<std::size_t>(descriptor.dimension_x) *
-		descriptor.dimension_y;
-	if (plane > std::numeric_limits<std::size_t>::max() /
-			descriptor.dimension_z) {
-		return 2;
-	}
-	const std::size_t sample_count = plane * descriptor.dimension_z;
-	std::vector<std::uint8_t> density_bytes;
-	std::vector<std::uint8_t> material_bytes;
-	std::vector<float> densities;
-	std::vector<std::uint16_t> materials;
-	if (!read_file(density_path, density_bytes) ||
-		!decode_densities(density_bytes, sample_count, densities) ||
-		(material_argument != "-" &&
-			(!read_file(material_argument, material_bytes) ||
-				!decode_materials(
-					material_bytes,
-					sample_count,
-					materials
-				)))) {
-		return 2;
-	}
-	wt::WtDenseGridSource source(sample_count);
+	wt::WtDenseFileGridSource source;
 	if (source.initialize(
 			descriptor,
-			std::move(densities),
-			std::move(materials)
-		) != wt::WtDenseGridStatus::Ok) {
+			density_path,
+			material_path_pointer
+		) != wt::WtDenseFileGridStatus::Ok ||
+		!validate_density_values(density_path)) {
 		return 2;
 	}
 	std::vector<wt::WtChunkKey> keys;
 	if (!read_keys(key_path, keys)) return 2;
-	wt::WtChunkBaker baker(keys.size());
-	std::vector<wt::WtBakedChunkPage> pages;
-	if (baker.bake(keys, source_revision, source, pages) !=
-		wt::WtChunkBakeStatus::Ok) {
-		return 2;
+	std::sort(keys.begin(), keys.end());
+	for (std::size_t index = 0; index < keys.size(); ++index) {
+		if (!wt::wt_is_valid_chunk_key(keys[index]) ||
+			(index != 0 && keys[index - 1] == keys[index])) {
+			return 2;
+		}
 	}
 	wt::WtWorldManifest manifest;
 	manifest.source_revision = source_revision;
@@ -287,7 +241,7 @@ int bake_dense(int argc, char **argv) {
 			wt::WtDependencyKind::SourceAsset,
 			"density",
 			"",
-			wt::wt_sha256(density_bytes.data(), density_bytes.size()),
+			density_hash,
 		},
 		{
 			wt::WtDependencyKind::Generator,
@@ -342,22 +296,9 @@ int bake_dense(int argc, char **argv) {
 			wt::WtDependencyKind::SourceAsset,
 			"materials",
 			"",
-			wt::wt_sha256(material_bytes.data(), material_bytes.size()),
+			material_hash,
 		});
 	}
-	for (const wt::WtBakedChunkPage &page : pages) {
-		manifest.pages.push_back({
-			page.key,
-			page.bytes.size(),
-			page.content_hash,
-		});
-	}
-	std::vector<std::uint8_t> world_bytes;
-	if (wt::wt_write_world_manifest(manifest, world_bytes) !=
-		wt::WtWorldManifestStatus::Ok) {
-		return 2;
-	}
-
 	std::error_code error;
 	if (std::filesystem::exists(output_path, error) || error ||
 		output_path.filename().empty()) {
@@ -370,14 +311,33 @@ int bake_dense(int argc, char **argv) {
 		!std::filesystem::create_directories(temporary, error) || error) {
 		return 2;
 	}
-	bool wrote_all = write_file(temporary / "world.wtworld", world_bytes);
-	for (const wt::WtBakedChunkPage &page : pages) {
-		wrote_all = wrote_all && write_file(
-			temporary / (hash_hex(page.content_hash) + ".wtchunk"),
-			page.bytes
-		);
+	manifest.pages.reserve(keys.size());
+	wt::WtChunkBaker baker(1);
+	std::vector<wt::WtChunkKey> one_key(1);
+	std::vector<wt::WtBakedChunkPage> pages;
+	for (const wt::WtChunkKey &key : keys) {
+		one_key[0] = key;
+		if (baker.bake(one_key, source_revision, source, pages) !=
+				wt::WtChunkBakeStatus::Ok ||
+			pages.size() != 1 ||
+			!write_file(
+				temporary /
+					(hash_hex(pages[0].content_hash) + ".wtchunk"),
+				pages[0].bytes
+			)) {
+			std::filesystem::remove_all(temporary, error);
+			return 2;
+		}
+		manifest.pages.push_back({
+			pages[0].key,
+			pages[0].bytes.size(),
+			pages[0].content_hash,
+		});
 	}
-	if (!wrote_all) {
+	std::vector<std::uint8_t> world_bytes;
+	if (wt::wt_write_world_manifest(manifest, world_bytes) !=
+			wt::WtWorldManifestStatus::Ok ||
+		!write_file(temporary / "world.wtworld", world_bytes)) {
 		std::filesystem::remove_all(temporary, error);
 		return 2;
 	}
@@ -388,10 +348,12 @@ int bake_dense(int argc, char **argv) {
 	}
 	std::printf(
 		"{\"type\":\"wtbake\",\"pages\":%zu,\"source_revision\":%llu,"
-		"\"world_sha256\":\"%s\"}\n",
-		pages.size(),
+		"\"world_sha256\":\"%s\",\"bounded\":true,"
+		"\"peak_page_payloads\":1,\"source_cache_bytes\":%zu}\n",
+		manifest.pages.size(),
 		static_cast<unsigned long long>(source_revision),
-		hash_hex(wt::wt_sha256(world_bytes.data(), world_bytes.size())).c_str()
+		hash_hex(wt::wt_sha256(world_bytes.data(), world_bytes.size())).c_str(),
+		source.cache_capacity_bytes()
 	);
 	return 0;
 }
@@ -402,7 +364,8 @@ void usage() {
 		"usage: wt_bake_tool dense <density.f32le> <materials.u16le|-> "
 		"<keys.txt> <output-dir> <origin-x> <origin-y> <origin-z> "
 		"<dim-x> <dim-y> <dim-z> <spacing> <source-revision> "
-		"<default-material> <config-hash> <backend-hash> "
+		"<default-material> <config-hash> <density-hash> "
+		"<material-hash|-> <backend-hash> "
 		"<generator-version> <godot-version> <godot-cpp-version> "
 		"<toolchain-version>\n"
 	);
