@@ -31,11 +31,16 @@ private:
 	struct Record {
 		godot::MeshInstance3D *instance = nullptr;
 		WtGenerationToken generation;
+		float current_transparency = 0.0F;
+		float retirement_start_transparency = 0.0F;
+		std::uint32_t introduction_frame = 0;
 		std::uint32_t retirement_frame = 0;
+		bool introducing = false;
 		bool retiring = false;
 	};
 
 	bool on_owner_thread() const noexcept;
+	static void set_record_transparency(Record &record, float value) noexcept;
 	godot::Node3D &owner_;
 	std::thread::id owner_thread_;
 	std::map<WtChunkKey, Record> records_;

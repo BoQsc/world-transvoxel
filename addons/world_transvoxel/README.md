@@ -46,7 +46,8 @@ runtime behavior and replaces whole-source/all-page bake allocation with
 bounded file-backed sampling and one-page output. Version 1.0.4 retains the
 bounded baker and caps ready chunk retirement removal per frame. Version 1.0.5
 adds a fixed native render fade-out window for retiring chunks after replacement
-application to reduce dynamic mixed-LOD visual swaps; it is qualified for
+application. Version 1.0.6 also fades newly introduced render chunks through a
+fixed native window to reduce dynamic mixed-LOD visual swaps; it is qualified for
 Windows x86-64 with both engines. The release ships API/limit documentation,
 addon-local bake/storage wrappers, runtime DLLs, and native tools. Compute
 acceleration is optional later work.

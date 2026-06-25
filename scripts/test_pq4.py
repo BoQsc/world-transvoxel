@@ -218,10 +218,12 @@ def audit_release(root: Path) -> dict[str, object]:
         raise RuntimeError("PQ4 release retirement flush budget is not locked.")
     if (
         "kRenderRetirementFadeFrames = 12U" not in render_sink_source
+        or "kRenderIntroductionFadeFrames = 12U" not in render_sink_source
         or "render_fading_resources" not in metrics_source
         or "render retirement fade duration | 12 frames" not in operating_limits
+        or "render introduction fade duration | 12 frames" not in operating_limits
     ):
-        raise RuntimeError("PQ4 release render retirement fade is not locked.")
+        raise RuntimeError("PQ4 release render fade windows are not locked.")
 
     manifest_path = root / "RELEASE_MANIFEST.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -448,6 +450,7 @@ def test_pq4(
             "operational_limits_documented": True,
             "ready_chunk_retirement_bounded": True,
             "ready_chunk_retirement_fade_bounded": True,
+            "ready_chunk_introduction_fade_bounded": True,
             "license_notices_complete": True,
             "official_mit_provenance_verified": True,
             "self_contained_bake_and_storage_tools": True,

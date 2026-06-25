@@ -10,12 +10,14 @@ during moving-viewer LOD replacement. World Transvoxel 1.0.2 is superseded by
 1.0.3's bounded bake lifetime. World Transvoxel 1.0.3 is superseded because
 dynamic mixed-LOD viewer motion could retire a large ready replacement set in
 one frame. World Transvoxel 1.0.5 also applies a fixed native render fade-out to
-retiring chunks after replacement application. World Transvoxel 1.0.5 is
+retiring chunks after replacement application. World Transvoxel 1.0.6 also
+applies a fixed native render fade-in to newly introduced chunks. World
+Transvoxel 1.0.6 is
 released as a deterministic directory,
 not an archive:
 
 ```text
-artifacts/release/world-transvoxel-1.0.5-windows-x86_64/
+artifacts/release/world-transvoxel-1.0.6-windows-x86_64/
 ```
 
 The directory contains the complete `addons/world_transvoxel` install,
@@ -65,6 +67,7 @@ PQ4 passes only when:
 - the packaged bake and storage tools produce and validate a real world;
 - ready chunk retirement removal is bounded per frame in the native runtime;
 - retiring render chunks have a bounded native fade-out window;
+- newly introduced render chunks have a bounded native fade-in window;
 - the exact release addon passes the complete PQ3 Godot 4.6.3/4.7
   debug/release clean-install workflow;
 - public API, supported matrix, and operational limits ship inside the addon.

@@ -18,6 +18,7 @@ namespace world_transvoxel {
 namespace {
 
 constexpr std::uint32_t kRenderRetirementFadeFrames = 12U;
+constexpr std::uint32_t kRenderIntroductionFadeFrames = 12U;
 
 godot::String chunk_name(const WtChunkKey &key) {
 	return godot::String("WT_Render_") + godot::String::num_int64(key.x) + "_" +
@@ -37,10 +38,28 @@ godot::Vector3 to_godot(const WtGridPoint &value) {
 	};
 }
 
+float clamp_unit(float value) {
+	if (value < 0.0F) {
+		return 0.0F;
+	}
+	if (value > 1.0F) {
+		return 1.0F;
+	}
+	return value;
+}
+
 } // namespace
 
 WtGodotRenderSink::WtGodotRenderSink(godot::Node3D &owner) noexcept :
 		owner_(owner), owner_thread_(std::this_thread::get_id()) {
+}
+
+void WtGodotRenderSink::set_record_transparency(
+	Record &record,
+	float value
+) noexcept {
+	record.current_transparency = clamp_unit(value);
+	record.instance->set_transparency(record.current_transparency);
 }
 
 bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
@@ -93,16 +112,20 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	mesh->add_surface_from_arrays(godot::Mesh::PRIMITIVE_TRIANGLES, arrays);
 
 	Record &record = records_[payload.key];
-	if (record.instance == nullptr) {
+	const bool created = record.instance == nullptr;
+	if (created) {
 		record.instance = memnew(godot::MeshInstance3D);
 		record.instance->set_name(chunk_name(payload.key));
 		owner_.add_child(record.instance);
 	}
 	record.retiring = false;
 	record.retirement_frame = 0;
-	record.instance->set_transparency(0.0F);
+	record.retirement_start_transparency = 0.0F;
+	record.introducing = created;
+	record.introduction_frame = 0;
 	record.instance->set_position(to_godot(payload.world_origin));
 	record.instance->set_mesh(mesh);
+	set_record_transparency(record, created ? 1.0F : 0.0F);
 	record.generation = payload.generation;
 	return true;
 }
@@ -135,8 +158,9 @@ bool WtGodotRenderSink::begin_render_retirement(const WtChunkKey &key) {
 		return false;
 	}
 	record.retiring = true;
+	record.introducing = false;
 	record.retirement_frame = 0;
-	record.instance->set_transparency(0.0F);
+	record.retirement_start_transparency = record.current_transparency;
 	return true;
 }
 
@@ -146,23 +170,36 @@ void WtGodotRenderSink::advance_retirements() {
 	}
 	for (auto iterator = records_.begin(); iterator != records_.end();) {
 		Record &record = iterator->second;
-		if (!record.retiring) {
+		if (record.retiring) {
+			++record.retirement_frame;
+			const float progress = static_cast<float>(record.retirement_frame) /
+				static_cast<float>(kRenderRetirementFadeFrames);
+			const float transparency = record.retirement_start_transparency +
+				((1.0F - record.retirement_start_transparency) * progress);
+			set_record_transparency(record, transparency);
+			if (record.retirement_frame >= kRenderRetirementFadeFrames) {
+				owner_.remove_child(record.instance);
+				record.instance->queue_free();
+				iterator = records_.erase(iterator);
+			} else {
+				++iterator;
+			}
+			continue;
+		}
+		if (record.introducing) {
+			++record.introduction_frame;
+			const float progress = static_cast<float>(record.introduction_frame) /
+				static_cast<float>(kRenderIntroductionFadeFrames);
+			set_record_transparency(record, 1.0F - progress);
+			if (record.introduction_frame >= kRenderIntroductionFadeFrames) {
+				record.introducing = false;
+				record.introduction_frame = 0;
+				set_record_transparency(record, 0.0F);
+			}
 			++iterator;
 			continue;
 		}
-		++record.retirement_frame;
-		const float transparency = static_cast<float>(record.retirement_frame) /
-			static_cast<float>(kRenderRetirementFadeFrames);
-		record.instance->set_transparency(
-			transparency < 1.0F ? transparency : 1.0F
-		);
-		if (record.retirement_frame >= kRenderRetirementFadeFrames) {
-			owner_.remove_child(record.instance);
-			record.instance->queue_free();
-			iterator = records_.erase(iterator);
-		} else {
-			++iterator;
-		}
+		++iterator;
 	}
 }
 
@@ -184,7 +221,7 @@ std::size_t WtGodotRenderSink::resource_count() const noexcept {
 std::size_t WtGodotRenderSink::fading_count() const noexcept {
 	std::size_t count = 0;
 	for (const auto &entry : records_) {
-		count += entry.second.retiring ? 1U : 0U;
+		count += (entry.second.retiring || entry.second.introducing) ? 1U : 0U;
 	}
 	return count;
 }

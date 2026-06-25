@@ -10,20 +10,21 @@ render nor one-sided collision winding to Godot and did not implement complete
 primary/secondary transition deformation at convex mixed-LOD corners.
 
 World Transvoxel 1.0.1 is superseded because moving-viewer plan changes could
-remove old render and collision chunks before their LOD replacements were
 applied. World Transvoxel 1.0.3 is superseded because dynamic mixed-LOD viewer
 motion could retire a large replacement set in one frame, producing visible LOD
-swap popping. World Transvoxel 1.0.5 is the current official MIT-backed addon
+swap popping. World Transvoxel 1.0.5 is superseded because it faded retiring
+chunks but introduced replacement chunks abruptly. World Transvoxel 1.0.6 is
+the current official MIT-backed addon
 for Windows x86-64 with Godot 4.6.3 and 4.7. It retains the topology fixes,
 bounded application-confirmed chunk retirement, continuous-motion
 render/collision regression coverage, bounded dense baking, and caps ready
 chunk retirement removal to a small per-frame budget. It also fades retiring
-render chunks for a fixed native frame window after replacement application, so
-old visual chunks are not removed as a one-frame render swap. The deterministic install
-directory is:
+and newly introduced render chunks for fixed native frame windows after
+replacement application, so visual chunks are not removed or introduced as a
+one-frame render swap. The deterministic install directory is:
 
 ```text
-artifacts/release/world-transvoxel-1.0.5-windows-x86_64/
+artifacts/release/world-transvoxel-1.0.6-windows-x86_64/
 ```
 
 Copy its `addons/world_transvoxel/` directory and retain the included license
@@ -87,8 +88,9 @@ locks real `ArrayMesh`/concave-collision application budgets, eight-frame
 burst readiness, and the 96/128 collision hysteresis policy. A versioned
 bounded `wttrace` format and checked 60-second motion/edit soak now close M5.
 Ready chunk retirements are also flushed through a bounded per-frame removal
-budget and retiring render chunks use a fixed native fade-out window to reduce
-dynamic mixed-LOD visual swaps during sustained movement.
+budget; retiring render chunks fade out and newly introduced render chunks
+fade in through fixed native windows to reduce dynamic mixed-LOD visual swaps
+during sustained movement.
 Clean-addon installation and the real baked-world
 stream/render/collide/edit/query/save/reload/migrate/shutdown workflow close
 PQ3. PQ4 adds two-build byte reproducibility, installed tool validation,
@@ -109,7 +111,7 @@ replay, stale rejection, exact authoritative scalar/material queries,
 side-by-side snapshot compaction, schema-1.0 migration, and reopen
 equivalence. PQ3 is complete: an isolated copied-addon project now passes the
 15-second full-world edit/query/compact/migrate/reopen soak on Godot 4.6.3 and
-4.7 with debug and release binaries. PQ4 is complete for 1.0.5, and the
+4.7 with debug and release binaries. PQ4 is complete for 1.0.6, and the
 official MIT-backed addon is production-ready within the documented Windows
 x86-64 support matrix.
 
