@@ -9,6 +9,7 @@
 #include <godot_cpp/variant/packed_vector2_array.hpp>
 #include <godot_cpp/variant/packed_vector3_array.hpp>
 #include <godot_cpp/variant/string.hpp>
+#include <godot_cpp/variant/string_name.hpp>
 #include <godot_cpp/variant/vector2.hpp>
 #include <godot_cpp/variant/vector3.hpp>
 
@@ -19,6 +20,7 @@ namespace {
 
 constexpr std::uint32_t kRenderRetirementFadeFrames = 24U;
 constexpr std::uint32_t kRenderIntroductionFadeFrames = 24U;
+constexpr const char *kFadeOpacityShaderParameter = "wt_fade_opacity";
 
 godot::String chunk_name(const WtChunkKey &key) {
 	return godot::String("WT_Render_") + godot::String::num_int64(key.x) + "_" +
@@ -68,6 +70,10 @@ void WtGodotRenderSink::set_record_transparency(
 ) noexcept {
 	record.current_transparency = clamp_unit(value);
 	record.instance->set_transparency(record.current_transparency);
+	record.instance->set_instance_shader_parameter(
+		godot::StringName(kFadeOpacityShaderParameter),
+		1.0F - record.current_transparency
+	);
 }
 
 bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {

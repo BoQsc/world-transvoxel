@@ -49,8 +49,10 @@ adds a fixed native render fade-out window for retiring chunks after replacement
 application. Version 1.0.6 also fades newly introduced render chunks through a
 fixed native window. Version 1.0.7 extends both native render fade windows to
 24 frames. Version 1.0.8 adds native same-key render mesh replacement crossfade
-so an already visible chunk key does not swap mesh data at full opacity; it is qualified for
-Windows x86-64 with both engines. The release ships API/limit documentation,
+so an already visible chunk key does not swap mesh data at full opacity. Version
+1.0.9 also publishes the per-instance shader parameter `wt_fade_opacity` so
+custom terrain shaders can participate in the same native fade contract; it is
+qualified for Windows x86-64 with both engines. The release ships API/limit documentation,
 addon-local bake/storage wrappers, runtime DLLs, and native tools. Compute
 acceleration is optional later work.
 

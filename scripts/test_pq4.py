@@ -219,9 +219,11 @@ def audit_release(root: Path) -> dict[str, object]:
     if (
         "kRenderRetirementFadeFrames = 24U" not in render_sink_source
         or "kRenderIntroductionFadeFrames = 24U" not in render_sink_source
-        or "replacement_retirements_" not in render_sink_source
-        or "same-key render mesh replacement crossfade | native" not in operating_limits
-        or "render_fading_resources" not in metrics_source
+		or "replacement_retirements_" not in render_sink_source
+		or "wt_fade_opacity" not in render_sink_source
+		or "same-key render mesh replacement crossfade | native" not in operating_limits
+		or "shader fade opacity parameter | `wt_fade_opacity`" not in operating_limits
+		or "render_fading_resources" not in metrics_source
         or "render retirement fade duration | 24 frames" not in operating_limits
         or "render introduction fade duration | 24 frames" not in operating_limits
     ):
@@ -451,9 +453,10 @@ def test_pq4(
             "public_api_documented": True,
             "operational_limits_documented": True,
             "ready_chunk_retirement_bounded": True,
-            "ready_chunk_retirement_fade_bounded": True,
-            "ready_chunk_introduction_fade_bounded": True,
-            "license_notices_complete": True,
+			"ready_chunk_retirement_fade_bounded": True,
+			"ready_chunk_introduction_fade_bounded": True,
+			"shader_fade_opacity_parameter_documented": True,
+			"license_notices_complete": True,
             "official_mit_provenance_verified": True,
             "self_contained_bake_and_storage_tools": True,
             "exact_release_install_matrix_passed": True,

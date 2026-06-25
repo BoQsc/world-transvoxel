@@ -124,10 +124,10 @@ proves:
 The bounded release fixture page files were compared byte-for-byte with the
 installed World Transvoxel 1.0.2 release baker. The page files matched. The
 world manifest includes release-versioned generator provenance, so the locked
-World Transvoxel 1.0.8 world SHA-256 is:
+World Transvoxel 1.0.9 world SHA-256 is:
 
 ```text
-5a2b7cf072af32c84e6be9e18925a7e5888c61fc0bc2795920750f064e1bb9f0
+e16748e8e3fc096ae87406b27398969d32cdffec59608f82392c6f28136ad6f3
 ```
 
 No generated bake artifacts remain in the repository.

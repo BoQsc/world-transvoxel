@@ -15,11 +15,13 @@ applies a fixed native render fade-in to newly introduced chunks. World
 Transvoxel 1.0.7 extends both native render fade windows to 24 frames. World
 Transvoxel 1.0.8 also crossfades same-key render mesh replacement instead of
 swapping already visible mesh data at full opacity. World Transvoxel 1.0.8 is
+superseded because opaque custom terrain shaders could ignore the native fade.
+World Transvoxel 1.0.9 publishes `wt_fade_opacity` for fade-aware shaders and is
 released as a deterministic directory,
 not an archive:
 
 ```text
-artifacts/release/world-transvoxel-1.0.8-windows-x86_64/
+artifacts/release/world-transvoxel-1.0.9-windows-x86_64/
 ```
 
 The directory contains the complete `addons/world_transvoxel` install,
@@ -70,6 +72,8 @@ PQ4 passes only when:
 - ready chunk retirement removal is bounded per frame in the native runtime;
 - retiring render chunks have a bounded native fade-out window;
 - newly introduced render chunks have a bounded native fade-in window;
+- native fade opacity is available to custom terrain shaders as the per-instance
+  shader parameter `wt_fade_opacity`;
 - the exact release addon passes the complete PQ3 Godot 4.6.3/4.7
   debug/release clean-install workflow;
 - public API, supported matrix, and operational limits ship inside the addon.

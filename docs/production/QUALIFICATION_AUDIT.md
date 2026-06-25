@@ -2,7 +2,7 @@
 
 Date: 2026-06-25
 
-Status: PQ4 complete; World Transvoxel 1.0.8 release qualified
+Status: PQ4 complete; World Transvoxel 1.0.9 release qualified
 
 ## Result
 
@@ -14,7 +14,7 @@ meshing, bounded render/collision application, and shutdown.
 
 The root `world_transvoxel/` scene proves that path as thin application code,
 and the isolated PQ3 project proves that the addon does not depend on that
-repository integration. PQ4 proves that the exact installed 1.0.8 directory is
+repository integration. PQ4 proves that the exact installed 1.0.9 directory is
 reproducible, self-contained, licensed, documented, and passes that same
 matrix. The official MIT-backed addon is production-ready within its recorded
 support limits.
@@ -31,7 +31,8 @@ fixed native render fade-in window for newly introduced chunks to reduce
 dynamic mixed-LOD visual swaps. Version 1.0.7 extends both native render fade
 windows to 24 frames. Version 1.0.8 keeps the previous render instance alive
 when an existing chunk key receives replacement mesh data, then fades that
-previous instance out while the replacement fades in. The
+previous instance out while the replacement fades in. Version 1.0.9 also
+publishes `wt_fade_opacity` for custom shader materials. The
 topology qualification adds explicit
 Godot clockwise render winding, matching one-sided collision winding, outside
 ray proof, canonical primary/secondary transition deformation, convex refined
@@ -55,7 +56,7 @@ mixed-LOD manifold validation.
 | telemetry | bounded binary trace and 60-second orchestration soak complete | immutable public runtime/application metrics snapshot is checked by PQ3 |
 | shutdown | queued Godot application teardown is tested | source, compacted, and migrated clean-project worlds stop with zero retained resources |
 
-The addon version is `1.0.8` with milestone identity `PQ4`.
+The addon version is `1.0.9` with milestone identity `PQ4`.
 
 ## Finite qualification gates
 
@@ -149,11 +150,12 @@ Status: complete on 2026-06-22.
 - complete: bound native fade-in of newly introduced render chunks after
   replacement application;
 - complete: native same-key render mesh replacement crossfade;
+- complete: native per-instance shader fade opacity parameter;
 - complete: rerun the full PQ3 matrix against the exact release directory.
 
 Exit: passed. Reference evidence is
 `docs/evidence/pq4_release_windows_x86_64.json`; the ignored local release is
-`artifacts/release/world-transvoxel-1.0.8-windows-x86_64/`.
+`artifacts/release/world-transvoxel-1.0.9-windows-x86_64/`.
 
 M6 compute acceleration is optional and outside these required gates. The
 independent 0BSD backend may now enter its separate qualification.
