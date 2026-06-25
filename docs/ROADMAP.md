@@ -77,7 +77,8 @@ complete. Native-backed inspect, validation, and world migration tools are
 also complete, together with the deterministic dense-volume command-line
 baker and its thin Godot editor entry point. The dense baker now streams
 validation, samples through a fixed file cache, and writes one page at a time;
-its output remains byte-identical to the 1.0.2 baker. The schema-1 codec
+page output remains byte-identical to the 1.0.2 baker while the world manifest
+hash remains release-versioned through generator provenance. The schema-1 codec
 decision is resolved as `none` only.
 
 - versioned binary world/chunk/edit formats;
@@ -130,14 +131,17 @@ Exit: compute is enabled only where end-to-end measurements beat CPU.
 
 ## Production finish line
 
-Status: complete on 2026-06-23 for World Transvoxel 1.0.3.
+Status: complete on 2026-06-25 for World Transvoxel 1.0.4.
 
 World Transvoxel 1.0.0 is withdrawn due to incorrect Godot-facing winding and
 incomplete convex mixed-LOD corner deformation.
 
 World Transvoxel 1.0.1 is superseded because moving-viewer LOD changes retired
 old chunks before replacement application. Version 1.0.2 stages retirement
-until replacement render/collision readiness is confirmed.
+until replacement render/collision readiness is confirmed. Version 1.0.3 is
+superseded by 1.0.4 because dynamic mixed-LOD viewer motion could retire a
+large ready replacement set in one frame; 1.0.4 keeps staged retirement and
+adds a bounded per-frame retirement flush.
 
 Finite qualification gates are tracked in
 `docs/production/QUALIFICATION_AUDIT.md`:

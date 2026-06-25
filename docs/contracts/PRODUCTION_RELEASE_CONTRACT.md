@@ -7,11 +7,13 @@ render/collision winding and incomplete convex mixed-LOD corner deformation.
 
 World Transvoxel 1.0.1 is superseded because it could expose transient holes
 during moving-viewer LOD replacement. World Transvoxel 1.0.2 is superseded by
-1.0.3's byte-compatible bounded bake lifetime. World Transvoxel 1.0.3 is
-released as a deterministic directory, not an archive:
+1.0.3's bounded bake lifetime. World Transvoxel 1.0.3 is superseded because
+dynamic mixed-LOD viewer motion could retire a large ready replacement set in
+one frame. World Transvoxel 1.0.4 is released as a deterministic directory,
+not an archive:
 
 ```text
-artifacts/release/world-transvoxel-1.0.3-windows-x86_64/
+artifacts/release/world-transvoxel-1.0.4-windows-x86_64/
 ```
 
 The directory contains the complete `addons/world_transvoxel` install,
@@ -59,6 +61,7 @@ PQ4 passes only when:
   intermediates;
 - all required 0BSD/MIT notices and pinned upstream bytes pass audit;
 - the packaged bake and storage tools produce and validate a real world;
+- ready chunk retirement removal is bounded per frame in the native runtime;
 - the exact release addon passes the complete PQ3 Godot 4.6.3/4.7
   debug/release clean-install workflow;
 - public API, supported matrix, and operational limits ship inside the addon.

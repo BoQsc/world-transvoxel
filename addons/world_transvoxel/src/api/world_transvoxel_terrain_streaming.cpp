@@ -10,6 +10,11 @@
 #include <string>
 
 namespace world_transvoxel {
+namespace {
+
+constexpr std::size_t kChunkRetirementFlushBudget = 4U;
+
+} // namespace
 
 void WorldTransvoxelTerrain::_process(double delta) {
 	(void)delta;
@@ -260,12 +265,18 @@ void WorldTransvoxelTerrain::flush_ready_chunk_retirements() {
 		}
 		if (!record.fully_ready()) return;
 	}
-	for (const WtChunkKey &key : pending_chunk_retirements_) {
+	std::size_t retired_count = 0;
+	while (
+		retired_count < kChunkRetirementFlushBudget &&
+		!pending_chunk_retirements_.empty()
+	) {
+		const WtChunkKey key = pending_chunk_retirements_.front();
 		application_->forget_chunk(key);
 		render_sink_->remove_render(key);
 		collision_sink_->remove_collision(key);
+		pending_chunk_retirements_.erase(pending_chunk_retirements_.begin());
+		++retired_count;
 	}
-	pending_chunk_retirements_.clear();
 }
 
 void WorldTransvoxelTerrain::reset_world_application(std::size_t capacity) {

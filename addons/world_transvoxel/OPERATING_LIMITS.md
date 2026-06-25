@@ -1,8 +1,8 @@
-# World Transvoxel 1.0.3 Operating Limits
+# World Transvoxel 1.0.4 Operating Limits
 
 ## Qualified release matrix
 
-The 1.0.3 release is qualified only for:
+The 1.0.4 release is qualified only for:
 
 | Component | Supported value |
 | --- | --- |
@@ -34,6 +34,7 @@ release even if the source can be compiled for them.
 | trace events | 65,536 | 262,144 |
 | render apply budget per frame | 4 | 128 |
 | collision apply budget per frame | 2 | 128 |
+| ready chunk retirement removals per frame | 4 | fixed in 1.0.4 |
 | collision activation/deactivation | 96 / 128 | finite, nonnegative |
 
 Viewer capacity multiplied by demand capacity per viewer may not exceed
@@ -83,6 +84,8 @@ through a controlled stop/start before it becomes active.
   current replacement set is fully ready. During sustained movement, resource
   and application-record ownership can temporarily approach twice the active
   chunk capacity; it returns to the current desired set after streaming settles.
+  Once replacements are fully ready, old chunk removal is capped at four chunks
+  per frame to avoid a large one-frame dynamic LOD visual swap.
 - Authoritative sample queries can fail for absent, corrupt, misaligned, or
   disagreeing overlapping pages.
 - Output paths for bake, migration, and compaction must not already exist.

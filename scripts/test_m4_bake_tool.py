@@ -14,7 +14,7 @@ from wt_script_common import REPO_ROOT, native_tool_path
 
 
 EXPECTED_RELEASE_COMPAT_WORLD_SHA256 = (
-    "9ab9d7c9dba2ef01717d9cf5bd952bb6c21451d668f0502d3cbfa88e1204762c"
+    "3d3423ccb3f4752d56ba6a84914fe621bf67dcd51695630621a5069f7fc0741d"
 )
 
 

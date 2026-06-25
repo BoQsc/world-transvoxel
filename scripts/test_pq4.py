@@ -193,6 +193,21 @@ def audit_release(root: Path) -> dict[str, object]:
         if "wt_script_common" in script or "bootstrap_toolchain" in script:
             raise RuntimeError(f"PQ4 packaged {script_name} imports repository code.")
 
+    streaming_source = (
+        addon
+        / "src"
+        / "api"
+        / "world_transvoxel_terrain_streaming.cpp"
+    ).read_text(encoding="utf-8")
+    operating_limits = (addon / "OPERATING_LIMITS.md").read_text(
+        encoding="utf-8"
+    )
+    if (
+        "kChunkRetirementFlushBudget = 4U" not in streaming_source
+        or "ready chunk retirement removals per frame | 4" not in operating_limits
+    ):
+        raise RuntimeError("PQ4 release retirement flush budget is not locked.")
+
     manifest_path = root / "RELEASE_MANIFEST.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if (
@@ -416,6 +431,7 @@ def test_pq4(
             "qualified_support_matrix_only": True,
             "public_api_documented": True,
             "operational_limits_documented": True,
+            "ready_chunk_retirement_bounded": True,
             "license_notices_complete": True,
             "official_mit_provenance_verified": True,
             "self_contained_bake_and_storage_tools": True,
