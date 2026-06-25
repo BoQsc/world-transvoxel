@@ -6,6 +6,7 @@ const COLLISION_COUNT := 16
 const RENDER_BUDGET := 4
 const COLLISION_BUDGET := 2
 const FRAMES_PER_RUN := 8
+const MAX_RENDER_RESOURCE_COUNT := 160
 
 
 func _initialize() -> void:
@@ -61,9 +62,18 @@ func _run_scenario(terrain: Node, generation: int) -> Dictionary:
 	if terrain.get_queued_render_count() != 0 or \
 			terrain.get_queued_collision_count() != 0:
 		return {"valid": false, "message": "application queues did not drain"}
-	if terrain.get_render_resource_count() != RENDER_COUNT or \
-			terrain.get_collision_resource_count() != COLLISION_COUNT:
-		return {"valid": false, "message": "resource count mismatch"}
+	var render_resources: int = terrain.get_render_resource_count()
+	var collision_resources: int = terrain.get_collision_resource_count()
+	if render_resources < RENDER_COUNT or \
+			render_resources > MAX_RENDER_RESOURCE_COUNT or \
+			collision_resources != COLLISION_COUNT:
+		return {
+			"valid": false,
+			"message": "resource count mismatch render=%d collision=%d" % [
+				render_resources,
+				collision_resources,
+			],
+		}
 	if terrain.get_render_latency_frames_maximum() != FRAMES_PER_RUN or \
 			terrain.get_collision_latency_frames_maximum() != FRAMES_PER_RUN:
 		return {"valid": false, "message": "readiness latency mismatch"}

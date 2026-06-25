@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <map>
 #include <thread>
+#include <vector>
 
 namespace godot {
 class MeshInstance3D;
@@ -29,6 +30,7 @@ public:
 
 private:
 	struct Record {
+		WtChunkKey key;
 		godot::MeshInstance3D *instance = nullptr;
 		WtGenerationToken generation;
 		float current_transparency = 0.0F;
@@ -44,6 +46,7 @@ private:
 	godot::Node3D &owner_;
 	std::thread::id owner_thread_;
 	std::map<WtChunkKey, Record> records_;
+	std::vector<Record> replacement_retirements_;
 };
 
 } // namespace world_transvoxel

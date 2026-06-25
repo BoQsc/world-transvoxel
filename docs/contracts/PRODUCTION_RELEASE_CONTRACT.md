@@ -13,12 +13,13 @@ one frame. World Transvoxel 1.0.5 also applies a fixed native render fade-out to
 retiring chunks after replacement application. World Transvoxel 1.0.6 also
 applies a fixed native render fade-in to newly introduced chunks. World
 Transvoxel 1.0.7 extends both native render fade windows to 24 frames. World
-Transvoxel 1.0.7 is
+Transvoxel 1.0.8 also crossfades same-key render mesh replacement instead of
+swapping already visible mesh data at full opacity. World Transvoxel 1.0.8 is
 released as a deterministic directory,
 not an archive:
 
 ```text
-artifacts/release/world-transvoxel-1.0.7-windows-x86_64/
+artifacts/release/world-transvoxel-1.0.8-windows-x86_64/
 ```
 
 The directory contains the complete `addons/world_transvoxel` install,

@@ -38,13 +38,16 @@ must process no more than its configured budget. At the eighth frame:
 
 - both queues are empty;
 - all 32 expected generations are fully ready;
-- exactly 32 render and 16 collision resources are owned;
+- between 32 and 160 render resources are owned, allowing bounded native
+  same-key mesh replacement crossfade under rapid replacement;
+- exactly 16 collision resources are owned;
 - maximum render and collision queue latency is eight application ticks.
 
 One cold creation run is recorded separately. Warmup and measured runs replace
-the same keys with newer generations, proving that replacement does not create
-duplicate chunk nodes. Final teardown removes all resources and records its
-main-thread duration.
+the same keys with newer generations, proving that replacement creates only a
+bounded temporary native render crossfade set and does not duplicate collision
+resources. Final teardown removes all active and temporary resources and records
+its main-thread duration.
 
 `WtM5ApplicationBenchmarkFixture` exists only to create deterministic immutable
 payloads and time the production application boundary. GDScript parses command

@@ -198,15 +198,10 @@ std::uint64_t WtM5ApplicationBenchmarkFixture::clear(
 	WtGodotCollisionSink &collision_sink
 ) {
 	const Clock::time_point start = Clock::now();
+	render_sink.clear();
+	collision_sink.clear();
 	for (std::size_t index = 0; index < active_x_.size(); ++index) {
 		const WtChunkKey key = { active_x_[index], 0, 0, 0 };
-		if (render_sink.applied_generation(key).value != 0) {
-			render_sink.remove_render(key);
-		}
-		if (index < collision_count_ &&
-			collision_sink.applied_generation(key).value != 0) {
-			collision_sink.remove_collision(key);
-		}
 		application.forget_chunk(key);
 	}
 	active_x_.clear();

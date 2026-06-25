@@ -219,6 +219,8 @@ def audit_release(root: Path) -> dict[str, object]:
     if (
         "kRenderRetirementFadeFrames = 24U" not in render_sink_source
         or "kRenderIntroductionFadeFrames = 24U" not in render_sink_source
+        or "replacement_retirements_" not in render_sink_source
+        or "same-key render mesh replacement crossfade | native" not in operating_limits
         or "render_fading_resources" not in metrics_source
         or "render retirement fade duration | 24 frames" not in operating_limits
         or "render introduction fade duration | 24 frames" not in operating_limits

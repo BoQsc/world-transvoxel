@@ -14,53 +14,53 @@
     "self_contained_bake_and_storage_tools": true
   },
   "artifact": {
-    "bytes": 6242499,
-    "content_sha256": "7fb7658c4c0daf28a92ddae28e40f566d283a332269e512a0a7d7d970e265271",
+    "bytes": 6247174,
+    "content_sha256": "f3c960b44fe54099b2168a6e2ffed931c23f7d23511fd0d9c3bcf13dcf3352fe",
     "file_count": 147,
     "format": "directory",
-    "manifest_sha256": "0d1666a8b6070e33992dd013298574ee2645e1a77f6af68a8bcc45a3440e3015",
+    "manifest_sha256": "c4fbf20d33d4bb654e7f2f89a6a0dd5fad72926e1b828ae3a4f89bbb993e4c89",
     "official_transvoxel_cpp_sha256": "83a5511346b54c42e4e66dec916d3971c92f4fbda1c7878cbad5901a820dcab4",
-    "path": "artifacts/release/world-transvoxel-1.0.7-windows-x86_64",
+    "path": "artifacts/release/world-transvoxel-1.0.8-windows-x86_64",
     "reproducible_builds": 2,
-    "sha256": "1cbb0df7ccc69b018168b5d0185fd52c5256b50d1456be40f2a487e40ca47140"
+    "sha256": "fcea7b013c7fdf251cc7a6208e142973384babc46ec332240751f028f6f4744e"
   },
   "clean_install_soak": {
     "case_count": 4,
     "cases": [
       {
-        "actual_duration_ms": 15347,
+        "actual_duration_ms": 15310,
         "configuration": "template_debug",
-        "distribution_sha256": "70864e37045b707b790b647fea187c74ec717b80d5b04df8f5bf5e2c6de3ce71",
+        "distribution_sha256": "6717e5e5af148eb0ee3e2577e9539aa40b7b994a3687b2ab9956e681dffd9411",
         "engine_version": "4.6.3",
-        "runtime_binary_sha256": "c440f32db0ed4234794656a259d88f6b3c83fe18db13dc75c4428c911124867e",
+        "runtime_binary_sha256": "acd9dc5c730d4011db5aa7fb14d9160f23ae331eaa8ed789ccb2717e36d074a9",
         "shutdown": "clean"
       },
       {
-        "actual_duration_ms": 15202,
+        "actual_duration_ms": 15005,
         "configuration": "template_debug",
-        "distribution_sha256": "70864e37045b707b790b647fea187c74ec717b80d5b04df8f5bf5e2c6de3ce71",
+        "distribution_sha256": "6717e5e5af148eb0ee3e2577e9539aa40b7b994a3687b2ab9956e681dffd9411",
         "engine_version": "4.7",
-        "runtime_binary_sha256": "c440f32db0ed4234794656a259d88f6b3c83fe18db13dc75c4428c911124867e",
+        "runtime_binary_sha256": "acd9dc5c730d4011db5aa7fb14d9160f23ae331eaa8ed789ccb2717e36d074a9",
         "shutdown": "clean"
       },
       {
-        "actual_duration_ms": 15271,
+        "actual_duration_ms": 15270,
         "configuration": "template_release",
-        "distribution_sha256": "39510519ba22d73c0865ecee651db83d0b73f08e7171f3dafa1876b68ef9dc16",
+        "distribution_sha256": "7d0cbaaead563dac4ebd1b0153483d0e72f8a3ab9a0cf2e1cce0308bdce3b60d",
         "engine_version": "4.6.3",
-        "runtime_binary_sha256": "1960c799bb7bec7d949ff5627f4a0834a53fdb836cf69cfcb76d68b758627a5c",
+        "runtime_binary_sha256": "6fc2f31f898847c15389ac9f2b952b255887cdce8dfa5c69360efe167d7ec64c",
         "shutdown": "clean"
       },
       {
-        "actual_duration_ms": 15144,
+        "actual_duration_ms": 15184,
         "configuration": "template_release",
-        "distribution_sha256": "39510519ba22d73c0865ecee651db83d0b73f08e7171f3dafa1876b68ef9dc16",
+        "distribution_sha256": "7d0cbaaead563dac4ebd1b0153483d0e72f8a3ab9a0cf2e1cce0308bdce3b60d",
         "engine_version": "4.7",
-        "runtime_binary_sha256": "1960c799bb7bec7d949ff5627f4a0834a53fdb836cf69cfcb76d68b758627a5c",
+        "runtime_binary_sha256": "6fc2f31f898847c15389ac9f2b952b255887cdce8dfa5c69360efe167d7ec64c",
         "shutdown": "clean"
       }
     ],
-    "distribution_manifest_sha256": "0d1666a8b6070e33992dd013298574ee2645e1a77f6af68a8bcc45a3440e3015",
+    "distribution_manifest_sha256": "c4fbf20d33d4bb654e7f2f89a6a0dd5fad72926e1b828ae3a4f89bbb993e4c89",
     "requested_duration_ms_per_case": 15000
   },
   "host": {
@@ -71,14 +71,14 @@
     "system": "Windows"
   },
   "packaged_tools": {
-    "bake_report_sha256": "bebe13da638fddc7bee68dee9be39efbf8e6252a26702c6e0b37d464b5fc99e4",
+    "bake_report_sha256": "8f7262d73897097cc4a3d0cd6c0f260af9a8a9ac671988baa9dc33c79f57ea16",
     "bounded": true,
     "pages": 1,
     "peak_page_payloads": 1,
     "source_cache_bytes": 196608,
-    "world_sha256": "bebe13da638fddc7bee68dee9be39efbf8e6252a26702c6e0b37d464b5fc99e4"
+    "world_sha256": "8f7262d73897097cc4a3d0cd6c0f260af9a8a9ac671988baa9dc33c79f57ea16"
   },
   "schema": 1,
   "scope": "pq4_production_release",
-  "version": "1.0.7"
+  "version": "1.0.8"
 }
