@@ -1,8 +1,8 @@
-# World Transvoxel 1.0.6 Operating Limits
+# World Transvoxel 1.0.7 Operating Limits
 
 ## Qualified release matrix
 
-The 1.0.6 release is qualified only for:
+The 1.0.7 release is qualified only for:
 
 | Component | Supported value |
 | --- | --- |
@@ -35,8 +35,8 @@ release even if the source can be compiled for them.
 | render apply budget per frame | 4 | 128 |
 | collision apply budget per frame | 2 | 128 |
 | ready chunk retirement removals per frame | 4 | fixed in 1.0.4 |
-| render retirement fade duration | 12 frames | fixed in 1.0.5 |
-| render introduction fade duration | 12 frames | fixed in 1.0.6 |
+| render retirement fade duration | 24 frames | fixed in 1.0.7 |
+| render introduction fade duration | 24 frames | fixed in 1.0.7 |
 | collision activation/deactivation | 96 / 128 | finite, nonnegative |
 
 Viewer capacity multiplied by demand capacity per viewer may not exceed
@@ -88,9 +88,9 @@ through a controlled stop/start before it becomes active.
   chunk capacity; it returns to the current desired set after streaming settles.
   Once replacements are fully ready, old chunk removal is capped at four chunks
   per frame to avoid a large one-frame dynamic LOD visual swap. Retiring render
-  chunks remain render-only for 12 frames and fade out through native
+  chunks remain render-only for 24 frames and fade out through native
   `GeometryInstance3D` transparency; newly introduced render chunks fade in
-  through the same native transparency path for 12 frames. Collision is removed
+  through the same native transparency path for 24 frames. Collision is removed
   at retirement.
 - Authoritative sample queries can fail for absent, corrupt, misaligned, or
   disagreeing overlapping pages.

@@ -14,17 +14,19 @@ applied. World Transvoxel 1.0.3 is superseded because dynamic mixed-LOD viewer
 motion could retire a large replacement set in one frame, producing visible LOD
 swap popping. World Transvoxel 1.0.5 is superseded because it faded retiring
 chunks but introduced replacement chunks abruptly. World Transvoxel 1.0.6 is
+superseded because its 12-frame native crossfade still exceeded the sandbox
+multi-view temporal gross-pop gate. World Transvoxel 1.0.7 is
 the current official MIT-backed addon
 for Windows x86-64 with Godot 4.6.3 and 4.7. It retains the topology fixes,
 bounded application-confirmed chunk retirement, continuous-motion
 render/collision regression coverage, bounded dense baking, and caps ready
 chunk retirement removal to a small per-frame budget. It also fades retiring
-and newly introduced render chunks for fixed native frame windows after
+and newly introduced render chunks for fixed 24-frame native windows after
 replacement application, so visual chunks are not removed or introduced as a
 one-frame render swap. The deterministic install directory is:
 
 ```text
-artifacts/release/world-transvoxel-1.0.6-windows-x86_64/
+artifacts/release/world-transvoxel-1.0.7-windows-x86_64/
 ```
 
 Copy its `addons/world_transvoxel/` directory and retain the included license
@@ -111,7 +113,7 @@ replay, stale rejection, exact authoritative scalar/material queries,
 side-by-side snapshot compaction, schema-1.0 migration, and reopen
 equivalence. PQ3 is complete: an isolated copied-addon project now passes the
 15-second full-world edit/query/compact/migrate/reopen soak on Godot 4.6.3 and
-4.7 with debug and release binaries. PQ4 is complete for 1.0.6, and the
+4.7 with debug and release binaries. PQ4 is complete for 1.0.7, and the
 official MIT-backed addon is production-ready within the documented Windows
 x86-64 support matrix.
 

@@ -217,11 +217,11 @@ def audit_release(root: Path) -> dict[str, object]:
     ):
         raise RuntimeError("PQ4 release retirement flush budget is not locked.")
     if (
-        "kRenderRetirementFadeFrames = 12U" not in render_sink_source
-        or "kRenderIntroductionFadeFrames = 12U" not in render_sink_source
+        "kRenderRetirementFadeFrames = 24U" not in render_sink_source
+        or "kRenderIntroductionFadeFrames = 24U" not in render_sink_source
         or "render_fading_resources" not in metrics_source
-        or "render retirement fade duration | 12 frames" not in operating_limits
-        or "render introduction fade duration | 12 frames" not in operating_limits
+        or "render retirement fade duration | 24 frames" not in operating_limits
+        or "render introduction fade duration | 24 frames" not in operating_limits
     ):
         raise RuntimeError("PQ4 release render fade windows are not locked.")
 

@@ -17,8 +17,8 @@
 namespace world_transvoxel {
 namespace {
 
-constexpr std::uint32_t kRenderRetirementFadeFrames = 12U;
-constexpr std::uint32_t kRenderIntroductionFadeFrames = 12U;
+constexpr std::uint32_t kRenderRetirementFadeFrames = 24U;
+constexpr std::uint32_t kRenderIntroductionFadeFrames = 24U;
 
 godot::String chunk_name(const WtChunkKey &key) {
 	return godot::String("WT_Render_") + godot::String::num_int64(key.x) + "_" +
