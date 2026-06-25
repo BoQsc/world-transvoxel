@@ -199,6 +199,15 @@ def audit_release(root: Path) -> dict[str, object]:
         / "api"
         / "world_transvoxel_terrain_streaming.cpp"
     ).read_text(encoding="utf-8")
+    metrics_source = (
+        addon
+        / "src"
+        / "api"
+        / "world_transvoxel_terrain_metrics.cpp"
+    ).read_text(encoding="utf-8")
+    render_sink_source = (
+        addon / "src" / "render" / "wt_godot_render_sink.cpp"
+    ).read_text(encoding="utf-8")
     operating_limits = (addon / "OPERATING_LIMITS.md").read_text(
         encoding="utf-8"
     )
@@ -207,6 +216,12 @@ def audit_release(root: Path) -> dict[str, object]:
         or "ready chunk retirement removals per frame | 4" not in operating_limits
     ):
         raise RuntimeError("PQ4 release retirement flush budget is not locked.")
+    if (
+        "kRenderRetirementFadeFrames = 12U" not in render_sink_source
+        or "render_fading_resources" not in metrics_source
+        or "render retirement fade duration | 12 frames" not in operating_limits
+    ):
+        raise RuntimeError("PQ4 release render retirement fade is not locked.")
 
     manifest_path = root / "RELEASE_MANIFEST.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -432,6 +447,7 @@ def test_pq4(
             "public_api_documented": True,
             "operational_limits_documented": True,
             "ready_chunk_retirement_bounded": True,
+            "ready_chunk_retirement_fade_bounded": True,
             "license_notices_complete": True,
             "official_mit_provenance_verified": True,
             "self_contained_bake_and_storage_tools": True,

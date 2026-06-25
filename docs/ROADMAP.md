@@ -131,7 +131,7 @@ Exit: compute is enabled only where end-to-end measurements beat CPU.
 
 ## Production finish line
 
-Status: complete on 2026-06-25 for World Transvoxel 1.0.4.
+Status: complete on 2026-06-25 for World Transvoxel 1.0.5.
 
 World Transvoxel 1.0.0 is withdrawn due to incorrect Godot-facing winding and
 incomplete convex mixed-LOD corner deformation.
@@ -141,7 +141,8 @@ old chunks before replacement application. Version 1.0.2 stages retirement
 until replacement render/collision readiness is confirmed. Version 1.0.3 is
 superseded by 1.0.4 because dynamic mixed-LOD viewer motion could retire a
 large ready replacement set in one frame; 1.0.4 keeps staged retirement and
-adds a bounded per-frame retirement flush.
+adds a bounded per-frame retirement flush. Version 1.0.5 adds a fixed native
+render fade-out window for retiring chunks after replacement application.
 
 Finite qualification gates are tracked in
 `docs/production/QUALIFICATION_AUDIT.md`:

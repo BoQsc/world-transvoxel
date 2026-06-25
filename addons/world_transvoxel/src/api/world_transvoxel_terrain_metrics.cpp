@@ -1,5 +1,6 @@
 #include "api/world_transvoxel_terrain.h"
 
+#include "render/wt_godot_render_sink.h"
 #include "services/wt_chunk_application.h"
 
 #include <godot_cpp/core/class_db.hpp>
@@ -118,6 +119,9 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	output["queued_render"] = get_queued_render_count();
 	output["queued_collision"] = get_queued_collision_count();
 	output["render_resources"] = get_render_resource_count();
+	output["render_fading_resources"] = static_cast<std::int64_t>(
+		render_sink_->fading_count()
+	);
 	output["collision_resources"] = get_collision_resource_count();
 	return output;
 }

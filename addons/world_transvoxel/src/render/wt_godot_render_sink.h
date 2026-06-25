@@ -4,6 +4,7 @@
 
 #include <godot_cpp/classes/node3d.hpp>
 
+#include <cstdint>
 #include <map>
 #include <thread>
 
@@ -19,14 +20,19 @@ public:
 
 	bool apply_render(const WtRenderPayload &payload) override;
 	bool remove_render(const WtChunkKey &key);
+	bool begin_render_retirement(const WtChunkKey &key);
+	void advance_retirements();
 	void clear();
 	std::size_t resource_count() const noexcept;
+	std::size_t fading_count() const noexcept;
 	WtGenerationToken applied_generation(const WtChunkKey &key) const noexcept;
 
 private:
 	struct Record {
 		godot::MeshInstance3D *instance = nullptr;
 		WtGenerationToken generation;
+		std::uint32_t retirement_frame = 0;
+		bool retiring = false;
 	};
 
 	bool on_owner_thread() const noexcept;

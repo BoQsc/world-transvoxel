@@ -26,6 +26,7 @@ void WorldTransvoxelTerrain::_process(double delta) {
 		*collision_sink_
 	);
 	flush_ready_chunk_retirements();
+	render_sink_->advance_retirements();
 	notify_lifecycle_state();
 }
 
@@ -272,7 +273,7 @@ void WorldTransvoxelTerrain::flush_ready_chunk_retirements() {
 	) {
 		const WtChunkKey key = pending_chunk_retirements_.front();
 		application_->forget_chunk(key);
-		render_sink_->remove_render(key);
+		render_sink_->begin_render_retirement(key);
 		collision_sink_->remove_collision(key);
 		pending_chunk_retirements_.erase(pending_chunk_retirements_.begin());
 		++retired_count;

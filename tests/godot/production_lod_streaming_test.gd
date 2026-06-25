@@ -99,6 +99,9 @@ func _run_test() -> void:
 		return
 	terrain.call("set_render_apply_budget", render_budget)
 	terrain.call("set_collision_apply_budget", collision_budget)
+	if not await _wait_for_render_fade(terrain):
+		_fail("moving multi-LOD replacement did not enter render fade")
+		return
 	if not await _wait_for_counts(terrain, 13, 13):
 		_fail("moving multi-LOD resources did not settle")
 		return
@@ -154,6 +157,17 @@ func _wait_for_plan(terrain: Node, previous_count: int) -> bool:
 	for _frame in range(900):
 		var metrics: Dictionary = terrain.call("get_runtime_metrics")
 		if int(metrics.get("planned_demands", 0)) > previous_count:
+			await process_frame
+			return true
+		await process_frame
+	return false
+
+
+func _wait_for_render_fade(terrain: Node) -> bool:
+	for _frame in range(900):
+		var metrics: Dictionary = terrain.call("get_runtime_metrics")
+		if int(metrics.get("pending_chunk_retirements", 0)) == 0 and \
+				int(metrics.get("render_fading_resources", 0)) > 0:
 			await process_frame
 			return true
 		await process_frame

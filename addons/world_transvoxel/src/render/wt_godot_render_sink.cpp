@@ -12,8 +12,12 @@
 #include <godot_cpp/variant/vector2.hpp>
 #include <godot_cpp/variant/vector3.hpp>
 
+#include <cstdint>
+
 namespace world_transvoxel {
 namespace {
+
+constexpr std::uint32_t kRenderRetirementFadeFrames = 12U;
 
 godot::String chunk_name(const WtChunkKey &key) {
 	return godot::String("WT_Render_") + godot::String::num_int64(key.x) + "_" +
@@ -94,6 +98,9 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 		record.instance->set_name(chunk_name(payload.key));
 		owner_.add_child(record.instance);
 	}
+	record.retiring = false;
+	record.retirement_frame = 0;
+	record.instance->set_transparency(0.0F);
 	record.instance->set_position(to_godot(payload.world_origin));
 	record.instance->set_mesh(mesh);
 	record.generation = payload.generation;
@@ -114,6 +121,51 @@ bool WtGodotRenderSink::remove_render(const WtChunkKey &key) {
 	return true;
 }
 
+bool WtGodotRenderSink::begin_render_retirement(const WtChunkKey &key) {
+	if (!on_owner_thread()) {
+		return false;
+	}
+	const auto iterator = records_.find(key);
+	if (iterator == records_.end()) {
+		return false;
+	}
+	Record &record = iterator->second;
+	if (record.instance == nullptr) {
+		records_.erase(iterator);
+		return false;
+	}
+	record.retiring = true;
+	record.retirement_frame = 0;
+	record.instance->set_transparency(0.0F);
+	return true;
+}
+
+void WtGodotRenderSink::advance_retirements() {
+	if (!on_owner_thread()) {
+		return;
+	}
+	for (auto iterator = records_.begin(); iterator != records_.end();) {
+		Record &record = iterator->second;
+		if (!record.retiring) {
+			++iterator;
+			continue;
+		}
+		++record.retirement_frame;
+		const float transparency = static_cast<float>(record.retirement_frame) /
+			static_cast<float>(kRenderRetirementFadeFrames);
+		record.instance->set_transparency(
+			transparency < 1.0F ? transparency : 1.0F
+		);
+		if (record.retirement_frame >= kRenderRetirementFadeFrames) {
+			owner_.remove_child(record.instance);
+			record.instance->queue_free();
+			iterator = records_.erase(iterator);
+		} else {
+			++iterator;
+		}
+	}
+}
+
 void WtGodotRenderSink::clear() {
 	if (!on_owner_thread()) {
 		return;
@@ -127,6 +179,14 @@ void WtGodotRenderSink::clear() {
 
 std::size_t WtGodotRenderSink::resource_count() const noexcept {
 	return records_.size();
+}
+
+std::size_t WtGodotRenderSink::fading_count() const noexcept {
+	std::size_t count = 0;
+	for (const auto &entry : records_) {
+		count += entry.second.retiring ? 1U : 0U;
+	}
+	return count;
 }
 
 WtGenerationToken WtGodotRenderSink::applied_generation(

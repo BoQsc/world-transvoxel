@@ -20,7 +20,7 @@ from wt_script_common import (
 )
 
 
-RELEASE_VERSION = "1.0.4"
+RELEASE_VERSION = "1.0.5"
 RELEASE_NAME = f"world-transvoxel-{RELEASE_VERSION}-windows-x86_64"
 DEFAULT_RELEASE_ROOT = REPO_ROOT / "artifacts" / "release" / RELEASE_NAME
 NOTICE_PATHS = (

@@ -44,11 +44,12 @@ could expose transient replacement holes. Version 1.0.2 stages old chunks
 until replacement render/collision readiness. Version 1.0.3 retains that
 runtime behavior and replaces whole-source/all-page bake allocation with
 bounded file-backed sampling and one-page output. Version 1.0.4 retains the
-bounded baker and caps ready chunk retirement removal per frame to reduce
-dynamic mixed-LOD visual swaps; it is qualified for Windows x86-64 with both
-engines. The release ships API/limit documentation, addon-local bake/storage
-wrappers, runtime DLLs, and native tools. Compute acceleration is optional
-later work.
+bounded baker and caps ready chunk retirement removal per frame. Version 1.0.5
+adds a fixed native render fade-out window for retiring chunks after replacement
+application to reduce dynamic mixed-LOD visual swaps; it is qualified for
+Windows x86-64 with both engines. The release ships API/limit documentation,
+addon-local bake/storage wrappers, runtime DLLs, and native tools. Compute
+acceleration is optional later work.
 
 Build from the repository root:
 
