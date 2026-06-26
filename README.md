@@ -29,10 +29,11 @@ and newly introduced render chunks for fixed 24-frame native windows after
 replacement application, so visual chunks are not removed or introduced as a
 one-frame render swap, and same-key render mesh replacement keeps the previous
 mesh as a temporary retiring instance while the replacement mesh fades in. The
-fade state is also published to custom shaders through the per-instance
-`wt_fade_opacity` parameter. Development build `1.0.11-dev` keeps that shader
-parameter transient so stable fully visible chunks do not consume Godot
-instance-shader storage at large visual scales. The
+fade state can also be published to custom shaders through the opt-in
+per-instance `wt_fade_opacity` parameter. Development build `1.0.11-dev`
+keeps that shader parameter disabled by default because Godot retains
+per-instance shader-parameter slots after use; native engine transparency fade
+remains active without consuming those slots at large visual scales. The
 deterministic install directory is:
 
 ```text
@@ -47,9 +48,10 @@ against this baseline.
 The working tree may contain post-PQ4 development builds. Version
 `1.0.10-dev` adds native batched authoritative sample queries for sandbox S1
 terrain-edit latency work. Version `1.0.11-dev` clears default
-`wt_fade_opacity` instance parameters after fade completion for S2 large-scale
-visual evidence. These development builds are not the deterministic 1.0.9
-release artifact.
+`wt_fade_opacity` instance-parameter allocation by making writes opt-in/default-off
+for S2 large-scale visual evidence and preserves active render-node identity
+during same-key remeshes. These development builds are not the deterministic
+1.0.9 release artifact.
 
 ## Canonical direction
 

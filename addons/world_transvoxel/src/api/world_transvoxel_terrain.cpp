@@ -328,6 +328,9 @@ bool WorldTransvoxelTerrain::start_world(
 		return false;
 	}
 	lifecycle_ = std::move(lifecycle);
+	render_sink_->set_shader_fade_parameter_enabled(
+		configuration_->is_shader_fade_parameter_enabled()
+	);
 	render_sink_->clear();
 	collision_sink_->clear();
 	reset_world_application(static_cast<std::size_t>(

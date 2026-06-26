@@ -61,6 +61,8 @@ public:
 	double get_collision_activation_distance() const noexcept;
 	void set_collision_deactivation_distance(double value);
 	double get_collision_deactivation_distance() const noexcept;
+	void set_shader_fade_parameter_enabled(bool value);
+	bool is_shader_fade_parameter_enabled() const noexcept;
 
 private:
 	std::int64_t active_chunk_capacity_ = 256;
@@ -83,6 +85,7 @@ private:
 	std::int64_t collision_apply_budget_ = 2;
 	double collision_activation_distance_ = 96.0;
 	double collision_deactivation_distance_ = 128.0;
+	bool shader_fade_parameter_enabled_ = false;
 };
 
 } // namespace world_transvoxel

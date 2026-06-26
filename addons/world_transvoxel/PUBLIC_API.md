@@ -101,6 +101,12 @@ This `Resource` exposes the construction-time capacities documented in
 `get_validation_error()`. Configuration is copied when startup begins; stop
 the world before replacing it.
 
+`shader_fade_parameter_enabled` is an opt-in boolean. The default is `false`,
+which keeps native `GeometryInstance3D` transparency fade active without
+allocating Godot per-instance shader-parameter slots. Set it to `true` only for
+small scenes using a custom shader that declares and consumes
+`wt_fade_opacity`.
+
 ## `WorldTransvoxelEditTransaction`
 
 Supported commands:

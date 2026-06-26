@@ -78,6 +78,21 @@ void WorldTransvoxelConfig::_bind_methods() {
 		collision_deactivation_distance,
 		"0,1000000,0.01,or_greater"
 	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("set_shader_fade_parameter_enabled", "enabled"),
+		&WorldTransvoxelConfig::set_shader_fade_parameter_enabled
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("is_shader_fade_parameter_enabled"),
+		&WorldTransvoxelConfig::is_shader_fade_parameter_enabled
+	);
+	ADD_PROPERTY(
+		godot::PropertyInfo(
+			godot::Variant::BOOL, "shader_fade_parameter_enabled"
+		),
+		"set_shader_fade_parameter_enabled",
+		"is_shader_fade_parameter_enabled"
+	);
 }
 
 #undef WT_BIND_FLOAT_PROPERTY
@@ -171,6 +186,16 @@ void WorldTransvoxelConfig::set_collision_deactivation_distance(double value) {
 
 double WorldTransvoxelConfig::get_collision_deactivation_distance() const noexcept {
 	return collision_deactivation_distance_;
+}
+
+void WorldTransvoxelConfig::set_shader_fade_parameter_enabled(bool value) {
+	if (shader_fade_parameter_enabled_ == value) return;
+	shader_fade_parameter_enabled_ = value;
+	emit_changed();
+}
+
+bool WorldTransvoxelConfig::is_shader_fade_parameter_enabled() const noexcept {
+	return shader_fade_parameter_enabled_;
 }
 
 } // namespace world_transvoxel

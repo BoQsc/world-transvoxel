@@ -4,8 +4,8 @@
 
 The 1.0.11-dev S2 development build inherits the 1.0.9 Windows x86-64
 qualification matrix, includes the documented 1.0.10-dev batched authoritative
-sample query, and keeps fade shader instance parameters transient so stable
-large-scale scenes do not exhaust Godot instance-shader storage. It is
+sample query, and makes fade shader instance-parameter writes opt-in/default-off
+so stable large-scale scenes do not exhaust Godot instance-shader storage. It is
 qualified only for:
 
 | Component | Supported value |
@@ -42,7 +42,7 @@ release even if the source can be compiled for them.
 | render retirement fade duration | 24 frames | fixed in 1.0.7 |
 | render introduction fade duration | 24 frames | fixed in 1.0.7 |
 | same-key render mesh replacement crossfade | native | fixed in 1.0.8 |
-| shader fade opacity parameter | `wt_fade_opacity`, transient while fading | fixed in 1.0.11-dev |
+| shader fade opacity parameter | `wt_fade_opacity`, opt-in/default-off | fixed in 1.0.11-dev |
 | collision activation/deactivation | 96 / 128 | finite, nonnegative |
 
 Viewer capacity multiplied by demand capacity per viewer may not exceed
@@ -96,18 +96,18 @@ through a controlled stop/start before it becomes active.
   Once replacements are fully ready, old chunk removal is capped at four chunks
   per frame to avoid a large one-frame dynamic LOD visual swap. Retiring render
   chunks remain render-only for 24 frames and fade out through native
-  `GeometryInstance3D` transparency plus the per-instance shader parameter
-  `wt_fade_opacity`; newly introduced render chunks fade in through the same
-  24-frame path. Same-key render mesh replacements keep the previous mesh as a
+  `GeometryInstance3D` transparency, optionally plus the per-instance shader
+  parameter `wt_fade_opacity`; newly introduced render chunks fade in through
+  the same 24-frame path. Same-key render mesh replacements keep the previous mesh as a
   temporary render-only retiring instance while the replacement mesh fades in,
   so replacement generation application does not swap the visible mesh at full
   opacity. Custom terrain shaders that want deterministic native fade behavior
-  must declare an instance uniform named `wt_fade_opacity` with default `1.0`
-  and apply it to `ALPHA`; otherwise only the engine-level transparency fallback
-  is available. Native code sets this instance parameter only while a render
-  chunk is actively fading and clears it when the chunk returns to the fully
-  visible default, so stable large-scale scenes do not consume one Godot
-  instance-shader slot per chunk. Collision is removed at retirement.
+  through `ALPHA` must declare an instance uniform named `wt_fade_opacity` with
+  default `1.0`, apply it to `ALPHA`, and explicitly enable
+  `WorldTransvoxelConfig.shader_fade_parameter_enabled`. This switch is off by
+  default because Godot retains per-instance shader-parameter slots after use;
+  stable large-scale scenes must keep the default unless the project has a
+  measured shader-slot budget. Collision is removed at retirement.
 - Authoritative sample queries can fail for absent, corrupt, misaligned, or
   disagreeing overlapping pages.
 - Output paths for bake, migration, and compaction must not already exist.

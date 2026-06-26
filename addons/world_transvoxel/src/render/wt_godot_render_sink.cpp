@@ -73,6 +73,9 @@ void WtGodotRenderSink::set_record_transparency(
 ) noexcept {
 	record.current_transparency = clamp_unit(value);
 	record.instance->set_transparency(record.current_transparency);
+	if (!shader_fade_parameter_enabled_) {
+		return;
+	}
 	const float fade_opacity = 1.0F - record.current_transparency;
 	const godot::StringName parameter(kFadeOpacityShaderParameter);
 	if (fade_opacity < (kDefaultFadeOpacity - kFadeOpacityEpsilon)) {
@@ -311,6 +314,16 @@ WtGenerationToken WtGodotRenderSink::applied_generation(
 ) const noexcept {
 	const auto iterator = records_.find(key);
 	return iterator == records_.end() ? WtGenerationToken{} : iterator->second.generation;
+}
+
+void WtGodotRenderSink::set_shader_fade_parameter_enabled(
+	bool enabled
+) noexcept {
+	shader_fade_parameter_enabled_ = enabled;
+}
+
+bool WtGodotRenderSink::is_shader_fade_parameter_enabled() const noexcept {
+	return shader_fade_parameter_enabled_;
 }
 
 bool WtGodotRenderSink::on_owner_thread() const noexcept {

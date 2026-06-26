@@ -55,9 +55,9 @@ custom terrain shaders can participate in the same native fade contract; it is
 qualified for Windows x86-64 with both engines. Version 1.0.10-dev is a local
 post-PQ4 S1 development build that adds a native batched authoritative sample
 query for exact terrain-edit restoration. Version 1.0.11-dev is a local S2
-development build that keeps `wt_fade_opacity` allocated only while chunks are
-actively fading, then clears the parameter back to shader default so stable
-large-scale scenes do not exhaust Godot instance-shader storage. These
+development build that makes `wt_fade_opacity` instance-parameter writes
+opt-in/default-off because Godot retains per-instance shader-parameter slots
+after use. Native engine transparency fade remains active by default. These
 development builds are not the deterministic PQ4 release artifact. The release
 ships API/limit documentation, addon-local bake/storage wrappers, runtime DLLs,
 and native tools. Compute acceleration is optional later work.

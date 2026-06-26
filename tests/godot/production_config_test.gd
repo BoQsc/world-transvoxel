@@ -19,9 +19,17 @@ func _run_test() -> void:
 	if config.get("active_chunk_capacity") != 256 or \
 			config.get("viewer_capacity") != 8 or \
 			config.get("render_apply_budget") != 4 or \
-			config.get("collision_apply_budget") != 2:
+			config.get("collision_apply_budget") != 2 or \
+			config.get("shader_fade_parameter_enabled") != false or \
+			config.call("is_shader_fade_parameter_enabled") != false:
 		_fail("default configuration values changed")
 		return
+	config.set("shader_fade_parameter_enabled", true)
+	if config.get("shader_fade_parameter_enabled") != true or \
+			config.call("is_shader_fade_parameter_enabled") != true:
+		_fail("shader fade parameter toggle was not retained")
+		return
+	config.set("shader_fade_parameter_enabled", false)
 
 	var terrain: Node = ClassDB.instantiate("WorldTransvoxelTerrain")
 	if terrain == null or terrain.call("is_configuration_valid") or \
