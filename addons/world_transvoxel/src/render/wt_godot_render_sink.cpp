@@ -10,6 +10,7 @@
 #include <godot_cpp/variant/packed_vector3_array.hpp>
 #include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/variant/string_name.hpp>
+#include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/variant/vector2.hpp>
 #include <godot_cpp/variant/vector3.hpp>
 
@@ -21,6 +22,8 @@ namespace {
 constexpr std::uint32_t kRenderRetirementFadeFrames = 24U;
 constexpr std::uint32_t kRenderIntroductionFadeFrames = 24U;
 constexpr const char *kFadeOpacityShaderParameter = "wt_fade_opacity";
+constexpr float kDefaultFadeOpacity = 1.0F;
+constexpr float kFadeOpacityEpsilon = 0.0001F;
 
 godot::String chunk_name(const WtChunkKey &key) {
 	return godot::String("WT_Render_") + godot::String::num_int64(key.x) + "_" +
@@ -70,10 +73,17 @@ void WtGodotRenderSink::set_record_transparency(
 ) noexcept {
 	record.current_transparency = clamp_unit(value);
 	record.instance->set_transparency(record.current_transparency);
-	record.instance->set_instance_shader_parameter(
-		godot::StringName(kFadeOpacityShaderParameter),
-		1.0F - record.current_transparency
-	);
+	const float fade_opacity = 1.0F - record.current_transparency;
+	const godot::StringName parameter(kFadeOpacityShaderParameter);
+	if (fade_opacity < (kDefaultFadeOpacity - kFadeOpacityEpsilon)) {
+		record.instance->set_instance_shader_parameter(parameter, fade_opacity);
+		record.shader_fade_parameter_active = true;
+		return;
+	}
+	if (record.shader_fade_parameter_active) {
+		record.instance->set_instance_shader_parameter(parameter, godot::Variant());
+		record.shader_fade_parameter_active = false;
+	}
 }
 
 bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
@@ -127,20 +137,33 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 
 	Record &record = records_[payload.key];
 	const bool created = record.instance == nullptr;
-	if (!created) {
+	if (created) {
+		record.instance = memnew(godot::MeshInstance3D);
 		record.key = payload.key;
-		record.retiring = true;
-		record.introducing = false;
-		record.retirement_frame = 0;
-		record.retirement_start_transparency = record.current_transparency;
-		record.instance->set_name(retiring_chunk_name(record.key, record.generation));
-		replacement_retirements_.push_back(record);
-		record = Record{};
+		record.instance->set_name(chunk_name(payload.key));
+		owner_.add_child(record.instance);
+	} else {
+		godot::Ref<godot::Mesh> retiring_mesh = record.instance->get_mesh();
+		if (retiring_mesh.is_valid()) {
+			Record retirement;
+			retirement.instance = memnew(godot::MeshInstance3D);
+			retirement.key = payload.key;
+			retirement.generation = record.generation;
+			retirement.instance->set_name(
+				retiring_chunk_name(record.key, record.generation)
+			);
+			retirement.instance->set_position(record.instance->get_position());
+			retirement.instance->set_mesh(retiring_mesh);
+			retirement.retiring = true;
+			retirement.retirement_frame = 0;
+			retirement.retirement_start_transparency = record.current_transparency;
+			owner_.add_child(retirement.instance);
+			set_record_transparency(retirement, record.current_transparency);
+			replacement_retirements_.push_back(retirement);
+		}
+		record.key = payload.key;
+		record.instance->set_name(chunk_name(payload.key));
 	}
-	record.instance = memnew(godot::MeshInstance3D);
-	record.key = payload.key;
-	record.instance->set_name(chunk_name(payload.key));
-	owner_.add_child(record.instance);
 	record.retiring = false;
 	record.retirement_frame = 0;
 	record.retirement_start_transparency = 0.0F;

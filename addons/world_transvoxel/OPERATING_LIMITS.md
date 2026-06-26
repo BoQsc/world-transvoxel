@@ -1,10 +1,12 @@
-# World Transvoxel 1.0.10-dev Operating Limits
+# World Transvoxel 1.0.11-dev Operating Limits
 
 ## Qualified release matrix
 
-The 1.0.10-dev S1 development build inherits the 1.0.9 Windows x86-64
-qualification matrix and adds the documented batched authoritative sample query.
-It is qualified only for:
+The 1.0.11-dev S2 development build inherits the 1.0.9 Windows x86-64
+qualification matrix, includes the documented 1.0.10-dev batched authoritative
+sample query, and keeps fade shader instance parameters transient so stable
+large-scale scenes do not exhaust Godot instance-shader storage. It is
+qualified only for:
 
 | Component | Supported value |
 | --- | --- |
@@ -40,7 +42,7 @@ release even if the source can be compiled for them.
 | render retirement fade duration | 24 frames | fixed in 1.0.7 |
 | render introduction fade duration | 24 frames | fixed in 1.0.7 |
 | same-key render mesh replacement crossfade | native | fixed in 1.0.8 |
-| shader fade opacity parameter | `wt_fade_opacity` | fixed in 1.0.9 |
+| shader fade opacity parameter | `wt_fade_opacity`, transient while fading | fixed in 1.0.11-dev |
 | collision activation/deactivation | 96 / 128 | finite, nonnegative |
 
 Viewer capacity multiplied by demand capacity per viewer may not exceed
@@ -100,9 +102,12 @@ through a controlled stop/start before it becomes active.
   temporary render-only retiring instance while the replacement mesh fades in,
   so replacement generation application does not swap the visible mesh at full
   opacity. Custom terrain shaders that want deterministic native fade behavior
-  must declare an instance uniform named `wt_fade_opacity` and apply it to
-  `ALPHA`; otherwise only the engine-level transparency fallback is available.
-  Collision is removed at retirement.
+  must declare an instance uniform named `wt_fade_opacity` with default `1.0`
+  and apply it to `ALPHA`; otherwise only the engine-level transparency fallback
+  is available. Native code sets this instance parameter only while a render
+  chunk is actively fading and clears it when the chunk returns to the fully
+  visible default, so stable large-scale scenes do not consume one Godot
+  instance-shader slot per chunk. Collision is removed at retirement.
 - Authoritative sample queries can fail for absent, corrupt, misaligned, or
   disagreeing overlapping pages.
 - Output paths for bake, migration, and compaction must not already exist.

@@ -24,7 +24,7 @@ ORIGIN = (-2, -2, -2)
 DIMENSIONS = (133, 37, 37)
 SOURCE_REVISION = 8001
 EXPECTED_WORLD_SHA256 = (
-    "b4ec10d3782529b013142f708c4f0d35eb8d4cb9b00f82ea64a3b6599fdc74de"
+    "e44d8955cbe64ce8d606d3a906ba68805014b02ec16edc38f58dad7c6062336a"
 )
 
 
@@ -85,7 +85,10 @@ def prepare(configuration: str) -> None:
     storage_tool = native_tool_path(configuration, "wt_storage_tool")
     metadata = json.loads(output([storage_tool, "validate", world_path]))
     if (
-        metadata.get("pages") != 28
+        metadata.get("schema_major") != 1
+        or metadata.get("schema_minor") != 1
+        or metadata.get("pages") != 28
+        or metadata.get("dependencies") != 8
         or metadata.get("source_revision") != SOURCE_REVISION
         or metadata.get("world_revision") != 0
         or metadata.get("sha256") != EXPECTED_WORLD_SHA256

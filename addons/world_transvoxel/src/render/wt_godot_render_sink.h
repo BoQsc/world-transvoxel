@@ -37,6 +37,7 @@ private:
 		float retirement_start_transparency = 0.0F;
 		std::uint32_t introduction_frame = 0;
 		std::uint32_t retirement_frame = 0;
+		bool shader_fade_parameter_active = false;
 		bool introducing = false;
 		bool retiring = false;
 	};

@@ -14,7 +14,7 @@ from wt_script_common import REPO_ROOT, native_tool_path
 
 
 EXPECTED_RELEASE_COMPAT_WORLD_SHA256 = (
-    "e16748e8e3fc096ae87406b27398969d32cdffec59608f82392c6f28136ad6f3"
+    "b1513d5b1ae66a6e1a00c5d49353bd49603aa7437d874bfcc900af42fdc56ad7"
 )
 
 
@@ -175,7 +175,10 @@ def test_baker() -> None:
                 ).stdout
             )
             if (
-                world_info["pages"] != 2
+                world_info["schema_major"] != 1
+                or world_info["schema_minor"] != 1
+                or world_info["pages"] != 2
+                or world_info["dependencies"] != 8
                 or world_info["source_revision"] != 7
                 or world_info["world_revision"] != 0
             ):
