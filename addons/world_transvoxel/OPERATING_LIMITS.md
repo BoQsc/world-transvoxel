@@ -1,8 +1,10 @@
-# World Transvoxel 1.0.9 Operating Limits
+# World Transvoxel 1.0.10-dev Operating Limits
 
 ## Qualified release matrix
 
-The 1.0.9 release is qualified only for:
+The 1.0.10-dev S1 development build inherits the 1.0.9 Windows x86-64
+qualification matrix and adds the documented batched authoritative sample query.
+It is qualified only for:
 
 | Component | Supported value |
 | --- | --- |
@@ -62,6 +64,7 @@ Viewer capacity multiplied by demand capacity per viewer may not exceed
 - Production edit journal: 4,096 transactions, 65,536 commands, and 64 MiB.
 - One edit transaction: 4,096 commands maximum.
 - Runtime world-operation queue: 16 requests.
+- One authoritative sample batch query: 4,096 grid points maximum.
 - Side-by-side snapshot compaction: 4,096 pages and 256 MiB of source page
   bytes maximum.
 - Storage CLI input: 1 GiB maximum, while common containers retain the

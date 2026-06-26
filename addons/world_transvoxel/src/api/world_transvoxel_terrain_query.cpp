@@ -4,6 +4,7 @@
 
 #include <godot_cpp/classes/project_settings.hpp>
 #include <godot_cpp/core/class_db.hpp>
+#include <godot_cpp/variant/variant.hpp>
 
 namespace world_transvoxel {
 namespace {
@@ -21,6 +22,11 @@ void WorldTransvoxelTerrain::bind_query_snapshot_methods() {
 	godot::ClassDB::bind_method(
 		godot::D_METHOD("request_authoritative_sample", "grid_point", "lod"),
 		&WorldTransvoxelTerrain::request_authoritative_sample,
+		DEFVAL(0)
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("request_authoritative_samples", "grid_points", "lod"),
+		&WorldTransvoxelTerrain::request_authoritative_samples,
 		DEFVAL(0)
 	);
 	godot::ClassDB::bind_method(
@@ -47,6 +53,16 @@ void WorldTransvoxelTerrain::bind_query_snapshot_methods() {
 	));
 	ADD_SIGNAL(godot::MethodInfo(
 		"authoritative_sample_failed",
+		godot::PropertyInfo(godot::Variant::INT, "request_id"),
+		godot::PropertyInfo(godot::Variant::STRING, "error")
+	));
+	ADD_SIGNAL(godot::MethodInfo(
+		"authoritative_samples_ready",
+		godot::PropertyInfo(godot::Variant::INT, "request_id"),
+		godot::PropertyInfo(godot::Variant::ARRAY, "samples")
+	));
+	ADD_SIGNAL(godot::MethodInfo(
+		"authoritative_samples_failed",
 		godot::PropertyInfo(godot::Variant::INT, "request_id"),
 		godot::PropertyInfo(godot::Variant::STRING, "error")
 	));
@@ -95,6 +111,40 @@ std::int64_t WorldTransvoxelTerrain::request_authoritative_sample(
 	const WtReadOnlyRuntimeStatus status =
 		lifecycle_->request_authoritative_sample(
 			{ grid_point.x, grid_point.y, grid_point.z },
+			static_cast<std::uint8_t>(lod),
+			request_id
+		);
+	synchronous_world_error_ = wt_read_only_runtime_status_message(status);
+	return status == WtReadOnlyRuntimeStatus::Ok ?
+		static_cast<std::int64_t>(request_id) : 0;
+}
+
+std::int64_t WorldTransvoxelTerrain::request_authoritative_samples(
+	const godot::Array &grid_points,
+	std::int64_t lod
+) {
+	if (!lifecycle_ || lod < 0 || lod > kWtMaximumLod ||
+		grid_points.is_empty() ||
+		static_cast<std::size_t>(grid_points.size()) >
+			kWtMaximumAuthoritativeSampleBatchPoints) {
+		synchronous_world_error_ = "authoritative sample query is invalid";
+		return 0;
+	}
+	std::vector<WtGridPoint> points;
+	points.reserve(static_cast<std::size_t>(grid_points.size()));
+	for (std::int64_t index = 0; index < grid_points.size(); ++index) {
+		const godot::Variant value = grid_points[index];
+		if (value.get_type() != godot::Variant::VECTOR3I) {
+			synchronous_world_error_ = "authoritative sample query is invalid";
+			return 0;
+		}
+		const godot::Vector3i point = value;
+		points.push_back({ point.x, point.y, point.z });
+	}
+	std::uint64_t request_id = 0;
+	const WtReadOnlyRuntimeStatus status =
+		lifecycle_->request_authoritative_samples(
+			points,
 			static_cast<std::uint8_t>(lod),
 			request_id
 		);

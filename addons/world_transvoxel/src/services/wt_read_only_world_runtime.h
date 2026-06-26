@@ -63,6 +63,8 @@ enum class WtReadOnlyPublicationKind : std::uint8_t {
 	EditRejected,
 	AuthoritativeSampleReady,
 	AuthoritativeSampleRejected,
+	AuthoritativeSampleBatchReady,
+	AuthoritativeSampleBatchRejected,
 	WorldSnapshotReady,
 	WorldSnapshotRejected,
 };
@@ -90,6 +92,7 @@ struct WtReadOnlyPublication {
 	WtAuthoritativeSampleQueryStatus sample_status =
 		WtAuthoritativeSampleQueryStatus::Ok;
 	WtAuthoritativeSample authoritative_sample;
+	std::vector<WtAuthoritativeSample> authoritative_samples;
 	WtWorldSnapshotStoreStatus snapshot_status =
 		WtWorldSnapshotStoreStatus::Ok;
 	std::filesystem::path snapshot_manifest_path;
@@ -150,6 +153,11 @@ public:
 		std::uint8_t lod,
 		std::uint64_t &request_id
 	);
+	WtReadOnlyRuntimeStatus request_authoritative_samples(
+		const std::vector<WtGridPoint> &points,
+		std::uint8_t lod,
+		std::uint64_t &request_id
+	);
 	WtReadOnlyRuntimeStatus request_world_snapshot(
 		const std::filesystem::path &output_directory,
 		std::uint64_t new_source_revision,
@@ -175,6 +183,7 @@ private:
 	enum class WorldOperationKind : std::uint8_t {
 		Edit,
 		AuthoritativeSample,
+		AuthoritativeSampleBatch,
 		CompactSnapshot,
 		MigrateSnapshot,
 	};
@@ -182,6 +191,7 @@ private:
 		WorldOperationKind kind = WorldOperationKind::Edit;
 		WtEditTransaction transaction;
 		WtGridPoint point;
+		std::vector<WtGridPoint> points;
 		std::uint8_t lod = 0;
 		std::uint64_t request_id = 0;
 		std::filesystem::path output_directory;
@@ -194,6 +204,7 @@ private:
 	bool process_world_operation_event();
 	bool process_edit_operation(const WtEditTransaction &transaction);
 	bool process_sample_query_operation(const WorldOperation &operation);
+	bool process_sample_batch_query_operation(const WorldOperation &operation);
 	bool process_snapshot_operation(const WorldOperation &operation);
 	bool process_storage_completions();
 	bool process_scheduler_jobs();

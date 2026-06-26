@@ -42,6 +42,10 @@ notices. The independent 0BSD backend is not the production backend and is not
 claimed to be an exact replacement; it may now enter separate qualification
 against this baseline.
 
+The working tree may contain post-PQ4 development builds. Version
+`1.0.10-dev` adds native batched authoritative sample queries for sandbox S1
+terrain-edit latency work; it is not the deterministic 1.0.9 release artifact.
+
 ## Canonical direction
 
 Read [IMPLEMENTATION_CHARTER.md](IMPLEMENTATION_CHARTER.md) before changing the

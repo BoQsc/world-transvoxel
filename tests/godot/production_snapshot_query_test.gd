@@ -3,6 +3,8 @@ extends SceneTree
 
 var sample_results: Dictionary = {}
 var sample_failures: Dictionary = {}
+var sample_batch_results: Dictionary = {}
+var sample_batch_failures: Dictionary = {}
 var snapshot_results: Dictionary = {}
 var snapshot_failures: Dictionary = {}
 var committed_revisions: Array[int] = []
@@ -23,6 +25,8 @@ func _run_test() -> void:
 	terrain.set("configuration", config)
 	terrain.connect("authoritative_sample_ready", _on_sample_ready)
 	terrain.connect("authoritative_sample_failed", _on_sample_failed)
+	terrain.connect("authoritative_samples_ready", _on_sample_batch_ready)
+	terrain.connect("authoritative_samples_failed", _on_sample_batch_failed)
 	terrain.connect("world_snapshot_ready", _on_snapshot_ready)
 	terrain.connect("world_snapshot_failed", _on_snapshot_failed)
 	terrain.connect("edit_committed", _on_edit_committed)
@@ -58,6 +62,29 @@ func _run_test() -> void:
 			initial.call("get_source_revision") != 7001 or \
 			initial.call("get_world_revision") != 12:
 		_fail("initial authoritative sample mismatch")
+		return
+	var batch_id: int = terrain.call(
+		"request_authoritative_samples",
+		[Vector3i(8, 8, 8), Vector3i(9, 8, 8), Vector3i(10, 8, 8)],
+		0
+	)
+	if batch_id <= 0 or not await _wait_for_sample_batch(batch_id):
+		_fail("batch authoritative query did not complete")
+		return
+	var batch: Array = sample_batch_results[batch_id]
+	if batch.size() != 3:
+		_fail("batch authoritative query returned the wrong count")
+		return
+	for index in range(batch.size()):
+		var sample: RefCounted = batch[index]
+		if sample.call("get_grid_point") != Vector3i(8 + index, 8, 8) or \
+				sample.call("get_source_revision") != 7001 or \
+				sample.call("get_world_revision") != 12:
+			_fail("batch authoritative sample order or revision mismatch")
+			return
+	if batch[0].call("get_density") != initial.call("get_density") or \
+			batch[0].call("get_material") != initial.call("get_material"):
+		_fail("batch authoritative sample payload mismatch")
 		return
 	var invalid_id: int = terrain.call(
 		"request_authoritative_sample", Vector3i(1, 8, 8), 1
@@ -227,7 +254,7 @@ func _run_test() -> void:
 	if FileAccess.file_exists(journal_path):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(journal_path))
 	print(
-		"PRODUCTION_GODOT_SNAPSHOT_QUERY_PASS queries=5 compaction=1 " +
+		"PRODUCTION_GODOT_SNAPSHOT_QUERY_PASS queries=8 compaction=1 " +
 		"migrations=2 legacy=1 ordering=1"
 	)
 	terrain.queue_free()
@@ -258,6 +285,16 @@ func _wait_for_sample_failure(request_id: int) -> bool:
 	for _frame in range(900):
 		if sample_failures.has(request_id):
 			return true
+		await process_frame
+	return false
+
+
+func _wait_for_sample_batch(request_id: int) -> bool:
+	for _frame in range(900):
+		if sample_batch_results.has(request_id):
+			return true
+		if sample_batch_failures.has(request_id):
+			return false
 		await process_frame
 	return false
 
@@ -295,6 +332,14 @@ func _on_sample_ready(request_id: int, sample: RefCounted) -> void:
 
 func _on_sample_failed(request_id: int, error: String) -> void:
 	sample_failures[request_id] = error
+
+
+func _on_sample_batch_ready(request_id: int, samples: Array) -> void:
+	sample_batch_results[request_id] = samples
+
+
+func _on_sample_batch_failed(request_id: int, error: String) -> void:
+	sample_batch_failures[request_id] = error
 
 
 func _on_snapshot_ready(

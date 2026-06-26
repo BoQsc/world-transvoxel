@@ -64,6 +64,11 @@ public:
 		std::uint8_t lod,
 		std::uint64_t &request_id
 	);
+	WtReadOnlyRuntimeStatus request_authoritative_samples(
+		const std::vector<WtGridPoint> &points,
+		std::uint8_t lod,
+		std::uint64_t &request_id
+	);
 	WtReadOnlyRuntimeStatus request_world_snapshot(
 		const std::filesystem::path &output_directory,
 		std::uint64_t new_source_revision,

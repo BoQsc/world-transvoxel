@@ -7,6 +7,7 @@
 #include "services/wt_world_lifecycle.h"
 
 #include <godot_cpp/classes/node3d.hpp>
+#include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/vector3.hpp>
 #include <godot_cpp/variant/vector3i.hpp>
@@ -85,6 +86,10 @@ public:
 	) const;
 	std::int64_t request_authoritative_sample(
 		const godot::Vector3i &grid_point,
+		std::int64_t lod = 0
+	);
+	std::int64_t request_authoritative_samples(
+		const godot::Array &grid_points,
 		std::int64_t lod = 0
 	);
 	std::int64_t request_world_compaction(

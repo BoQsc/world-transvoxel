@@ -52,9 +52,12 @@ fixed native window. Version 1.0.7 extends both native render fade windows to
 so an already visible chunk key does not swap mesh data at full opacity. Version
 1.0.9 also publishes the per-instance shader parameter `wt_fade_opacity` so
 custom terrain shaders can participate in the same native fade contract; it is
-qualified for Windows x86-64 with both engines. The release ships API/limit documentation,
-addon-local bake/storage wrappers, runtime DLLs, and native tools. Compute
-acceleration is optional later work.
+qualified for Windows x86-64 with both engines. Version 1.0.10-dev is a local
+post-PQ4 S1 development build that adds a native batched authoritative sample
+query for exact terrain-edit restoration; it is not the deterministic PQ4
+release artifact. The release ships API/limit documentation, addon-local
+bake/storage wrappers, runtime DLLs, and native tools. Compute acceleration is
+optional later work.
 
 Build from the repository root:
 

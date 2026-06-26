@@ -243,6 +243,20 @@ WtWorldLifecycleService::request_authoritative_sample(
 	return runtime_->request_authoritative_sample(point, lod, request_id);
 }
 
+WtReadOnlyRuntimeStatus
+WtWorldLifecycleService::request_authoritative_samples(
+	const std::vector<WtGridPoint> &points,
+	std::uint8_t lod,
+	std::uint64_t &request_id
+) {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	if (state_ != WtWorldLifecycleState::Running || !runtime_) {
+		request_id = 0;
+		return WtReadOnlyRuntimeStatus::NotRunning;
+	}
+	return runtime_->request_authoritative_samples(points, lod, request_id);
+}
+
 WtReadOnlyRuntimeStatus WtWorldLifecycleService::request_world_snapshot(
 	const std::filesystem::path &output_directory,
 	std::uint64_t new_source_revision,

@@ -56,6 +56,7 @@ Editing:
 Queries and side-by-side snapshots:
 
 - `request_authoritative_sample(grid_point, lod=0) -> int`
+- `request_authoritative_samples(grid_points, lod=0) -> int`
 - `request_world_compaction(output_directory, new_source_revision) -> int`
 - `request_world_migration(output_directory) -> int`
 
@@ -88,6 +89,8 @@ Signals:
 - `edit_failed(error)`
 - `authoritative_sample_ready(request_id, sample)`
 - `authoritative_sample_failed(request_id, error)`
+- `authoritative_samples_ready(request_id, samples)`
+- `authoritative_samples_failed(request_id, error)`
 - `world_snapshot_ready(request_id, manifest_path, source_revision, world_revision, page_count)`
 - `world_snapshot_failed(request_id, error)`
 
@@ -121,5 +124,8 @@ readiness.
 
 `WorldTransvoxelSample` exposes grid point, LOD, density, material, source
 revision, world revision, and agreeing-page count.
+
+Batch authoritative sample requests return an `Array` of
+`WorldTransvoxelSample` objects in the same order as the submitted grid points.
 
 These objects are point-in-time snapshots; they do not update in place.

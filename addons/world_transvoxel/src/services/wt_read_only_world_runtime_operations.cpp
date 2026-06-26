@@ -49,6 +49,29 @@ WtReadOnlyWorldRuntime::request_authoritative_sample(
 	return WtReadOnlyRuntimeStatus::Ok;
 }
 
+WtReadOnlyRuntimeStatus
+WtReadOnlyWorldRuntime::request_authoritative_samples(
+	const std::vector<WtGridPoint> &points,
+	std::uint8_t lod,
+	std::uint64_t &request_id
+) {
+	request_id = 0;
+	if (!valid_ || edit_journal_store_ == nullptr ||
+		lod > kWtMaximumLod || points.empty() ||
+		points.size() > kWtMaximumAuthoritativeSampleBatchPoints) {
+		return WtReadOnlyRuntimeStatus::InvalidQuery;
+	}
+	WorldOperation operation;
+	operation.kind = WorldOperationKind::AuthoritativeSampleBatch;
+	operation.points = points;
+	operation.lod = lod;
+	if (!enqueue_world_operation(operation)) {
+		return WtReadOnlyRuntimeStatus::OperationQueueFull;
+	}
+	request_id = operation.request_id;
+	return WtReadOnlyRuntimeStatus::Ok;
+}
+
 WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::request_world_snapshot(
 	const std::filesystem::path &output_directory,
 	std::uint64_t new_source_revision,
@@ -88,6 +111,8 @@ bool WtReadOnlyWorldRuntime::process_world_operation_event() {
 			return process_edit_operation(operation.transaction);
 		case WorldOperationKind::AuthoritativeSample:
 			return process_sample_query_operation(operation);
+		case WorldOperationKind::AuthoritativeSampleBatch:
+			return process_sample_batch_query_operation(operation);
 		case WorldOperationKind::CompactSnapshot:
 		case WorldOperationKind::MigrateSnapshot:
 			return process_snapshot_operation(operation);
@@ -126,6 +151,43 @@ bool WtReadOnlyWorldRuntime::process_sample_query_operation(
 			++metrics_.sample_queries;
 		} else {
 			++metrics_.sample_query_rejections;
+		}
+	}
+	return true;
+}
+
+bool WtReadOnlyWorldRuntime::process_sample_batch_query_operation(
+	const WorldOperation &operation
+) {
+	std::vector<WtAuthoritativeSample> samples;
+	const WtAuthoritativeSampleQueryStatus status =
+		wt_query_authoritative_samples(
+			operation.points,
+			operation.lod,
+			storage_,
+			edit_journal_store_->journal(),
+			initial_world_revision_,
+			samples
+		);
+	WtReadOnlyPublication publication;
+	publication.kind = status == WtAuthoritativeSampleQueryStatus::Ok ?
+		WtReadOnlyPublicationKind::AuthoritativeSampleBatchReady :
+		WtReadOnlyPublicationKind::AuthoritativeSampleBatchRejected;
+	publication.request_id = operation.request_id;
+	publication.sample_status = status;
+	publication.authoritative_samples = std::move(samples);
+	publication.world_revision = world_revision_.load();
+	if (!push_publication(std::move(publication)) &&
+		!stop_requested_.load()) {
+		set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
+	}
+	{
+		std::lock_guard<std::mutex> lock(metrics_mutex_);
+		if (status == WtAuthoritativeSampleQueryStatus::Ok) {
+			metrics_.sample_queries += operation.points.size();
+		} else {
+			metrics_.sample_query_rejections +=
+				operation.points.empty() ? 1U : operation.points.size();
 		}
 	}
 	return true;

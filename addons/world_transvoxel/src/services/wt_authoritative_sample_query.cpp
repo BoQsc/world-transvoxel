@@ -73,6 +73,61 @@ bool same_sample(
 		left.material == right.material;
 }
 
+struct EditedPageCacheEntry {
+	WtChunkKey key;
+	std::shared_ptr<const WtChunkPage> page;
+};
+
+WtAuthoritativeSampleQueryStatus load_edited_page(
+	const WtChunkKey &key,
+	WtAsyncStorageService &storage,
+	const WtEditJournal &journal,
+	std::uint64_t initial_world_revision,
+	std::vector<EditedPageCacheEntry> &cache,
+	const WtChunkPage *&output
+) {
+	output = nullptr;
+	const auto cached = std::find_if(
+		cache.begin(),
+		cache.end(),
+		[&](const EditedPageCacheEntry &entry) { return entry.key == key; }
+	);
+	if (cached != cache.end()) {
+		output = cached->page.get();
+		return WtAuthoritativeSampleQueryStatus::Ok;
+	}
+	if (!storage.has_page(key)) {
+		return WtAuthoritativeSampleQueryStatus::Ok;
+	}
+	std::shared_ptr<const std::vector<std::uint8_t>> bytes;
+	if (storage.load_page_now(key, bytes) != WtPageLoadStatus::Ok || !bytes) {
+		return WtAuthoritativeSampleQueryStatus::StorageFailure;
+	}
+	WtChunkPageView view;
+	WtChunkPage page;
+	if (wt_open_chunk_page(
+			{ bytes->data(), bytes->size() },
+			view
+		) != WtChunkPageStatus::Ok ||
+		wt_decode_chunk_page(view, page) != WtChunkPageStatus::Ok) {
+		return WtAuthoritativeSampleQueryStatus::PageFailure;
+	}
+	WtChunkEditState edit_state;
+	if (edit_state.initialize(
+			std::move(page),
+			storage.source_revision(),
+			initial_world_revision
+		) != WtChunkEditStatus::Ok ||
+		journal.replay(edit_state) != WtEditJournalStatus::Ok ||
+		edit_state.current_world_revision() != journal.current_world_revision()) {
+		return WtAuthoritativeSampleQueryStatus::EditReplayFailure;
+	}
+	auto edited_page = std::make_shared<WtChunkPage>(edit_state.page());
+	output = edited_page.get();
+	cache.push_back({ key, std::move(edited_page) });
+	return WtAuthoritativeSampleQueryStatus::Ok;
+}
+
 } // namespace
 
 WtAuthoritativeSampleQueryStatus wt_query_authoritative_sample(
@@ -140,6 +195,76 @@ WtAuthoritativeSampleQueryStatus wt_query_authoritative_sample(
 	output.source_revision = storage.source_revision();
 	output.world_revision = journal.current_world_revision();
 	output.agreeing_page_count = agreeing_pages;
+	return WtAuthoritativeSampleQueryStatus::Ok;
+}
+
+WtAuthoritativeSampleQueryStatus wt_query_authoritative_samples(
+	const std::vector<WtGridPoint> &points,
+	std::uint8_t lod,
+	WtAsyncStorageService &storage,
+	const WtEditJournal &journal,
+	std::uint64_t initial_world_revision,
+	std::vector<WtAuthoritativeSample> &output
+) {
+	output.clear();
+	if (points.empty() ||
+		points.size() > kWtMaximumAuthoritativeSampleBatchPoints ||
+		lod > kWtMaximumLod) {
+		return WtAuthoritativeSampleQueryStatus::InvalidPoint;
+	}
+	if (!storage.is_open() || !journal.initialized() ||
+		journal.source_revision() != storage.source_revision() ||
+		journal.initial_world_revision() != initial_world_revision) {
+		return WtAuthoritativeSampleQueryStatus::StorageFailure;
+	}
+	std::vector<EditedPageCacheEntry> cache;
+	output.reserve(points.size());
+	for (const WtGridPoint &point : points) {
+		const std::vector<WtChunkKey> keys = candidate_keys(point, lod);
+		if (keys.empty()) return WtAuthoritativeSampleQueryStatus::InvalidPoint;
+		bool found = false;
+		WtScalarSample selected;
+		std::size_t agreeing_pages = 0;
+		for (const WtChunkKey &key : keys) {
+			const WtChunkPage *page = nullptr;
+			const WtAuthoritativeSampleQueryStatus status = load_edited_page(
+				key,
+				storage,
+				journal,
+				initial_world_revision,
+				cache,
+				page
+			);
+			if (status != WtAuthoritativeSampleQueryStatus::Ok) {
+				output.clear();
+				return status;
+			}
+			if (page == nullptr) continue;
+			WtScalarSample candidate;
+			if (!wt_sample_chunk_page(*page, point, candidate)) {
+				continue;
+			}
+			if (found && !same_sample(selected, candidate)) {
+				output.clear();
+				return WtAuthoritativeSampleQueryStatus::ConflictingSamples;
+			}
+			selected = candidate;
+			found = true;
+			++agreeing_pages;
+		}
+		if (!found) {
+			output.clear();
+			return WtAuthoritativeSampleQueryStatus::NotFound;
+		}
+		output.push_back({
+			point,
+			lod,
+			selected,
+			storage.source_revision(),
+			journal.current_world_revision(),
+			agreeing_pages,
+		});
+	}
 	return WtAuthoritativeSampleQueryStatus::Ok;
 }
 

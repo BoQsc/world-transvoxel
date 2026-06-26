@@ -188,6 +188,38 @@ void WorldTransvoxelTerrain::drain_world_publications() {
 					synchronous_world_error_
 				);
 				break;
+			case WtReadOnlyPublicationKind::AuthoritativeSampleBatchReady: {
+				godot::Array samples;
+				samples.resize(
+					static_cast<int>(publication.authoritative_samples.size())
+				);
+				for (std::size_t index = 0;
+						index < publication.authoritative_samples.size();
+						++index) {
+					godot::Ref<WorldTransvoxelSample> sample;
+					sample.instantiate();
+					sample->set_sample(publication.authoritative_samples[index]);
+					samples[static_cast<int>(index)] = sample;
+				}
+				synchronous_world_error_ = "ok";
+				emit_signal(
+					"authoritative_samples_ready",
+					static_cast<std::int64_t>(publication.request_id),
+					samples
+				);
+				break;
+			}
+			case WtReadOnlyPublicationKind::AuthoritativeSampleBatchRejected:
+				synchronous_world_error_ =
+					wt_authoritative_sample_query_status_message(
+						publication.sample_status
+					);
+				emit_signal(
+					"authoritative_samples_failed",
+					static_cast<std::int64_t>(publication.request_id),
+					synchronous_world_error_
+				);
+				break;
 			case WtReadOnlyPublicationKind::WorldSnapshotReady: {
 				const std::string utf8 =
 					publication.snapshot_manifest_path.u8string();
