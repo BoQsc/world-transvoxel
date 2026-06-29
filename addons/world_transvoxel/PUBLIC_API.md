@@ -24,6 +24,7 @@ Configuration and lifecycle:
 - `is_configuration_valid() -> bool`
 - `get_configuration_error() -> String`
 - `start_world(world_manifest_path, object_root) -> bool`
+- `start_procedural_world(chunk_count_x, chunk_count_z, seed, source_revision, object_root) -> bool`
 - `stop_world() -> bool`
 - `get_world_state() -> int`
 - `get_world_state_name() -> String`
@@ -36,6 +37,13 @@ Configuration and lifecycle:
 Lifecycle state values are `0 stopped`, `1 starting`, `2 running`,
 `3 stopping`, and `4 failed`. Startup and shutdown are asynchronous; observe
 `world_state_changed`.
+
+`start_procedural_world()` starts a compact deterministic horizontal chunk grid
+without reading a `.wtworld` manifest. It generates requested page bytes on
+demand through the same native page format, cache, meshing, editing, and
+streaming pipeline used by manifest-backed worlds. The initial supported
+procedural descriptor is one vertical chunk layer at LOD 0, up to 262,144
+indexed pages, with persistent edits stored in the object root journal.
 
 Streaming and readiness:
 

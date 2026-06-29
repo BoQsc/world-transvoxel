@@ -1,5 +1,6 @@
 #include "bake/wt_chunk_baker.h"
 #include "storage/wt_async_storage_service.h"
+#include "storage/wt_chunk_page.h"
 #include "storage/wt_hash256.h"
 
 #include <chrono>
@@ -524,6 +525,145 @@ void test_shutdown_accounting(const StorageFixture &fixture) {
 	);
 }
 
+void test_procedural_service(std::vector<std::uint8_t> &evidence) {
+	wt::WtAsyncStorageService invalid({ 1, 1, wt::kWtMaximumContainerSize });
+	check(
+		invalid.open_procedural({}) ==
+			wt::WtAsyncStorageStatus::InvalidConfiguration,
+		"empty procedural descriptor was accepted"
+	);
+	wt::WtProceduralWorldDescriptor oversized;
+	oversized.chunk_count_x = 1024;
+	oversized.chunk_count_z = 1024;
+	oversized.source_revision = 190019;
+	check(
+		invalid.open_procedural(oversized) ==
+			wt::WtAsyncStorageStatus::InvalidConfiguration,
+		"oversized procedural descriptor was accepted"
+	);
+
+	wt::WtProceduralWorldDescriptor descriptor;
+	descriptor.chunk_count_x = 4;
+	descriptor.chunk_count_z = 3;
+	descriptor.chunk_y = 0;
+	descriptor.source_revision = 190019;
+	descriptor.world_revision = 7;
+	descriptor.seed = 19;
+	wt::WtAsyncStorageService service({
+		2,
+		2,
+		wt::kWtMaximumContainerSize,
+	});
+	check(
+		service.open_procedural(descriptor) == wt::WtAsyncStorageStatus::Ok,
+		"procedural storage service open failed"
+	);
+	check(service.is_open(), "procedural service reports closed");
+	check(
+		service.source_revision() == descriptor.source_revision &&
+			service.world_revision() == descriptor.world_revision &&
+			service.page_count() == 12,
+		"procedural metadata mismatch"
+	);
+	const std::vector<wt::WtChunkKey> keys = service.page_keys();
+	check(
+		keys.size() == 12 &&
+			keys.front() == wt::WtChunkKey { 0, 0, 0, 0 } &&
+			keys.back() == wt::WtChunkKey { 3, 0, 2, 0 },
+		"procedural page key index mismatch"
+	);
+	check(
+		service.has_page({ 2, 0, 1, 0 }) &&
+			!service.has_page({ 4, 0, 1, 0 }) &&
+			!service.has_page({ 2, 1, 1, 0 }) &&
+			!service.has_page({ 2, 0, 1, 1 }),
+		"procedural page lookup mismatch"
+	);
+	std::vector<std::uint8_t> manifest_bytes;
+	check(
+		!service.snapshot_manifest(manifest_bytes) && manifest_bytes.empty(),
+		"procedural storage exposed a manifest snapshot"
+	);
+
+	std::shared_ptr<const std::vector<std::uint8_t>> immediate_bytes;
+	check(
+		service.load_page_now({ 2, 0, 1, 0 }, immediate_bytes) ==
+			wt::WtPageLoadStatus::Ok &&
+			immediate_bytes &&
+			!immediate_bytes->empty(),
+		"procedural immediate load failed"
+	);
+	wt::WtChunkPageView view;
+	wt::WtChunkPage page;
+	check(
+		immediate_bytes &&
+			wt::wt_open_chunk_page(
+				{ immediate_bytes->data(), immediate_bytes->size() },
+				view
+			) == wt::WtChunkPageStatus::Ok &&
+			wt::wt_decode_chunk_page(view, page) ==
+				wt::WtChunkPageStatus::Ok,
+		"procedural page decode failed"
+	);
+	check(
+		page.metadata.key == wt::WtChunkKey { 2, 0, 1, 0 } &&
+			page.metadata.source_revision == descriptor.source_revision &&
+			page.samples.size() == wt::kWtChunkPageSampleCount,
+		"procedural decoded page metadata mismatch"
+	);
+	check(
+		service.load_page_now({ 9, 0, 1, 0 }, immediate_bytes) ==
+			wt::WtPageLoadStatus::PageFailure,
+		"procedural immediate load accepted an unindexed page"
+	);
+	check(
+		service.request_page({ 1, 0, 1, 0 }, { 81 }, 4) ==
+			wt::WtAsyncStorageStatus::Ok,
+		"procedural asynchronous request was rejected"
+	);
+	const wt::WtPageLoadCompletion completion = wait_completion(
+		service,
+		{ 1, 0, 1, 0 },
+		81,
+		wt::WtPageLoadStatus::Ok
+	);
+	check(
+		completion.page_bytes && !completion.page_bytes->empty(),
+		"procedural asynchronous completion had no bytes"
+	);
+	const std::size_t completion_size = completion.page_bytes ?
+		completion.page_bytes->size() : 0;
+	check(
+		service.request_page({ 9, 0, 1, 0 }, { 82 }, 0) ==
+			wt::WtAsyncStorageStatus::PageNotFound,
+		"procedural asynchronous request accepted an unindexed page"
+	);
+	const wt::WtAsyncStorageMetrics metrics = service.get_metrics();
+	check(
+			metrics.accepted_requests == 1 &&
+			metrics.completed_requests == 1 &&
+			metrics.successful_pages == 1 &&
+			metrics.failed_pages == 0 &&
+			metrics.bytes_read == completion_size,
+		"procedural async metrics mismatch"
+	);
+	if (completion.page_bytes) {
+		evidence.insert(
+			evidence.end(),
+			completion.page_bytes->begin(),
+			completion.page_bytes->end()
+		);
+	}
+	append_u64(evidence, metrics.bytes_read);
+	append_u64(evidence, service.page_count());
+	service.close();
+	check(
+		!service.is_open() && service.page_count() == 0 &&
+			!service.has_page({ 1, 0, 1, 0 }),
+		"closed procedural service retained page state"
+	);
+}
+
 } // namespace
 
 int main() {
@@ -537,6 +677,7 @@ int main() {
 	std::vector<std::uint8_t> evidence;
 	test_async_service(fixture, evidence);
 	test_shutdown_accounting(fixture);
+	test_procedural_service(evidence);
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M5_ASYNC_STORAGE_FAIL failures=%d\n", failure_count);
 		return 1;

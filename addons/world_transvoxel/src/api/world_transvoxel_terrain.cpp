@@ -8,7 +8,6 @@
 #include "testing/wt_m3_integration_fixture.h"
 #include "testing/wt_m5_application_benchmark_fixture.h"
 
-#include <godot_cpp/classes/project_settings.hpp>
 #include <godot_cpp/core/class_db.hpp>
 
 #include <algorithm>
@@ -83,6 +82,17 @@ void WorldTransvoxelTerrain::_bind_methods() {
 	godot::ClassDB::bind_method(
 		godot::D_METHOD("start_world", "world_manifest_path", "object_root"),
 		&WorldTransvoxelTerrain::start_world
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"start_procedural_world",
+			"chunk_count_x",
+			"chunk_count_z",
+			"seed",
+			"source_revision",
+			"object_root"
+		),
+		&WorldTransvoxelTerrain::start_procedural_world
 	);
 	godot::ClassDB::bind_method(
 		godot::D_METHOD("stop_world"),
@@ -290,65 +300,6 @@ godot::String WorldTransvoxelTerrain::get_configuration_error() const {
 	return configuration_.is_valid() ?
 		configuration_->get_validation_error() :
 		godot::String("configuration is required");
-}
-
-namespace {
-
-std::filesystem::path globalized_path(const godot::String &path) {
-	const godot::String global =
-		godot::ProjectSettings::get_singleton()->globalize_path(path);
-	const godot::CharString utf8 = global.utf8();
-	return std::filesystem::u8path(utf8.get_data());
-}
-
-} // namespace
-
-bool WorldTransvoxelTerrain::start_world(
-	const godot::String &world_manifest_path,
-	const godot::String &object_root
-) {
-	if (!is_configuration_valid()) {
-		synchronous_world_error_ = get_configuration_error();
-		return false;
-	}
-	if (lifecycle_ &&
-		lifecycle_->state() != WtWorldLifecycleState::Stopped) {
-		synchronous_world_error_ =
-			"world lifecycle state does not allow startup";
-		return false;
-	}
-	const WtRuntimeConfig config = configuration_->to_native();
-	auto lifecycle = std::make_unique<WtWorldLifecycleService>(config);
-	const WtWorldLifecycleStatus status = lifecycle->start(
-		globalized_path(world_manifest_path),
-		globalized_path(object_root)
-	);
-	if (status != WtWorldLifecycleStatus::Ok) {
-		synchronous_world_error_ =
-			wt_world_lifecycle_status_message(status);
-		return false;
-	}
-	lifecycle_ = std::move(lifecycle);
-	render_sink_->set_shader_fade_parameter_enabled(
-		configuration_->is_shader_fade_parameter_enabled()
-	);
-	render_sink_->set_transition_frames(static_cast<std::uint32_t>(
-		configuration_->get_render_transition_frames()
-	));
-	render_sink_->clear();
-	collision_sink_->clear();
-	reset_world_application(static_cast<std::size_t>(
-		config.active_chunk_capacity
-	));
-	render_apply_budget_ = static_cast<std::size_t>(
-		config.render_apply_budget
-	);
-	collision_apply_budget_ = static_cast<std::size_t>(
-		config.collision_apply_budget
-	);
-	synchronous_world_error_ = "ok";
-	emit_lifecycle_state(WtWorldLifecycleState::Starting);
-	return true;
 }
 
 bool WorldTransvoxelTerrain::stop_world() {

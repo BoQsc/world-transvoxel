@@ -1,5 +1,7 @@
 #include "storage/wt_async_storage_service.h"
 
+#include "storage/wt_procedural_world_source.h"
+
 #include <algorithm>
 #include <fstream>
 #include <limits>
@@ -144,6 +146,48 @@ WtAsyncStorageStatus WtAsyncStorageService::open(
 		}
 	}
 	object_root_ = object_root;
+	procedural_ = false;
+	procedural_descriptor_ = {};
+	procedural_keys_.clear();
+	requests_.clear();
+	active_requests_.clear();
+	completion_head_ = 0;
+	completion_count_ = 0;
+	sequence_counter_ = 0;
+	stop_requested_ = false;
+	metrics_ = {};
+	open_ = true;
+	worker_ = std::thread(&WtAsyncStorageService::worker_main, this);
+	return WtAsyncStorageStatus::Ok;
+}
+
+WtAsyncStorageStatus WtAsyncStorageService::open_procedural(
+	const WtProceduralWorldDescriptor &descriptor
+) {
+	if (!configuration_valid()) {
+		return WtAsyncStorageStatus::InvalidConfiguration;
+	}
+	if (!wt_valid_procedural_descriptor(descriptor)) {
+		return WtAsyncStorageStatus::InvalidConfiguration;
+	}
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		if (open_) {
+			return WtAsyncStorageStatus::AlreadyOpen;
+		}
+	}
+	std::lock_guard<std::mutex> lock(mutex_);
+	requests_.reserve(limits_.request_capacity);
+	active_requests_.reserve(
+		limits_.request_capacity + limits_.completion_capacity + 1
+	);
+	completion_slots_.assign(limits_.completion_capacity, {});
+	manifest_bytes_.clear();
+	manifest_ = {};
+	object_root_.clear();
+	procedural_ = true;
+	procedural_descriptor_ = descriptor;
+	procedural_keys_ = wt_procedural_keys(descriptor);
 	requests_.clear();
 	active_requests_.clear();
 	completion_head_ = 0;
@@ -182,6 +226,9 @@ void WtAsyncStorageService::close() noexcept {
 	object_root_.clear();
 	manifest_bytes_.clear();
 	manifest_ = {};
+	procedural_ = false;
+	procedural_descriptor_ = {};
+	procedural_keys_.clear();
 	completion_notifier_ = {};
 }
 
@@ -197,8 +244,10 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 	if (!open_ || stop_requested_) {
 		return WtAsyncStorageStatus::NotOpen;
 	}
-	const WtWorldPageIndexEntry *entry = manifest_.find_page(key);
-	if (entry == nullptr) {
+	const WtWorldPageIndexEntry *entry = procedural_ ?
+		nullptr : manifest_.find_page(key);
+	if ((procedural_ && !wt_procedural_has_key(procedural_keys_, key)) ||
+		(!procedural_ && entry == nullptr)) {
 		return WtAsyncStorageStatus::PageNotFound;
 	}
 	const auto active = std::find_if(
@@ -219,7 +268,9 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 	Request request;
 	request.key = key;
 	request.generation = generation;
-	request.entry = *entry;
+	if (entry != nullptr) {
+		request.entry = *entry;
+	}
 	request.sequence = ++sequence_counter_;
 	request.priority = priority;
 	const auto position = std::lower_bound(
@@ -246,16 +297,30 @@ WtPageLoadStatus WtAsyncStorageService::load_page_now(
 ) const {
 	page_bytes.reset();
 	Request request;
+	WtProceduralWorldDescriptor procedural_descriptor;
+	bool procedural = false;
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
 		if (!open_ || stop_requested_) return WtPageLoadStatus::IoFailure;
-		const WtWorldPageIndexEntry *entry = manifest_.find_page(key);
-		if (entry == nullptr) return WtPageLoadStatus::PageFailure;
+		procedural = procedural_;
+		procedural_descriptor = procedural_descriptor_;
+		const WtWorldPageIndexEntry *entry = procedural ?
+			nullptr : manifest_.find_page(key);
+		if ((procedural && !wt_procedural_has_key(procedural_keys_, key)) ||
+			(!procedural && entry == nullptr)) {
+			return WtPageLoadStatus::PageFailure;
+		}
 		request.key = key;
-		request.entry = *entry;
+		if (entry != nullptr) {
+			request.entry = *entry;
+		}
 	}
 	std::uint64_t bytes_read = 0;
-	WtPageLoadCompletion completion = load_page(request, bytes_read);
+	WtPageLoadCompletion completion = procedural ?
+		wt_generate_procedural_page(
+			procedural_descriptor, key, {}, bytes_read
+		) :
+		load_page(request, bytes_read);
 	if (completion.status == WtPageLoadStatus::Ok) {
 		page_bytes = std::move(completion.page_bytes);
 	}
@@ -267,7 +332,7 @@ bool WtAsyncStorageService::snapshot_manifest(
 ) const {
 	std::lock_guard<std::mutex> lock(mutex_);
 	manifest_bytes.clear();
-	if (!open_ || stop_requested_) return false;
+	if (!open_ || stop_requested_ || procedural_) return false;
 	manifest_bytes = manifest_bytes_;
 	return true;
 }
@@ -380,6 +445,14 @@ WtPageLoadCompletion WtAsyncStorageService::load_page(
 	WtPageLoadCompletion completion;
 	completion.key = request.key;
 	completion.generation = request.generation;
+	if (procedural_) {
+		return wt_generate_procedural_page(
+			procedural_descriptor_,
+			request.key,
+			request.generation,
+			bytes_read
+		);
+	}
 	const std::filesystem::path path =
 		wt_page_object_path(object_root_, request.entry.content_hash);
 	std::error_code error;
@@ -432,13 +505,16 @@ void WtAsyncStorageService::set_completion_notifier(
 
 bool WtAsyncStorageService::has_page(const WtChunkKey &key) const noexcept {
 	std::lock_guard<std::mutex> lock(mutex_);
-	return open_ && manifest_.find_page(key) != nullptr;
+	return open_ && (procedural_ ?
+		wt_procedural_has_key(procedural_keys_, key) :
+		manifest_.find_page(key) != nullptr);
 }
 
 std::vector<WtChunkKey> WtAsyncStorageService::page_keys() const {
 	std::lock_guard<std::mutex> lock(mutex_);
 	std::vector<WtChunkKey> keys;
 	if (!open_) return keys;
+	if (procedural_) return procedural_keys_;
 	keys.reserve(manifest_.pages.size());
 	for (const WtWorldPageIndexEntry &entry : manifest_.pages) {
 		keys.push_back(entry.key);
@@ -448,17 +524,22 @@ std::vector<WtChunkKey> WtAsyncStorageService::page_keys() const {
 
 std::uint64_t WtAsyncStorageService::source_revision() const noexcept {
 	std::lock_guard<std::mutex> lock(mutex_);
-	return open_ ? manifest_.source_revision : 0;
+	if (!open_) return 0;
+	return procedural_ ? procedural_descriptor_.source_revision :
+		manifest_.source_revision;
 }
 
 std::uint64_t WtAsyncStorageService::world_revision() const noexcept {
 	std::lock_guard<std::mutex> lock(mutex_);
-	return open_ ? manifest_.world_revision : 0;
+	if (!open_) return 0;
+	return procedural_ ? procedural_descriptor_.world_revision :
+		manifest_.world_revision;
 }
 
 std::size_t WtAsyncStorageService::page_count() const noexcept {
 	std::lock_guard<std::mutex> lock(mutex_);
-	return open_ ? manifest_.pages.size() : 0;
+	if (!open_) return 0;
+	return procedural_ ? procedural_keys_.size() : manifest_.pages.size();
 }
 
 std::size_t WtAsyncStorageService::queued_request_count() const noexcept {

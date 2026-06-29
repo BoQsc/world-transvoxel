@@ -45,6 +45,13 @@ configuration is attached, copies it, globalizes Godot `res://` or `user://`
 paths, creates bounded storage ownership, and returns after launching a native
 control thread.
 
+`start_procedural_world(chunk_count_x, chunk_count_z, seed, source_revision,
+object_root)` follows the same lifecycle and bounded storage ownership, but
+starts from a compact deterministic descriptor instead of a manifest. Requested
+pages are generated on demand through the existing native page baker and then
+flow through the same cache, meshing, editing, and application pipeline as
+manifest-backed pages.
+
 The control thread:
 
 1. reads and validates the manifest;
@@ -68,6 +75,7 @@ copied native startup configuration.
 The facade exposes:
 
 - `start_world(world_manifest_path, object_root) -> bool`;
+- `start_procedural_world(chunk_count_x, chunk_count_z, seed, source_revision, object_root) -> bool`;
 - `stop_world() -> bool`;
 - state number/name and `is_world_running()`;
 - source revision, world revision, and manifest page count;
@@ -79,6 +87,10 @@ Missing/corrupt manifests are accepted as asynchronous startup attempts and
 transition to `failed`; they are not misreported as synchronous argument
 errors. Empty API paths and invalid configuration fail synchronously before a
 thread is created.
+
+Procedural startup rejects invalid dimensions, missing object roots, nonpositive
+source revisions, and descriptors above the 262,144-page compact runtime limit
+synchronously before a thread is created.
 
 ## Proof
 
@@ -94,6 +106,11 @@ ccdb1e1ad000f824ebd4628e640a6c1d95f9d734cc1298f738de3d0c98f3a126
 `production_lifecycle_test.gd` proves the public API, signals, path
 globalization, immutable running configuration, asynchronous failure/reset,
 restart, and queue-free cleanup on Godot 4.6.3 and 4.7 with both addon builds.
+
+`test_wt_m5_async_storage.cpp` proves procedural descriptor validation,
+procedural page indexing, synchronous and asynchronous generated page loads,
+manifest-snapshot rejection in procedural mode, metrics accounting, and clean
+close behavior.
 
 The production qualification entry point generates its deterministic manifest
 fixture through the native format writer before running Godot. No binary

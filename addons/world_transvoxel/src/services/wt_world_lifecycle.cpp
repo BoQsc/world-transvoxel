@@ -1,5 +1,6 @@
 #include "services/wt_world_lifecycle.h"
 
+#include <system_error>
 #include <utility>
 
 namespace world_transvoxel {
@@ -39,6 +40,58 @@ WtWorldLifecycleStatus WtWorldLifecycleService::start(
 		std::lock_guard<std::mutex> state_lock(state_mutex_);
 		world_manifest_path_ = world_manifest_path;
 		object_root_ = object_root;
+		procedural_ = false;
+		procedural_descriptor_ = {};
+		storage_ = std::make_unique<WtAsyncStorageService>(
+			WtAsyncStorageLimits {
+				static_cast<std::size_t>(config_.storage_request_capacity),
+				static_cast<std::size_t>(config_.storage_completion_capacity),
+				kWtMaximumContainerSize,
+			}
+		);
+		last_storage_status_ = WtAsyncStorageStatus::Ok;
+		last_runtime_status_ = WtReadOnlyRuntimeStatus::Ok;
+		last_edit_journal_status_ = WtEditJournalStoreStatus::Ok;
+		stop_requested_ = false;
+		source_revision_ = 0;
+		world_revision_ = 0;
+		page_count_ = 0;
+		state_ = WtWorldLifecycleState::Starting;
+	}
+	state_changed_.notify_all();
+	control_thread_ = std::thread(
+		&WtWorldLifecycleService::control_main,
+		this
+	);
+	return WtWorldLifecycleStatus::Ok;
+}
+
+WtWorldLifecycleStatus WtWorldLifecycleService::start_procedural(
+	const WtProceduralWorldDescriptor &descriptor,
+	const std::filesystem::path &object_root
+) {
+	std::lock_guard<std::mutex> operation_lock(operation_mutex_);
+	if (!configuration_valid_) {
+		return WtWorldLifecycleStatus::InvalidConfiguration;
+	}
+	if (object_root.empty()) {
+		return WtWorldLifecycleStatus::InvalidPath;
+	}
+	{
+		std::lock_guard<std::mutex> state_lock(state_mutex_);
+		if (state_ != WtWorldLifecycleState::Stopped) {
+			return WtWorldLifecycleStatus::InvalidState;
+		}
+	}
+	if (control_thread_.joinable()) {
+		control_thread_.join();
+	}
+	{
+		std::lock_guard<std::mutex> state_lock(state_mutex_);
+		world_manifest_path_.clear();
+		object_root_ = object_root;
+		procedural_ = true;
+		procedural_descriptor_ = descriptor;
 		storage_ = std::make_unique<WtAsyncStorageService>(
 			WtAsyncStorageLimits {
 				static_cast<std::size_t>(config_.storage_request_capacity),
@@ -87,10 +140,14 @@ void WtWorldLifecycleService::shutdown_blocking() noexcept {
 }
 
 void WtWorldLifecycleService::control_main() noexcept {
-	const WtAsyncStorageStatus open_status = storage_->open(
-		world_manifest_path_,
-		object_root_
-	);
+	std::error_code directory_error;
+	if (procedural_) {
+		std::filesystem::create_directories(object_root_, directory_error);
+	}
+	const WtAsyncStorageStatus open_status =
+		directory_error ? WtAsyncStorageStatus::InvalidPath :
+		procedural_ ? storage_->open_procedural(procedural_descriptor_) :
+		storage_->open(world_manifest_path_, object_root_);
 	WtEditJournalStoreStatus journal_status =
 		WtEditJournalStoreStatus::NotOpen;
 	if (open_status == WtAsyncStorageStatus::Ok) {
@@ -158,6 +215,8 @@ void WtWorldLifecycleService::control_main() noexcept {
 		edit_journal_store_.reset();
 		world_manifest_path_.clear();
 		object_root_.clear();
+		procedural_ = false;
+		procedural_descriptor_ = {};
 		stop_requested_ = false;
 		source_revision_ = 0;
 		world_revision_ = 0;

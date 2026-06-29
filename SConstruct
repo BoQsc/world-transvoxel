@@ -363,6 +363,7 @@ m5_async_storage_test = native_test_env.Program(
         "addons/world_transvoxel/src/storage/wt_chunk_page.cpp",
         "addons/world_transvoxel/src/storage/wt_container_format.cpp",
         "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+        "addons/world_transvoxel/src/storage/wt_procedural_world_source.cpp",
         "addons/world_transvoxel/src/storage/wt_world_manifest.cpp",
     ],
 )
@@ -558,6 +559,7 @@ m5_pipeline_budget_test = native_test_env.Program(
         "addons/world_transvoxel/src/storage/wt_chunk_page_sample_source.cpp",
         "addons/world_transvoxel/src/storage/wt_container_format.cpp",
         "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+        "addons/world_transvoxel/src/storage/wt_procedural_world_source.cpp",
         "addons/world_transvoxel/src/storage/wt_world_manifest.cpp",
     ],
 )
@@ -624,6 +626,7 @@ m5_page_meshing_runtime_test = native_test_env.Program(
         "addons/world_transvoxel/src/storage/wt_chunk_page_sample_source.cpp",
         "addons/world_transvoxel/src/storage/wt_container_format.cpp",
         "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+        "addons/world_transvoxel/src/storage/wt_procedural_world_source.cpp",
         "addons/world_transvoxel/src/storage/wt_storage_page_cache.cpp",
         "addons/world_transvoxel/src/storage/wt_world_manifest.cpp",
         "addons/world_transvoxel/src/streaming/wt_stream_scheduler.cpp",
@@ -697,6 +700,7 @@ production_snapshot_query_test = native_test_env.Program(
         "addons/world_transvoxel/src/storage/wt_container_format.cpp",
         "addons/world_transvoxel/src/storage/wt_edit_journal_store.cpp",
         "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+        "addons/world_transvoxel/src/storage/wt_procedural_world_source.cpp",
         "addons/world_transvoxel/src/storage/wt_world_manifest.cpp",
         "addons/world_transvoxel/src/storage/wt_world_snapshot_store.cpp",
     ],
@@ -705,6 +709,7 @@ production_snapshot_query_test = native_test_env.Program(
 production_read_only_runtime_sources = [
     "addons/world_transvoxel/src/backend/wt_cell_types.cpp",
     "addons/world_transvoxel/src/backend/wt_transvoxel_mit_backend.cpp",
+    "addons/world_transvoxel/src/bake/wt_chunk_baker.cpp",
     "addons/world_transvoxel/src/bake/wt_snapshot_compactor.cpp",
     "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
     "addons/world_transvoxel/src/editing/wt_chunk_edit_state.cpp",
@@ -740,6 +745,7 @@ production_read_only_runtime_sources = [
     "addons/world_transvoxel/src/storage/wt_container_format.cpp",
     "addons/world_transvoxel/src/storage/wt_edit_journal_store.cpp",
     "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+    "addons/world_transvoxel/src/storage/wt_procedural_world_source.cpp",
     "addons/world_transvoxel/src/storage/wt_storage_page_cache.cpp",
     "addons/world_transvoxel/src/storage/wt_world_manifest.cpp",
     "addons/world_transvoxel/src/storage/wt_world_snapshot_store.cpp",

@@ -24,6 +24,15 @@ struct WtAsyncStorageLimits {
 	std::size_t maximum_page_bytes = kWtMaximumContainerSize;
 };
 
+struct WtProceduralWorldDescriptor {
+	std::uint32_t chunk_count_x = 0;
+	std::uint32_t chunk_count_z = 0;
+	std::int32_t chunk_y = 0;
+	std::uint64_t source_revision = 0;
+	std::uint64_t world_revision = 0;
+	std::uint32_t seed = 1;
+};
+
 enum class WtAsyncStorageStatus : std::uint8_t {
 	Ok,
 	InvalidConfiguration,
@@ -85,6 +94,9 @@ public:
 	WtAsyncStorageStatus open(
 		const std::filesystem::path &world_manifest_path,
 		const std::filesystem::path &object_root
+	);
+	WtAsyncStorageStatus open_procedural(
+		const WtProceduralWorldDescriptor &descriptor
 	);
 	void close() noexcept;
 
@@ -160,6 +172,9 @@ private:
 	std::filesystem::path object_root_;
 	std::vector<std::uint8_t> manifest_bytes_;
 	WtWorldManifestView manifest_;
+	bool procedural_ = false;
+	WtProceduralWorldDescriptor procedural_descriptor_;
+	std::vector<WtChunkKey> procedural_keys_;
 	std::function<void()> completion_notifier_;
 	WtAsyncStorageMetrics metrics_;
 };

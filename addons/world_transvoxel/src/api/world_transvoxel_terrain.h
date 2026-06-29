@@ -58,6 +58,13 @@ public:
 		const godot::String &world_manifest_path,
 		const godot::String &object_root
 	);
+	bool start_procedural_world(
+		std::int64_t chunk_count_x,
+		std::int64_t chunk_count_z,
+		std::int64_t seed,
+		std::int64_t source_revision,
+		const godot::String &object_root
+	);
 	bool stop_world();
 	std::int64_t get_world_state() const noexcept;
 	godot::String get_world_state_name() const;
