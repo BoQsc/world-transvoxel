@@ -30,10 +30,10 @@ replacement application, so visual chunks are not removed or introduced as a
 one-frame render swap, and same-key render mesh replacement keeps the previous
 mesh as a temporary retiring instance while the replacement mesh fades in. The
 fade state can also be published to custom shaders through the opt-in
-per-instance `wt_fade_opacity` parameter. Development build `1.0.11-dev`
-keeps that shader parameter disabled by default because Godot retains
-per-instance shader-parameter slots after use; native engine transparency fade
-remains active without consuming those slots at large visual scales. The
+per-instance `wt_fade_opacity` parameter. Development build `1.0.12-dev`
+keeps shader fade parameters and native render transition fading disabled by
+default; replacement meshes direct-swap unless `render_transition_frames` is
+set above zero. The
 deterministic install directory is:
 
 ```text
@@ -49,9 +49,10 @@ The working tree may contain post-PQ4 development builds. Version
 `1.0.10-dev` adds native batched authoritative sample queries for sandbox S1
 terrain-edit latency work. Version `1.0.11-dev` clears default
 `wt_fade_opacity` instance-parameter allocation by making writes opt-in/default-off
-for S2 large-scale visual evidence and preserves active render-node identity
-during same-key remeshes. These development builds are not the deterministic
-1.0.9 release artifact.
+for S2 large-scale visual evidence. Version `1.0.12-dev` also makes native
+render transition fading opt-in/default-off so editing does not blink by
+default. These development builds are not the deterministic 1.0.9 release
+artifact.
 
 ## Canonical direction
 
@@ -109,9 +110,10 @@ locks real `ArrayMesh`/concave-collision application budgets, eight-frame
 burst readiness, and the 96/128 collision hysteresis policy. A versioned
 bounded `wttrace` format and checked 60-second motion/edit soak now close M5.
 Ready chunk retirements are also flushed through a bounded per-frame removal
-budget; retiring render chunks fade out and newly introduced render chunks
-fade in through fixed native windows to reduce dynamic mixed-LOD visual swaps
-during sustained movement.
+budget. The released 1.0.9 path fades retiring and newly introduced render
+chunks through fixed native windows; the current development path keeps that
+capability behind opt-in `render_transition_frames` so editing defaults to
+direct replacement.
 Clean-addon installation and the real baked-world
 stream/render/collide/edit/query/save/reload/migrate/shutdown workflow close
 PQ3. PQ4 adds two-build byte reproducibility, installed tool validation,

@@ -19,8 +19,7 @@
 namespace world_transvoxel {
 namespace {
 
-constexpr std::uint32_t kRenderRetirementFadeFrames = 24U;
-constexpr std::uint32_t kRenderIntroductionFadeFrames = 24U;
+constexpr std::uint32_t kDefaultDisabledTransitionFrames = 0U;
 constexpr const char *kFadeOpacityShaderParameter = "wt_fade_opacity";
 constexpr float kDefaultFadeOpacity = 1.0F;
 constexpr float kFadeOpacityEpsilon = 0.0001F;
@@ -147,7 +146,7 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 		owner_.add_child(record.instance);
 	} else {
 		godot::Ref<godot::Mesh> retiring_mesh = record.instance->get_mesh();
-		if (retiring_mesh.is_valid()) {
+		if (transition_frames_ > 0U && retiring_mesh.is_valid()) {
 			Record retirement;
 			retirement.instance = memnew(godot::MeshInstance3D);
 			retirement.key = payload.key;
@@ -170,11 +169,11 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	record.retiring = false;
 	record.retirement_frame = 0;
 	record.retirement_start_transparency = 0.0F;
-	record.introducing = true;
+	record.introducing = transition_frames_ > 0U;
 	record.introduction_frame = 0;
 	record.instance->set_position(to_godot(payload.world_origin));
 	record.instance->set_mesh(mesh);
-	set_record_transparency(record, 1.0F);
+	set_record_transparency(record, record.introducing ? 1.0F : 0.0F);
 	record.generation = payload.generation;
 	return true;
 }
@@ -218,6 +217,12 @@ bool WtGodotRenderSink::begin_render_retirement(const WtChunkKey &key) {
 		records_.erase(iterator);
 		return false;
 	}
+	if (transition_frames_ == 0U) {
+		owner_.remove_child(record.instance);
+		record.instance->queue_free();
+		records_.erase(iterator);
+		return true;
+	}
 	record.retiring = true;
 	record.introducing = false;
 	record.retirement_frame = 0;
@@ -234,11 +239,11 @@ void WtGodotRenderSink::advance_retirements() {
 		Record &record = *iterator;
 		++record.retirement_frame;
 		const float progress = static_cast<float>(record.retirement_frame) /
-			static_cast<float>(kRenderRetirementFadeFrames);
+			static_cast<float>(transition_frames_);
 		const float transparency = record.retirement_start_transparency +
 			((1.0F - record.retirement_start_transparency) * progress);
 		set_record_transparency(record, transparency);
-		if (record.retirement_frame >= kRenderRetirementFadeFrames) {
+		if (record.retirement_frame >= transition_frames_) {
 			owner_.remove_child(record.instance);
 			record.instance->queue_free();
 			iterator = replacement_retirements_.erase(iterator);
@@ -251,11 +256,11 @@ void WtGodotRenderSink::advance_retirements() {
 		if (record.retiring) {
 			++record.retirement_frame;
 			const float progress = static_cast<float>(record.retirement_frame) /
-				static_cast<float>(kRenderRetirementFadeFrames);
+				static_cast<float>(transition_frames_);
 			const float transparency = record.retirement_start_transparency +
 				((1.0F - record.retirement_start_transparency) * progress);
 			set_record_transparency(record, transparency);
-			if (record.retirement_frame >= kRenderRetirementFadeFrames) {
+			if (record.retirement_frame >= transition_frames_) {
 				owner_.remove_child(record.instance);
 				record.instance->queue_free();
 				iterator = records_.erase(iterator);
@@ -267,9 +272,9 @@ void WtGodotRenderSink::advance_retirements() {
 		if (record.introducing) {
 			++record.introduction_frame;
 			const float progress = static_cast<float>(record.introduction_frame) /
-				static_cast<float>(kRenderIntroductionFadeFrames);
+				static_cast<float>(transition_frames_);
 			set_record_transparency(record, 1.0F - progress);
-			if (record.introduction_frame >= kRenderIntroductionFadeFrames) {
+			if (record.introduction_frame >= transition_frames_) {
 				record.introducing = false;
 				record.introduction_frame = 0;
 				set_record_transparency(record, 0.0F);
@@ -324,6 +329,30 @@ void WtGodotRenderSink::set_shader_fade_parameter_enabled(
 
 bool WtGodotRenderSink::is_shader_fade_parameter_enabled() const noexcept {
 	return shader_fade_parameter_enabled_;
+}
+
+void WtGodotRenderSink::set_transition_frames(std::uint32_t frames) noexcept {
+	transition_frames_ = frames;
+	if (transition_frames_ == kDefaultDisabledTransitionFrames) {
+		for (auto &entry : records_) {
+			Record &record = entry.second;
+			record.introducing = false;
+			record.retiring = false;
+			record.introduction_frame = 0;
+			record.retirement_frame = 0;
+			record.retirement_start_transparency = 0.0F;
+			set_record_transparency(record, 0.0F);
+		}
+		for (auto &record : replacement_retirements_) {
+			owner_.remove_child(record.instance);
+			record.instance->queue_free();
+		}
+		replacement_retirements_.clear();
+	}
+}
+
+std::uint32_t WtGodotRenderSink::get_transition_frames() const noexcept {
+	return transition_frames_;
 }
 
 bool WtGodotRenderSink::on_owner_thread() const noexcept {

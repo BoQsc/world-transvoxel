@@ -78,14 +78,14 @@ func _run_test() -> void:
 	if terrain.call("_m3_test_render_generation") != 3 or \
 			terrain.call("_m3_test_collision_generation") != 3:
 		return _fail("resource replacement retained an old generation")
-	if terrain.get_render_resource_count() != 2 or \
+	if terrain.get_render_resource_count() != 1 or \
 			terrain.get_collision_resource_count() != 1:
-		return _fail("resource replacement did not create bounded crossfade nodes")
-	for frame in range(24):
+		return _fail("resource replacement did not direct-swap render/collision resources")
+	for frame in range(2):
 		await process_frame
 	if terrain.get_render_resource_count() != 1 or \
 			terrain.get_collision_resource_count() != 1:
-		return _fail("resource replacement crossfade did not settle")
+		return _fail("resource replacement did not remain settled after direct swap")
 
 	if not terrain.call("_m3_test_submit_generation", 4, true):
 		return _fail("in-flight teardown generation failed")

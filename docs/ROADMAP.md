@@ -149,7 +149,10 @@ fade windows to 24 frames. Version 1.0.8 adds native same-key render mesh
 replacement crossfade so replacement generations do not swap visible mesh data
 at full opacity. Version 1.0.9 publishes native fade opacity to custom shaders
 through `wt_fade_opacity` so shader materials can participate in the same visual
-fade contract.
+fade contract. Current development build 1.0.12-dev keeps that fade capability
+but makes native render transition fading opt-in/default-off through
+`WorldTransvoxelConfig.render_transition_frames`, so edit/playable terrain
+defaults to direct replacement without fade blink.
 
 Finite qualification gates are tracked in
 `docs/production/QUALIFICATION_AUDIT.md`:

@@ -20,10 +20,24 @@ func _run_test() -> void:
 			config.get("viewer_capacity") != 8 or \
 			config.get("render_apply_budget") != 4 or \
 			config.get("collision_apply_budget") != 2 or \
+			config.get("render_transition_frames") != 0 or \
 			config.get("shader_fade_parameter_enabled") != false or \
 			config.call("is_shader_fade_parameter_enabled") != false:
 		_fail("default configuration values changed")
 		return
+	config.set("render_transition_frames", 24)
+	if config.get("render_transition_frames") != 24:
+		_fail("render transition frame count was not retained")
+		return
+	config.set("render_transition_frames", -1)
+	if config.get("render_transition_frames") != 0:
+		_fail("render transition frame count did not clamp to zero")
+		return
+	config.set("render_transition_frames", 999)
+	if config.get("render_transition_frames") != 240:
+		_fail("render transition frame count did not clamp to maximum")
+		return
+	config.set("render_transition_frames", 0)
 	config.set("shader_fade_parameter_enabled", true)
 	if config.get("shader_fade_parameter_enabled") != true or \
 			config.call("is_shader_fade_parameter_enabled") != true:

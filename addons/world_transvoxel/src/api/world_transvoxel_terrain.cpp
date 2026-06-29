@@ -12,6 +12,7 @@
 #include <godot_cpp/core/class_db.hpp>
 
 #include <algorithm>
+#include <cstdint>
 #include <memory>
 
 namespace world_transvoxel {
@@ -331,6 +332,9 @@ bool WorldTransvoxelTerrain::start_world(
 	render_sink_->set_shader_fade_parameter_enabled(
 		configuration_->is_shader_fade_parameter_enabled()
 	);
+	render_sink_->set_transition_frames(static_cast<std::uint32_t>(
+		configuration_->get_render_transition_frames()
+	));
 	render_sink_->clear();
 	collision_sink_->clear();
 	reset_world_application(static_cast<std::size_t>(

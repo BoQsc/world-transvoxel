@@ -57,10 +57,12 @@ post-PQ4 S1 development build that adds a native batched authoritative sample
 query for exact terrain-edit restoration. Version 1.0.11-dev is a local S2
 development build that makes `wt_fade_opacity` instance-parameter writes
 opt-in/default-off because Godot retains per-instance shader-parameter slots
-after use. Native engine transparency fade remains active by default. These
-development builds are not the deterministic PQ4 release artifact. The release
-ships API/limit documentation, addon-local bake/storage wrappers, runtime DLLs,
-and native tools. Compute acceleration is optional later work.
+after use. Version 1.0.12-dev also makes native render transition fading
+opt-in/default-off; the default replacement path is a direct swap so terrain
+edits do not blink. These development builds are not the deterministic PQ4
+release artifact. The release ships API/limit documentation, addon-local
+bake/storage wrappers, runtime DLLs, and native tools. Compute acceleration is
+optional later work.
 
 Build from the repository root:
 

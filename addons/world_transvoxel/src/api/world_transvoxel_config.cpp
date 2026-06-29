@@ -70,6 +70,7 @@ void WorldTransvoxelConfig::_bind_methods() {
 	WT_BIND_INT_PROPERTY(trace_event_capacity, "1,262144,1");
 	WT_BIND_INT_PROPERTY(render_apply_budget, "0,128,1");
 	WT_BIND_INT_PROPERTY(collision_apply_budget, "0,128,1");
+	WT_BIND_INT_PROPERTY(render_transition_frames, "0,240,1");
 	WT_BIND_FLOAT_PROPERTY(
 		collision_activation_distance,
 		"0,1000000,0.01,or_greater"
@@ -167,6 +168,22 @@ WT_CONFIG_INT_ACCESSORS(render_apply_budget)
 WT_CONFIG_INT_ACCESSORS(collision_apply_budget)
 
 #undef WT_CONFIG_INT_ACCESSORS
+
+void WorldTransvoxelConfig::set_render_transition_frames(std::int64_t value) {
+	if (value < 0) {
+		value = 0;
+	}
+	if (value > 240) {
+		value = 240;
+	}
+	if (render_transition_frames_ == value) return;
+	render_transition_frames_ = value;
+	emit_changed();
+}
+
+std::int64_t WorldTransvoxelConfig::get_render_transition_frames() const noexcept {
+	return render_transition_frames_;
+}
 
 void WorldTransvoxelConfig::set_collision_activation_distance(double value) {
 	if (collision_activation_distance_ == value) return;

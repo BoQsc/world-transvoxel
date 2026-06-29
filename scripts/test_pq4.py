@@ -208,6 +208,9 @@ def audit_release(root: Path) -> dict[str, object]:
     render_sink_source = (
         addon / "src" / "render" / "wt_godot_render_sink.cpp"
     ).read_text(encoding="utf-8")
+    config_source = (
+        addon / "src" / "api" / "world_transvoxel_config.cpp"
+    ).read_text(encoding="utf-8")
     operating_limits = (addon / "OPERATING_LIMITS.md").read_text(
         encoding="utf-8"
     )
@@ -217,17 +220,16 @@ def audit_release(root: Path) -> dict[str, object]:
     ):
         raise RuntimeError("PQ4 release retirement flush budget is not locked.")
     if (
-        "kRenderRetirementFadeFrames = 24U" not in render_sink_source
-        or "kRenderIntroductionFadeFrames = 24U" not in render_sink_source
-		or "replacement_retirements_" not in render_sink_source
-		or "wt_fade_opacity" not in render_sink_source
-		or "same-key render mesh replacement crossfade | native" not in operating_limits
-		or "shader fade opacity parameter | `wt_fade_opacity`" not in operating_limits
-		or "render_fading_resources" not in metrics_source
-        or "render retirement fade duration | 24 frames" not in operating_limits
-        or "render introduction fade duration | 24 frames" not in operating_limits
+        "set_transition_frames" not in render_sink_source
+        or "replacement_retirements_" not in render_sink_source
+        or "wt_fade_opacity" not in render_sink_source
+        or "render_transition_frames" not in config_source
+        or "same-key render mesh replacement | direct swap by default" not in operating_limits
+        or "shader fade opacity parameter | `wt_fade_opacity`" not in operating_limits
+        or "render_fading_resources" not in metrics_source
+        or "render transition fade duration | 0 frames, disabled | 240" not in operating_limits
     ):
-        raise RuntimeError("PQ4 release render fade windows are not locked.")
+        raise RuntimeError("render transition fade contract is not locked.")
 
     manifest_path = root / "RELEASE_MANIFEST.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -453,8 +455,8 @@ def test_pq4(
             "public_api_documented": True,
             "operational_limits_documented": True,
             "ready_chunk_retirement_bounded": True,
-			"ready_chunk_retirement_fade_bounded": True,
-			"ready_chunk_introduction_fade_bounded": True,
+            "ready_chunk_transition_fade_opt_in": True,
+            "default_render_replacement_direct_swap": True,
 			"shader_fade_opacity_parameter_documented": True,
 			"license_notices_complete": True,
             "official_mit_provenance_verified": True,

@@ -101,11 +101,14 @@ This `Resource` exposes the construction-time capacities documented in
 `get_validation_error()`. Configuration is copied when startup begins; stop
 the world before replacing it.
 
-`shader_fade_parameter_enabled` is an opt-in boolean. The default is `false`,
-which keeps native `GeometryInstance3D` transparency fade active without
-allocating Godot per-instance shader-parameter slots. Set it to `true` only for
-small scenes using a custom shader that declares and consumes
-`wt_fade_opacity`.
+`render_transition_frames` is an opt-in integer. The default is `0`, which
+directly swaps replacement render meshes and avoids edit-time fade/blink. Values
+above zero keep retiring render instances alive and fade replacement render
+chunks over that many frames.
+
+`shader_fade_parameter_enabled` is an opt-in boolean. The default is `false`.
+Set it to `true` only when `render_transition_frames` is positive and a custom
+shader declares and consumes `wt_fade_opacity`.
 
 ## `WorldTransvoxelEditTransaction`
 

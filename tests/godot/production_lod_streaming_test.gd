@@ -21,6 +21,7 @@ func _run_test() -> void:
 	config.set("mesh_entry_capacity", 40)
 	config.set("render_entry_capacity", 40)
 	config.set("collision_entry_capacity", 40)
+	config.set("render_transition_frames", 24)
 	root.add_child(terrain)
 	terrain.set("configuration", config)
 

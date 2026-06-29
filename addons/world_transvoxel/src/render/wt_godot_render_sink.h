@@ -29,6 +29,8 @@ public:
 	WtGenerationToken applied_generation(const WtChunkKey &key) const noexcept;
 	void set_shader_fade_parameter_enabled(bool enabled) noexcept;
 	bool is_shader_fade_parameter_enabled() const noexcept;
+	void set_transition_frames(std::uint32_t frames) noexcept;
+	std::uint32_t get_transition_frames() const noexcept;
 
 private:
 	struct Record {
@@ -51,6 +53,7 @@ private:
 	std::map<WtChunkKey, Record> records_;
 	std::vector<Record> replacement_retirements_;
 	bool shader_fade_parameter_enabled_ = false;
+	std::uint32_t transition_frames_ = 0;
 };
 
 } // namespace world_transvoxel

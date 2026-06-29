@@ -1,11 +1,13 @@
-# World Transvoxel 1.0.11-dev Operating Limits
+# World Transvoxel 1.0.12-dev Operating Limits
 
 ## Qualified release matrix
 
-The 1.0.11-dev S2 development build inherits the 1.0.9 Windows x86-64
+The 1.0.12-dev S2 development build inherits the 1.0.9 Windows x86-64
 qualification matrix, includes the documented 1.0.10-dev batched authoritative
-sample query, and makes fade shader instance-parameter writes opt-in/default-off
-so stable large-scale scenes do not exhaust Godot instance-shader storage. It is
+sample query, makes native render transition fading opt-in/default-off, and
+makes fade shader instance-parameter writes opt-in/default-off so stable
+large-scale scenes do not blink during edits or exhaust Godot instance-shader
+storage. It is
 qualified only for:
 
 | Component | Supported value |
@@ -39,9 +41,8 @@ release even if the source can be compiled for them.
 | render apply budget per frame | 4 | 128 |
 | collision apply budget per frame | 2 | 128 |
 | ready chunk retirement removals per frame | 4 | fixed in 1.0.4 |
-| render retirement fade duration | 24 frames | fixed in 1.0.7 |
-| render introduction fade duration | 24 frames | fixed in 1.0.7 |
-| same-key render mesh replacement crossfade | native | fixed in 1.0.8 |
+| render transition fade duration | 0 frames, disabled | 240 |
+| same-key render mesh replacement | direct swap by default | crossfade when transition frames > 0 |
 | shader fade opacity parameter | `wt_fade_opacity`, opt-in/default-off | fixed in 1.0.11-dev |
 | collision activation/deactivation | 96 / 128 | finite, nonnegative |
 
@@ -94,16 +95,15 @@ through a controlled stop/start before it becomes active.
   and application-record ownership can temporarily approach twice the active
   chunk capacity; it returns to the current desired set after streaming settles.
   Once replacements are fully ready, old chunk removal is capped at four chunks
-  per frame to avoid a large one-frame dynamic LOD visual swap. Retiring render
-  chunks remain render-only for 24 frames and fade out through native
-  `GeometryInstance3D` transparency, optionally plus the per-instance shader
-  parameter `wt_fade_opacity`; newly introduced render chunks fade in through
-  the same 24-frame path. Same-key render mesh replacements keep the previous mesh as a
-  temporary render-only retiring instance while the replacement mesh fades in,
-  so replacement generation application does not swap the visible mesh at full
-  opacity. Custom terrain shaders that want deterministic native fade behavior
-  through `ALPHA` must declare an instance uniform named `wt_fade_opacity` with
-  default `1.0`, apply it to `ALPHA`, and explicitly enable
+  per frame to avoid a large one-frame dynamic LOD visual swap. Render
+  transition fading is disabled by default: same-key render mesh replacements
+  swap directly, so terrain edits do not create a white blink/fade. Projects
+  that explicitly set `WorldTransvoxelConfig.render_transition_frames` above
+  zero opt into temporary retiring render instances, retirement fade-out, and
+  introduction fade-in for that many frames. Custom terrain shaders that want
+  deterministic native fade behavior through `ALPHA` must declare an instance
+  uniform named `wt_fade_opacity` with default `1.0`, apply it to `ALPHA`, set a
+  positive render transition frame count, and explicitly enable
   `WorldTransvoxelConfig.shader_fade_parameter_enabled`. This switch is off by
   default because Godot retains per-instance shader-parameter slots after use;
   stable large-scale scenes must keep the default unless the project has a
