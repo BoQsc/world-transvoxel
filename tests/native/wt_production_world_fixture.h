@@ -26,6 +26,13 @@ bool wt_write_production_transition_fixture(
 	std::filesystem::path &world_manifest_path
 );
 
+bool wt_write_production_g8_2000x2000_fixture(
+	const std::filesystem::path &root,
+	std::uint64_t source_revision,
+	std::uint64_t world_revision,
+	std::filesystem::path &world_manifest_path
+);
+
 bool wt_write_production_legacy_fixture(
 	const std::filesystem::path &root,
 	std::uint64_t source_revision,

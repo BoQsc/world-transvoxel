@@ -5,8 +5,11 @@
 #include "storage/wt_hash256.h"
 #include "storage/wt_world_manifest.h"
 
+#include <algorithm>
+#include <array>
 #include <fstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace world_transvoxel::testing {
@@ -139,6 +142,57 @@ bool write_baked_fixture(
 	return write_file(world_manifest_path, bytes);
 }
 
+void append_unique_key(
+	std::vector<WtChunkKey> &keys,
+	const WtChunkKey &key
+) {
+	if (std::find(keys.begin(), keys.end(), key) == keys.end()) {
+		keys.push_back(key);
+	}
+}
+
+std::vector<WtChunkKey> g8_2000x2000_sparse_keys() {
+	constexpr std::int32_t map_blocks = 2000;
+	constexpr std::int32_t chunk_size = 16;
+	constexpr std::int32_t chunk_grid = 125;
+	constexpr std::int32_t window_radius_chunks = 2;
+	const std::array<std::pair<std::int32_t, std::int32_t>, 5> path_blocks = { {
+		{ 8, 8 },
+		{ 496, 496 },
+		{ 1000, 1000 },
+		{ 1504, 496 },
+		{ 1991, 1991 },
+	} };
+	std::vector<WtChunkKey> keys;
+	keys.reserve(93);
+	for (const auto &[block_x, block_z] : path_blocks) {
+		if (block_x < 0 || block_x >= map_blocks ||
+			block_z < 0 || block_z >= map_blocks) {
+			return {};
+		}
+		const std::int32_t center_x = block_x / chunk_size;
+		const std::int32_t center_z = block_z / chunk_size;
+		const std::int32_t min_x = std::max(
+			0, center_x - window_radius_chunks
+		);
+		const std::int32_t max_x = std::min(
+			chunk_grid - 1, center_x + window_radius_chunks
+		);
+		const std::int32_t min_z = std::max(
+			0, center_z - window_radius_chunks
+		);
+		const std::int32_t max_z = std::min(
+			chunk_grid - 1, center_z + window_radius_chunks
+		);
+		for (std::int32_t z = min_z; z <= max_z; ++z) {
+			for (std::int32_t x = min_x; x <= max_x; ++x) {
+				append_unique_key(keys, { x, 0, z, 0 });
+			}
+		}
+	}
+	return keys;
+}
+
 } // namespace
 
 bool wt_write_production_world_fixture(
@@ -229,6 +283,24 @@ bool wt_write_production_transition_fixture(
 		"production-transition-streaming",
 		"production-transition-streaming-config-v1",
 		"transition.wtworld", world_manifest_path
+	);
+}
+
+bool wt_write_production_g8_2000x2000_fixture(
+	const std::filesystem::path &root,
+	std::uint64_t source_revision,
+	std::uint64_t world_revision,
+	std::filesystem::path &world_manifest_path
+) {
+	const std::vector<WtChunkKey> keys = g8_2000x2000_sparse_keys();
+	if (keys.size() != 93U) return false;
+	return write_baked_fixture(
+		root, keys, source_revision, world_revision,
+		"production-g8-2000x2000-plane",
+		"production-g8-2000x2000-plane-v1",
+		"production-g8-2000x2000-bounded-window",
+		"production-g8-2000x2000-bounded-window-config-v1",
+		"g8_2000x2000_sparse.wtworld", world_manifest_path
 	);
 }
 

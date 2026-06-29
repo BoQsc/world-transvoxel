@@ -1,9 +1,12 @@
 #include "services/wt_read_only_world_runtime.h"
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_hash256.h"
+#include "streaming/wt_balanced_lod_planner.h"
 #include "wt_production_world_fixture.h"
 
+#include <algorithm>
 #include <atomic>
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -125,9 +128,77 @@ wt::WtViewerSnapshot viewer(
 	return { id, x, y, 8.0, revision };
 }
 
+const wt::WtLodMapEntry *find_entry(
+	const wt::WtBalancedLodPlan &plan,
+	const wt::WtChunkKey &key
+) {
+	for (const wt::WtLodMapEntry &entry : plan.entries) {
+		if (entry.key == key) return &entry;
+	}
+	return nullptr;
+}
+
+void test_g8_2000x2000_window_planning() {
+	FixtureRoot fixture;
+	std::filesystem::path world_path;
+	check(wtt::wt_write_production_g8_2000x2000_fixture(
+		fixture.path, 8101, 14, world_path
+	), "g8 2000x2000 sparse fixture write failed");
+
+	wt::WtAsyncStorageService storage({ 256, 256, wt::kWtMaximumContainerSize });
+	check(storage.open(world_path, fixture.path) ==
+		wt::WtAsyncStorageStatus::Ok,
+		"g8 2000x2000 sparse fixture open failed");
+	check(storage.page_count() == 93 &&
+		storage.has_page({ 0, 0, 0, 0 }) &&
+		storage.has_page({ 31, 0, 31, 0 }) &&
+		storage.has_page({ 62, 0, 62, 0 }) &&
+		storage.has_page({ 94, 0, 31, 0 }) &&
+		storage.has_page({ 124, 0, 124, 0 }) &&
+		!storage.has_page({ 125, 0, 124, 0 }),
+		"g8 2000x2000 page catalog mismatch");
+
+	struct Sample {
+		double x;
+		double z;
+		std::size_t expected_entries;
+		wt::WtChunkKey center_key;
+	};
+	const std::array<Sample, 5> samples = { {
+		{ 8.0, 8.0, 9, { 0, 0, 0, 0 } },
+		{ 496.0, 496.0, 25, { 31, 0, 31, 0 } },
+		{ 1000.0, 1000.0, 25, { 62, 0, 62, 0 } },
+		{ 1504.0, 496.0, 25, { 94, 0, 31, 0 } },
+		{ 1991.0, 1991.0, 9, { 124, 0, 124, 0 } },
+	} };
+	wt::WtBalancedLodPlanner planner(256, storage.page_keys());
+	check(planner.valid(), "g8 2000x2000 planner configuration rejected");
+	std::size_t maximum_window = 0;
+	std::uint64_t revision = 1;
+	for (const Sample &sample : samples) {
+		wt::WtBalancedLodPlan plan;
+		check(planner.plan(
+			{ { { 1, sample.x, 8.0, sample.z, revision++ }, 2, 0 } },
+			{}, {}, plan
+		) == wt::WtBalancedLodPlannerStatus::Ok,
+			"g8 2000x2000 bounded window planning failed");
+		check(plan.entries.size() == sample.expected_entries &&
+			find_entry(plan, sample.center_key) != nullptr,
+			"g8 2000x2000 bounded window shape mismatch");
+		maximum_window = std::max(maximum_window, plan.entries.size());
+	}
+	check(maximum_window == 25,
+		"g8 2000x2000 maximum bounded window mismatch");
+	std::printf(
+		"PRODUCTION_G8_2000X2000_WINDOW_PASS pages=93 samples=5 max_window=25\n"
+	);
+}
+
 } // namespace
 
 int main() {
+	test_g8_2000x2000_window_planning();
+
 	FixtureRoot fixture;
 	std::filesystem::path world_path;
 	check(wtt::wt_write_production_streaming_fixture(

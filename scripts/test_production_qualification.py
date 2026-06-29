@@ -101,10 +101,12 @@ def prepare_lifecycle_fixture() -> None:
         or "PRODUCTION_LIFECYCLE_FIXTURE_PASS" not in combined
         or "PRODUCTION_STREAMING_FIXTURE_PASS" not in combined
         or "PRODUCTION_TRANSITION_FIXTURE_PASS" not in combined
+        or "PRODUCTION_G8_2000X2000_FIXTURE_PASS" not in combined
         or "PRODUCTION_LEGACY_FIXTURE_PASS" not in combined
         or not (LIFECYCLE_FIXTURE_ROOT / "world.wtworld").is_file()
         or not (LIFECYCLE_FIXTURE_ROOT / "streaming.wtworld").is_file()
         or not (LIFECYCLE_FIXTURE_ROOT / "transition.wtworld").is_file()
+        or not (LIFECYCLE_FIXTURE_ROOT / "g8_2000x2000_sparse.wtworld").is_file()
         or not (LIFECYCLE_FIXTURE_ROOT / "legacy.wtworld").is_file()
     ):
         raise RuntimeError("Production lifecycle fixture generation failed.")
@@ -197,6 +199,12 @@ def run_engine_tests(engine: Path, name: str) -> None:
         f"{name}-lod-streaming",
         "res://tests/godot/production_lod_streaming_test.gd",
         "PRODUCTION_GODOT_LOD_STREAMING_PASS",
+    )
+    run_godot_test(
+        engine,
+        f"{name}-g8-2000x2000-streaming",
+        "res://tests/godot/production_g8_2000x2000_streaming_test.gd",
+        "PRODUCTION_GODOT_G8_2000X2000_STREAMING_PASS",
     )
     run_godot_test(
         engine,
