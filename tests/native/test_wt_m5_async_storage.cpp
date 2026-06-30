@@ -611,6 +611,20 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 			page.samples.size() == wt::kWtChunkPageSampleCount,
 		"procedural decoded page metadata mismatch"
 	);
+	wt::WtScalarSample deep_sample;
+	wt::WtScalarSample mid_sample;
+	wt::WtScalarSample shallow_sample;
+	check(
+		wt::wt_sample_chunk_page(page, { 40, 0, 24 }, deep_sample) &&
+			wt::wt_sample_chunk_page(page, { 40, 4, 24 }, mid_sample) &&
+			wt::wt_sample_chunk_page(page, { 40, 8, 24 }, shallow_sample) &&
+			deep_sample.density < mid_sample.density &&
+			mid_sample.density < shallow_sample.density &&
+			deep_sample.material == 1 &&
+			mid_sample.material == 7 &&
+			shallow_sample.material == 4,
+		"procedural underground strata samples mismatch"
+	);
 	check(
 		service.load_page_now({ 9, 0, 1, 0 }, immediate_bytes) ==
 			wt::WtPageLoadStatus::PageFailure,
@@ -686,7 +700,7 @@ int main() {
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
 		"M5_ASYNC_STORAGE_PASS requests=5 successes=1 failures=4 "
-		"queue_rejections=1\n"
+		"queue_rejections=1 procedural_strata=1\n"
 	);
 	return 0;
 }

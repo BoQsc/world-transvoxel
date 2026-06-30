@@ -9,9 +9,9 @@
 namespace world_transvoxel {
 namespace {
 
-class WtProceduralHeightSource final : public WtChunkSampleSource {
+class WtProceduralTerrainVolumeSource final : public WtChunkSampleSource {
 public:
-	explicit WtProceduralHeightSource(
+	explicit WtProceduralTerrainVolumeSource(
 		WtProceduralWorldDescriptor descriptor
 	) noexcept :
 			descriptor_(descriptor) {
@@ -25,7 +25,7 @@ public:
 		output.density = static_cast<float>(
 			static_cast<double>(point.y) - surface
 		);
-		output.material = material(surface, point.x, point.z);
+		output.material = material(surface, point.x, point.y, point.z);
 		return std::isfinite(output.density);
 	}
 
@@ -67,10 +67,15 @@ private:
 	std::uint16_t material(
 		double surface,
 		std::int64_t x,
+		std::int64_t y,
 		std::int64_t z
 	) const noexcept {
+		const double depth = surface - static_cast<double>(y);
+		if (depth >= 8.0) return 1;
+		if (depth >= 3.0) return 7;
+		if (depth >= 1.0) return 4;
 		if (surface < 7.6) return 2;
-		if (surface > 11.0) return 5;
+		if (surface > 11.0) return 7;
 		const std::int64_t band =
 			(x >= 0 ? x / 96 : (x - 95) / 96) +
 			(z >= 0 ? z / 96 : (z - 95) / 96);
@@ -140,7 +145,7 @@ WtPageLoadCompletion wt_generate_procedural_page(
 		completion.status = WtPageLoadStatus::PageFailure;
 		return completion;
 	}
-	WtProceduralHeightSource source(descriptor);
+	WtProceduralTerrainVolumeSource source(descriptor);
 	std::vector<WtBakedChunkPage> pages;
 	const WtChunkBaker baker(1);
 	if (baker.bake({ key }, descriptor.source_revision, source, pages) !=
