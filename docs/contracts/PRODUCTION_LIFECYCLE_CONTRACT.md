@@ -89,8 +89,8 @@ errors. Empty API paths and invalid configuration fail synchronously before a
 thread is created.
 
 Procedural startup rejects invalid dimensions, missing object roots, nonpositive
-source revisions, and descriptors above the 262,144-page compact runtime limit
-synchronously before a thread is created.
+source revisions, and descriptors above the 262,144 hierarchy-page compact
+runtime limit synchronously before a thread is created.
 
 ## Proof
 

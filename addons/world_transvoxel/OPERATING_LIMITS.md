@@ -58,8 +58,9 @@ Viewer capacity multiplied by demand capacity per viewer may not exceed
 - Each transition face: 3,072 vertices and 9,216 indices maximum.
 - One chunk may own up to six transition faces.
 - World manifest: 262,144 pages maximum.
-- Compact procedural world descriptor: 262,144 indexed LOD-0 pages maximum,
-  currently one vertical chunk layer.
+- Compact procedural world descriptor: 262,144 indexed hierarchy pages maximum.
+  The current deterministic source emits LOD0 and LOD1 pages with two LOD0
+  vertical layers and one LOD1 vertical layer for the configured chunk slice.
 - Manifest dependency records: 1,024 maximum; dependency text is 255 bytes.
 
 ## Storage, editing, and operations

@@ -14,7 +14,7 @@ from wt_script_common import REPO_ROOT, native_test_path
 
 
 EXPECTED_ASYNC_STORAGE_HASH = (
-    "fa1a8d60b9c5a060e3d4e5a5e3940a53bd1f36aa2e253fea1eaad18e504f5903"
+    "786ca9f17069123c4311709e085562ae3cbecd8825ebcba968b71f0d91778e67"
 )
 EXPECTED_STORAGE_CACHE_HASH = (
     "11b2749ef19124bf73f6f2e287f0cc0da3c877fd9876d3cd42e0d031bd0f740f"

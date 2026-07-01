@@ -41,9 +41,9 @@ Lifecycle state values are `0 stopped`, `1 starting`, `2 running`,
 `start_procedural_world()` starts a compact deterministic horizontal chunk grid
 without reading a `.wtworld` manifest. It generates requested page bytes on
 demand through the same native page format, cache, meshing, editing, and
-streaming pipeline used by manifest-backed worlds. The initial supported
-procedural descriptor is one vertical chunk layer at LOD 0, up to 262,144
-indexed pages, with persistent edits stored in the object root journal.
+streaming pipeline used by manifest-backed worlds. The supported procedural
+descriptor emits a bounded LOD0/LOD1 hierarchy, up to 262,144 indexed hierarchy
+pages, with persistent edits stored in the object root journal.
 
 Streaming and readiness:
 

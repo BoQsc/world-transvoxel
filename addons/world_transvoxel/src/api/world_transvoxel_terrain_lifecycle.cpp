@@ -2,6 +2,7 @@
 
 #include "physics/wt_godot_collision_sink.h"
 #include "render/wt_godot_render_sink.h"
+#include "storage/wt_procedural_world_source.h"
 
 #include <godot_cpp/classes/project_settings.hpp>
 
@@ -100,16 +101,6 @@ bool WorldTransvoxelTerrain::start_procedural_world(
 			"procedural world descriptor is invalid";
 		return false;
 	}
-	const std::uint64_t page_count =
-		static_cast<std::uint64_t>(chunk_count_x) *
-		static_cast<std::uint64_t>(chunk_count_z);
-	if (page_count == 0 || page_count > 262144U) {
-		synchronous_world_error_ =
-			"procedural world page count exceeds compact runtime limit";
-		return false;
-	}
-	const WtRuntimeConfig config = configuration_->to_native();
-	auto lifecycle = std::make_unique<WtWorldLifecycleService>(config);
 	WtProceduralWorldDescriptor descriptor;
 	descriptor.chunk_count_x = static_cast<std::uint32_t>(chunk_count_x);
 	descriptor.chunk_count_z = static_cast<std::uint32_t>(chunk_count_z);
@@ -117,6 +108,14 @@ bool WorldTransvoxelTerrain::start_procedural_world(
 	descriptor.source_revision = static_cast<std::uint64_t>(source_revision);
 	descriptor.world_revision = 0;
 	descriptor.seed = compact_seed(seed);
+	const std::uint64_t page_count = wt_procedural_page_count(descriptor);
+	if (page_count == 0 || page_count > 262144U) {
+		synchronous_world_error_ =
+			"procedural world page count exceeds compact runtime limit";
+		return false;
+	}
+	const WtRuntimeConfig config = configuration_->to_native();
+	auto lifecycle = std::make_unique<WtWorldLifecycleService>(config);
 	const WtWorldLifecycleStatus status = lifecycle->start_procedural(
 		descriptor,
 		globalized_path(object_root)

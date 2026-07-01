@@ -9,6 +9,38 @@
 namespace world_transvoxel {
 namespace {
 
+std::uint32_t ceil_divide_u32(
+	std::uint32_t value,
+	std::uint32_t divisor
+) noexcept {
+	return (value + divisor - 1U) / divisor;
+}
+
+std::int32_t floor_divide_i32(
+	std::int32_t value,
+	std::int32_t divisor
+) noexcept {
+	return value >= 0 ? value / divisor :
+		-static_cast<std::int32_t>(
+			(-static_cast<std::int64_t>(value) + divisor - 1) / divisor
+		);
+}
+
+std::uint32_t lod_span(std::uint8_t lod) noexcept {
+	return std::uint32_t{ 1 } << lod;
+}
+
+std::uint32_t vertical_layer_count(std::uint8_t lod) noexcept {
+	return std::uint32_t{ 1 } << (kWtProceduralMaximumLod - lod);
+}
+
+std::int32_t vertical_origin(
+	const WtProceduralWorldDescriptor &descriptor,
+	std::uint8_t lod
+) noexcept {
+	return floor_divide_i32(descriptor.chunk_y, static_cast<std::int32_t>(lod_span(lod)));
+}
+
 class WtProceduralTerrainVolumeSource final : public WtChunkSampleSource {
 public:
 	explicit WtProceduralTerrainVolumeSource(
@@ -90,9 +122,7 @@ private:
 bool wt_valid_procedural_descriptor(
 	const WtProceduralWorldDescriptor &descriptor
 ) noexcept {
-	const std::uint64_t page_count =
-		static_cast<std::uint64_t>(descriptor.chunk_count_x) *
-		static_cast<std::uint64_t>(descriptor.chunk_count_z);
+	const std::uint64_t page_count = wt_procedural_page_count(descriptor);
 	return descriptor.chunk_count_x != 0 &&
 		descriptor.chunk_count_z != 0 &&
 		descriptor.source_revision != 0 &&
@@ -100,24 +130,47 @@ bool wt_valid_procedural_descriptor(
 		page_count <= kWtMaximumProceduralPageCount;
 }
 
+std::uint64_t wt_procedural_page_count(
+	const WtProceduralWorldDescriptor &descriptor
+) noexcept {
+	if (descriptor.chunk_count_x == 0 || descriptor.chunk_count_z == 0) return 0;
+	std::uint64_t pages = 0;
+	for (std::uint8_t lod = 0; lod <= kWtProceduralMaximumLod; ++lod) {
+		const std::uint32_t span = lod_span(lod);
+		pages += static_cast<std::uint64_t>(
+			ceil_divide_u32(descriptor.chunk_count_x, span)
+		) * static_cast<std::uint64_t>(
+			ceil_divide_u32(descriptor.chunk_count_z, span)
+		) * static_cast<std::uint64_t>(vertical_layer_count(lod));
+	}
+	return pages;
+}
+
 std::vector<WtChunkKey> wt_procedural_keys(
 	const WtProceduralWorldDescriptor &descriptor
 ) {
 	std::vector<WtChunkKey> keys;
-	keys.reserve(
-		static_cast<std::size_t>(descriptor.chunk_count_x) *
-		static_cast<std::size_t>(descriptor.chunk_count_z)
-	);
-	for (std::uint32_t z = 0; z < descriptor.chunk_count_z; ++z) {
-		for (std::uint32_t x = 0; x < descriptor.chunk_count_x; ++x) {
-			keys.push_back({
-				static_cast<std::int32_t>(x),
-				descriptor.chunk_y,
-				static_cast<std::int32_t>(z),
-				0,
-			});
+	keys.reserve(static_cast<std::size_t>(wt_procedural_page_count(descriptor)));
+	for (std::uint8_t lod = 0; lod <= kWtProceduralMaximumLod; ++lod) {
+		const std::uint32_t span = lod_span(lod);
+		const std::uint32_t count_x = ceil_divide_u32(descriptor.chunk_count_x, span);
+		const std::uint32_t count_z = ceil_divide_u32(descriptor.chunk_count_z, span);
+		const std::uint32_t count_y = vertical_layer_count(lod);
+		const std::int32_t origin_y = vertical_origin(descriptor, lod);
+		for (std::uint32_t z = 0; z < count_z; ++z) {
+			for (std::uint32_t y = 0; y < count_y; ++y) {
+				for (std::uint32_t x = 0; x < count_x; ++x) {
+					keys.push_back({
+						static_cast<std::int32_t>(x),
+						static_cast<std::int32_t>(origin_y + static_cast<std::int32_t>(y)),
+						static_cast<std::int32_t>(z),
+						lod,
+					});
+				}
+			}
 		}
 	}
+	std::sort(keys.begin(), keys.end());
 	return keys;
 }
 
@@ -137,11 +190,21 @@ WtPageLoadCompletion wt_generate_procedural_page(
 	WtPageLoadCompletion completion;
 	completion.key = key;
 	completion.generation = generation;
-	if (!wt_is_valid_chunk_key(key) || key.lod != 0 ||
-		key.y != descriptor.chunk_y ||
-		key.x < 0 || key.z < 0 ||
-		static_cast<std::uint32_t>(key.x) >= descriptor.chunk_count_x ||
-		static_cast<std::uint32_t>(key.z) >= descriptor.chunk_count_z) {
+	if (!wt_is_valid_chunk_key(key) || key.lod > kWtProceduralMaximumLod ||
+		key.x < 0 || key.z < 0) {
+		completion.status = WtPageLoadStatus::PageFailure;
+		return completion;
+	}
+	const std::uint32_t span = lod_span(key.lod);
+	const std::uint32_t count_x = ceil_divide_u32(descriptor.chunk_count_x, span);
+	const std::uint32_t count_z = ceil_divide_u32(descriptor.chunk_count_z, span);
+	const std::int32_t min_y = vertical_origin(descriptor, key.lod);
+	const std::int32_t max_y = static_cast<std::int32_t>(
+		min_y + static_cast<std::int32_t>(vertical_layer_count(key.lod))
+	);
+	if (key.y < min_y || key.y >= max_y ||
+		static_cast<std::uint32_t>(key.x) >= count_x ||
+		static_cast<std::uint32_t>(key.z) >= count_z) {
 		completion.status = WtPageLoadStatus::PageFailure;
 		return completion;
 	}

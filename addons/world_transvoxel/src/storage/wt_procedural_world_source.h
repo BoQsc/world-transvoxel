@@ -8,8 +8,13 @@
 namespace world_transvoxel {
 
 constexpr std::uint64_t kWtMaximumProceduralPageCount = 262144;
+constexpr std::uint8_t kWtProceduralMaximumLod = 1;
 
 bool wt_valid_procedural_descriptor(
+	const WtProceduralWorldDescriptor &descriptor
+) noexcept;
+
+std::uint64_t wt_procedural_page_count(
 	const WtProceduralWorldDescriptor &descriptor
 ) noexcept;
 

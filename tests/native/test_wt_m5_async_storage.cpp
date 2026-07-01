@@ -562,20 +562,21 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 	check(
 		service.source_revision() == descriptor.source_revision &&
 			service.world_revision() == descriptor.world_revision &&
-			service.page_count() == 12,
+			service.page_count() == 28,
 		"procedural metadata mismatch"
 	);
 	const std::vector<wt::WtChunkKey> keys = service.page_keys();
 	check(
-		keys.size() == 12 &&
+		keys.size() == 28 &&
 			keys.front() == wt::WtChunkKey { 0, 0, 0, 0 } &&
-			keys.back() == wt::WtChunkKey { 3, 0, 2, 0 },
+			keys.back() == wt::WtChunkKey { 1, 0, 1, 1 },
 		"procedural page key index mismatch"
 	);
 	check(
 		service.has_page({ 2, 0, 1, 0 }) &&
+			service.has_page({ 2, 1, 1, 0 }) &&
+			service.has_page({ 1, 0, 1, 1 }) &&
 			!service.has_page({ 4, 0, 1, 0 }) &&
-			!service.has_page({ 2, 1, 1, 0 }) &&
 			!service.has_page({ 2, 0, 1, 1 }),
 		"procedural page lookup mismatch"
 	);
@@ -610,6 +611,27 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 			page.metadata.source_revision == descriptor.source_revision &&
 			page.samples.size() == wt::kWtChunkPageSampleCount,
 		"procedural decoded page metadata mismatch"
+	);
+	std::shared_ptr<const std::vector<std::uint8_t>> lod_bytes;
+	check(
+		service.load_page_now({ 1, 0, 1, 1 }, lod_bytes) ==
+			wt::WtPageLoadStatus::Ok &&
+			lod_bytes &&
+			!lod_bytes->empty(),
+		"procedural LOD1 immediate load failed"
+	);
+	wt::WtChunkPageView lod_view;
+	wt::WtChunkPage lod_page;
+	check(
+		lod_bytes &&
+			wt::wt_open_chunk_page(
+				{ lod_bytes->data(), lod_bytes->size() },
+				lod_view
+			) == wt::WtChunkPageStatus::Ok &&
+			wt::wt_decode_chunk_page(lod_view, lod_page) ==
+				wt::WtChunkPageStatus::Ok &&
+			lod_page.metadata.key == wt::WtChunkKey { 1, 0, 1, 1 },
+		"procedural LOD1 page decode failed"
 	);
 	wt::WtScalarSample deep_sample;
 	wt::WtScalarSample mid_sample;
