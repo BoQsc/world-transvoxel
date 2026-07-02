@@ -119,6 +119,23 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t world_snapshot_rejections = 0;
 	std::uint64_t published_events = 0;
 	std::uint64_t rejected_events = 0;
+	std::uint64_t scheduler_requested_records = 0;
+	std::uint64_t scheduler_sampling_records = 0;
+	std::uint64_t scheduler_meshing_records = 0;
+	std::uint64_t scheduler_ready_records = 0;
+	std::uint64_t scheduler_failed_records = 0;
+	std::uint64_t scheduler_queued_jobs = 0;
+	std::uint64_t scheduler_queued_completions = 0;
+	std::uint64_t scheduler_queue_rejections = 0;
+	std::uint64_t page_sample_failures = 0;
+	std::uint64_t page_mesh_failures = 0;
+	std::uint64_t page_storage_failures = 0;
+	std::uint64_t page_cache_failures = 0;
+	std::uint64_t page_scheduler_backpressure = 0;
+	std::int64_t page_last_failure_key_x = 0;
+	std::int64_t page_last_failure_key_y = 0;
+	std::int64_t page_last_failure_key_z = 0;
+	std::uint64_t page_last_failure_key_lod = 0;
 };
 
 class WtReadOnlyWorldRuntime {

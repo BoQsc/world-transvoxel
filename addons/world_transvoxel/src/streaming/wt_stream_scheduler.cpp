@@ -353,6 +353,27 @@ WtSchedulerMetrics WtStreamScheduler::get_metrics() const noexcept {
 	WtSchedulerMetrics snapshot = metrics_;
 	snapshot.queue_rejections +=
 		asynchronous_queue_rejections_.load(std::memory_order_relaxed);
+	for (const WtChunkRecord &record : records_) {
+		switch (record.lifecycle) {
+			case WtChunkLifecycle::Requested:
+				++snapshot.requested_records;
+				break;
+			case WtChunkLifecycle::Sampling:
+				++snapshot.sampling_records;
+				break;
+			case WtChunkLifecycle::Meshing:
+				++snapshot.meshing_records;
+				break;
+			case WtChunkLifecycle::Ready:
+				++snapshot.ready_records;
+				break;
+			case WtChunkLifecycle::Failed:
+				++snapshot.failed_records;
+				break;
+			case WtChunkLifecycle::Cancelled:
+				break;
+		}
+	}
 	return snapshot;
 }
 

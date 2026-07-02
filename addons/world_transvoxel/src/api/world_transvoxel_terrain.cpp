@@ -80,6 +80,24 @@ void WorldTransvoxelTerrain::_bind_methods() {
 		"get_configuration"
 	);
 	godot::ClassDB::bind_method(
+		godot::D_METHOD("set_render_material_override", "material"),
+		&WorldTransvoxelTerrain::set_render_material_override
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_render_material_override"),
+		&WorldTransvoxelTerrain::get_render_material_override
+	);
+	ADD_PROPERTY(
+		godot::PropertyInfo(
+			godot::Variant::OBJECT,
+			"render_material_override",
+			godot::PROPERTY_HINT_RESOURCE_TYPE,
+			"Material"
+		),
+		"set_render_material_override",
+		"get_render_material_override"
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD("start_world", "world_manifest_path", "object_root"),
 		&WorldTransvoxelTerrain::start_world
 	);
@@ -290,6 +308,14 @@ void WorldTransvoxelTerrain::set_configuration(
 godot::Ref<WorldTransvoxelConfig>
 WorldTransvoxelTerrain::get_configuration() const {
 	return configuration_;
+}
+
+void WorldTransvoxelTerrain::set_render_material_override(const godot::Variant &material) {
+	render_sink_->set_material_override(material);
+}
+
+godot::Variant WorldTransvoxelTerrain::get_render_material_override() const {
+	return render_sink_->get_material_override();
 }
 
 bool WorldTransvoxelTerrain::is_configuration_valid() const noexcept {

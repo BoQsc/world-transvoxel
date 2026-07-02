@@ -20,6 +20,16 @@ bool pending_result_phase(WtPageMeshingRuntimePhase phase) noexcept {
 		phase == WtPageMeshingRuntimePhase::MeshFailedReady;
 }
 
+void record_failure_key(
+	WtPageMeshingRuntimeMetrics &metrics,
+	const WtChunkKey &key
+) noexcept {
+	metrics.last_failure_key_x = key.x;
+	metrics.last_failure_key_y = key.y;
+	metrics.last_failure_key_z = key.z;
+	metrics.last_failure_key_lod = key.lod;
+}
+
 } // namespace
 
 WtPageMeshingRuntimeService::WtPageMeshingRuntimeService(
@@ -134,47 +144,14 @@ WtPageMeshingRuntimeService::begin_sample_job(
 	records_.insert(position, std::move(record));
 	++metrics_.sample_jobs;
 
-	Record &inserted = records_[record_index];
-	for (Dependency &dependency : inserted.dependencies) {
-		const WtStoragePageCacheStatus cache_status = cache.find_or_decode(
-			dependency.key,
-			inserted.source_revision,
-			dependency.page
-		);
-		if (cache_status == WtStoragePageCacheStatus::Ok) {
-			++metrics_.dependency_cache_hits;
-			continue;
-		}
-		if (cache_status != WtStoragePageCacheStatus::NotFound) {
-			++metrics_.cache_failures;
-			mark_sample_failure(record_index, scheduler);
-			return WtPageMeshingRuntimeStatus::CacheFailure;
-		}
-		++metrics_.dependency_cache_misses;
-		const WtAsyncStorageStatus storage_status = storage.request_page(
-			dependency.key,
-			inserted.generation,
-			inserted.priority
-		);
-		if (storage_status != WtAsyncStorageStatus::Ok) {
-			++metrics_.storage_failures;
-			mark_sample_failure(record_index, scheduler);
-			return WtPageMeshingRuntimeStatus::StorageRequestFailure;
-		}
-		++metrics_.dependency_requests;
-	}
-	update_maximum_pins();
-	if (std::all_of(
-			inserted.dependencies.begin(),
-			inserted.dependencies.end(),
-			[](const Dependency &dependency) {
-				return static_cast<bool>(dependency.page);
-			}
-		)) {
-		inserted.phase = WtPageMeshingRuntimePhase::SampleReady;
-		return submit_pending_result(record_index, scheduler);
-	}
-	return WtPageMeshingRuntimeStatus::Ok;
+	bool made_progress = false;
+	return resolve_loading_record(
+		record_index,
+		storage,
+		cache,
+		scheduler,
+		made_progress
+	);
 }
 
 WtPageMeshingRuntimeStatus
@@ -214,6 +191,7 @@ WtPageMeshingRuntimeService::accept_storage_completion(
 	if (completion.status != WtPageLoadStatus::Ok) {
 		cache.accept_completion(completion, owner->generation);
 		++metrics_.storage_failures;
+		record_failure_key(metrics_, completion.key);
 		mark_sample_failure(record_index, scheduler);
 		return WtPageMeshingRuntimeStatus::StorageRequestFailure;
 	}
@@ -226,9 +204,11 @@ WtPageMeshingRuntimeService::accept_storage_completion(
 		) != WtStoragePageCacheStatus::Ok ||
 		!dependency->page) {
 		++metrics_.cache_failures;
+		record_failure_key(metrics_, completion.key);
 		mark_sample_failure(record_index, scheduler);
 		return WtPageMeshingRuntimeStatus::CacheFailure;
 	}
+	dependency->request_pending = false;
 	++metrics_.accepted_storage_completions;
 	update_maximum_pins();
 	if (std::all_of(
@@ -394,6 +374,47 @@ std::size_t WtPageMeshingRuntimeService::flush_scheduler_results(
 	return submitted;
 }
 
+std::size_t WtPageMeshingRuntimeService::resume_loading_records(
+	WtAsyncStorageService &storage,
+	WtStoragePageCache &cache,
+	WtStreamScheduler &scheduler,
+	std::size_t maximum_records
+) {
+	if (!valid_ || !cache.valid() || !storage.is_open() ||
+		maximum_records == 0) {
+		return 0;
+	}
+	std::size_t progressed = 0;
+	std::size_t visited = 0;
+	for (std::size_t index = 0;
+		index < records_.size() && visited < maximum_records;) {
+		if (records_[index].phase != WtPageMeshingRuntimePhase::Loading) {
+			++index;
+			continue;
+		}
+		++visited;
+		const WtChunkKey key = records_[index].key;
+		bool made_progress = false;
+		const WtPageMeshingRuntimeStatus status = resolve_loading_record(
+			index,
+			storage,
+			cache,
+			scheduler,
+			made_progress
+		);
+		if (made_progress) {
+			++progressed;
+		}
+		if (status == WtPageMeshingRuntimeStatus::SchedulerBackpressure) {
+			break;
+		}
+		if (index < records_.size() && records_[index].key == key) {
+			++index;
+		}
+	}
+	return progressed;
+}
+
 bool WtPageMeshingRuntimeService::pop_mesh_completion(
 	WtPageMeshCompletion &completion
 ) {
@@ -461,6 +482,121 @@ WtPageMeshingRuntimeService::find_completion_owner(
 		}
 	}
 	return records_.end();
+}
+
+WtPageMeshingRuntimeStatus
+WtPageMeshingRuntimeService::resolve_dependency(
+	std::size_t record_index,
+	std::size_t dependency_index,
+	WtAsyncStorageService &storage,
+	WtStoragePageCache &cache,
+	WtStreamScheduler &scheduler,
+	bool &made_progress
+) {
+	if (record_index >= records_.size() ||
+		dependency_index >= records_[record_index].dependencies.size()) {
+		return WtPageMeshingRuntimeStatus::NotFound;
+	}
+	Record &record = records_[record_index];
+	Dependency &dependency = record.dependencies[dependency_index];
+	if (dependency.page) {
+		return WtPageMeshingRuntimeStatus::Ok;
+	}
+	const WtStoragePageCacheStatus cache_status = cache.find_or_decode(
+		dependency.key,
+		record.source_revision,
+		dependency.page
+	);
+	if (cache_status == WtStoragePageCacheStatus::Ok) {
+		dependency.request_pending = false;
+		++metrics_.dependency_cache_hits;
+		made_progress = true;
+		return WtPageMeshingRuntimeStatus::Ok;
+	}
+	if (cache_status != WtStoragePageCacheStatus::NotFound) {
+		++metrics_.cache_failures;
+		record_failure_key(metrics_, dependency.key);
+		mark_sample_failure(record_index, scheduler);
+		return WtPageMeshingRuntimeStatus::CacheFailure;
+	}
+	if (dependency.request_pending) {
+		return WtPageMeshingRuntimeStatus::Ok;
+	}
+	++metrics_.dependency_cache_misses;
+	const WtAsyncStorageStatus storage_status = storage.request_page(
+		dependency.key,
+		record.generation,
+		record.priority
+	);
+	if (storage_status == WtAsyncStorageStatus::Ok) {
+		dependency.request_pending = true;
+		++metrics_.dependency_requests;
+		made_progress = true;
+		return WtPageMeshingRuntimeStatus::Ok;
+	}
+	if (storage_status == WtAsyncStorageStatus::RequestQueueFull) {
+		return WtPageMeshingRuntimeStatus::SchedulerBackpressure;
+	}
+	if (storage_status == WtAsyncStorageStatus::AlreadyPending) {
+		dependency.request_pending = true;
+		return WtPageMeshingRuntimeStatus::Ok;
+	}
+	++metrics_.storage_failures;
+	record_failure_key(metrics_, dependency.key);
+	mark_sample_failure(record_index, scheduler);
+	return WtPageMeshingRuntimeStatus::StorageRequestFailure;
+}
+
+WtPageMeshingRuntimeStatus
+WtPageMeshingRuntimeService::resolve_loading_record(
+	std::size_t record_index,
+	WtAsyncStorageService &storage,
+	WtStoragePageCache &cache,
+	WtStreamScheduler &scheduler,
+	bool &made_progress
+) {
+	if (record_index >= records_.size()) {
+		return WtPageMeshingRuntimeStatus::NotFound;
+	}
+	Record &record = records_[record_index];
+	if (record.phase != WtPageMeshingRuntimePhase::Loading) {
+		return WtPageMeshingRuntimeStatus::NotReady;
+	}
+	for (std::size_t dependency_index = 0;
+		dependency_index < record.dependencies.size();
+		++dependency_index) {
+		const WtPageMeshingRuntimeStatus status = resolve_dependency(
+			record_index,
+			dependency_index,
+			storage,
+			cache,
+			scheduler,
+			made_progress
+		);
+		if (status == WtPageMeshingRuntimeStatus::SchedulerBackpressure) {
+			update_maximum_pins();
+			return status;
+		}
+		if (status != WtPageMeshingRuntimeStatus::Ok) {
+			return status;
+		}
+		if (record_index >= records_.size()) {
+			return WtPageMeshingRuntimeStatus::NotFound;
+		}
+	}
+	update_maximum_pins();
+	if (std::all_of(
+			record.dependencies.begin(),
+			record.dependencies.end(),
+			[](const Dependency &dependency) {
+				return static_cast<bool>(dependency.page);
+			}
+		)) {
+		record.phase = WtPageMeshingRuntimePhase::SampleReady;
+		made_progress = true;
+		return submit_pending_result(record_index, scheduler);
+	}
+	return WtPageMeshingRuntimeStatus::Ok;
 }
 
 WtPageMeshingRuntimeStatus

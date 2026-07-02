@@ -9,6 +9,7 @@
 #include <godot_cpp/classes/node3d.hpp>
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
+#include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/variant/vector3.hpp>
 #include <godot_cpp/variant/vector3i.hpp>
 #include <godot_cpp/variant/string.hpp>
@@ -52,6 +53,8 @@ public:
 		const godot::Ref<WorldTransvoxelConfig> &configuration
 	);
 	godot::Ref<WorldTransvoxelConfig> get_configuration() const;
+	void set_render_material_override(const godot::Variant &material);
+	godot::Variant get_render_material_override() const;
 	bool is_configuration_valid() const noexcept;
 	godot::String get_configuration_error() const;
 	bool start_world(

@@ -21,8 +21,10 @@ Identity and capability:
 Configuration and lifecycle:
 
 - `configuration: WorldTransvoxelConfig`
+- `render_material_override: Resource`
 - `is_configuration_valid() -> bool`
 - `get_configuration_error() -> String`
+- `set_render_material_override(material)` / `get_render_material_override()`
 - `start_world(world_manifest_path, object_root) -> bool`
 - `start_procedural_world(chunk_count_x, chunk_count_z, seed, source_revision, object_root) -> bool`
 - `stop_world() -> bool`
@@ -44,6 +46,11 @@ demand through the same native page format, cache, meshing, editing, and
 streaming pipeline used by manifest-backed worlds. The supported procedural
 descriptor emits a bounded LOD0..LOD3 hierarchy, up to 262,144 indexed hierarchy
 pages, with persistent edits stored in the object root journal.
+
+`render_material_override` is an optional Godot material resource applied by the
+native render sink to every existing and newly created render chunk. Higher-level
+addons should prefer this over frame-by-frame recursive material scans so newly
+streamed chunks do not flash with the engine default material.
 
 Streaming and readiness:
 

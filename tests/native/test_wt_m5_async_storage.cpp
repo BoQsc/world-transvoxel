@@ -658,6 +658,24 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 			lod3_page.metadata.key == wt::WtChunkKey { 0, 0, 0, 3 },
 		"procedural LOD3 page decode failed"
 	);
+	std::shared_ptr<const std::vector<std::uint8_t>> support_bytes;
+	wt::WtChunkPageView support_view;
+	wt::WtChunkPage support_page;
+	check(
+		!service.has_page({ -1, 0, 1, 0 }) &&
+			service.load_page_now({ -1, 0, 1, 0 }, support_bytes) ==
+				wt::WtPageLoadStatus::Ok &&
+			support_bytes &&
+			!support_bytes->empty() &&
+			wt::wt_open_chunk_page(
+				{ support_bytes->data(), support_bytes->size() },
+				support_view
+			) == wt::WtChunkPageStatus::Ok &&
+			wt::wt_decode_chunk_page(support_view, support_page) ==
+				wt::WtChunkPageStatus::Ok &&
+			support_page.metadata.key == wt::WtChunkKey { -1, 0, 1, 0 },
+		"procedural support page generation failed"
+	);
 	wt::WtScalarSample deep_sample;
 	wt::WtScalarSample mid_sample;
 	wt::WtScalarSample shallow_sample;
@@ -677,6 +695,35 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 			wt::WtPageLoadStatus::PageFailure,
 		"procedural immediate load accepted an unindexed page"
 	);
+
+	wt::WtProceduralWorldDescriptor compact_descriptor;
+	compact_descriptor.chunk_count_x = 128;
+	compact_descriptor.chunk_count_z = 128;
+	compact_descriptor.chunk_y = 0;
+	compact_descriptor.source_revision = 190019;
+	compact_descriptor.world_revision = 19;
+	compact_descriptor.seed = 19019;
+	wt::WtAsyncStorageService compact_service({
+		2,
+		2,
+		wt::kWtMaximumContainerSize,
+	});
+	check(
+		compact_service.open_procedural(compact_descriptor) ==
+			wt::WtAsyncStorageStatus::Ok,
+		"compact procedural storage service open failed"
+	);
+	std::shared_ptr<const std::vector<std::uint8_t>> compact_lod1_bytes;
+	check(
+		compact_service.has_page({ 30, 3, 33, 1 }) &&
+			compact_service.load_page_now({ 30, 3, 33, 1 },
+				compact_lod1_bytes) == wt::WtPageLoadStatus::Ok &&
+			compact_lod1_bytes &&
+			!compact_lod1_bytes->empty(),
+		"compact procedural LOD1 page from integration traversal failed"
+	);
+	compact_service.close();
+
 	check(
 		service.request_page({ 1, 0, 1, 0 }, { 81 }, 4) ==
 			wt::WtAsyncStorageStatus::Ok,

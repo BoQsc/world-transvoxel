@@ -70,6 +70,59 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	set_metric(output, "published_events", runtime.published_events);
 	set_metric(output, "rejected_events", runtime.rejected_events);
 	set_metric(
+		output,
+		"scheduler_requested_records",
+		runtime.scheduler_requested_records
+	);
+	set_metric(
+		output,
+		"scheduler_sampling_records",
+		runtime.scheduler_sampling_records
+	);
+	set_metric(
+		output,
+		"scheduler_meshing_records",
+		runtime.scheduler_meshing_records
+	);
+	set_metric(
+		output,
+		"scheduler_ready_records",
+		runtime.scheduler_ready_records
+	);
+	set_metric(
+		output,
+		"scheduler_failed_records",
+		runtime.scheduler_failed_records
+	);
+	set_metric(output, "scheduler_queued_jobs", runtime.scheduler_queued_jobs);
+	set_metric(
+		output,
+		"scheduler_queued_completions",
+		runtime.scheduler_queued_completions
+	);
+	set_metric(
+		output,
+		"scheduler_queue_rejections",
+		runtime.scheduler_queue_rejections
+	);
+	set_metric(output, "page_sample_failures", runtime.page_sample_failures);
+	set_metric(output, "page_mesh_failures", runtime.page_mesh_failures);
+	set_metric(output, "page_storage_failures", runtime.page_storage_failures);
+	set_metric(output, "page_cache_failures", runtime.page_cache_failures);
+	set_metric(
+		output,
+		"page_scheduler_backpressure",
+		runtime.page_scheduler_backpressure
+	);
+	output["page_last_failure_key_x"] =
+		static_cast<std::int64_t>(runtime.page_last_failure_key_x);
+	output["page_last_failure_key_y"] =
+		static_cast<std::int64_t>(runtime.page_last_failure_key_y);
+	output["page_last_failure_key_z"] =
+		static_cast<std::int64_t>(runtime.page_last_failure_key_z);
+	output["page_last_failure_key_lod"] =
+		static_cast<std::int64_t>(runtime.page_last_failure_key_lod);
+	set_metric(
 		output, "application_submitted_render", application.submitted_render
 	);
 	set_metric(

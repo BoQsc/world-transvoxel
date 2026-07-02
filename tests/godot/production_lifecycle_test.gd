@@ -17,6 +17,12 @@ func _run_test() -> void:
 		return
 	root.add_child(terrain)
 	terrain.set("configuration", config)
+	var initial_material := ShaderMaterial.new()
+	terrain.call("set_render_material_override", initial_material)
+	if terrain.call("get_render_material_override") != initial_material or \
+			terrain.get("render_material_override") != initial_material:
+		_fail("render material override did not round-trip before startup")
+		return
 	terrain.connect("world_state_changed", _on_world_state_changed)
 	terrain.connect("world_failed", _on_world_failed)
 
@@ -37,6 +43,11 @@ func _run_test() -> void:
 		return
 	if not observed_states.has("starting") or not observed_states.has("running"):
 		_fail("startup state signals were incomplete")
+		return
+	var running_material := ShaderMaterial.new()
+	terrain.set("render_material_override", running_material)
+	if terrain.call("get_render_material_override") != running_material:
+		_fail("render material override did not update while running")
 		return
 
 	var replacement: Resource = ClassDB.instantiate("WorldTransvoxelConfig")
@@ -92,7 +103,7 @@ func _run_test() -> void:
 		return
 	terrain.queue_free()
 	await process_frame
-	print("PRODUCTION_GODOT_LIFECYCLE_PASS states=5 restart=1")
+	print("PRODUCTION_GODOT_LIFECYCLE_PASS states=5 restart=1 material_override=1")
 	quit(0)
 
 

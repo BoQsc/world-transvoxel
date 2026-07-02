@@ -3,6 +3,7 @@
 #include "render/wt_render_apply_queue.h"
 
 #include <godot_cpp/classes/node3d.hpp>
+#include <godot_cpp/variant/variant.hpp>
 
 #include <cstdint>
 #include <map>
@@ -31,6 +32,8 @@ public:
 	bool is_shader_fade_parameter_enabled() const noexcept;
 	void set_transition_frames(std::uint32_t frames) noexcept;
 	std::uint32_t get_transition_frames() const noexcept;
+	void set_material_override(const godot::Variant &material);
+	godot::Variant get_material_override() const;
 
 private:
 	struct Record {
@@ -48,10 +51,12 @@ private:
 
 	bool on_owner_thread() const noexcept;
 	void set_record_transparency(Record &record, float value) noexcept;
+	void apply_record_material_override(Record &record);
 	godot::Node3D &owner_;
 	std::thread::id owner_thread_;
 	std::map<WtChunkKey, Record> records_;
 	std::vector<Record> replacement_retirements_;
+	godot::Variant material_override_;
 	bool shader_fade_parameter_enabled_ = false;
 	std::uint32_t transition_frames_ = 0;
 };

@@ -27,6 +27,11 @@ bool wt_procedural_has_key(
 	const WtChunkKey &key
 ) noexcept;
 
+bool wt_procedural_can_generate_page(
+	const WtProceduralWorldDescriptor &descriptor,
+	const WtChunkKey &key
+) noexcept;
+
 WtPageLoadCompletion wt_generate_procedural_page(
 	const WtProceduralWorldDescriptor &descriptor,
 	const WtChunkKey &key,

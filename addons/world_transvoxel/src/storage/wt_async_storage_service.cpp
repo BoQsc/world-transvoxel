@@ -246,7 +246,8 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 	}
 	const WtWorldPageIndexEntry *entry = procedural_ ?
 		nullptr : manifest_.find_page(key);
-	if ((procedural_ && !wt_procedural_has_key(procedural_keys_, key)) ||
+	if ((procedural_ &&
+			!wt_procedural_can_generate_page(procedural_descriptor_, key)) ||
 		(!procedural_ && entry == nullptr)) {
 		return WtAsyncStorageStatus::PageNotFound;
 	}
@@ -306,7 +307,8 @@ WtPageLoadStatus WtAsyncStorageService::load_page_now(
 		procedural_descriptor = procedural_descriptor_;
 		const WtWorldPageIndexEntry *entry = procedural ?
 			nullptr : manifest_.find_page(key);
-		if ((procedural && !wt_procedural_has_key(procedural_keys_, key)) ||
+		if ((procedural &&
+				!wt_procedural_can_generate_page(procedural_descriptor, key)) ||
 			(!procedural && entry == nullptr)) {
 			return WtPageLoadStatus::PageFailure;
 		}

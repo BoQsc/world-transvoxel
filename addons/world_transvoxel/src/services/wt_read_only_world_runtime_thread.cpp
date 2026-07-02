@@ -16,6 +16,12 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 		bool progressed = process_viewer_event();
 		progressed = process_world_operation_event() || progressed;
 		progressed = process_storage_completions() || progressed;
+		progressed = page_runtime_->resume_loading_records(
+			storage_,
+			*page_cache_,
+			*scheduler_,
+			4
+		) != 0 || progressed;
 		progressed = page_runtime_->flush_scheduler_results(*scheduler_) != 0 ||
 			progressed;
 		progressed = scheduler_->apply_completions(
@@ -102,7 +108,32 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::last_status() const noexcept {
 WtReadOnlyRuntimeMetrics
 WtReadOnlyWorldRuntime::get_metrics() const noexcept {
 	std::lock_guard<std::mutex> lock(metrics_mutex_);
-	return metrics_;
+	WtReadOnlyRuntimeMetrics snapshot = metrics_;
+	if (scheduler_) {
+		const WtSchedulerMetrics scheduler = scheduler_->get_metrics();
+		snapshot.scheduler_requested_records = scheduler.requested_records;
+		snapshot.scheduler_sampling_records = scheduler.sampling_records;
+		snapshot.scheduler_meshing_records = scheduler.meshing_records;
+		snapshot.scheduler_ready_records = scheduler.ready_records;
+		snapshot.scheduler_failed_records = scheduler.failed_records;
+		snapshot.scheduler_queued_jobs = scheduler_->queued_job_count();
+		snapshot.scheduler_queued_completions =
+			scheduler_->queued_completion_count();
+		snapshot.scheduler_queue_rejections = scheduler.queue_rejections;
+	}
+	if (page_runtime_) {
+		const WtPageMeshingRuntimeMetrics page = page_runtime_->get_metrics();
+		snapshot.page_sample_failures = page.sample_failures;
+		snapshot.page_mesh_failures = page.mesh_failures;
+		snapshot.page_storage_failures = page.storage_failures;
+		snapshot.page_cache_failures = page.cache_failures;
+		snapshot.page_scheduler_backpressure = page.scheduler_backpressure;
+		snapshot.page_last_failure_key_x = page.last_failure_key_x;
+		snapshot.page_last_failure_key_y = page.last_failure_key_y;
+		snapshot.page_last_failure_key_z = page.last_failure_key_z;
+		snapshot.page_last_failure_key_lod = page.last_failure_key_lod;
+	}
+	return snapshot;
 }
 
 std::uint64_t WtReadOnlyWorldRuntime::world_revision() const noexcept {

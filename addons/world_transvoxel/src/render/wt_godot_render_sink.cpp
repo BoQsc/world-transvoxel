@@ -88,6 +88,13 @@ void WtGodotRenderSink::set_record_transparency(
 	}
 }
 
+void WtGodotRenderSink::apply_record_material_override(Record &record) {
+	if (record.instance == nullptr) {
+		return;
+	}
+	record.instance->set(godot::StringName("material_override"), material_override_);
+}
+
 bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	if (!on_owner_thread()) return false;
 	if (payload.indices.empty()) {
@@ -160,6 +167,7 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 			retirement.retirement_frame = 0;
 			retirement.retirement_start_transparency = record.current_transparency;
 			owner_.add_child(retirement.instance);
+			apply_record_material_override(retirement);
 			set_record_transparency(retirement, record.current_transparency);
 			replacement_retirements_.push_back(retirement);
 		}
@@ -173,6 +181,7 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	record.introduction_frame = 0;
 	record.instance->set_position(to_godot(payload.world_origin));
 	record.instance->set_mesh(mesh);
+	apply_record_material_override(record);
 	set_record_transparency(record, record.introducing ? 1.0F : 0.0F);
 	record.generation = payload.generation;
 	return true;
@@ -329,6 +338,22 @@ void WtGodotRenderSink::set_shader_fade_parameter_enabled(
 
 bool WtGodotRenderSink::is_shader_fade_parameter_enabled() const noexcept {
 	return shader_fade_parameter_enabled_;
+}
+
+void WtGodotRenderSink::set_material_override(
+	const godot::Variant &material
+) {
+	material_override_ = material;
+	for (auto &entry : records_) {
+		apply_record_material_override(entry.second);
+	}
+	for (Record &record : replacement_retirements_) {
+		apply_record_material_override(record);
+	}
+}
+
+godot::Variant WtGodotRenderSink::get_material_override() const {
+	return material_override_;
 }
 
 void WtGodotRenderSink::set_transition_frames(std::uint32_t frames) noexcept {

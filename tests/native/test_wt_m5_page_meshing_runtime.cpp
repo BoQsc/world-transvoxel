@@ -518,6 +518,82 @@ void test_runtime_lifecycle(
 	storage.close();
 }
 
+void test_storage_backpressure_retry(const RuntimeFixture &fixture) {
+	wt::WtAsyncStorageService storage({ 2, 32, wt::kWtMaximumContainerSize });
+	check(
+		storage.open(fixture.world_path, fixture.root) ==
+			wt::WtAsyncStorageStatus::Ok,
+		"backpressure retry storage open failed"
+	);
+	wt::WtStoragePageCache cache({
+		2,
+		wt::kWtMaximumContainerSize,
+		2,
+		wt::kWtMaximumContainerSize,
+	});
+	wt::WtStreamScheduler scheduler(4, 4, 4, 1);
+	wt::WtPageMeshingRuntimeService runtime(4);
+	const wt::WtChunkJob sample = request_sample_job(
+		scheduler,
+		fixture.coarse_key,
+		kWorldRevision + 3,
+		5
+	);
+	const wt::WtPageMeshingRuntimeStatus begin_status =
+		runtime.begin_sample_job(
+			sample,
+			fixture.transition_mask,
+			storage,
+			cache,
+			scheduler
+		);
+	check(
+		begin_status == wt::WtPageMeshingRuntimeStatus::SchedulerBackpressure ||
+			begin_status == wt::WtPageMeshingRuntimeStatus::Ok,
+		"storage queue backpressure was treated as a sample failure"
+	);
+	for (std::size_t attempt = 0; attempt < 64; ++attempt) {
+		const auto records = runtime.get_records();
+		if (!records.empty() &&
+			records[0].phase == wt::WtPageMeshingRuntimePhase::AwaitingMesh) {
+			break;
+		}
+		wt::WtPageLoadCompletion completion;
+		if (!wait_completion(storage, completion)) {
+			break;
+		}
+		const wt::WtPageMeshingRuntimeStatus completion_status =
+			runtime.accept_storage_completion(completion, cache, scheduler);
+		check(
+			completion_status == wt::WtPageMeshingRuntimeStatus::Ok ||
+				completion_status ==
+					wt::WtPageMeshingRuntimeStatus::SchedulerBackpressure,
+			"backpressure retry rejected a storage completion"
+		);
+		runtime.resume_loading_records(storage, cache, scheduler, 1);
+		runtime.flush_scheduler_results(scheduler);
+	}
+	const auto records = runtime.get_records();
+	const wt::WtPageMeshingRuntimeMetrics metrics = runtime.get_metrics();
+	check(
+		records.size() == 1 &&
+			records[0].phase == wt::WtPageMeshingRuntimePhase::AwaitingMesh &&
+			records[0].pinned_page_count == kDependencyCount &&
+			metrics.sample_failures == 0 &&
+			metrics.storage_failures == 0 &&
+			metrics.dependency_requests == kDependencyCount,
+		"storage backpressure retry did not reach sample-ready state"
+	);
+	check(
+		scheduler.apply_completions(1) == 1 &&
+			scheduler.find_record(fixture.coarse_key) != nullptr &&
+			scheduler.find_record(fixture.coarse_key)->lifecycle ==
+				wt::WtChunkLifecycle::Meshing,
+		"backpressure retry sample completion was not applied"
+	);
+	storage.close();
+}
+
 void test_missing_support(const RuntimeFixture &fixture) {
 	wt::WtAsyncStorageService storage({ 32, 32, wt::kWtMaximumContainerSize });
 	check(
@@ -584,6 +660,7 @@ int main() {
 	);
 	std::vector<std::uint8_t> evidence;
 	test_runtime_lifecycle(fixture, evidence);
+	test_storage_backpressure_retry(fixture);
 	test_missing_support(fixture);
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M5_PAGE_MESHING_RUNTIME_FAIL failures=%d\n",

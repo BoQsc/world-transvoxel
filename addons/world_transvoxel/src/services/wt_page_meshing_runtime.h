@@ -91,6 +91,10 @@ struct WtPageMeshingRuntimeMetrics {
 	std::uint64_t invalidated_records = 0;
 	std::uint64_t discarded_mesh_completions = 0;
 	std::size_t maximum_pinned_pages = 0;
+	std::int64_t last_failure_key_x = 0;
+	std::int64_t last_failure_key_y = 0;
+	std::int64_t last_failure_key_z = 0;
+	std::uint64_t last_failure_key_lod = 0;
 };
 
 class WtPageMeshingRuntimeService final : public WtPageMeshingRuntimeOwner {
@@ -123,6 +127,12 @@ public:
 
 	std::size_t flush_scheduler_results(
 		WtStreamScheduler &scheduler
+	);
+	std::size_t resume_loading_records(
+		WtAsyncStorageService &storage,
+		WtStoragePageCache &cache,
+		WtStreamScheduler &scheduler,
+		std::size_t maximum_records
 	);
 	bool pop_mesh_completion(WtPageMeshCompletion &completion);
 
@@ -164,6 +174,7 @@ private:
 	struct Dependency {
 		WtChunkKey key;
 		std::shared_ptr<const WtChunkPage> page;
+		bool request_pending = false;
 	};
 
 	struct Record {
@@ -188,6 +199,21 @@ private:
 	std::vector<Record>::iterator find_completion_owner(
 		const WtPageLoadCompletion &completion
 	) noexcept;
+	WtPageMeshingRuntimeStatus resolve_dependency(
+		std::size_t record_index,
+		std::size_t dependency_index,
+		WtAsyncStorageService &storage,
+		WtStoragePageCache &cache,
+		WtStreamScheduler &scheduler,
+		bool &made_progress
+	);
+	WtPageMeshingRuntimeStatus resolve_loading_record(
+		std::size_t record_index,
+		WtAsyncStorageService &storage,
+		WtStoragePageCache &cache,
+		WtStreamScheduler &scheduler,
+		bool &made_progress
+	);
 	WtPageMeshingRuntimeStatus submit_pending_result(
 		std::size_t record_index,
 		WtStreamScheduler &scheduler

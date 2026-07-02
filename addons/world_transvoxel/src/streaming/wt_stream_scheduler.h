@@ -52,6 +52,11 @@ struct WtSchedulerMetrics {
 	std::uint64_t discarded_jobs = 0;
 	std::uint64_t discarded_completions = 0;
 	std::uint64_t queue_rejections = 0;
+	std::uint64_t requested_records = 0;
+	std::uint64_t sampling_records = 0;
+	std::uint64_t meshing_records = 0;
+	std::uint64_t ready_records = 0;
+	std::uint64_t failed_records = 0;
 };
 
 class WtStreamScheduler {

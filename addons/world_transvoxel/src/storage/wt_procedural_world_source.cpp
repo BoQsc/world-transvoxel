@@ -181,6 +181,32 @@ bool wt_procedural_has_key(
 	return std::binary_search(keys.begin(), keys.end(), key);
 }
 
+bool wt_procedural_can_generate_page(
+	const WtProceduralWorldDescriptor &descriptor,
+	const WtChunkKey &key
+) noexcept {
+	if (!wt_is_valid_chunk_key(key) || key.lod > kWtProceduralMaximumLod) {
+		return false;
+	}
+	const std::uint32_t span = lod_span(key.lod);
+	const std::int32_t count_x = static_cast<std::int32_t>(
+		ceil_divide_u32(descriptor.chunk_count_x, span)
+	);
+	const std::int32_t count_z = static_cast<std::int32_t>(
+		ceil_divide_u32(descriptor.chunk_count_z, span)
+	);
+	const std::int32_t min_y = vertical_origin(descriptor, key.lod);
+	const std::int32_t max_y = static_cast<std::int32_t>(
+		min_y + static_cast<std::int32_t>(vertical_layer_count(key.lod))
+	);
+	return key.x >= -1 &&
+		key.x <= count_x &&
+		key.z >= -1 &&
+		key.z <= count_z &&
+		key.y >= min_y - 1 &&
+		key.y <= max_y;
+}
+
 WtPageLoadCompletion wt_generate_procedural_page(
 	const WtProceduralWorldDescriptor &descriptor,
 	const WtChunkKey &key,
@@ -190,21 +216,7 @@ WtPageLoadCompletion wt_generate_procedural_page(
 	WtPageLoadCompletion completion;
 	completion.key = key;
 	completion.generation = generation;
-	if (!wt_is_valid_chunk_key(key) || key.lod > kWtProceduralMaximumLod ||
-		key.x < 0 || key.z < 0) {
-		completion.status = WtPageLoadStatus::PageFailure;
-		return completion;
-	}
-	const std::uint32_t span = lod_span(key.lod);
-	const std::uint32_t count_x = ceil_divide_u32(descriptor.chunk_count_x, span);
-	const std::uint32_t count_z = ceil_divide_u32(descriptor.chunk_count_z, span);
-	const std::int32_t min_y = vertical_origin(descriptor, key.lod);
-	const std::int32_t max_y = static_cast<std::int32_t>(
-		min_y + static_cast<std::int32_t>(vertical_layer_count(key.lod))
-	);
-	if (key.y < min_y || key.y >= max_y ||
-		static_cast<std::uint32_t>(key.x) >= count_x ||
-		static_cast<std::uint32_t>(key.z) >= count_z) {
+	if (!wt_procedural_can_generate_page(descriptor, key)) {
 		completion.status = WtPageLoadStatus::PageFailure;
 		return completion;
 	}
