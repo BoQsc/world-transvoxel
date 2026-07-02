@@ -78,7 +78,8 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 	);
 	lod_planner_ = std::make_unique<WtBalancedLodPlanner>(
 		active,
-		storage_.page_keys()
+		storage_.page_keys(),
+		static_cast<std::uint32_t>(config_.lod_refinement_radius_chunks)
 	);
 	planner_viewers_.reserve(viewers);
 	scheduler_ = std::make_unique<WtStreamScheduler>(

@@ -37,7 +37,8 @@ class WtBalancedLodPlanner {
 public:
 	WtBalancedLodPlanner(
 		std::size_t active_capacity,
-		std::vector<WtChunkKey> page_catalog
+		std::vector<WtChunkKey> page_catalog,
+		std::uint32_t refinement_radius_limit_chunks = 0
 	);
 
 	bool valid() const noexcept;
@@ -72,6 +73,7 @@ private:
 	) const;
 
 	std::size_t active_capacity_ = 0;
+	std::uint32_t refinement_radius_limit_chunks_ = 0;
 	std::vector<WtChunkKey> page_catalog_;
 	bool valid_ = false;
 };

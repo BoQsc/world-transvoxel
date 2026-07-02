@@ -42,7 +42,7 @@ Lifecycle state values are `0 stopped`, `1 starting`, `2 running`,
 without reading a `.wtworld` manifest. It generates requested page bytes on
 demand through the same native page format, cache, meshing, editing, and
 streaming pipeline used by manifest-backed worlds. The supported procedural
-descriptor emits a bounded LOD0/LOD1 hierarchy, up to 262,144 indexed hierarchy
+descriptor emits a bounded LOD0..LOD3 hierarchy, up to 262,144 indexed hierarchy
 pages, with persistent edits stored in the object root journal.
 
 Streaming and readiness:
@@ -108,6 +108,12 @@ This `Resource` exposes the construction-time capacities documented in
 `OPERATING_LIMITS.md`. It provides `get_schema_version()`, `is_valid()`, and
 `get_validation_error()`. Configuration is copied when startup begins; stop
 the world before replacing it.
+
+`lod_refinement_radius_chunks` is optional and defaults to `0`, which preserves
+the legacy behavior where each viewer's `radius_chunks` controls both coarse
+coverage and near-detail refinement. Set it above zero to cap refinement while
+keeping a larger coarse LOD coverage radius. Large procedural worlds should use
+this instead of forcing every visible root chunk to refine around the player.
 
 `render_transition_frames` is an opt-in integer. The default is `0`, which
 directly swaps replacement render meshes and avoids edit-time fade/blink. Values

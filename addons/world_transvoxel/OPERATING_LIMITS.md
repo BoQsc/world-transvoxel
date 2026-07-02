@@ -30,6 +30,7 @@ release even if the source can be compiled for them.
 | active chunks | 256 | 65,536 |
 | viewers | 8 | 1,024 |
 | demands per viewer | 4,096 | 65,536 |
+| LOD refinement radius cap | 0, use viewer radius | 65,536 |
 | total configured demands | derived | 65,536 |
 | storage requests/completions | 256 each | 65,536 each |
 | encoded page cache | 256 / 64 MiB | 65,536 / 1 GiB |
@@ -47,7 +48,9 @@ release even if the source can be compiled for them.
 | collision activation/deactivation | 96 / 128 | finite, nonnegative |
 
 Viewer capacity multiplied by demand capacity per viewer may not exceed
-65,536. Deactivation distance must be at least activation distance.
+65,536. `lod_refinement_radius_chunks=0` means no cap; nonzero values must not
+exceed demand capacity per viewer. Deactivation distance must be at least
+activation distance.
 
 ## Geometry and world bounds
 
@@ -59,8 +62,9 @@ Viewer capacity multiplied by demand capacity per viewer may not exceed
 - One chunk may own up to six transition faces.
 - World manifest: 262,144 pages maximum.
 - Compact procedural world descriptor: 262,144 indexed hierarchy pages maximum.
-  The current deterministic source emits LOD0 and LOD1 pages with two LOD0
-  vertical layers and one LOD1 vertical layer for the configured chunk slice.
+  The current deterministic source emits LOD0..LOD3 pages with eight LOD0,
+  four LOD1, two LOD2, and one LOD3 vertical layers for the configured chunk
+  slice.
 - Manifest dependency records: 1,024 maximum; dependency text is 255 bytes.
 
 ## Storage, editing, and operations

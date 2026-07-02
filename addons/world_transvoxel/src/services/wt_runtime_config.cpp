@@ -41,6 +41,9 @@ WtRuntimeConfigStatus wt_validate_runtime_config(
 		config.demand_capacity_per_viewer > kWtMaximumDesiredChunkCount) {
 		return WtRuntimeConfigStatus::InvalidDemandCapacity;
 	}
+	if (config.lod_refinement_radius_chunks > config.demand_capacity_per_viewer) {
+		return WtRuntimeConfigStatus::InvalidLodRefinementRadius;
+	}
 	if (config.viewer_capacity >
 		kWtMaximumDesiredChunkCount / config.demand_capacity_per_viewer) {
 		return WtRuntimeConfigStatus::InvalidTotalDemandCapacity;
@@ -113,6 +116,8 @@ const char *wt_runtime_config_status_message(
 			return "viewer capacity must be between 1 and 1024";
 		case WtRuntimeConfigStatus::InvalidDemandCapacity:
 			return "demand capacity per viewer must be between 1 and 65536";
+		case WtRuntimeConfigStatus::InvalidLodRefinementRadius:
+			return "LOD refinement radius must be 0 or no larger than demand capacity per viewer";
 		case WtRuntimeConfigStatus::InvalidTotalDemandCapacity:
 			return "viewer and demand capacities exceed 65536 total demands";
 		case WtRuntimeConfigStatus::InvalidStorageQueueCapacity:

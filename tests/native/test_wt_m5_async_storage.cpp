@@ -562,22 +562,26 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 	check(
 		service.source_revision() == descriptor.source_revision &&
 			service.world_revision() == descriptor.world_revision &&
-			service.page_count() == 28,
+			service.page_count() == 115,
 		"procedural metadata mismatch"
 	);
 	const std::vector<wt::WtChunkKey> keys = service.page_keys();
 	check(
-		keys.size() == 28 &&
+		keys.size() == 115 &&
 			keys.front() == wt::WtChunkKey { 0, 0, 0, 0 } &&
-			keys.back() == wt::WtChunkKey { 1, 0, 1, 1 },
+			keys.back() == wt::WtChunkKey { 0, 0, 0, 3 },
 		"procedural page key index mismatch"
 	);
 	check(
 		service.has_page({ 2, 0, 1, 0 }) &&
 			service.has_page({ 2, 1, 1, 0 }) &&
 			service.has_page({ 1, 0, 1, 1 }) &&
+			service.has_page({ 0, 0, 0, 2 }) &&
+			service.has_page({ 0, 1, 0, 2 }) &&
+			service.has_page({ 0, 0, 0, 3 }) &&
 			!service.has_page({ 4, 0, 1, 0 }) &&
-			!service.has_page({ 2, 0, 1, 1 }),
+			!service.has_page({ 2, 0, 1, 1 }) &&
+			!service.has_page({ 0, 1, 0, 3 }),
 		"procedural page lookup mismatch"
 	);
 	std::vector<std::uint8_t> manifest_bytes;
@@ -632,6 +636,27 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 				wt::WtChunkPageStatus::Ok &&
 			lod_page.metadata.key == wt::WtChunkKey { 1, 0, 1, 1 },
 		"procedural LOD1 page decode failed"
+	);
+	std::shared_ptr<const std::vector<std::uint8_t>> lod3_bytes;
+	check(
+		service.load_page_now({ 0, 0, 0, 3 }, lod3_bytes) ==
+			wt::WtPageLoadStatus::Ok &&
+			lod3_bytes &&
+			!lod3_bytes->empty(),
+		"procedural LOD3 immediate load failed"
+	);
+	wt::WtChunkPageView lod3_view;
+	wt::WtChunkPage lod3_page;
+	check(
+		lod3_bytes &&
+			wt::wt_open_chunk_page(
+				{ lod3_bytes->data(), lod3_bytes->size() },
+				lod3_view
+			) == wt::WtChunkPageStatus::Ok &&
+			wt::wt_decode_chunk_page(lod3_view, lod3_page) ==
+				wt::WtChunkPageStatus::Ok &&
+			lod3_page.metadata.key == wt::WtChunkKey { 0, 0, 0, 3 },
+		"procedural LOD3 page decode failed"
 	);
 	wt::WtScalarSample deep_sample;
 	wt::WtScalarSample mid_sample;
@@ -722,7 +747,7 @@ int main() {
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
 		"M5_ASYNC_STORAGE_PASS requests=5 successes=1 failures=4 "
-		"queue_rejections=1 procedural_strata=1\n"
+		"queue_rejections=1 procedural_strata=1 procedural_lod3=1\n"
 	);
 	return 0;
 }

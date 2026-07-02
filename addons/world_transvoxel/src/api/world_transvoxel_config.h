@@ -27,6 +27,8 @@ public:
 	std::int64_t get_viewer_capacity() const noexcept;
 	void set_demand_capacity_per_viewer(std::int64_t value);
 	std::int64_t get_demand_capacity_per_viewer() const noexcept;
+	void set_lod_refinement_radius_chunks(std::int64_t value);
+	std::int64_t get_lod_refinement_radius_chunks() const noexcept;
 	void set_storage_request_capacity(std::int64_t value);
 	std::int64_t get_storage_request_capacity() const noexcept;
 	void set_storage_completion_capacity(std::int64_t value);
@@ -70,6 +72,7 @@ private:
 	std::int64_t active_chunk_capacity_ = 256;
 	std::int64_t viewer_capacity_ = 8;
 	std::int64_t demand_capacity_per_viewer_ = 4096;
+	std::int64_t lod_refinement_radius_chunks_ = 0;
 	std::int64_t storage_request_capacity_ = 256;
 	std::int64_t storage_completion_capacity_ = 256;
 	std::int64_t encoded_page_entry_capacity_ = 256;

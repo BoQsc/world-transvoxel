@@ -15,6 +15,7 @@ struct WtRuntimeConfig {
 	std::uint64_t active_chunk_capacity = 256;
 	std::uint64_t viewer_capacity = 8;
 	std::uint64_t demand_capacity_per_viewer = 4096;
+	std::uint64_t lod_refinement_radius_chunks = 0;
 	std::uint64_t storage_request_capacity = 256;
 	std::uint64_t storage_completion_capacity = 256;
 	std::uint64_t encoded_page_entry_capacity = 256;
@@ -40,6 +41,7 @@ enum class WtRuntimeConfigStatus : std::uint8_t {
 	InvalidActiveChunkCapacity,
 	InvalidViewerCapacity,
 	InvalidDemandCapacity,
+	InvalidLodRefinementRadius,
 	InvalidTotalDemandCapacity,
 	InvalidStorageQueueCapacity,
 	InvalidStorageCacheCapacity,

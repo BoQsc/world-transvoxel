@@ -118,8 +118,12 @@ void WtBalancedLodPlan::clear() noexcept {
 
 WtBalancedLodPlanner::WtBalancedLodPlanner(
 	std::size_t active_capacity,
-	std::vector<WtChunkKey> page_catalog
-) : active_capacity_(active_capacity), page_catalog_(std::move(page_catalog)) {
+	std::vector<WtChunkKey> page_catalog,
+	std::uint32_t refinement_radius_limit_chunks
+) :
+		active_capacity_(active_capacity),
+		refinement_radius_limit_chunks_(refinement_radius_limit_chunks),
+		page_catalog_(std::move(page_catalog)) {
 	std::sort(page_catalog_.begin(), page_catalog_.end());
 	valid_ = active_capacity_ != 0 &&
 		active_capacity_ <= kWtMaximumRuntimeActiveChunks &&
@@ -155,8 +159,16 @@ bool WtBalancedLodPlanner::should_refine(
 	if (key.lod == 0) return false;
 	const double child_extent = static_cast<double>(wt_chunk_extent(key.lod - 1));
 	for (const WtLodPlannerViewer &viewer : viewers) {
+		std::uint32_t refinement_radius = viewer.radius_chunks;
+		if (refinement_radius_limit_chunks_ != 0) {
+			refinement_radius = std::min(
+				refinement_radius,
+				refinement_radius_limit_chunks_
+			);
+		}
+		if (refinement_radius == 0) continue;
 		if (distance_to_chunk(viewer.snapshot, key) <
-			child_extent * static_cast<double>(viewer.radius_chunks)) {
+			child_extent * static_cast<double>(refinement_radius)) {
 			return true;
 		}
 	}
@@ -350,12 +362,15 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 		}
 		const double bounded = std::min(
 			nearest,
-			static_cast<double>(std::numeric_limits<std::int32_t>::max())
+			static_cast<double>(99999999)
 		);
+		const std::int32_t lod_priority =
+			static_cast<std::int32_t>(entry.key.lod) * 100000000;
+		const std::int32_t distance_priority =
+			99999999 - static_cast<std::int32_t>(bounded);
 		output.demands.push_back({
 			entry.key,
-			std::numeric_limits<std::int32_t>::max() -
-				static_cast<std::int32_t>(bounded),
+			lod_priority + distance_priority,
 			collision_required,
 		});
 	}

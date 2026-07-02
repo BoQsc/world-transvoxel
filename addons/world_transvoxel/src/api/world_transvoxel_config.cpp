@@ -55,6 +55,7 @@ void WorldTransvoxelConfig::_bind_methods() {
 	WT_BIND_INT_PROPERTY(active_chunk_capacity, "1,65536,1");
 	WT_BIND_INT_PROPERTY(viewer_capacity, "1,1024,1");
 	WT_BIND_INT_PROPERTY(demand_capacity_per_viewer, "1,65536,1");
+	WT_BIND_INT_PROPERTY(lod_refinement_radius_chunks, "0,65536,1");
 	WT_BIND_INT_PROPERTY(storage_request_capacity, "1,65536,1");
 	WT_BIND_INT_PROPERTY(storage_completion_capacity, "1,65536,1");
 	WT_BIND_INT_PROPERTY(encoded_page_entry_capacity, "1,65536,1");
@@ -118,6 +119,7 @@ WtRuntimeConfig WorldTransvoxelConfig::to_native() const noexcept {
 	result.active_chunk_capacity = active_chunk_capacity_;
 	result.viewer_capacity = viewer_capacity_;
 	result.demand_capacity_per_viewer = demand_capacity_per_viewer_;
+	result.lod_refinement_radius_chunks = lod_refinement_radius_chunks_;
 	result.storage_request_capacity = storage_request_capacity_;
 	result.storage_completion_capacity = storage_completion_capacity_;
 	result.encoded_page_entry_capacity = encoded_page_entry_capacity_;
@@ -151,6 +153,7 @@ WtRuntimeConfig WorldTransvoxelConfig::to_native() const noexcept {
 WT_CONFIG_INT_ACCESSORS(active_chunk_capacity)
 WT_CONFIG_INT_ACCESSORS(viewer_capacity)
 WT_CONFIG_INT_ACCESSORS(demand_capacity_per_viewer)
+WT_CONFIG_INT_ACCESSORS(lod_refinement_radius_chunks)
 WT_CONFIG_INT_ACCESSORS(storage_request_capacity)
 WT_CONFIG_INT_ACCESSORS(storage_completion_capacity)
 WT_CONFIG_INT_ACCESSORS(encoded_page_entry_capacity)
