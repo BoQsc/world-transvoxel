@@ -84,42 +84,74 @@ private:
 			(static_cast<double>(z) - center_z) / std::max(center_z, 1.0);
 		const double phase =
 			static_cast<double>(descriptor_.seed % 100000U) * 0.0001;
-		const double central_highland = 24.0 * std::exp(
-			-1.9 * (normalized_x * normalized_x + normalized_z * normalized_z)
+		const double radial_distance =
+			normalized_x * normalized_x + normalized_z * normalized_z;
+		const double central_highland = 18.0 * std::exp(
+			-2.1 * radial_distance
 		);
-		const double ridge_axis = normalized_z + normalized_x * 0.32 - 0.08;
-		const double ridge_along = normalized_x - 0.12;
-		const double mountain_range = 14.0 *
-			std::exp(-22.0 * ridge_axis * ridge_axis) *
-			std::exp(-1.25 * ridge_along * ridge_along);
-		const double ridge = 11.0 * std::exp(
-			-11.0 * (
-				(normalized_x - 0.34) * (normalized_x - 0.34) +
-				(normalized_z + 0.18) * (normalized_z + 0.18)
+		const double ridge_axis = normalized_z + normalized_x * 0.34 - 0.06;
+		const double ridge_along = normalized_x - 0.05;
+		const double mountain_range = 18.0 *
+			std::exp(-48.0 * ridge_axis * ridge_axis) *
+			std::exp(-1.2 * ridge_along * ridge_along);
+		const double spire_a = 50.0 * std::exp(
+			-165.0 * (
+				(normalized_x - 0.16) * (normalized_x - 0.16) +
+				(normalized_z + 0.02) * (normalized_z + 0.02)
 			)
 		);
-		const double basin = -5.5 * std::exp(
-			-7.0 * (
-				(normalized_x + 0.42) * (normalized_x + 0.42) +
-				(normalized_z - 0.28) * (normalized_z - 0.28)
+		const double spire_b = 38.0 * std::exp(
+			-170.0 * (
+				(normalized_x + 0.16) * (normalized_x + 0.16) +
+				(normalized_z - 0.19) * (normalized_z - 0.19)
+			)
+		);
+		const double spire_c = 34.0 * std::exp(
+			-190.0 * (
+				(normalized_x - 0.36) * (normalized_x - 0.36) +
+				(normalized_z + 0.30) * (normalized_z + 0.30)
+			)
+		);
+		const double knife_ridge = 20.0 *
+			std::exp(-95.0 * (
+				normalized_z + 0.22 * normalized_x + 0.13
+			) * (
+				normalized_z + 0.22 * normalized_x + 0.13
+			)) *
+			std::exp(-3.0 * (normalized_x - 0.25) * (normalized_x - 0.25));
+		const double cliff = 10.0 /
+			(1.0 + std::exp(-35.0 * (
+				0.20 - normalized_z + 0.18 * normalized_x
+			))) *
+			std::exp(-1.8 * (normalized_x - 0.18) * (normalized_x - 0.18));
+		const double basin = -12.0 * std::exp(
+			-5.0 * (
+				(normalized_x + 0.44) * (normalized_x + 0.44) +
+				(normalized_z - 0.27) * (normalized_z - 0.27)
 			)
 		);
 		const double macro =
-			4.2 * std::sin(static_cast<double>(x) * 0.0032 + phase * 1.7) +
-			3.4 * std::cos(static_cast<double>(z) * 0.0038 - phase * 1.3) +
-			2.2 * std::sin(static_cast<double>(x + z) * 0.0024 + phase);
+			4.0 * std::sin(static_cast<double>(x) * 0.0032 + phase * 1.7) +
+			3.2 * std::cos(static_cast<double>(z) * 0.0038 - phase * 1.3) +
+			2.3 * std::sin(static_cast<double>(x + z) * 0.0024 + phase);
 		const double hills =
-			2.4 * std::sin(static_cast<double>(x) * 0.010 + phase) *
+			2.6 * std::sin(static_cast<double>(x) * 0.010 + phase) *
 				std::cos(static_cast<double>(z) * 0.0085 - phase * 0.5) +
-			1.7 * std::cos(static_cast<double>(x - z) * 0.0075 - phase * 0.25);
+			1.6 * std::cos(static_cast<double>(x - z) * 0.0075 - phase * 0.25);
+		const double crag =
+			std::sin(static_cast<double>(x) * 0.045 + phase) *
+			std::cos(static_cast<double>(z) * 0.041 - phase * 0.5);
+		const double crags = 6.0 * std::max(0.0, crag) *
+			std::max(0.0, crag) * std::exp(-2.1 * radial_distance);
 		const double long_wave =
-			1.1 * std::sin(static_cast<double>(x) * 0.016 + phase) +
-			0.9 * std::cos(static_cast<double>(z) * 0.014 - phase);
+			1.0 * std::sin(static_cast<double>(x) * 0.016 + phase) +
+			0.8 * std::cos(static_cast<double>(z) * 0.014 - phase);
 		const double local = 0.45 * std::cos(
 			static_cast<double>(x - z) * 0.021 - phase * 0.25
 		);
-		return 18.0 + central_highland + mountain_range + ridge + basin +
-			macro + hills + long_wave + local;
+		return 12.0 + central_highland + mountain_range + spire_a +
+			spire_b + spire_c + knife_ridge + cliff + basin + macro +
+			hills + crags + long_wave + local;
 	}
 
 	std::uint16_t material(

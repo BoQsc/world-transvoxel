@@ -701,9 +701,9 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 	wt::WtScalarSample mid_sample;
 	wt::WtScalarSample shallow_sample;
 	check(
-		wt::wt_sample_chunk_page(strata_page, { 45, 35, 30 }, deep_sample) &&
-			wt::wt_sample_chunk_page(strata_page, { 45, 40, 30 }, mid_sample) &&
-			wt::wt_sample_chunk_page(strata_page, { 45, 42, 30 }, shallow_sample) &&
+		wt::wt_sample_chunk_page(strata_page, { 47, 35, 25 }, deep_sample) &&
+			wt::wt_sample_chunk_page(strata_page, { 47, 40, 25 }, mid_sample) &&
+			wt::wt_sample_chunk_page(strata_page, { 47, 42, 25 }, shallow_sample) &&
 			deep_sample.density < mid_sample.density &&
 			mid_sample.density < shallow_sample.density &&
 			deep_sample.material == 1 &&
