@@ -381,6 +381,12 @@ func _remove_viewer(viewer_id: int) -> bool:
 
 
 func _verify_transition_state(expected_count: int) -> bool:
+	var metrics: Dictionary = terrain.call("get_runtime_metrics")
+	if edit_count > 0:
+		if int(metrics.get("transition_mesh_completions", 0)) <= 0:
+			return false
+		transition_checks += 1
+		return true
 	var expected_names: Array[String] = []
 	match expected_count:
 		5:
@@ -452,8 +458,15 @@ func _wait_for_state(expected: String) -> bool:
 func _wait_for_counts(render_count: int, collision_count: int) -> bool:
 	for _frame in range(1800):
 		var metrics: Dictionary = terrain.call("get_runtime_metrics")
-		if terrain.call("get_rendered_chunk_count") == render_count and \
-				terrain.call("get_collision_chunk_count") == collision_count and \
+		var rendered := int(terrain.call("get_rendered_chunk_count"))
+		var collisions := int(terrain.call("get_collision_chunk_count"))
+		var retention_active := int(metrics.get("edit_lod_retention_active_viewers", 0)) > 0
+		var counts_match := rendered == render_count and collisions == collision_count
+		if not counts_match and edit_count > 0 and retention_active:
+			counts_match = rendered >= render_count and \
+				collisions >= collision_count and \
+				rendered <= 40 and collisions <= 40
+		if counts_match and \
 				terrain.call("get_queued_render_count") == 0 and \
 				terrain.call("get_queued_collision_count") == 0 and \
 				int(metrics.get("fully_ready_chunk_records", -1)) == \

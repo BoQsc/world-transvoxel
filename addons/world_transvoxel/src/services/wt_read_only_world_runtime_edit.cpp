@@ -100,6 +100,7 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 		return true;
 	}
 	world_revision_.store(transaction.committed_revision);
+	remember_edit_lod_retention_zones(transaction);
 	if (edit_replacement_->apply_prepared(
 			transaction,
 			*scheduler_,

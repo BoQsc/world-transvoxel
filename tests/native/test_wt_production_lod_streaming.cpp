@@ -170,6 +170,21 @@ int main() {
 	check(plan.entries.size() == 9 && bridge != nullptr &&
 		bridge->transition_mask == wt::wt_face_bit(wt::WtChunkFace::NegativeX),
 		"initial balanced LOD topology mismatch");
+	const wt::WtChunkKey retained_edit_key { 5, 0, 0, 0 };
+	check(find_entry(plan, retained_edit_key) == nullptr,
+		"far edited detail key was unexpectedly active before retention");
+
+	std::vector<wt::WtLodPlannerViewer> retained_viewers = first_viewer;
+	retained_viewers.push_back(planner_viewer(
+		0x8000000000000001ULL, 2, 80.0
+	));
+	wt::WtBalancedLodPlan retained_plan;
+	check(planner.plan(
+		retained_viewers, {}, {}, retained_plan
+	) == wt::WtBalancedLodPlannerStatus::Ok,
+		"edit-retention balanced LOD plan failed");
+	check(find_entry(retained_plan, retained_edit_key) != nullptr,
+		"edit-retention viewer did not keep far edited LOD0 key active");
 
 	wt::WtBalancedLodPlanner bounded(8, storage.page_keys());
 	wt::WtBalancedLodPlan rejected_plan;
@@ -254,6 +269,8 @@ int main() {
 	std::vector<std::uint8_t> evidence;
 	append_u64(evidence, plan.entries.size());
 	append_u64(evidence, bridge == nullptr ? 0 : bridge->transition_mask);
+	append_u64(evidence, retained_plan.entries.size());
+	append_u64(evidence, find_entry(retained_plan, retained_edit_key) != nullptr);
 	for (std::uint64_t value : publications.bridge_vertices) {
 		append_u64(evidence, value);
 	}
@@ -272,9 +289,12 @@ int main() {
 	}
 	std::printf(
 		"PRODUCTION_LOD_STREAMING_EVIDENCE entries=%zu mask=%u "
+		"retained_entries=%zu retained_edit_key=%d "
 		"bridge0=%llu/%llu bridge1=%llu/%llu transition_completions=%llu\n",
 		plan.entries.size(),
 		bridge == nullptr ? 0U : static_cast<unsigned int>(bridge->transition_mask),
+		retained_plan.entries.size(),
+		find_entry(retained_plan, retained_edit_key) != nullptr ? 1 : 0,
 		static_cast<unsigned long long>(publications.bridge_vertices[0]),
 		static_cast<unsigned long long>(publications.bridge_indices[0]),
 		static_cast<unsigned long long>(publications.bridge_vertices[1]),

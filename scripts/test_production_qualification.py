@@ -23,7 +23,7 @@ from wt_script_common import REPO_ROOT, addon_binary_path, native_test_path
 
 ARTIFACT_ROOT = REPO_ROOT / "artifacts" / "production-qualification"
 EXPECTED_CONFIG_HASH = (
-    "c21861342875b96db0bad453f8251d4586994f579e75188be102af1155af0104"
+    "799ef02ecb28f3df15afa63dadb829711ef911ee69de037fe7309e855a79d05e"
 )
 EXPECTED_EDIT_JOURNAL_HASH = (
     "f6331a4a71a1c1ddb4bfd2aca61562dd5358710a9888eabd6b1b9308229e64e6"
@@ -38,7 +38,7 @@ EXPECTED_STREAMING_HASH = (
     "39db05c67fc2f4b8d8beaab2e7da927ae968efb3d75118bcd80c5523116d9b3b"
 )
 EXPECTED_LOD_STREAMING_HASH = (
-    "72588dfd19daf366f0dcc07fd8941cb500874a6719dda0ecb3754db295a6fb40"
+    "6d0a6dc82c2930d5b4bd2a568f022abf6afac2ad6a2b36a8ddbf7ce36feeac94"
 )
 LIFECYCLE_FIXTURE_ROOT = REPO_ROOT / "build" / "production-lifecycle-fixture"
 

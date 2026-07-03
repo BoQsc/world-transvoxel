@@ -113,6 +113,10 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t edit_commits = 0;
 	std::uint64_t edit_rejections = 0;
 	std::uint64_t edit_replacements = 0;
+	std::uint64_t edit_lod_retention_zones = 0;
+	std::uint64_t edit_lod_retention_active_viewers = 0;
+	std::uint64_t edit_lod_retention_plans = 0;
+	std::uint64_t edit_lod_retention_fallbacks = 0;
 	std::uint64_t sample_queries = 0;
 	std::uint64_t sample_query_rejections = 0;
 	std::uint64_t world_snapshots = 0;
@@ -214,6 +218,12 @@ private:
 		std::filesystem::path output_directory;
 		std::uint64_t new_source_revision = 0;
 	};
+	struct EditLodRetentionZone {
+		double x = 0.0;
+		double y = 0.0;
+		double z = 0.0;
+		std::uint64_t revision = 0;
+	};
 
 	bool enqueue_viewer_event(const ViewerEvent &event);
 	bool process_viewer_event();
@@ -228,6 +238,13 @@ private:
 	bool process_mesh_completions();
 	bool publish_delta(const WtDesiredSetDelta &delta);
 	bool push_publication(WtReadOnlyPublication publication);
+	void remember_edit_lod_retention_zones(
+		const WtEditTransaction &transaction
+	);
+	std::size_t append_edit_lod_retention_viewers(
+		const std::vector<WtLodPlannerViewer> &real_viewers,
+		std::vector<WtLodPlannerViewer> &planning_viewers
+	) const;
 	void notify_work() noexcept;
 	void set_failure(WtReadOnlyRuntimeStatus status) noexcept;
 
@@ -262,6 +279,8 @@ private:
 	std::unique_ptr<WtMultiViewerDesiredSet> desired_;
 	std::unique_ptr<WtBalancedLodPlanner> lod_planner_;
 	std::vector<WtLodPlannerViewer> planner_viewers_;
+	std::vector<EditLodRetentionZone> edit_lod_retention_zones_;
+	std::uint64_t next_edit_lod_retention_revision_ = 1;
 	WtBalancedLodPlan current_plan_;
 	std::uint64_t plan_revision_ = 0;
 	std::unique_ptr<WtStreamScheduler> scheduler_;

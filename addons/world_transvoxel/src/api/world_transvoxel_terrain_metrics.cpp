@@ -57,6 +57,26 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	set_metric(output, "edit_commits", runtime.edit_commits);
 	set_metric(output, "edit_rejections", runtime.edit_rejections);
 	set_metric(output, "edit_replacements", runtime.edit_replacements);
+	set_metric(
+		output,
+		"edit_lod_retention_zones",
+		runtime.edit_lod_retention_zones
+	);
+	set_metric(
+		output,
+		"edit_lod_retention_active_viewers",
+		runtime.edit_lod_retention_active_viewers
+	);
+	set_metric(
+		output,
+		"edit_lod_retention_plans",
+		runtime.edit_lod_retention_plans
+	);
+	set_metric(
+		output,
+		"edit_lod_retention_fallbacks",
+		runtime.edit_lod_retention_fallbacks
+	);
 	set_metric(output, "sample_queries", runtime.sample_queries);
 	set_metric(
 		output, "sample_query_rejections", runtime.sample_query_rejections
