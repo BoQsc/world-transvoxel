@@ -701,9 +701,9 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 	wt::WtScalarSample mid_sample;
 	wt::WtScalarSample shallow_sample;
 	check(
-		wt::wt_sample_chunk_page(strata_page, { 40, 36, 24 }, deep_sample) &&
-			wt::wt_sample_chunk_page(strata_page, { 40, 40, 24 }, mid_sample) &&
-			wt::wt_sample_chunk_page(strata_page, { 40, 43, 24 }, shallow_sample) &&
+		wt::wt_sample_chunk_page(strata_page, { 45, 35, 30 }, deep_sample) &&
+			wt::wt_sample_chunk_page(strata_page, { 45, 40, 30 }, mid_sample) &&
+			wt::wt_sample_chunk_page(strata_page, { 45, 42, 30 }, shallow_sample) &&
 			deep_sample.density < mid_sample.density &&
 			mid_sample.density < shallow_sample.density &&
 			deep_sample.material == 1 &&
@@ -744,6 +744,59 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 		"compact procedural LOD1 page from integration traversal failed"
 	);
 	compact_service.close();
+
+	wt::WtProceduralWorldDescriptor flat_descriptor;
+	flat_descriptor.chunk_count_x = 128;
+	flat_descriptor.chunk_count_z = 128;
+	flat_descriptor.chunk_y = 0;
+	flat_descriptor.source_revision = 101;
+	flat_descriptor.world_revision = 0;
+	flat_descriptor.mode = wt::WtProceduralWorldMode::Flat;
+	wt::WtAsyncStorageService flat_service({
+		2,
+		2,
+		wt::kWtMaximumContainerSize,
+	});
+	check(
+		flat_service.open_procedural(flat_descriptor) ==
+			wt::WtAsyncStorageStatus::Ok,
+		"flat procedural storage service open failed"
+	);
+	std::shared_ptr<const std::vector<std::uint8_t>> flat_bytes;
+	check(
+		flat_service.load_page_now({ 0, 0, 0, 0 }, flat_bytes) ==
+			wt::WtPageLoadStatus::Ok &&
+			flat_bytes &&
+			!flat_bytes->empty(),
+		"flat procedural page load failed"
+	);
+	wt::WtChunkPageView flat_view;
+	wt::WtChunkPage flat_page;
+	check(
+		flat_bytes &&
+			wt::wt_open_chunk_page(
+				{ flat_bytes->data(), flat_bytes->size() },
+				flat_view
+			) == wt::WtChunkPageStatus::Ok &&
+			wt::wt_decode_chunk_page(flat_view, flat_page) ==
+				wt::WtChunkPageStatus::Ok &&
+			flat_page.metadata.key == wt::WtChunkKey { 0, 0, 0, 0 },
+		"flat procedural page decode failed"
+	);
+	wt::WtScalarSample flat_deep_sample;
+	wt::WtScalarSample flat_surface_sample;
+	wt::WtScalarSample flat_air_sample;
+	check(
+		wt::wt_sample_chunk_page(flat_page, { 8, 0, 8 }, flat_deep_sample) &&
+			wt::wt_sample_chunk_page(flat_page, { 8, 8, 8 }, flat_surface_sample) &&
+			wt::wt_sample_chunk_page(flat_page, { 8, 12, 8 }, flat_air_sample) &&
+			flat_deep_sample.density < 0.0F &&
+			flat_surface_sample.density == 0.0F &&
+			flat_air_sample.density > 0.0F &&
+			flat_deep_sample.material == 1,
+		"flat procedural density/material samples mismatch"
+	);
+	flat_service.close();
 
 	check(
 		service.request_page({ 1, 0, 1, 0 }, { 81 }, 4) ==

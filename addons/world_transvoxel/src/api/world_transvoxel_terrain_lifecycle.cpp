@@ -148,4 +148,75 @@ bool WorldTransvoxelTerrain::start_procedural_world(
 	return true;
 }
 
+bool WorldTransvoxelTerrain::start_flat_world(
+	std::int64_t chunk_count_x,
+	std::int64_t chunk_count_z,
+	std::int64_t source_revision,
+	const godot::String &object_root
+) {
+	if (!is_configuration_valid()) {
+		synchronous_world_error_ = get_configuration_error();
+		return false;
+	}
+	if (lifecycle_ &&
+		lifecycle_->state() != WtWorldLifecycleState::Stopped) {
+		synchronous_world_error_ =
+			"world lifecycle state does not allow startup";
+		return false;
+	}
+	if (chunk_count_x <= 0 || chunk_count_z <= 0 ||
+		chunk_count_x > 4096 || chunk_count_z > 4096 ||
+		source_revision <= 0 || object_root.is_empty()) {
+		synchronous_world_error_ =
+			"flat world descriptor is invalid";
+		return false;
+	}
+	WtProceduralWorldDescriptor descriptor;
+	descriptor.chunk_count_x = static_cast<std::uint32_t>(chunk_count_x);
+	descriptor.chunk_count_z = static_cast<std::uint32_t>(chunk_count_z);
+	descriptor.chunk_y = 0;
+	descriptor.source_revision = static_cast<std::uint64_t>(source_revision);
+	descriptor.world_revision = 0;
+	descriptor.seed = 0;
+	descriptor.mode = WtProceduralWorldMode::Flat;
+	const std::uint64_t page_count = wt_procedural_page_count(descriptor);
+	if (page_count == 0 || page_count > 262144U) {
+		synchronous_world_error_ =
+			"flat world page count exceeds compact runtime limit";
+		return false;
+	}
+	const WtRuntimeConfig config = configuration_->to_native();
+	auto lifecycle = std::make_unique<WtWorldLifecycleService>(config);
+	const WtWorldLifecycleStatus status = lifecycle->start_procedural(
+		descriptor,
+		globalized_path(object_root)
+	);
+	if (status != WtWorldLifecycleStatus::Ok) {
+		synchronous_world_error_ =
+			wt_world_lifecycle_status_message(status);
+		return false;
+	}
+	lifecycle_ = std::move(lifecycle);
+	render_sink_->set_shader_fade_parameter_enabled(
+		configuration_->is_shader_fade_parameter_enabled()
+	);
+	render_sink_->set_transition_frames(static_cast<std::uint32_t>(
+		configuration_->get_render_transition_frames()
+	));
+	render_sink_->clear();
+	collision_sink_->clear();
+	reset_world_application(static_cast<std::size_t>(
+		config.active_chunk_capacity
+	));
+	render_apply_budget_ = static_cast<std::size_t>(
+		config.render_apply_budget
+	);
+	collision_apply_budget_ = static_cast<std::size_t>(
+		config.collision_apply_budget
+	);
+	synchronous_world_error_ = "ok";
+	emit_lifecycle_state(WtWorldLifecycleState::Starting);
+	return true;
+}
+
 } // namespace world_transvoxel

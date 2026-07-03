@@ -63,6 +63,9 @@ public:
 
 private:
 	double height(std::int64_t x, std::int64_t z) const noexcept {
+		if (descriptor_.mode == WtProceduralWorldMode::Flat) {
+			return 8.0;
+		}
 		const double width = std::max(
 			16.0,
 			static_cast<double>(descriptor_.chunk_count_x) *
@@ -81,16 +84,21 @@ private:
 			(static_cast<double>(z) - center_z) / std::max(center_z, 1.0);
 		const double phase =
 			static_cast<double>(descriptor_.seed % 100000U) * 0.0001;
-		const double central_highland = 12.0 * std::exp(
-			-1.65 * (normalized_x * normalized_x + normalized_z * normalized_z)
+		const double central_highland = 24.0 * std::exp(
+			-1.9 * (normalized_x * normalized_x + normalized_z * normalized_z)
 		);
-		const double ridge = 7.0 * std::exp(
-			-9.0 * (
+		const double ridge_axis = normalized_z + normalized_x * 0.32 - 0.08;
+		const double ridge_along = normalized_x - 0.12;
+		const double mountain_range = 14.0 *
+			std::exp(-22.0 * ridge_axis * ridge_axis) *
+			std::exp(-1.25 * ridge_along * ridge_along);
+		const double ridge = 11.0 * std::exp(
+			-11.0 * (
 				(normalized_x - 0.34) * (normalized_x - 0.34) +
 				(normalized_z + 0.18) * (normalized_z + 0.18)
 			)
 		);
-		const double basin = -3.2 * std::exp(
+		const double basin = -5.5 * std::exp(
 			-7.0 * (
 				(normalized_x + 0.42) * (normalized_x + 0.42) +
 				(normalized_z - 0.28) * (normalized_z - 0.28)
@@ -110,8 +118,8 @@ private:
 		const double local = 0.45 * std::cos(
 			static_cast<double>(x - z) * 0.021 - phase * 0.25
 		);
-		return 20.0 + central_highland + ridge + basin + macro + hills +
-			long_wave + local;
+		return 18.0 + central_highland + mountain_range + ridge + basin +
+			macro + hills + long_wave + local;
 	}
 
 	std::uint16_t material(

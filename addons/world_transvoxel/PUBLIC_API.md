@@ -27,6 +27,7 @@ Configuration and lifecycle:
 - `set_render_material_override(material)` / `get_render_material_override()`
 - `start_world(world_manifest_path, object_root) -> bool`
 - `start_procedural_world(chunk_count_x, chunk_count_z, seed, source_revision, object_root) -> bool`
+- `start_flat_world(chunk_count_x, chunk_count_z, source_revision, object_root) -> bool`
 - `stop_world() -> bool`
 - `get_world_state() -> int`
 - `get_world_state_name() -> String`
@@ -46,6 +47,11 @@ demand through the same native page format, cache, meshing, editing, and
 streaming pipeline used by manifest-backed worlds. The supported procedural
 descriptor emits a bounded LOD0..LOD3 hierarchy, up to 262,144 indexed hierarchy
 pages, with persistent edits stored in the object root journal.
+
+`start_flat_world()` starts the same native procedural/storage/streaming path
+with a flat surface at y=8. It is intended for baseline playtests and games
+whose default terrain should be flat while retaining full voxel volume,
+editing, collision, and LOD behavior.
 
 `render_material_override` is an optional Godot material resource applied by the
 native render sink to every existing and newly created render chunk. Higher-level

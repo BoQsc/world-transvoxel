@@ -24,6 +24,11 @@ struct WtAsyncStorageLimits {
 	std::size_t maximum_page_bytes = kWtMaximumContainerSize;
 };
 
+enum class WtProceduralWorldMode : std::uint8_t {
+	Terrain = 0,
+	Flat = 1,
+};
+
 struct WtProceduralWorldDescriptor {
 	std::uint32_t chunk_count_x = 0;
 	std::uint32_t chunk_count_z = 0;
@@ -31,6 +36,7 @@ struct WtProceduralWorldDescriptor {
 	std::uint64_t source_revision = 0;
 	std::uint64_t world_revision = 0;
 	std::uint32_t seed = 1;
+	WtProceduralWorldMode mode = WtProceduralWorldMode::Terrain;
 };
 
 enum class WtAsyncStorageStatus : std::uint8_t {

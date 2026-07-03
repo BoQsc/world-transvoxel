@@ -113,6 +113,16 @@ void WorldTransvoxelTerrain::_bind_methods() {
 		&WorldTransvoxelTerrain::start_procedural_world
 	);
 	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"start_flat_world",
+			"chunk_count_x",
+			"chunk_count_z",
+			"source_revision",
+			"object_root"
+		),
+		&WorldTransvoxelTerrain::start_flat_world
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD("stop_world"),
 		&WorldTransvoxelTerrain::stop_world
 	);

@@ -52,6 +52,11 @@ pages are generated on demand through the existing native page baker and then
 flow through the same cache, meshing, editing, and application pipeline as
 manifest-backed pages.
 
+`start_flat_world(chunk_count_x, chunk_count_z, source_revision, object_root)`
+follows the same lifecycle and bounded storage ownership with the procedural
+descriptor set to flat mode. It produces a flat y=8 surface while retaining the
+same page format, cache, meshing, editing, collision, and LOD streaming path.
+
 The control thread:
 
 1. reads and validates the manifest;
@@ -76,6 +81,7 @@ The facade exposes:
 
 - `start_world(world_manifest_path, object_root) -> bool`;
 - `start_procedural_world(chunk_count_x, chunk_count_z, seed, source_revision, object_root) -> bool`;
+- `start_flat_world(chunk_count_x, chunk_count_z, source_revision, object_root) -> bool`;
 - `stop_world() -> bool`;
 - state number/name and `is_world_running()`;
 - source revision, world revision, and manifest page count;
@@ -88,9 +94,9 @@ transition to `failed`; they are not misreported as synchronous argument
 errors. Empty API paths and invalid configuration fail synchronously before a
 thread is created.
 
-Procedural startup rejects invalid dimensions, missing object roots, nonpositive
-source revisions, and descriptors above the 262,144 hierarchy-page compact
-runtime limit synchronously before a thread is created.
+Procedural and flat startup reject invalid dimensions, missing object roots,
+nonpositive source revisions, and descriptors above the 262,144 hierarchy-page
+compact runtime limit synchronously before a thread is created.
 
 ## Proof
 
