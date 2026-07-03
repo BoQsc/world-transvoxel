@@ -81,19 +81,37 @@ private:
 			(static_cast<double>(z) - center_z) / std::max(center_z, 1.0);
 		const double phase =
 			static_cast<double>(descriptor_.seed % 100000U) * 0.0001;
-		const double ridge = 3.2 * std::exp(
-			-3.0 * (normalized_x * normalized_x + normalized_z * normalized_z)
+		const double central_highland = 12.0 * std::exp(
+			-1.65 * (normalized_x * normalized_x + normalized_z * normalized_z)
 		);
+		const double ridge = 7.0 * std::exp(
+			-9.0 * (
+				(normalized_x - 0.34) * (normalized_x - 0.34) +
+				(normalized_z + 0.18) * (normalized_z + 0.18)
+			)
+		);
+		const double basin = -3.2 * std::exp(
+			-7.0 * (
+				(normalized_x + 0.42) * (normalized_x + 0.42) +
+				(normalized_z - 0.28) * (normalized_z - 0.28)
+			)
+		);
+		const double macro =
+			4.2 * std::sin(static_cast<double>(x) * 0.0032 + phase * 1.7) +
+			3.4 * std::cos(static_cast<double>(z) * 0.0038 - phase * 1.3) +
+			2.2 * std::sin(static_cast<double>(x + z) * 0.0024 + phase);
+		const double hills =
+			2.4 * std::sin(static_cast<double>(x) * 0.010 + phase) *
+				std::cos(static_cast<double>(z) * 0.0085 - phase * 0.5) +
+			1.7 * std::cos(static_cast<double>(x - z) * 0.0075 - phase * 0.25);
 		const double long_wave =
-			0.80 * std::sin(static_cast<double>(x) * 0.018 + phase) +
-			0.60 * std::cos(static_cast<double>(z) * 0.016 - phase);
-		const double diagonal = 0.40 * std::sin(
-			static_cast<double>(x + z) * 0.008 + phase * 0.5
-		);
-		const double local = 0.28 * std::cos(
+			1.1 * std::sin(static_cast<double>(x) * 0.016 + phase) +
+			0.9 * std::cos(static_cast<double>(z) * 0.014 - phase);
+		const double local = 0.45 * std::cos(
 			static_cast<double>(x - z) * 0.021 - phase * 0.25
 		);
-		return 5.8 + ridge + long_wave + diagonal + local;
+		return 20.0 + central_highland + ridge + basin + macro + hills +
+			long_wave + local;
 	}
 
 	std::uint16_t material(

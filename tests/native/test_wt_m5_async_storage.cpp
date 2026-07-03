@@ -616,6 +616,27 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 			page.samples.size() == wt::kWtChunkPageSampleCount,
 		"procedural decoded page metadata mismatch"
 	);
+	std::shared_ptr<const std::vector<std::uint8_t>> strata_bytes;
+	check(
+		service.load_page_now({ 2, 2, 1, 0 }, strata_bytes) ==
+			wt::WtPageLoadStatus::Ok &&
+			strata_bytes &&
+			!strata_bytes->empty(),
+		"procedural strata page immediate load failed"
+	);
+	wt::WtChunkPageView strata_view;
+	wt::WtChunkPage strata_page;
+	check(
+		strata_bytes &&
+			wt::wt_open_chunk_page(
+				{ strata_bytes->data(), strata_bytes->size() },
+				strata_view
+			) == wt::WtChunkPageStatus::Ok &&
+			wt::wt_decode_chunk_page(strata_view, strata_page) ==
+				wt::WtChunkPageStatus::Ok &&
+			strata_page.metadata.key == wt::WtChunkKey { 2, 2, 1, 0 },
+		"procedural strata page decode failed"
+	);
 	std::shared_ptr<const std::vector<std::uint8_t>> lod_bytes;
 	check(
 		service.load_page_now({ 1, 0, 1, 1 }, lod_bytes) ==
@@ -680,9 +701,9 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 	wt::WtScalarSample mid_sample;
 	wt::WtScalarSample shallow_sample;
 	check(
-		wt::wt_sample_chunk_page(page, { 40, 0, 24 }, deep_sample) &&
-			wt::wt_sample_chunk_page(page, { 40, 4, 24 }, mid_sample) &&
-			wt::wt_sample_chunk_page(page, { 40, 8, 24 }, shallow_sample) &&
+		wt::wt_sample_chunk_page(strata_page, { 40, 36, 24 }, deep_sample) &&
+			wt::wt_sample_chunk_page(strata_page, { 40, 40, 24 }, mid_sample) &&
+			wt::wt_sample_chunk_page(strata_page, { 40, 43, 24 }, shallow_sample) &&
 			deep_sample.density < mid_sample.density &&
 			mid_sample.density < shallow_sample.density &&
 			deep_sample.material == 1 &&
