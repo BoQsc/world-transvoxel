@@ -186,6 +186,28 @@ std::vector<wt::WtChunkPage> bake_pages() {
 	return pages;
 }
 
+wt::WtChunkPage bake_page(const wt::WtChunkKey &key) {
+	const IntegerSource source;
+	wt::WtChunkBaker baker(1);
+	std::vector<wt::WtBakedChunkPage> baked;
+	check(
+		baker.bake({ key }, 100, source, baked) == wt::WtChunkBakeStatus::Ok &&
+			baked.size() == 1,
+		"apply single page fixture bake failed"
+	);
+	wt::WtChunkPageView view;
+	wt::WtChunkPage page;
+	check(
+		wt::wt_open_chunk_page(
+			{ baked[0].bytes.data(), baked[0].bytes.size() },
+			view
+		) == wt::WtChunkPageStatus::Ok &&
+			wt::wt_decode_chunk_page(view, page) == wt::WtChunkPageStatus::Ok,
+		"apply single page fixture decode failed"
+	);
+	return page;
+}
+
 std::size_t sample_index(
 	const wt::WtChunkPage &page,
 	const wt::WtGridPoint &point
@@ -293,6 +315,47 @@ void test_replay_and_overlap(std::vector<std::uint8_t> &evidence) {
 	}
 }
 
+void test_coarse_lod_filtered_edit_coverage(std::vector<std::uint8_t> &evidence) {
+	wt::WtChunkEditState state;
+	check(
+		state.initialize(bake_page({ 0, 0, 0, 3 }), 100, 0) ==
+			wt::WtChunkEditStatus::Ok,
+		"coarse LOD edit fixture initialization failed"
+	);
+	wt::WtEditCommand command = sphere(
+		90,
+		0,
+		1,
+		wt::WtEditOperation::AddDensity,
+		4,
+		wt::kWtEditCoordinateScale,
+		-7.0F
+	);
+	check(
+		state.apply_command(command) == wt::WtChunkEditStatus::Ok,
+		"coarse LOD filtered edit command failed"
+	);
+	check(
+		state.changed_sample_count() == 2,
+		"coarse LOD filtered edit did not update intersected cells"
+	);
+	check(
+		state.page().samples[sample_index(state.page(), { 0, 0, 0 })].density ==
+				-7.0F &&
+			state.page().samples[sample_index(state.page(), { 8, 0, 0 })].density ==
+				1.0F &&
+			state.page().samples[sample_index(state.page(), { 16, 0, 0 })].density ==
+				16.0F,
+		"coarse LOD filtered edit sample values mismatch"
+	);
+	std::vector<std::uint8_t> bytes;
+	check(
+		wt::wt_write_chunk_page(state.page(), bytes) == wt::WtChunkPageStatus::Ok,
+		"coarse LOD filtered edit page write failed"
+	);
+	evidence.insert(evidence.end(), bytes.begin(), bytes.end());
+}
+
 void test_failures() {
 	std::vector<wt::WtChunkPage> pages = bake_pages();
 	if (pages.empty()) return;
@@ -376,6 +439,7 @@ void test_failures() {
 int main() {
 	std::vector<std::uint8_t> evidence;
 	test_replay_and_overlap(evidence);
+	test_coarse_lod_filtered_edit_coverage(evidence);
 	test_failures();
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M4_APPLY_FAIL failures=%d\n", failure_count);
@@ -384,7 +448,7 @@ int main() {
 	std::printf("M4_APPLY_HASH ");
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
-		"M4_APPLY_PASS pages=2 overlap_samples=1083 failure_cases=7\n"
+		"M4_APPLY_PASS pages=3 overlap_samples=1083 coarse_lod_filtered_samples=2 failure_cases=7\n"
 	);
 	return 0;
 }

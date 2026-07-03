@@ -266,6 +266,7 @@ bool WtChunkPageSampleSource::sample(
 	}
 	bool found = false;
 	WtScalarSample selected;
+	std::uint64_t selected_spacing = 0;
 	for (std::size_t index = 0;
 		index <= support_page_count_;
 		++index) {
@@ -275,11 +276,16 @@ bool WtChunkPageSampleSource::sample(
 		if (!wt_sample_chunk_page(*page, point, candidate)) {
 			continue;
 		}
-		if (found && !same_sample(selected, candidate)) {
+		const std::uint64_t candidate_spacing = page->metadata.cell_spacing;
+		if (found && candidate_spacing == selected_spacing &&
+			!same_sample(selected, candidate)) {
 			return false;
 		}
-		selected = candidate;
-		found = true;
+		if (!found || candidate_spacing < selected_spacing) {
+			selected = candidate;
+			selected_spacing = candidate_spacing;
+			found = true;
+		}
 	}
 	if (found) {
 		output = selected;

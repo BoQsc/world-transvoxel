@@ -429,6 +429,7 @@ void test_source_failures() {
 	std::vector<wt::WtChunkKey> keys = {
 		coarse_key,
 		support_keys[0],
+		support_keys[1],
 		{ 50, 50, 50, 0 },
 	};
 	wt::WtChunkBaker baker(keys.size());
@@ -442,9 +443,11 @@ void test_source_failures() {
 	);
 	const wt::WtChunkPage *coarse = find_page(pages, coarse_key);
 	const wt::WtChunkPage *support = find_page(pages, support_keys[0]);
+	const wt::WtChunkPage *support_peer = find_page(pages, support_keys[1]);
 	const wt::WtChunkPage *unrelated =
 		find_page(pages, { 50, 50, 50, 0 });
-	if (coarse == nullptr || support == nullptr || unrelated == nullptr) {
+	if (coarse == nullptr || support == nullptr || support_peer == nullptr ||
+		unrelated == nullptr) {
 		check(false, "failure fixture page missing");
 		return;
 	}
@@ -496,8 +499,32 @@ void test_source_failures() {
 	const wt::WtGridPoint conflict_point = support_bounds.minimum;
 	wt::WtScalarSample sample;
 	check(
-		!conflicting_source.sample(conflict_point, sample),
-		"overlapping conflicting sample was accepted"
+		conflicting_source.sample(conflict_point, sample) &&
+			sample.density ==
+				conflicting.samples[shared_sample_index].density &&
+			sample.material ==
+				conflicting.samples[shared_sample_index].material,
+		"cross-LOD conflicting sample did not prefer finer support page"
+	);
+
+	wt::WtChunkPage same_lod_conflicting = *support_peer;
+	same_lod_conflicting.samples[shared_sample_index].density += 1.0F;
+	wt::WtChunkPageSampleSource same_lod_source(*coarse);
+	check(
+		same_lod_source.add_transition_support_page(*support) ==
+				wt::WtChunkPageSampleSourceStatus::Ok &&
+			same_lod_source.add_transition_support_page(same_lod_conflicting) ==
+				wt::WtChunkPageSampleSourceStatus::Ok,
+		"same-LOD conflicting support setup failed"
+	);
+	const wt::WtGridPoint same_lod_conflict_point = {
+		support_bounds.minimum.x,
+		support_bounds.minimum.y,
+		support_bounds.maximum.z,
+	};
+	check(
+		!same_lod_source.sample(same_lod_conflict_point, sample),
+		"same-LOD conflicting sample was accepted"
 	);
 }
 
@@ -533,7 +560,7 @@ int main() {
 	}
 	std::printf(
 		"M5_PAGE_TRANSITION_PASS faces=6 support_pages_per_face=4 "
-		"coarse_lod=2 corners=1 conflicts=1\n"
+		"coarse_lod=2 corners=1 fine_precedence=1 same_lod_conflicts=1\n"
 	);
 	return 0;
 }

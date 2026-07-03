@@ -81,16 +81,98 @@ bool point_in_box(
 		z >= box.minimum_z_q16 && z <= box.maximum_z_q16;
 }
 
+WideUnsigned unsigned_magnitude(WideSigned value) noexcept {
+	return static_cast<WideUnsigned>(value < 0 ? -value : value);
+}
+
+WideUnsigned squared_distance_to_interval(
+	WideSigned value,
+	WideSigned minimum,
+	WideSigned maximum
+) noexcept {
+	if (value < minimum) {
+		const WideUnsigned delta = unsigned_magnitude(minimum - value);
+		return delta * delta;
+	}
+	if (value > maximum) {
+		const WideUnsigned delta = unsigned_magnitude(value - maximum);
+		return delta * delta;
+	}
+	return 0;
+}
+
+bool sphere_intersects_sample_footprint(
+	const WtGridPoint &point,
+	const WtEditSphere &sphere,
+	std::int64_t spacing
+) noexcept {
+	if (spacing <= 1) {
+		return point_in_sphere(point, sphere);
+	}
+	const WideSigned footprint_half =
+		static_cast<WideSigned>(spacing) *
+		static_cast<WideSigned>(kWtEditCoordinateScale) / 2;
+	const WideSigned coordinates[3] = {
+		static_cast<WideSigned>(point.x) * kWtEditCoordinateScale,
+		static_cast<WideSigned>(point.y) * kWtEditCoordinateScale,
+		static_cast<WideSigned>(point.z) * kWtEditCoordinateScale,
+	};
+	const WideSigned centers[3] = {
+		sphere.center_x_q16,
+		sphere.center_y_q16,
+		sphere.center_z_q16,
+	};
+	WideUnsigned squared_distance = 0;
+	for (std::size_t axis = 0; axis < 3; ++axis) {
+		squared_distance += squared_distance_to_interval(
+			centers[axis],
+			coordinates[axis] - footprint_half,
+			coordinates[axis] + footprint_half
+		);
+	}
+	const WideUnsigned radius =
+		static_cast<WideUnsigned>(sphere.radius_q16);
+	return squared_distance <= radius * radius;
+}
+
+bool box_intersects_sample_footprint(
+	const WtGridPoint &point,
+	const WtEditBox &box,
+	std::int64_t spacing
+) noexcept {
+	if (spacing <= 1) {
+		return point_in_box(point, box);
+	}
+	const WideSigned footprint_half =
+		static_cast<WideSigned>(spacing) *
+		static_cast<WideSigned>(kWtEditCoordinateScale) / 2;
+	const WideSigned x =
+		static_cast<WideSigned>(point.x) * kWtEditCoordinateScale;
+	const WideSigned y =
+		static_cast<WideSigned>(point.y) * kWtEditCoordinateScale;
+	const WideSigned z =
+		static_cast<WideSigned>(point.z) * kWtEditCoordinateScale;
+	return x >= static_cast<WideSigned>(box.minimum_x_q16) - footprint_half &&
+		x <= static_cast<WideSigned>(box.maximum_x_q16) + footprint_half &&
+		y >= static_cast<WideSigned>(box.minimum_y_q16) - footprint_half &&
+		y <= static_cast<WideSigned>(box.maximum_y_q16) + footprint_half &&
+		z >= static_cast<WideSigned>(box.minimum_z_q16) - footprint_half &&
+		z <= static_cast<WideSigned>(box.maximum_z_q16) + footprint_half;
+}
+
 bool contains(
 	const WtEditCommand &command,
-	const WtGridPoint &point
+	const WtGridPoint &point,
+	std::int64_t spacing
 ) noexcept {
 	if (!point_in_bounds(point, command.bounds)) {
-		return false;
+		if (spacing <= 1) {
+			return false;
+		}
 	}
 	return command.shape == WtEditShape::Sphere ?
-		point_in_sphere(point, command.sphere) :
-		point_in_box(point, command.box);
+		sphere_intersects_sample_footprint(point, command.sphere, spacing) :
+		box_intersects_sample_footprint(point, command.box, spacing);
 }
 
 WtGridPoint sample_point(
@@ -144,11 +226,17 @@ bool density_result_is_finite(
 		!may_intersect_page(page.metadata, command.bounds)) {
 		return true;
 	}
+	const std::int64_t spacing =
+		static_cast<std::int64_t>(page.metadata.cell_spacing);
 	std::size_t index = 0;
 	for (int z = -1; z <= 17; ++z) {
 		for (int y = -1; y <= 17; ++y) {
 			for (int x = -1; x <= 17; ++x, ++index) {
-				if (contains(command, sample_point(page.metadata, x, y, z)) &&
+				if (contains(
+						command,
+						sample_point(page.metadata, x, y, z),
+						spacing
+					) &&
 					!std::isfinite(
 						page.samples[index].density +
 						command.density_value
@@ -168,12 +256,18 @@ std::size_t apply_values(
 	if (!may_intersect_page(page.metadata, command.bounds)) {
 		return 0;
 	}
+	const std::int64_t spacing =
+		static_cast<std::int64_t>(page.metadata.cell_spacing);
 	std::size_t changed = 0;
 	std::size_t index = 0;
 	for (int z = -1; z <= 17; ++z) {
 		for (int y = -1; y <= 17; ++y) {
 			for (int x = -1; x <= 17; ++x, ++index) {
-				if (!contains(command, sample_point(page.metadata, x, y, z))) {
+				if (!contains(
+						command,
+						sample_point(page.metadata, x, y, z),
+						spacing
+					)) {
 					continue;
 				}
 				WtScalarSample &sample = page.samples[index];

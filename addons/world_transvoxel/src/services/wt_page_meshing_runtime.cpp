@@ -301,6 +301,7 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 			}
 			record->phase = WtPageMeshingRuntimePhase::MeshFailedReady;
 			++metrics_.mesh_failures;
+			record_failure_key(metrics_, record->key);
 			submit_pending_result(record_index, scheduler);
 			return WtPageMeshingRuntimeStatus::EditReplayFailure;
 		}
@@ -344,6 +345,7 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 	if (!mesh_ok) {
 		record->phase = WtPageMeshingRuntimePhase::MeshFailedReady;
 		++metrics_.mesh_failures;
+		record_failure_key(metrics_, record->key);
 		submit_pending_result(record_index, scheduler);
 		return WtPageMeshingRuntimeStatus::MeshingFailure;
 	}
