@@ -29,6 +29,16 @@ public:
 		double radius,
 		double value
 	);
+	bool carve_sdf_sphere(
+		const godot::Vector3 &center,
+		double radius,
+		double strength
+	);
+	bool construct_sdf_sphere(
+		const godot::Vector3 &center,
+		double radius,
+		double strength
+	);
 	bool paint_material_sphere(
 		const godot::Vector3 &center,
 		double radius,

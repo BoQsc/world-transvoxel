@@ -356,6 +356,65 @@ void test_coarse_lod_filtered_edit_coverage(std::vector<std::uint8_t> &evidence)
 	evidence.insert(evidence.end(), bytes.begin(), bytes.end());
 }
 
+void test_sdf_sphere_edits(std::vector<std::uint8_t> &evidence) {
+	wt::WtChunkEditState state;
+	check(
+		state.initialize(bake_page({ 0, 0, 0, 0 }), 100, 0) ==
+			wt::WtChunkEditStatus::Ok,
+		"SDF sphere edit fixture initialization failed"
+	);
+	wt::WtEditCommand carve = sphere(
+		91,
+		0,
+		1,
+		wt::WtEditOperation::SdfCarve,
+		0,
+		2 * wt::kWtEditCoordinateScale,
+		1.0F
+	);
+	check(
+		state.apply_command(carve) == wt::WtChunkEditStatus::Ok,
+		"SDF carve sphere command failed"
+	);
+	check(
+		state.page().samples[sample_index(state.page(), { 0, 0, 0 })].density ==
+				2.0F &&
+			state.page().samples[sample_index(state.page(), { -1, 0, 0 })].density ==
+				1.0F &&
+			state.page().samples[sample_index(state.page(), { 3, 0, 0 })].density ==
+				3.0F,
+		"SDF carve sphere density values mismatch"
+	);
+	wt::WtEditCommand construct = sphere(
+		92,
+		0,
+		2,
+		wt::WtEditOperation::SdfConstruct,
+		0,
+		wt::kWtEditCoordinateScale,
+		2.0F
+	);
+	check(
+		state.apply_command(construct) == wt::WtChunkEditStatus::Ok,
+		"SDF construct sphere command failed"
+	);
+	check(
+		state.page().samples[sample_index(state.page(), { 0, 0, 0 })].density ==
+				-2.0F &&
+			state.page().samples[sample_index(state.page(), { -1, 0, 0 })].density <
+				0.0F &&
+			state.page().samples[sample_index(state.page(), { 3, 0, 0 })].density ==
+				3.0F,
+		"SDF construct sphere density values mismatch"
+	);
+	std::vector<std::uint8_t> bytes;
+	check(
+		wt::wt_write_chunk_page(state.page(), bytes) == wt::WtChunkPageStatus::Ok,
+		"SDF sphere edited page write failed"
+	);
+	evidence.insert(evidence.end(), bytes.begin(), bytes.end());
+}
+
 void test_failures() {
 	std::vector<wt::WtChunkPage> pages = bake_pages();
 	if (pages.empty()) return;
@@ -440,6 +499,7 @@ int main() {
 	std::vector<std::uint8_t> evidence;
 	test_replay_and_overlap(evidence);
 	test_coarse_lod_filtered_edit_coverage(evidence);
+	test_sdf_sphere_edits(evidence);
 	test_failures();
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M4_APPLY_FAIL failures=%d\n", failure_count);
@@ -448,7 +508,7 @@ int main() {
 	std::printf("M4_APPLY_HASH ");
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
-		"M4_APPLY_PASS pages=3 overlap_samples=1083 coarse_lod_filtered_samples=2 failure_cases=7\n"
+		"M4_APPLY_PASS pages=4 overlap_samples=1083 coarse_lod_filtered_samples=2 sdf_sphere_edits=2 failure_cases=7\n"
 	);
 	return 0;
 }

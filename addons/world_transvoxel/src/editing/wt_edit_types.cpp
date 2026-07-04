@@ -61,12 +61,26 @@ bool add_radius(
 bool valid_operation(WtEditOperation operation) noexcept {
 	return operation == WtEditOperation::AddDensity ||
 		operation == WtEditOperation::SetDensity ||
-		operation == WtEditOperation::PaintMaterial;
+		operation == WtEditOperation::PaintMaterial ||
+		operation == WtEditOperation::SdfCarve ||
+		operation == WtEditOperation::SdfConstruct;
 }
 
 bool valid_shape(WtEditShape shape) noexcept {
 	return shape == WtEditShape::Sphere ||
 		shape == WtEditShape::AxisAlignedBox;
+}
+
+bool density_operation(WtEditOperation operation) noexcept {
+	return operation == WtEditOperation::AddDensity ||
+		operation == WtEditOperation::SetDensity ||
+		operation == WtEditOperation::SdfCarve ||
+		operation == WtEditOperation::SdfConstruct;
+}
+
+bool sdf_operation(WtEditOperation operation) noexcept {
+	return operation == WtEditOperation::SdfCarve ||
+		operation == WtEditOperation::SdfConstruct;
 }
 
 } // namespace
@@ -139,13 +153,16 @@ bool wt_is_valid_edit_command(const WtEditCommand &command) noexcept {
 		!std::isfinite(command.density_value)) {
 		return false;
 	}
-	if ((command.operation == WtEditOperation::AddDensity ||
-			command.operation == WtEditOperation::SetDensity) &&
-		command.material != 0) {
+	if (density_operation(command.operation) && command.material != 0) {
 		return false;
 	}
 	if (command.operation == WtEditOperation::AddDensity &&
 		command.density_value == 0.0F) {
+		return false;
+	}
+	if (sdf_operation(command.operation) &&
+		(command.shape != WtEditShape::Sphere ||
+			command.density_value <= 0.0F)) {
 		return false;
 	}
 	if (command.operation == WtEditOperation::PaintMaterial &&

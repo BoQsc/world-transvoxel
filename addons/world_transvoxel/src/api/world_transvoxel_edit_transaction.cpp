@@ -70,6 +70,8 @@ void WorldTransvoxelEditTransaction::_bind_methods() {
 	)
 	WT_BIND_EDIT_METHOD(add_density_sphere, "center", "radius", "value");
 	WT_BIND_EDIT_METHOD(set_density_sphere, "center", "radius", "value");
+	WT_BIND_EDIT_METHOD(carve_sdf_sphere, "center", "radius", "strength");
+	WT_BIND_EDIT_METHOD(construct_sdf_sphere, "center", "radius", "strength");
 	WT_BIND_EDIT_METHOD(paint_material_sphere, "center", "radius", "material");
 	WT_BIND_EDIT_METHOD(add_density_box, "minimum", "maximum", "value");
 	WT_BIND_EDIT_METHOD(set_density_box, "minimum", "maximum", "value");
@@ -211,6 +213,22 @@ bool WorldTransvoxelEditTransaction::set_density_sphere(
 ) {
 	return append_sphere(
 		WtEditOperation::SetDensity, center, radius, value, 0
+	);
+}
+
+bool WorldTransvoxelEditTransaction::carve_sdf_sphere(
+	const godot::Vector3 &center, double radius, double strength
+) {
+	return append_sphere(
+		WtEditOperation::SdfCarve, center, radius, strength, 0
+	);
+}
+
+bool WorldTransvoxelEditTransaction::construct_sdf_sphere(
+	const godot::Vector3 &center, double radius, double strength
+) {
+	return append_sphere(
+		WtEditOperation::SdfConstruct, center, radius, strength, 0
 	);
 }
 

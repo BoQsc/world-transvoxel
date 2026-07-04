@@ -196,6 +196,33 @@ void test_round_trip(std::vector<std::uint8_t> &bytes) {
 	);
 }
 
+void test_sdf_operations() {
+	wt::WtEditTransaction transaction = make_transaction();
+	transaction.commands = {
+		sphere_command(0, wt::WtEditOperation::SdfCarve, 1.0F),
+		sphere_command(1, wt::WtEditOperation::SdfConstruct, 0.5F),
+	};
+	std::vector<std::uint8_t> bytes;
+	wt::WtEditTransactionDocument document;
+	check(
+		wt::wt_write_edit_transaction(transaction, bytes) ==
+				wt::WtEditTransactionStatus::Ok &&
+			wt::wt_open_edit_transaction(
+				{ bytes.data(), bytes.size() },
+				document
+			) == wt::WtEditTransactionStatus::Ok,
+		"SDF sphere edit transaction failed"
+	);
+	check(
+		document.transaction.commands.size() == 2 &&
+			document.transaction.commands[0].operation ==
+				wt::WtEditOperation::SdfCarve &&
+			document.transaction.commands[1].operation ==
+				wt::WtEditOperation::SdfConstruct,
+		"SDF sphere edit operation round trip mismatch"
+	);
+}
+
 void expect_invalid(
 	wt::WtEditTransaction transaction,
 	const char *message
@@ -247,6 +274,32 @@ void test_write_failures() {
 	transaction.commands[0].box.minimum_x_q16 =
 		transaction.commands[0].box.maximum_x_q16 + 1;
 	expect_invalid(transaction, "inverted box accepted");
+
+	transaction = make_transaction();
+	transaction.commands[1] = sphere_command(
+		0, wt::WtEditOperation::SdfCarve, 0.0F
+	);
+	expect_invalid(transaction, "zero-strength SDF edit accepted");
+
+	transaction = make_transaction();
+	transaction.commands[1] = sphere_command(
+		0, wt::WtEditOperation::SdfConstruct, -1.0F
+	);
+	expect_invalid(transaction, "negative-strength SDF edit accepted");
+
+	transaction = make_transaction();
+	transaction.commands[1] = sphere_command(
+		0, wt::WtEditOperation::SdfCarve, 1.0F
+	);
+	transaction.commands[1].material = 1;
+	expect_invalid(transaction, "SDF material payload accepted");
+
+	transaction = make_transaction();
+	transaction.commands[1] = box_command(0);
+	transaction.commands[1].operation = wt::WtEditOperation::SdfCarve;
+	transaction.commands[1].material = 0;
+	transaction.commands[1].density_value = 1.0F;
+	expect_invalid(transaction, "SDF box command accepted");
 }
 
 void test_read_failures(const std::vector<std::uint8_t> &valid_bytes) {
@@ -344,6 +397,7 @@ void test_read_failures(const std::vector<std::uint8_t> &valid_bytes) {
 
 int main() {
 	test_bounds();
+	test_sdf_operations();
 	std::vector<std::uint8_t> bytes;
 	test_round_trip(bytes);
 	test_write_failures();
@@ -354,6 +408,6 @@ int main() {
 	}
 	std::printf("M4_EDIT_HASH ");
 	print_hash(wt::wt_sha256(bytes.data(), bytes.size()));
-	std::printf("M4_EDIT_PASS commands=3 failure_cases=14\n");
+	std::printf("M4_EDIT_PASS commands=3 sdf_commands=2 failure_cases=18\n");
 	return 0;
 }
