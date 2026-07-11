@@ -55,7 +55,7 @@ and non-manifold transition overlap in the tested worlds.
 Locked aggregate hash:
 
 ```text
-chunk mesh  79140621c205ca23
+chunk mesh  20a67f299820f5c3
 ```
 
 Debug and optimized release configurations produce the same M1 and M2 hashes.

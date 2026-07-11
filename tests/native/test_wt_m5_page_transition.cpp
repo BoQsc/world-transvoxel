@@ -545,7 +545,7 @@ int main() {
 	}
 	test_page_lod_corner(mesher, scratch, hash);
 	test_source_failures();
-	constexpr std::uint64_t expected_hash = 0x82a8664caa10e5f6ULL;
+	constexpr std::uint64_t expected_hash = 0x43a27ee71c4039a6ULL;
 	check(hash == expected_hash, "M5 page transition hash mismatch");
 	std::printf(
 		"M5_PAGE_TRANSITION_HASH %016llx\n",

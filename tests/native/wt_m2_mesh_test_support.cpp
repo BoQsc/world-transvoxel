@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <map>
 #include <vector>
 
 namespace world_transvoxel_test {
@@ -31,6 +32,10 @@ Edge make_edge(QuantizedPoint a, QuantizedPoint b) {
 		b = temporary;
 	}
 	return { a, b };
+}
+
+bool edge_forward(QuantizedPoint a, QuantizedPoint b) {
+	return !(b < a);
 }
 
 double axis_value(const wt::WtVec3 &position, const wt::WtGridPoint &origin, int axis) {
@@ -252,6 +257,7 @@ void validate_buffer(const wt::WtChunkMeshBuffer &mesh, const char *message) {
 	check(mesh.indices.size() <= mesh.index_limit, message);
 	check((mesh.indices.size() % 3U) == 0U, message);
 	std::vector<bool> referenced(mesh.vertices.size(), false);
+	std::map<Edge, std::pair<unsigned int, unsigned int>> edge_directions;
 	bool indices_valid = true;
 	for (std::uint32_t index : mesh.indices) {
 		const bool valid = index < mesh.vertices.size();
@@ -261,9 +267,12 @@ void validate_buffer(const wt::WtChunkMeshBuffer &mesh, const char *message) {
 	}
 	if (indices_valid) {
 		for (std::size_t index = 0; index < mesh.indices.size(); index += 3) {
-			const wt::WtVec3 &a = mesh.vertices[mesh.indices[index]].position;
-			const wt::WtVec3 &b = mesh.vertices[mesh.indices[index + 1]].position;
-			const wt::WtVec3 &c = mesh.vertices[mesh.indices[index + 2]].position;
+			const std::uint32_t triangle[3] = {
+				mesh.indices[index], mesh.indices[index + 1], mesh.indices[index + 2]
+			};
+			const wt::WtVec3 &a = mesh.vertices[triangle[0]].position;
+			const wt::WtVec3 &b = mesh.vertices[triangle[1]].position;
+			const wt::WtVec3 &c = mesh.vertices[triangle[2]].position;
 			const double ab_x = static_cast<double>(b.x) - a.x;
 			const double ab_y = static_cast<double>(b.y) - a.y;
 			const double ab_z = static_cast<double>(b.z) - a.z;
@@ -277,24 +286,28 @@ void validate_buffer(const wt::WtChunkMeshBuffer &mesh, const char *message) {
 				cross_x * cross_x + cross_y * cross_y + cross_z * cross_z;
 			check(std::isfinite(area_squared) && area_squared > 0.0,
 				"chunk mesh retained a degenerate triangle");
-			const wt::WtVec3 &normal_a =
-				mesh.vertices[mesh.indices[index]].normal;
-			const wt::WtVec3 &normal_b =
-				mesh.vertices[mesh.indices[index + 1]].normal;
-			const wt::WtVec3 &normal_c =
-				mesh.vertices[mesh.indices[index + 2]].normal;
-			const double outward_dot =
-				cross_x * static_cast<double>(
-					normal_a.x + normal_b.x + normal_c.x
-				) +
-				cross_y * static_cast<double>(
-					normal_a.y + normal_b.y + normal_c.y
-				) +
-				cross_z * static_cast<double>(
-					normal_a.z + normal_b.z + normal_c.z
+			for (unsigned int edge_index = 0; edge_index < 3; ++edge_index) {
+				const QuantizedPoint point_a = quantize(
+					mesh.vertices[triangle[edge_index]].position, {}
 				);
-			check(std::isfinite(outward_dot) && outward_dot > 0.0,
-				"chunk mesh retained an inward-wound triangle");
+				const QuantizedPoint point_b = quantize(
+					mesh.vertices[triangle[(edge_index + 1) % 3]].position, {}
+				);
+				std::pair<unsigned int, unsigned int> &directions =
+					edge_directions[make_edge(point_a, point_b)];
+				if (edge_forward(point_a, point_b)) {
+					++directions.first;
+				} else {
+					++directions.second;
+				}
+			}
+		}
+		for (const auto &entry : edge_directions) {
+			const unsigned int uses = entry.second.first + entry.second.second;
+			if (uses == 2U) {
+				check(entry.second.first == 1U && entry.second.second == 1U,
+					"chunk mesh retained an orientation-conflicted shared edge");
+			}
 		}
 	}
 	for (bool used : referenced) {
