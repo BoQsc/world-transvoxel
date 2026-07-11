@@ -1,5 +1,6 @@
 #include "editing/wt_chunk_edit_state.h"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <utility>
@@ -10,7 +11,7 @@ namespace {
 using WideSigned = __int128_t;
 using WideUnsigned = __uint128_t;
 
-constexpr float kWtSdfEditBoundaryEpsilon = 0.0001F;
+constexpr float kWtSdfEditBoundaryEpsilon = 0.01F;
 
 bool valid_page(const WtChunkPage &page) noexcept {
 	return wt_is_valid_chunk_key(page.metadata.key) &&
@@ -153,6 +154,42 @@ bool sphere_intersects_sample_footprint(
 	return squared_distance <= radius * radius;
 }
 
+bool sphere_intersects_sdf_support(
+	const WtGridPoint &point,
+	const WtEditSphere &sphere,
+	std::int64_t spacing
+) noexcept {
+	const std::int64_t clamped_spacing = std::max<std::int64_t>(spacing, 1);
+	const WideSigned support =
+		static_cast<WideSigned>(clamped_spacing) *
+		static_cast<WideSigned>(kWtEditCoordinateScale);
+	const WideSigned coordinates[3] = {
+		static_cast<WideSigned>(point.x) * kWtEditCoordinateScale,
+		static_cast<WideSigned>(point.y) * kWtEditCoordinateScale,
+		static_cast<WideSigned>(point.z) * kWtEditCoordinateScale,
+	};
+	const WideSigned centers[3] = {
+		sphere.center_x_q16,
+		sphere.center_y_q16,
+		sphere.center_z_q16,
+	};
+	const WideSigned radius =
+		static_cast<WideSigned>(sphere.radius_q16) + support;
+	WideUnsigned squared_distance = 0;
+	for (std::size_t axis = 0; axis < 3; ++axis) {
+		const WideSigned delta = coordinates[axis] - centers[axis];
+		if (delta < -radius || delta > radius) {
+			return false;
+		}
+		const WideUnsigned magnitude = static_cast<WideUnsigned>(
+			delta < 0 ? -delta : delta
+		);
+		squared_distance += magnitude * magnitude;
+	}
+	const WideUnsigned unsigned_radius = static_cast<WideUnsigned>(radius);
+	return squared_distance <= unsigned_radius * unsigned_radius;
+}
+
 bool sphere_sdf_brush_density(
 	const WtGridPoint &point,
 	const WtEditSphere &sphere,
@@ -196,17 +233,15 @@ bool sphere_sdf_brush_density(
 	const long double signed_distance =
 		static_cast<long double>(sphere.radius_q16) -
 		std::sqrt(squared_distance);
-	if (signed_distance < 0.0L) {
-		output = 0.0F;
-		return true;
-	}
 	long double density =
 		signed_distance / static_cast<long double>(kWtEditCoordinateScale);
 	density *= static_cast<long double>(strength);
-	if (density < static_cast<long double>(kWtSdfEditBoundaryEpsilon)) {
-		density = static_cast<long double>(kWtSdfEditBoundaryEpsilon);
+	if (std::abs(density) < static_cast<long double>(kWtSdfEditBoundaryEpsilon)) {
+		density = density < 0.0L ?
+			-static_cast<long double>(kWtSdfEditBoundaryEpsilon) :
+			static_cast<long double>(kWtSdfEditBoundaryEpsilon);
 	}
-	if (!(density <= static_cast<long double>(
+	if (!(std::abs(density) <= static_cast<long double>(
 			std::numeric_limits<float>::max()
 		))) {
 		return false;
@@ -245,6 +280,11 @@ bool contains(
 	const WtGridPoint &point,
 	std::int64_t spacing
 ) noexcept {
+	if ((command.operation == WtEditOperation::SdfCarve ||
+			command.operation == WtEditOperation::SdfConstruct) &&
+			command.shape == WtEditShape::Sphere) {
+		return sphere_intersects_sdf_support(point, command.sphere, spacing);
+	}
 	if (!point_in_bounds(point, command.bounds)) {
 		if (spacing <= 1) {
 			return false;

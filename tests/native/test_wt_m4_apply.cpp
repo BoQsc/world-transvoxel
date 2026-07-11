@@ -407,10 +407,47 @@ void test_sdf_sphere_edits(std::vector<std::uint8_t> &evidence) {
 				3.0F,
 		"SDF construct sphere density values mismatch"
 	);
+	wt::WtChunkPage support_page = bake_page({ 0, 0, 0, 0 });
+	support_page.samples[sample_index(support_page, { 3, 0, 0 })].density = -4.0F;
+	support_page.samples[sample_index(support_page, { 4, 0, 0 })].density = -5.0F;
+	wt::WtChunkEditState support_state;
+	check(
+		support_state.initialize(support_page, 100, 0) ==
+			wt::WtChunkEditStatus::Ok,
+		"SDF support-band fixture initialization failed"
+	);
+	wt::WtEditCommand support_carve = sphere(
+		93,
+		0,
+		1,
+		wt::WtEditOperation::SdfCarve,
+		0,
+		2 * wt::kWtEditCoordinateScale,
+		1.0F
+	);
+	check(
+		support_state.apply_command(support_carve) == wt::WtChunkEditStatus::Ok,
+		"SDF support-band carve command failed"
+	);
+	check(
+		support_state.page().samples[
+			sample_index(support_state.page(), { 3, 0, 0 })
+		].density == -1.0F &&
+			support_state.page().samples[
+				sample_index(support_state.page(), { 4, 0, 0 })
+			].density == -5.0F,
+		"SDF support-band carve density values mismatch"
+	);
 	std::vector<std::uint8_t> bytes;
 	check(
 		wt::wt_write_chunk_page(state.page(), bytes) == wt::WtChunkPageStatus::Ok,
 		"SDF sphere edited page write failed"
+	);
+	evidence.insert(evidence.end(), bytes.begin(), bytes.end());
+	check(
+		wt::wt_write_chunk_page(support_state.page(), bytes) ==
+			wt::WtChunkPageStatus::Ok,
+		"SDF support-band page write failed"
 	);
 	evidence.insert(evidence.end(), bytes.begin(), bytes.end());
 }
@@ -508,7 +545,7 @@ int main() {
 	std::printf("M4_APPLY_HASH ");
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
-		"M4_APPLY_PASS pages=4 overlap_samples=1083 coarse_lod_filtered_samples=2 sdf_sphere_edits=2 failure_cases=7\n"
+		"M4_APPLY_PASS pages=4 overlap_samples=1083 coarse_lod_filtered_samples=2 sdf_sphere_edits=3 failure_cases=7\n"
 	);
 	return 0;
 }
