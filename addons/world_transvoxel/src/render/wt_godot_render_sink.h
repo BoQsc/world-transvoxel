@@ -27,6 +27,10 @@ public:
 	void clear();
 	std::size_t resource_count() const noexcept;
 	std::size_t fading_count() const noexcept;
+	std::size_t staged_count() const noexcept;
+	void set_new_record_visibility_staging_enabled(bool enabled) noexcept;
+	bool has_staged_records() const noexcept;
+	void publish_staged_records() noexcept;
 	WtGenerationToken applied_generation(const WtChunkKey &key) const noexcept;
 	void set_shader_fade_parameter_enabled(bool enabled) noexcept;
 	bool is_shader_fade_parameter_enabled() const noexcept;
@@ -47,6 +51,7 @@ private:
 		bool shader_fade_parameter_active = false;
 		bool introducing = false;
 		bool retiring = false;
+		bool staged = false;
 	};
 
 	bool on_owner_thread() const noexcept;
@@ -58,6 +63,7 @@ private:
 	std::vector<Record> replacement_retirements_;
 	godot::Variant material_override_;
 	bool shader_fade_parameter_enabled_ = false;
+	bool new_record_visibility_staging_enabled_ = false;
 	std::uint32_t transition_frames_ = 0;
 };
 

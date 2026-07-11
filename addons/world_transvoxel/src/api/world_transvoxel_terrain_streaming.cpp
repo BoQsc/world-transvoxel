@@ -10,15 +10,12 @@
 #include <string>
 
 namespace world_transvoxel {
-namespace {
-
-constexpr std::size_t kChunkRetirementFlushBudget = 4U;
-
-} // namespace
-
 void WorldTransvoxelTerrain::_process(double delta) {
 	(void)delta;
 	drain_world_publications();
+	render_sink_->set_new_record_visibility_staging_enabled(
+		!pending_chunk_retirements_.empty()
+	);
 	application_->apply(
 		render_apply_budget_,
 		collision_apply_budget_,
@@ -26,6 +23,12 @@ void WorldTransvoxelTerrain::_process(double delta) {
 		*collision_sink_
 	);
 	flush_ready_chunk_retirements();
+	if (pending_chunk_retirements_.empty()) {
+		render_sink_->set_new_record_visibility_staging_enabled(false);
+		if (render_sink_->has_staged_records()) {
+			render_sink_->publish_staged_records();
+		}
+	}
 	render_sink_->advance_retirements();
 	notify_lifecycle_state();
 }
@@ -298,18 +301,14 @@ void WorldTransvoxelTerrain::flush_ready_chunk_retirements() {
 		}
 		if (!record.fully_ready()) return;
 	}
-	std::size_t retired_count = 0;
-	while (
-		retired_count < kChunkRetirementFlushBudget &&
-		!pending_chunk_retirements_.empty()
-	) {
+	while (!pending_chunk_retirements_.empty()) {
 		const WtChunkKey key = pending_chunk_retirements_.front();
 		application_->forget_chunk(key);
 		render_sink_->begin_render_retirement(key);
 		collision_sink_->remove_collision(key);
 		pending_chunk_retirements_.erase(pending_chunk_retirements_.begin());
-		++retired_count;
 	}
+	render_sink_->publish_staged_records();
 }
 
 void WorldTransvoxelTerrain::reset_world_application(std::size_t capacity) {

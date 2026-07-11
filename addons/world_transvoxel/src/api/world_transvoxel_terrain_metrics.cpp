@@ -195,6 +195,9 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	output["render_fading_resources"] = static_cast<std::int64_t>(
 		render_sink_->fading_count()
 	);
+	output["staged_render_resources"] = static_cast<std::int64_t>(
+		render_sink_->staged_count()
+	);
 	output["collision_resources"] = get_collision_resource_count();
 	return output;
 }

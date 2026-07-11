@@ -151,6 +151,7 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 		record.key = payload.key;
 		record.instance->set_name(chunk_name(payload.key));
 		owner_.add_child(record.instance);
+		record.staged = new_record_visibility_staging_enabled_;
 	} else {
 		godot::Ref<godot::Mesh> retiring_mesh = record.instance->get_mesh();
 		if (transition_frames_ > 0U && retiring_mesh.is_valid()) {
@@ -181,6 +182,7 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	record.introduction_frame = 0;
 	record.instance->set_position(to_godot(payload.world_origin));
 	record.instance->set_mesh(mesh);
+	record.instance->set_visible(!record.staged);
 	apply_record_material_override(record);
 	set_record_transparency(record, record.introducing ? 1.0F : 0.0F);
 	record.generation = payload.generation;
@@ -321,6 +323,43 @@ std::size_t WtGodotRenderSink::fading_count() const noexcept {
 		count += (entry.second.retiring || entry.second.introducing) ? 1U : 0U;
 	}
 	return count;
+}
+
+std::size_t WtGodotRenderSink::staged_count() const noexcept {
+	std::size_t count = 0;
+	for (const auto &entry : records_) {
+		count += entry.second.staged ? 1U : 0U;
+	}
+	return count;
+}
+
+void WtGodotRenderSink::set_new_record_visibility_staging_enabled(
+	bool enabled
+) noexcept {
+	new_record_visibility_staging_enabled_ = enabled;
+}
+
+bool WtGodotRenderSink::has_staged_records() const noexcept {
+	for (const auto &entry : records_) {
+		if (entry.second.staged) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void WtGodotRenderSink::publish_staged_records() noexcept {
+	if (!on_owner_thread()) {
+		return;
+	}
+	for (auto &entry : records_) {
+		Record &record = entry.second;
+		if (!record.staged || record.instance == nullptr) {
+			continue;
+		}
+		record.staged = false;
+		record.instance->set_visible(true);
+	}
 }
 
 WtGenerationToken WtGodotRenderSink::applied_generation(
