@@ -791,7 +791,8 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 			wt::wt_sample_chunk_page(flat_page, { 8, 8, 8 }, flat_surface_sample) &&
 			wt::wt_sample_chunk_page(flat_page, { 8, 12, 8 }, flat_air_sample) &&
 			flat_deep_sample.density < 0.0F &&
-			flat_surface_sample.density == 0.0F &&
+			flat_surface_sample.density > 0.0F &&
+			flat_surface_sample.density <= 0.011F &&
 			flat_air_sample.density > 0.0F &&
 			flat_deep_sample.material == 1,
 		"flat procedural density/material samples mismatch"

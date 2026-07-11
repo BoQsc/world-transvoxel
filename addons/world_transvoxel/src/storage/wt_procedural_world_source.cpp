@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <memory>
 
 namespace world_transvoxel {
@@ -41,6 +42,18 @@ std::int32_t vertical_origin(
 	return floor_divide_i32(descriptor.chunk_y, static_cast<std::int32_t>(lod_span(lod)));
 }
 
+float regularized_density(double density) noexcept {
+	constexpr double kDensityEpsilon = 0.01;
+	if (!std::isfinite(density)) {
+		return std::numeric_limits<float>::quiet_NaN();
+	}
+	if (density > -kDensityEpsilon && density < kDensityEpsilon) {
+		return density < 0.0 ? -static_cast<float>(kDensityEpsilon) :
+			static_cast<float>(kDensityEpsilon);
+	}
+	return static_cast<float>(density);
+}
+
 class WtProceduralTerrainVolumeSource final : public WtChunkSampleSource {
 public:
 	explicit WtProceduralTerrainVolumeSource(
@@ -54,9 +67,7 @@ public:
 		WtScalarSample &output
 	) const noexcept override {
 		const double surface = height(point.x, point.z);
-		output.density = static_cast<float>(
-			static_cast<double>(point.y) - surface
-		);
+		output.density = regularized_density(static_cast<double>(point.y) - surface);
 		output.material = material(surface, point.x, point.y, point.z);
 		return std::isfinite(output.density);
 	}

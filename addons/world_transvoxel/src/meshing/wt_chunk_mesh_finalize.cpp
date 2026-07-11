@@ -32,6 +32,7 @@ WtVec3 wt_interpolated_mesh_normal(
 }
 
 void wt_finalize_deformed_triangles(WtChunkMeshBuffer &buffer) {
+	constexpr double kMinimumTriangleEdgeLengthSquared = 0.000001;
 	std::size_t write_index = 0;
 	for (std::size_t index = 0; index < buffer.indices.size(); index += 3) {
 		const std::uint32_t index_a = buffer.indices[index];
@@ -46,6 +47,17 @@ void wt_finalize_deformed_triangles(WtChunkMeshBuffer &buffer) {
 		const double ac_x = static_cast<double>(c.x) - a.x;
 		const double ac_y = static_cast<double>(c.y) - a.y;
 		const double ac_z = static_cast<double>(c.z) - a.z;
+		const double bc_x = static_cast<double>(c.x) - b.x;
+		const double bc_y = static_cast<double>(c.y) - b.y;
+		const double bc_z = static_cast<double>(c.z) - b.z;
+		const double ab_length_squared = ab_x * ab_x + ab_y * ab_y + ab_z * ab_z;
+		const double ac_length_squared = ac_x * ac_x + ac_y * ac_y + ac_z * ac_z;
+		const double bc_length_squared = bc_x * bc_x + bc_y * bc_y + bc_z * bc_z;
+		if (ab_length_squared <= kMinimumTriangleEdgeLengthSquared ||
+			ac_length_squared <= kMinimumTriangleEdgeLengthSquared ||
+			bc_length_squared <= kMinimumTriangleEdgeLengthSquared) {
+			continue;
+		}
 		const double cross_x = ab_y * ac_z - ab_z * ac_y;
 		const double cross_y = ab_z * ac_x - ab_x * ac_z;
 		const double cross_z = ab_x * ac_y - ab_y * ac_x;

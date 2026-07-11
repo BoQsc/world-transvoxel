@@ -119,6 +119,7 @@ WtCellStatus make_vertex(
 }
 
 void remove_degenerate_triangles(WtCellMeshingScratch &scratch) noexcept {
+	constexpr float kMinimumTriangleEdgeLengthSquared = 0.000001F;
 	std::uint8_t write_index = 0;
 	for (std::uint8_t read_index = 0; read_index < scratch.index_count; read_index += 3) {
 		const std::uint8_t i0 = scratch.indices[read_index];
@@ -132,6 +133,15 @@ void remove_degenerate_triangles(WtCellMeshingScratch &scratch) noexcept {
 			scratch.vertices[i2].position,
 			scratch.vertices[i0].position
 		);
+		const WtVec3 edge_c = subtract(
+			scratch.vertices[i2].position,
+			scratch.vertices[i1].position
+		);
+		if (length_squared(edge_a) <= kMinimumTriangleEdgeLengthSquared ||
+			length_squared(edge_b) <= kMinimumTriangleEdgeLengthSquared ||
+			length_squared(edge_c) <= kMinimumTriangleEdgeLengthSquared) {
+			continue;
+		}
 		if (length_squared(cross(edge_a, edge_b)) == 0.0F) {
 			continue;
 		}
