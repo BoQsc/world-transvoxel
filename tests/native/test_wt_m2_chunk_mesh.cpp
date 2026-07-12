@@ -1,4 +1,5 @@
 #include "backend/wt_transvoxel_mit_backend.h"
+#include "meshing/wt_chunk_mesh_finalize.h"
 #include "meshing/wt_chunk_mesher.h"
 #include "wt_m2_mesh_test_support.h"
 
@@ -17,6 +18,43 @@ int face_axis(wt::WtChunkFace face) {
 
 bool positive_face(wt::WtChunkFace face) {
 	return (static_cast<unsigned int>(face) & 1U) != 0U;
+}
+
+double triangle_alignment(const wt::WtChunkMeshBuffer &mesh, std::size_t index) {
+	const std::uint32_t triangle[3] = {
+		mesh.indices[index], mesh.indices[index + 1], mesh.indices[index + 2]
+	};
+	const wt::WtCellVertex &vertex_a = mesh.vertices[triangle[0]];
+	const wt::WtCellVertex &vertex_b = mesh.vertices[triangle[1]];
+	const wt::WtCellVertex &vertex_c = mesh.vertices[triangle[2]];
+	const double ab_x =
+		static_cast<double>(vertex_b.position.x) - vertex_a.position.x;
+	const double ab_y =
+		static_cast<double>(vertex_b.position.y) - vertex_a.position.y;
+	const double ab_z =
+		static_cast<double>(vertex_b.position.z) - vertex_a.position.z;
+	const double ac_x =
+		static_cast<double>(vertex_c.position.x) - vertex_a.position.x;
+	const double ac_y =
+		static_cast<double>(vertex_c.position.y) - vertex_a.position.y;
+	const double ac_z =
+		static_cast<double>(vertex_c.position.z) - vertex_a.position.z;
+	const double cross_x = ab_y * ac_z - ab_z * ac_y;
+	const double cross_y = ab_z * ac_x - ab_x * ac_z;
+	const double cross_z = ab_x * ac_y - ab_y * ac_x;
+	const double normal_x =
+		static_cast<double>(vertex_a.normal.x) +
+		static_cast<double>(vertex_b.normal.x) +
+		static_cast<double>(vertex_c.normal.x);
+	const double normal_y =
+		static_cast<double>(vertex_a.normal.y) +
+		static_cast<double>(vertex_b.normal.y) +
+		static_cast<double>(vertex_c.normal.y);
+	const double normal_z =
+		static_cast<double>(vertex_a.normal.z) +
+		static_cast<double>(vertex_b.normal.z) +
+		static_cast<double>(vertex_c.normal.z);
+	return cross_x * normal_x + cross_y * normal_y + cross_z * normal_z;
 }
 
 std::vector<wt::WtChunkKey> fine_neighbors(wt::WtChunkFace face) {
@@ -117,6 +155,24 @@ void test_same_lod_seam(
 	check(!left_edges.empty() && left_edges == right_edges, "same-LOD seam mismatch");
 	hash_result(hash, left);
 	hash_result(hash, right);
+}
+
+void test_finalizer_orients_inverted_connected_component() {
+	wt::WtChunkMeshBuffer mesh;
+	mesh.prepare(4, 6);
+	const wt::WtVec3 up = { 0.0F, 0.0F, 1.0F };
+	mesh.vertices.push_back({ { 0.0F, 0.0F, 0.0F }, up, 1, 0, 0 });
+	mesh.vertices.push_back({ { 1.0F, 0.0F, 0.0F }, up, 1, 0, 0 });
+	mesh.vertices.push_back({ { 1.0F, 1.0F, 0.0F }, up, 1, 0, 0 });
+	mesh.vertices.push_back({ { 0.0F, 1.0F, 0.0F }, up, 1, 0, 0 });
+	mesh.indices = { 0, 2, 1, 0, 3, 2 };
+	wt::wt_finalize_deformed_triangles(mesh);
+	validate_buffer(mesh, "invalid finalizer component-anchor mesh");
+	check(mesh.indices.size() == 6U,
+		"finalizer component-anchor mesh lost triangles");
+	check(triangle_alignment(mesh, 0) > 0.0 &&
+		triangle_alignment(mesh, 3) > 0.0,
+		"finalizer kept an inverted connected component");
 }
 
 void test_extreme_same_lod_gallery(
@@ -313,6 +369,7 @@ int main() {
 	const wt::WtChunkMesher mesher(wt::wt_get_transvoxel_mit_backend());
 	wt::WtChunkMeshingScratch scratch;
 	std::uint64_t hash = 14695981039346656037ULL;
+	test_finalizer_orients_inverted_connected_component();
 	test_same_lod_seam(mesher, scratch, hash);
 	test_extreme_same_lod_gallery(
 		mesher,

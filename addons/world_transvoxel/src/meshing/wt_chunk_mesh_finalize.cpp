@@ -12,6 +12,7 @@ namespace world_transvoxel {
 namespace {
 
 constexpr double kMinimumTriangleEdgeLengthSquared = 0.000001;
+constexpr double kMinimumNormalAlignmentMagnitude = 0.000000001;
 
 std::uint32_t float_bits(float value) noexcept {
 	std::uint32_t bits = 0;
@@ -104,6 +105,19 @@ struct EdgeIncident {
 	bool forward = true;
 };
 
+std::uint32_t triangle_index_at(
+	const TriangleRecord &triangle,
+	unsigned int index
+) noexcept {
+	if (index == 0U) {
+		return triangle.a;
+	}
+	if (triangle.flip) {
+		return index == 1U ? triangle.c : triangle.b;
+	}
+	return index == 1U ? triangle.b : triangle.c;
+}
+
 bool triangle_is_valid(
 	const WtChunkMeshBuffer &buffer,
 	std::uint32_t index_a,
@@ -156,6 +170,75 @@ void add_edge_incident(
 	edges[edge.key].push_back({ triangle_index, edge.forward });
 }
 
+double normal_alignment_score(
+	const WtChunkMeshBuffer &buffer,
+	const TriangleRecord &triangle
+) noexcept {
+	const WtCellVertex &vertex_a =
+		buffer.vertices[triangle_index_at(triangle, 0U)];
+	const WtCellVertex &vertex_b =
+		buffer.vertices[triangle_index_at(triangle, 1U)];
+	const WtCellVertex &vertex_c =
+		buffer.vertices[triangle_index_at(triangle, 2U)];
+	const WtVec3 &a = vertex_a.position;
+	const WtVec3 &b = vertex_b.position;
+	const WtVec3 &c = vertex_c.position;
+	const double ab_x = static_cast<double>(b.x) - a.x;
+	const double ab_y = static_cast<double>(b.y) - a.y;
+	const double ab_z = static_cast<double>(b.z) - a.z;
+	const double ac_x = static_cast<double>(c.x) - a.x;
+	const double ac_y = static_cast<double>(c.y) - a.y;
+	const double ac_z = static_cast<double>(c.z) - a.z;
+	const double cross_x = ab_y * ac_z - ab_z * ac_y;
+	const double cross_y = ab_z * ac_x - ab_x * ac_z;
+	const double cross_z = ab_x * ac_y - ab_y * ac_x;
+	const double normal_x =
+		static_cast<double>(vertex_a.normal.x) +
+		static_cast<double>(vertex_b.normal.x) +
+		static_cast<double>(vertex_c.normal.x);
+	const double normal_y =
+		static_cast<double>(vertex_a.normal.y) +
+		static_cast<double>(vertex_b.normal.y) +
+		static_cast<double>(vertex_c.normal.y);
+	const double normal_z =
+		static_cast<double>(vertex_a.normal.z) +
+		static_cast<double>(vertex_b.normal.z) +
+		static_cast<double>(vertex_c.normal.z);
+	const double cross_length_squared =
+		cross_x * cross_x + cross_y * cross_y + cross_z * cross_z;
+	const double normal_length_squared =
+		normal_x * normal_x + normal_y * normal_y + normal_z * normal_z;
+	if (cross_length_squared == 0.0 || normal_length_squared == 0.0) {
+		return 0.0;
+	}
+	const double score =
+		cross_x * normal_x + cross_y * normal_y + cross_z * normal_z;
+	return std::isfinite(score) ? score : 0.0;
+}
+
+void orient_component_to_normals(
+	const WtChunkMeshBuffer &buffer,
+	std::vector<TriangleRecord> &triangles,
+	const std::vector<std::size_t> &component
+) {
+	double score = 0.0;
+	double magnitude = 0.0;
+	for (const std::size_t triangle_index : component) {
+		const double alignment =
+			normal_alignment_score(buffer, triangles[triangle_index]);
+		score += alignment;
+		magnitude += std::fabs(alignment);
+	}
+	if (magnitude <= kMinimumNormalAlignmentMagnitude) {
+		return;
+	}
+	if (score < -kMinimumNormalAlignmentMagnitude) {
+		for (const std::size_t triangle_index : component) {
+			triangles[triangle_index].flip = !triangles[triangle_index].flip;
+		}
+	}
+}
+
 void orient_consistent_components(
 	const WtChunkMeshBuffer &buffer,
 	std::vector<TriangleRecord> &triangles,
@@ -166,9 +249,11 @@ void orient_consistent_components(
 			continue;
 		}
 		std::deque<std::size_t> queue;
+		std::vector<std::size_t> component;
 		triangles[start].visited = true;
 		triangles[start].flip = false;
 		queue.push_back(start);
+		component.push_back(start);
 		while (!queue.empty()) {
 			const std::size_t current = queue.front();
 			queue.pop_front();
@@ -197,13 +282,16 @@ void orient_consistent_components(
 					triangles[other.triangle].visited = true;
 					triangles[other.triangle].flip = required_neighbor_flip;
 					queue.push_back(other.triangle);
+					component.push_back(other.triangle);
 				}
 			}
 		}
-		// Keep the propagated orientation. Re-flipping a completed component from
-		// interpolated normals can make adjacent chunks choose opposite component
-		// orientation and produces same-direction shared edges under backface
-		// culling. The lookup-generated winding is the stable global anchor here.
+		// Edge propagation gives each connected component internally consistent
+		// winding. The component still needs a global outward/inward decision:
+		// lookup tables and edits can produce a consistently inverted island.
+		// Use interpolated SDF normals only as a whole-component anchor so shared
+		// edges remain consistently oriented after any flip.
+		orient_component_to_normals(buffer, triangles, component);
 	}
 }
 
