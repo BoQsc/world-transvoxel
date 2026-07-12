@@ -1,9 +1,11 @@
 #include "backend/wt_transvoxel_mit_backend.h"
 #include "bake/wt_chunk_baker.h"
+#include "editing/wt_chunk_edit_state.h"
 #include "services/wt_page_meshing_runtime.h"
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_chunk_page_sample_source.h"
 #include "storage/wt_hash256.h"
+#include "storage/wt_procedural_world_source.h"
 #include "storage/wt_storage_page_cache.h"
 #include "wt_m2_mesh_test_support.h"
 
@@ -14,6 +16,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <set>
 #include <string>
 #include <thread>
@@ -62,6 +65,251 @@ public:
 		return true;
 	}
 };
+
+struct ReproSphereEdit {
+	double x = 0.0;
+	double y = 0.0;
+	double z = 0.0;
+	double radius = 0.0;
+};
+
+std::int64_t q16(double value) {
+	return static_cast<std::int64_t>(std::llround(
+		value * static_cast<double>(wt::kWtEditCoordinateScale)
+	));
+}
+
+std::uint64_t uq16(double value) {
+	return static_cast<std::uint64_t>(std::llround(
+		value * static_cast<double>(wt::kWtEditCoordinateScale)
+	));
+}
+
+wt::WtId128 repro_id(std::uint64_t seed) {
+	wt::WtId128 value{};
+	for (std::size_t index = 0; index < value.size(); ++index) {
+		value[index] = static_cast<std::uint8_t>(
+			(seed + 1U) * 31U + index * 13U
+		);
+	}
+	return value;
+}
+
+double mesh_triangle_normal_alignment(
+	const wt::WtChunkMeshBuffer &mesh,
+	std::size_t index
+) {
+	const std::uint32_t triangle[3] = {
+		mesh.indices[index], mesh.indices[index + 1], mesh.indices[index + 2]
+	};
+	const wt::WtCellVertex &vertex_a = mesh.vertices[triangle[0]];
+	const wt::WtCellVertex &vertex_b = mesh.vertices[triangle[1]];
+	const wt::WtCellVertex &vertex_c = mesh.vertices[triangle[2]];
+	const double ab_x =
+		static_cast<double>(vertex_b.position.x) - vertex_a.position.x;
+	const double ab_y =
+		static_cast<double>(vertex_b.position.y) - vertex_a.position.y;
+	const double ab_z =
+		static_cast<double>(vertex_b.position.z) - vertex_a.position.z;
+	const double ac_x =
+		static_cast<double>(vertex_c.position.x) - vertex_a.position.x;
+	const double ac_y =
+		static_cast<double>(vertex_c.position.y) - vertex_a.position.y;
+	const double ac_z =
+		static_cast<double>(vertex_c.position.z) - vertex_a.position.z;
+	const double cross_x = ab_y * ac_z - ab_z * ac_y;
+	const double cross_y = ab_z * ac_x - ab_x * ac_z;
+	const double cross_z = ab_x * ac_y - ab_y * ac_x;
+	const double normal_x =
+		static_cast<double>(vertex_a.normal.x) +
+		static_cast<double>(vertex_b.normal.x) +
+		static_cast<double>(vertex_c.normal.x);
+	const double normal_y =
+		static_cast<double>(vertex_a.normal.y) +
+		static_cast<double>(vertex_b.normal.y) +
+		static_cast<double>(vertex_c.normal.y);
+	const double normal_z =
+		static_cast<double>(vertex_a.normal.z) +
+		static_cast<double>(vertex_b.normal.z) +
+		static_cast<double>(vertex_c.normal.z);
+	return cross_x * normal_x + cross_y * normal_y + cross_z * normal_z;
+}
+
+std::vector<wt::WtEditCommand> human_boundary_repro_commands() {
+	const ReproSphereEdit edits[] = {
+		{ 1183.96289, 119.422333, 1006.94098, 1.80000305 },
+		{ 1183.94055, 117.829788, 1006.30176, 1.80000305 },
+		{ 1183.92468, 116.166275, 1005.85016, 1.80000305 },
+		{ 1183.90125, 114.547058, 1005.34998, 1.80000305 },
+		{ 1183.89453, 112.876434, 1004.86182, 1.80000305 },
+		{ 1183.92114, 111.186813, 1004.65564, 1.80000305 },
+		{ 1183.85681, 110.805527, 1002.97369, 1.80000305 },
+		{ 1183.80139, 109.935593, 1001.49847, 1.80000305 },
+		{ 1183.68286, 109.570236, 999.88208, 1.80000305 },
+		{ 1183.61780, 108.692322, 998.513977, 1.80000305 },
+		{ 1183.55176, 107.788940, 997.123230, 1.80000305 },
+		{ 1183.48438, 106.879608, 995.706116, 1.80000305 },
+	};
+	std::vector<wt::WtEditCommand> commands;
+	commands.reserve(std::size(edits));
+	for (std::size_t index = 0; index < std::size(edits); ++index) {
+		wt::WtEditCommand command;
+		command.command_id = repro_id(index);
+		command.sequence = 0;
+		command.world_revision = static_cast<std::uint64_t>(index + 1U);
+		command.operation = wt::WtEditOperation::SdfCarve;
+		command.shape = wt::WtEditShape::Sphere;
+		command.density_value = 1.0F;
+		command.sphere = {
+			q16(edits[index].x),
+			q16(edits[index].y),
+			q16(edits[index].z),
+			uq16(edits[index].radius),
+		};
+		check(wt::wt_edit_sphere_bounds(command.sphere, command.bounds),
+			"human boundary repro edit bounds failed");
+		commands.push_back(command);
+	}
+	return commands;
+}
+
+wt::WtProceduralWorldDescriptor human_boundary_repro_descriptor() {
+	wt::WtProceduralWorldDescriptor descriptor;
+	descriptor.chunk_count_x = 128;
+	descriptor.chunk_count_z = 128;
+	descriptor.chunk_y = 0;
+	descriptor.seed = 19019;
+	descriptor.source_revision = 190019;
+	descriptor.mode = wt::WtProceduralWorldMode::Terrain;
+	return descriptor;
+}
+
+wt::WtChunkPage generate_procedural_page(
+	const wt::WtProceduralWorldDescriptor &descriptor,
+	const wt::WtChunkKey &key
+) {
+	std::uint64_t bytes_read = 0;
+	const wt::WtPageLoadCompletion completion =
+		wt::wt_generate_procedural_page(descriptor, key, {}, bytes_read);
+	check(completion.status == wt::WtPageLoadStatus::Ok &&
+		completion.page_bytes != nullptr, "human boundary repro page generation failed");
+	wt::WtChunkPageView view;
+	check(wt::wt_open_chunk_page(
+			{ completion.page_bytes->data(), completion.page_bytes->size() },
+			view
+		) == wt::WtChunkPageStatus::Ok,
+		"human boundary repro page open failed");
+	wt::WtChunkPage page;
+	check(wt::wt_decode_chunk_page(view, page) == wt::WtChunkPageStatus::Ok,
+		"human boundary repro page decode failed");
+	check(page.metadata.key == key,
+		"human boundary repro generated wrong page key");
+	return page;
+}
+
+wt::WtChunkPage edited_procedural_page(
+	const wt::WtProceduralWorldDescriptor &descriptor,
+	const wt::WtChunkKey &key,
+	const std::vector<wt::WtEditCommand> &commands
+) {
+	wt::WtChunkEditState edit_state;
+	check(edit_state.initialize(
+			generate_procedural_page(descriptor, key),
+			descriptor.source_revision,
+			0
+		) == wt::WtChunkEditStatus::Ok,
+		"human boundary repro edit state init failed");
+	for (const wt::WtEditCommand &command : commands) {
+		check(edit_state.apply_command(command) == wt::WtChunkEditStatus::Ok,
+			"human boundary repro edit apply failed");
+	}
+	return edit_state.page();
+}
+
+wt::WtChunkMeshResult mesh_page_direct(
+	const wt::WtChunkMesher &mesher,
+	wt::WtChunkMeshingScratch &scratch,
+	const wt::WtChunkPage &page
+) {
+	wt::WtChunkPageSampleSource source(page);
+	check(source.status() == wt::WtChunkPageSampleSourceStatus::Ok,
+		"human boundary repro page sample source failed");
+	wt::WtChunkMeshResult result;
+	check(mesher.mesh(
+			{ page.metadata.key, 0, 0.0F, 0.25F },
+			source,
+			result,
+			scratch
+		) == wt::WtChunkMeshingStatus::Ok,
+		"human boundary repro mesh failed");
+	validate_buffer(result.regular, "invalid human boundary repro regular mesh");
+	return result;
+}
+
+void check_mesh_winding_matches_normals(
+	const wt::WtChunkMeshBuffer &mesh,
+	const char *message
+) {
+	std::size_t negative = 0;
+	for (std::size_t index = 0; index < mesh.indices.size(); index += 3) {
+		if (mesh_triangle_normal_alignment(mesh, index) < -0.0001) {
+			++negative;
+		}
+	}
+	check(negative == 0, message);
+}
+
+void test_human_boundary_edit_repro(std::vector<std::uint8_t> &evidence) {
+	const wt::WtChunkMesher mesher(wt::wt_get_transvoxel_mit_backend());
+	wt::WtChunkMeshingScratch scratch;
+	const wt::WtProceduralWorldDescriptor descriptor =
+		human_boundary_repro_descriptor();
+	const std::vector<wt::WtEditCommand> commands =
+		human_boundary_repro_commands();
+	const std::array<wt::WtChunkKey, 8> keys = {{
+		{ 73, 6, 62, 0 }, { 74, 6, 62, 0 },
+		{ 73, 7, 62, 0 }, { 74, 7, 62, 0 },
+		{ 73, 6, 63, 0 }, { 74, 6, 63, 0 },
+		{ 73, 7, 63, 0 }, { 74, 7, 63, 0 },
+	}};
+	std::uint64_t repro_hash = 14695981039346656037ULL;
+	std::map<wt::WtChunkKey, wt::WtChunkMeshResult> meshes;
+	for (const wt::WtChunkKey &key : keys) {
+		wt::WtChunkPage page = edited_procedural_page(descriptor, key, commands);
+		wt::WtChunkMeshResult result = mesh_page_direct(mesher, scratch, page);
+		check_mesh_winding_matches_normals(
+			result.regular,
+			"human boundary repro produced inverted regular triangles"
+		);
+		hash_result(repro_hash, result);
+		meshes.emplace(key, std::move(result));
+	}
+	bool inspected_nonempty_x_seam = false;
+	for (std::int32_t y : { 6, 7 }) {
+		for (std::int32_t z : { 62, 63 }) {
+			const wt::WtChunkKey left_key = { 73, y, z, 0 };
+			const wt::WtChunkKey right_key = { 74, y, z, 0 };
+			const wt::WtChunkMeshResult &left = meshes[left_key];
+			const wt::WtChunkMeshResult &right = meshes[right_key];
+			const EdgeSet left_edges = plane_boundary_edges(
+				left.regular, left.world_origin, 0, 1184.0
+			);
+			const EdgeSet right_edges = plane_boundary_edges(
+				right.regular, right.world_origin, 0, 1184.0
+			);
+			if (!left_edges.empty() || !right_edges.empty()) {
+				inspected_nonempty_x_seam = true;
+			}
+			check(left_edges == right_edges,
+				"human boundary repro same-LOD x seam mismatch");
+		}
+	}
+	check(inspected_nonempty_x_seam,
+		"human boundary repro did not inspect any x-face seam edges");
+	for (unsigned int shift = 0; shift < 64; shift += 8) {
+		evidence.push_back(static_cast<std::uint8_t>(repro_hash >> shift));
+	}
+}
 
 bool write_file(
 	const std::filesystem::path &path,
@@ -659,6 +907,7 @@ int main() {
 		"runtime fixture dependency count mismatch"
 	);
 	std::vector<std::uint8_t> evidence;
+	test_human_boundary_edit_repro(evidence);
 	test_runtime_lifecycle(fixture, evidence);
 	test_storage_backpressure_retry(fixture);
 	test_missing_support(fixture);
@@ -671,7 +920,8 @@ int main() {
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
 		"M5_PAGE_MESHING_RUNTIME_PASS dependencies=13 cache_entries=2 "
-		"backpressure=1 cancellations=1 invalidations=1 missing_support=1\n"
+		"backpressure=1 cancellations=1 invalidations=1 missing_support=1 "
+		"human_boundary_repro=1\n"
 	);
 	return 0;
 }

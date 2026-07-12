@@ -36,6 +36,13 @@ Godot render sink swaps the second and third index of every triangle. This is
 an engine-boundary conversion; native topology, transition ownership, and
 payload hashes retain the authoritative counterclockwise convention.
 
+The Godot render sink submits visual vertices in a common world-space frame and
+keeps render `MeshInstance3D` transforms at identity. The payload itself remains
+chunk-local, but adjacent chunk draw calls must receive identical seam vertex
+positions after the engine-boundary conversion. This prevents raster seams where
+two chunks would otherwise compute the same world edge through different model
+transforms.
+
 ## Collision sanitation
 
 Collision is generated as an unindexed triangle-face array from the immutable

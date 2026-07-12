@@ -213,6 +213,137 @@ int inspect_journal(const std::vector<std::uint8_t> &bytes) {
 	return 0;
 }
 
+const char *edit_operation_name(wt::WtEditOperation operation) noexcept {
+	switch (operation) {
+		case wt::WtEditOperation::AddDensity: return "add_density";
+		case wt::WtEditOperation::SetDensity: return "set_density";
+		case wt::WtEditOperation::PaintMaterial: return "paint_material";
+		case wt::WtEditOperation::SdfCarve: return "sdf_carve";
+		case wt::WtEditOperation::SdfConstruct: return "sdf_construct";
+	}
+	return "unknown";
+}
+
+const char *edit_shape_name(wt::WtEditShape shape) noexcept {
+	switch (shape) {
+		case wt::WtEditShape::Sphere: return "sphere";
+		case wt::WtEditShape::AxisAlignedBox: return "axis_aligned_box";
+	}
+	return "unknown";
+}
+
+double q16_to_double(std::int64_t value) noexcept {
+	return static_cast<double>(value) /
+		static_cast<double>(wt::kWtEditCoordinateScale);
+}
+
+double uq16_to_double(std::uint64_t value) noexcept {
+	return static_cast<double>(value) /
+		static_cast<double>(wt::kWtEditCoordinateScale);
+}
+
+int dump_journal(const std::vector<std::uint8_t> &bytes) {
+	if (bytes.empty()) return 2;
+	std::size_t offset = 0;
+	std::size_t transaction_index = 0;
+	bool first_transaction = true;
+	std::printf("{\"type\":\"wtedit_dump\",\"transactions\":[");
+	while (offset < bytes.size()) {
+		std::size_t segment_size = 0;
+		if (wt::wt_measure_container(
+				{ bytes.data() + offset, bytes.size() - offset },
+				wt::kWtEditMagic,
+				segment_size
+			) != wt::WtContainerStatus::Ok ||
+			segment_size == 0) {
+			return 2;
+		}
+		wt::WtEditTransactionDocument document;
+		if (wt::wt_open_edit_transaction(
+				{ bytes.data() + offset, segment_size },
+				document
+			) != wt::WtEditTransactionStatus::Ok) {
+			return 2;
+		}
+		const wt::WtEditTransaction &transaction = document.transaction;
+		if (!first_transaction) {
+			std::printf(",");
+		}
+		first_transaction = false;
+		std::printf(
+			"{\"index\":%zu,\"source_revision\":%llu,"
+			"\"base_revision\":%llu,\"committed_revision\":%llu,"
+			"\"commands\":[",
+			transaction_index,
+			static_cast<unsigned long long>(transaction.source_revision),
+			static_cast<unsigned long long>(transaction.base_revision),
+			static_cast<unsigned long long>(transaction.committed_revision)
+		);
+		bool first_command = true;
+		for (const wt::WtEditCommand &command : transaction.commands) {
+			if (!first_command) {
+				std::printf(",");
+			}
+			first_command = false;
+			std::printf(
+				"{\"sequence\":%u,\"world_revision\":%llu,"
+				"\"operation\":\"%s\",\"shape\":\"%s\","
+				"\"density_value\":%.9g,\"material\":%u,"
+				"\"bounds\":{\"minimum\":[%lld,%lld,%lld],"
+				"\"maximum\":[%lld,%lld,%lld]}",
+				static_cast<unsigned int>(command.sequence),
+				static_cast<unsigned long long>(command.world_revision),
+				edit_operation_name(command.operation),
+				edit_shape_name(command.shape),
+				static_cast<double>(command.density_value),
+				static_cast<unsigned int>(command.material),
+				static_cast<long long>(command.bounds.minimum.x),
+				static_cast<long long>(command.bounds.minimum.y),
+				static_cast<long long>(command.bounds.minimum.z),
+				static_cast<long long>(command.bounds.maximum.x),
+				static_cast<long long>(command.bounds.maximum.y),
+				static_cast<long long>(command.bounds.maximum.z)
+			);
+			if (command.shape == wt::WtEditShape::Sphere) {
+				std::printf(
+					",\"sphere\":{\"center\":[%.9g,%.9g,%.9g],"
+					"\"radius\":%.9g}",
+					q16_to_double(command.sphere.center_x_q16),
+					q16_to_double(command.sphere.center_y_q16),
+					q16_to_double(command.sphere.center_z_q16),
+					uq16_to_double(command.sphere.radius_q16)
+				);
+			} else if (command.shape == wt::WtEditShape::AxisAlignedBox) {
+				std::printf(
+					",\"box\":{\"minimum\":[%.9g,%.9g,%.9g],"
+					"\"maximum\":[%.9g,%.9g,%.9g]}",
+					q16_to_double(command.box.minimum_x_q16),
+					q16_to_double(command.box.minimum_y_q16),
+					q16_to_double(command.box.minimum_z_q16),
+					q16_to_double(command.box.maximum_x_q16),
+					q16_to_double(command.box.maximum_y_q16),
+					q16_to_double(command.box.maximum_z_q16)
+				);
+			}
+			std::printf("}");
+		}
+		std::printf("]}");
+		offset += segment_size;
+		++transaction_index;
+	}
+	std::printf("]}\n");
+	return offset == bytes.size() ? 0 : 2;
+}
+
+int dump_file(const std::filesystem::path &path) {
+	std::vector<std::uint8_t> bytes;
+	if (!read_file(path, bytes) || bytes.size() < 8) return 2;
+	wt::WtFormatMagic magic{};
+	std::copy(bytes.begin(), bytes.begin() + 8, magic.begin());
+	if (magic == wt::kWtEditMagic) return dump_journal(bytes);
+	return 2;
+}
+
 int inspect_file(const std::filesystem::path &path) {
 	std::vector<std::uint8_t> bytes;
 	if (!read_file(path, bytes) || bytes.size() < 8) return 2;
@@ -256,6 +387,7 @@ void print_usage() {
 	std::fprintf(
 		stderr,
 		"usage: wt_storage_tool inspect <path> | validate <path> | "
+		"dump <path> | "
 		"migrate-world <input> <output>\n"
 	);
 }
@@ -267,6 +399,9 @@ int main(int argc, char **argv) {
 		(std::string(argv[1]) == "inspect" ||
 			std::string(argv[1]) == "validate")) {
 		return inspect_file(argv[2]);
+	}
+	if (argc == 3 && std::string(argv[1]) == "dump") {
+		return dump_file(argv[2]);
 	}
 	if (argc == 4 && std::string(argv[1]) == "migrate-world") {
 		return migrate_world(argv[2], argv[3]);

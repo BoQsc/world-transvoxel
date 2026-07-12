@@ -109,9 +109,18 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	normals.resize(static_cast<std::int64_t>(payload.vertices.size()));
 	materials.resize(static_cast<std::int64_t>(payload.vertices.size()));
 	indices.resize(static_cast<std::int64_t>(payload.indices.size()));
+	// Render chunks share seam vertices across separate MeshInstance3D draw
+	// calls. Store render positions in a common world-space frame and keep the
+	// instance transform identity so the GPU receives identical seam positions
+	// instead of recomputing equivalent world positions from different chunk
+	// origins.
+	const godot::Vector3 world_origin = to_godot(payload.world_origin);
 	for (std::size_t index = 0; index < payload.vertices.size(); ++index) {
 		const WtRenderVertex &vertex = payload.vertices[index];
-		positions.set(static_cast<std::int64_t>(index), to_godot(vertex.position));
+		positions.set(
+			static_cast<std::int64_t>(index),
+			to_godot(vertex.position) + world_origin
+		);
 		normals.set(static_cast<std::int64_t>(index), to_godot(vertex.normal));
 		materials.set(static_cast<std::int64_t>(index), {
 			static_cast<godot::real_t>(vertex.material), 0.0
@@ -180,7 +189,7 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	record.retirement_start_transparency = 0.0F;
 	record.introducing = transition_frames_ > 0U;
 	record.introduction_frame = 0;
-	record.instance->set_position(to_godot(payload.world_origin));
+	record.instance->set_position(godot::Vector3{});
 	record.instance->set_mesh(mesh);
 	record.instance->set_visible(!record.staged);
 	apply_record_material_override(record);
