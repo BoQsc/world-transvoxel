@@ -52,6 +52,28 @@ Viewer capacity multiplied by demand capacity per viewer may not exceed
 exceed demand capacity per viewer. Deactivation distance must be at least
 activation distance.
 
+## Streaming and edited-LOD continuity
+
+- Moving-viewer terrain is streamed from an active desired chunk set. Projects
+  should expect coarse far terrain plus detailed chunks around active viewers,
+  not every LOD0 chunk of a large world resident at once.
+- Runtime mesh watertightness and streaming visual continuity are separate
+  claims. A mesh probe with zero interior boundary/nonmanifold edges does not by
+  itself prove that every possible camera path is free from transient loading or
+  LOD-popping artifacts.
+- Recent edit LOD-retention zones are promoted into temporary planner viewers so
+  recently dug or placed terrain remains detailed when the player moves away and
+  returns. The current implementation keeps the newest eight edit-retention
+  zones active even without a real viewer nearby, then still applies the normal
+  retention-zone merge and capacity limits.
+- Render transition fading is opt-in and disabled by default. Enabling
+  `render_transition_frames` is a presentation choice; it must not be used as a
+  substitute for missing geometry or as proof that terrain is seamless.
+- Projects that need aggressive high-speed flight must qualify the chosen
+  viewer radius, active chunk capacity, viewer update distance, render/collision
+  apply budgets, and storage/meshing throughput together. Raising one value in
+  isolation can increase churn instead of improving visible continuity.
+
 ## Geometry and world bounds
 
 - Chunk cells per axis: 16.

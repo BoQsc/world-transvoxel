@@ -32,6 +32,7 @@ constexpr std::uint32_t kWtEditLodRetentionMaximumRefinementRadiusChunks = 3;
 constexpr std::uint32_t kWtEditLodRetentionRefinementMarginChunks = 1;
 constexpr double kWtEditLodRetentionMergeDistance = 32.0;
 constexpr double kWtEditLodRetentionVisibilitySlackRoots = 1.0;
+constexpr std::size_t kWtEditLodRetentionAlwaysActiveRecentZones = 8;
 
 bool valid_radius(std::uint32_t radius, std::uint64_t capacity) noexcept {
 	const std::uint64_t width = static_cast<std::uint64_t>(radius) * 2U + 1U;
@@ -431,8 +432,25 @@ std::size_t WtReadOnlyWorldRuntime::append_edit_lod_retention_viewers(
 		maximum_lod = std::max(maximum_lod, viewer.maximum_lod);
 	}
 	std::size_t appended = 0;
+	const auto is_recent_zone = [this](const EditLodRetentionZone &zone) {
+		if (edit_lod_retention_zones_.size() <=
+			kWtEditLodRetentionAlwaysActiveRecentZones) {
+			return true;
+		}
+		std::size_t newer = 0;
+		for (const EditLodRetentionZone &candidate :
+				edit_lod_retention_zones_) {
+			if (candidate.revision > zone.revision) {
+				++newer;
+				if (newer >= kWtEditLodRetentionAlwaysActiveRecentZones) {
+					return false;
+				}
+			}
+		}
+		return true;
+	};
 	for (const EditLodRetentionZone &zone : edit_lod_retention_zones_) {
-		bool visible_to_real_viewer = false;
+		bool visible_to_real_viewer = is_recent_zone(zone);
 		for (const WtLodPlannerViewer &viewer : real_viewers) {
 			const double root_extent =
 				static_cast<double>(wt_chunk_extent(viewer.maximum_lod));

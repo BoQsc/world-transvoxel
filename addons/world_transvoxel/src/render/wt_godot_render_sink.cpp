@@ -197,7 +197,7 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	record.retiring = false;
 	record.retirement_frame = 0;
 	record.retirement_start_transparency = 0.0F;
-	record.introducing = transition_frames_ > 0U;
+	record.introducing = !created && transition_frames_ > 0U;
 	record.introduction_frame = 0;
 	record.staged_mesh.unref();
 	record.staged_generation = {};
