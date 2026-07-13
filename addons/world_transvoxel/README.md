@@ -59,10 +59,17 @@ development build that makes `wt_fade_opacity` instance-parameter writes
 opt-in/default-off because Godot retains per-instance shader-parameter slots
 after use. Version 1.0.12-dev also makes native render transition fading
 opt-in/default-off; the default replacement path is a direct swap so terrain
-edits do not blink. These development builds are not the deterministic PQ4
-release artifact. The release ships API/limit documentation, addon-local
-bake/storage wrappers, runtime DLLs, and native tools. Compute acceleration is
-optional later work.
+edits do not blink. Version 1.0.13-dev keeps the official M2 topology hash
+`20a67f299820f5c3` while stabilizing mesh-finalizer edge ownership with
+quantized position keys at 1/1024 world-unit precision. It explicitly permits
+matched interior/chunk-face near-zero connector slivers only when topology
+probes report zero interior/unknown boundary edges, zero nonmanifold edges,
+zero orientation-conflict edges, zero repeated-point-key triangles, and zero
+unknown zero-area triangles. Blindly deleting those connector slivers is
+forbidden because it opened real cracks in edited terrain. These development
+builds are not the deterministic PQ4 release artifact. The release ships
+API/limit documentation, addon-local bake/storage wrappers, runtime DLLs, and
+native tools. Compute acceleration is optional later work.
 
 Build from the repository root:
 

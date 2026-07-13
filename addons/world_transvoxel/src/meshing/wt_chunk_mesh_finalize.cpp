@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <cmath>
-#include <cstring>
 #include <deque>
 #include <unordered_map>
 #include <vector>
@@ -12,19 +11,14 @@ namespace world_transvoxel {
 namespace {
 
 constexpr double kMinimumTriangleEdgeLengthSquared = 0.000001;
+constexpr double kMinimumTriangleThinRatioSquared = 1.0e-12;
 constexpr double kMinimumNormalAlignmentMagnitude = 0.000000001;
-
-std::uint32_t float_bits(float value) noexcept {
-	std::uint32_t bits = 0;
-	static_assert(sizeof(bits) == sizeof(value));
-	std::memcpy(&bits, &value, sizeof(bits));
-	return bits;
-}
+constexpr double kPositionKeyScale = 1024.0;
 
 struct PositionKey {
-	std::uint32_t x = 0;
-	std::uint32_t y = 0;
-	std::uint32_t z = 0;
+	std::int64_t x = 0;
+	std::int64_t y = 0;
+	std::int64_t z = 0;
 
 	bool operator==(const PositionKey &other) const noexcept {
 		return x == other.x && y == other.y && z == other.z;
@@ -50,9 +44,15 @@ struct PositionKeyHash {
 
 PositionKey make_position_key(const WtVec3 &position) noexcept {
 	return {
-		float_bits(position.x),
-		float_bits(position.y),
-		float_bits(position.z),
+		static_cast<std::int64_t>(std::llround(
+			static_cast<double>(position.x) * kPositionKeyScale
+		)),
+		static_cast<std::int64_t>(std::llround(
+			static_cast<double>(position.y) * kPositionKeyScale
+		)),
+		static_cast<std::int64_t>(std::llround(
+			static_cast<double>(position.z) * kPositionKeyScale
+		)),
 	};
 }
 
@@ -152,7 +152,12 @@ bool triangle_is_valid(
 	const double cross_x = ab_y * ac_z - ab_z * ac_y;
 	const double cross_y = ab_z * ac_x - ab_x * ac_z;
 	const double cross_z = ab_x * ac_y - ab_y * ac_x;
-	return cross_x * cross_x + cross_y * cross_y + cross_z * cross_z != 0.0;
+	const double area_squared =
+		cross_x * cross_x + cross_y * cross_y + cross_z * cross_z;
+	const double maximum_edge_squared =
+		std::max({ ab_length_squared, ac_length_squared, bc_length_squared });
+	return area_squared > maximum_edge_squared * maximum_edge_squared *
+		kMinimumTriangleThinRatioSquared;
 }
 
 void add_edge_incident(

@@ -175,6 +175,39 @@ void test_finalizer_orients_inverted_connected_component() {
 		"finalizer kept an inverted connected component");
 }
 
+void test_finalizer_rejects_near_zero_area_slivers() {
+	wt::WtChunkMeshBuffer mesh;
+	mesh.prepare(3, 3);
+	const wt::WtVec3 up = { 0.0F, 0.0F, 1.0F };
+	mesh.vertices.push_back({ { 0.0F, 0.0F, 0.0F }, up, 1, 0, 0 });
+	mesh.vertices.push_back({ { 1.0F, 0.0F, 0.0F }, up, 1, 0, 0 });
+	mesh.vertices.push_back({ { 1.0F, 0.0000001F, 0.0F }, up, 1, 0, 0 });
+	mesh.indices = { 0, 1, 2 };
+	wt::wt_finalize_deformed_triangles(mesh);
+	check(mesh.indices.empty(),
+		"finalizer retained a near-zero-area deformed sliver triangle");
+}
+
+void test_finalizer_orients_quantized_edge_component() {
+	wt::WtChunkMeshBuffer mesh;
+	mesh.prepare(6, 6);
+	const wt::WtVec3 up = { 0.0F, 0.0F, 1.0F };
+	mesh.vertices.push_back({ { 0.0F, 0.0F, 0.0F }, up, 1, 0, 0 });
+	mesh.vertices.push_back({ { 1.0F, 0.0F, 0.0F }, up, 1, 0, 0 });
+	mesh.vertices.push_back({ { 0.0F, 1.0F, 0.0F }, up, 1, 0, 0 });
+	mesh.vertices.push_back({ { 1.0001F, 0.0F, 0.0F }, up, 1, 0, 0 });
+	mesh.vertices.push_back({ { 0.0F, 1.0001F, 0.0F }, up, 1, 0, 0 });
+	mesh.vertices.push_back({ { 1.0F, 1.0F, 0.0F }, up, 1, 0, 0 });
+	mesh.indices = { 0, 1, 2, 3, 4, 5 };
+	wt::wt_finalize_deformed_triangles(mesh);
+	validate_buffer(mesh, "invalid finalizer quantized-edge mesh");
+	check(mesh.indices.size() == 6U,
+		"finalizer quantized-edge mesh lost triangles");
+	check(triangle_alignment(mesh, 0) > 0.0 &&
+		triangle_alignment(mesh, 3) > 0.0,
+		"finalizer did not propagate orientation across quantized edge");
+}
+
 void test_extreme_same_lod_gallery(
 	const wt::WtChunkMesher &mesher,
 	wt::WtChunkMeshingScratch &scratch,
@@ -370,6 +403,8 @@ int main() {
 	wt::WtChunkMeshingScratch scratch;
 	std::uint64_t hash = 14695981039346656037ULL;
 	test_finalizer_orients_inverted_connected_component();
+	test_finalizer_rejects_near_zero_area_slivers();
+	test_finalizer_orients_quantized_edge_component();
 	test_same_lod_seam(mesher, scratch, hash);
 	test_extreme_same_lod_gallery(
 		mesher,
