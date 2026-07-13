@@ -257,7 +257,9 @@ private:
 	);
 	std::size_t append_edit_lod_retention_viewers(
 		const std::vector<WtLodPlannerViewer> &real_viewers,
-		std::vector<WtLodPlannerViewer> &planning_viewers
+		std::vector<WtLodPlannerViewer> &planning_viewers,
+		std::uint32_t maximum_refinement_radius_chunks,
+		std::size_t maximum_retention_viewers
 	) const;
 	void notify_work() noexcept;
 	void set_failure(WtReadOnlyRuntimeStatus status) noexcept;

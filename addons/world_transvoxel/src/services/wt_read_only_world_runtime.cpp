@@ -422,9 +422,13 @@ void WtReadOnlyWorldRuntime::remember_edit_lod_retention_zones(
 
 std::size_t WtReadOnlyWorldRuntime::append_edit_lod_retention_viewers(
 	const std::vector<WtLodPlannerViewer> &real_viewers,
-	std::vector<WtLodPlannerViewer> &planning_viewers
+	std::vector<WtLodPlannerViewer> &planning_viewers,
+	std::uint32_t maximum_refinement_radius_chunks,
+	std::size_t maximum_retention_viewers
 ) const {
-	if (real_viewers.empty() || edit_lod_retention_zones_.empty()) {
+	if (real_viewers.empty() || edit_lod_retention_zones_.empty() ||
+			maximum_refinement_radius_chunks == 0 ||
+			maximum_retention_viewers == 0) {
 		return 0;
 	}
 	std::uint8_t maximum_lod = 0;
@@ -449,6 +453,8 @@ std::size_t WtReadOnlyWorldRuntime::append_edit_lod_retention_viewers(
 		}
 		return true;
 	};
+	std::vector<const EditLodRetentionZone *> visible_zones;
+	visible_zones.reserve(edit_lod_retention_zones_.size());
 	for (const EditLodRetentionZone &zone : edit_lod_retention_zones_) {
 		bool visible_to_real_viewer = is_recent_zone(zone);
 		for (const WtLodPlannerViewer &viewer : real_viewers) {
@@ -474,6 +480,22 @@ std::size_t WtReadOnlyWorldRuntime::append_edit_lod_retention_viewers(
 		if (!visible_to_real_viewer) {
 			continue;
 		}
+		visible_zones.push_back(&zone);
+	}
+	std::sort(
+		visible_zones.begin(),
+		visible_zones.end(),
+		[](const EditLodRetentionZone *left,
+			const EditLodRetentionZone *right) {
+			return left->revision > right->revision;
+		}
+	);
+	const std::size_t append_limit = std::min(
+		visible_zones.size(),
+		maximum_retention_viewers
+	);
+	for (std::size_t index = 0; index < append_limit; ++index) {
+		const EditLodRetentionZone &zone = *visible_zones[index];
 		planning_viewers.push_back({
 			{
 				kWtEditLodRetentionViewerIdBase +
@@ -485,7 +507,10 @@ std::size_t WtReadOnlyWorldRuntime::append_edit_lod_retention_viewers(
 			},
 			kWtEditLodRetentionRootRadiusChunks,
 			maximum_lod,
-			zone.refinement_radius_chunks,
+			std::min(
+				zone.refinement_radius_chunks,
+				maximum_refinement_radius_chunks
+			),
 		});
 		++appended;
 	}
@@ -543,29 +568,78 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		config_.collision_activation_distance,
 		config_.collision_deactivation_distance,
 	};
-	std::vector<WtLodPlannerViewer> planning_viewers = candidate_viewers;
-	std::size_t edit_retention_viewers =
-		append_edit_lod_retention_viewers(candidate_viewers, planning_viewers);
 	bool edit_retention_fallback = false;
+	std::vector<WtLodPlannerViewer> planning_viewers;
+	std::size_t edit_retention_viewers = 0;
 	WtBalancedLodPlan candidate_plan;
-	WtBalancedLodPlannerStatus plan_status = lod_planner_->plan(
-			planning_viewers,
-			desired_->get_desired_chunks(),
-			collision_policy,
-			candidate_plan
-		);
+	const std::size_t retention_viewer_capacity =
+		config_.viewer_capacity > candidate_viewers.size() ?
+		config_.viewer_capacity - candidate_viewers.size() : 0;
+	const auto try_plan_with_retention =
+		[&](
+			std::uint32_t maximum_refinement_radius_chunks,
+			std::size_t maximum_retention_viewers
+		) {
+			planning_viewers = candidate_viewers;
+			candidate_plan.clear();
+			edit_retention_viewers = append_edit_lod_retention_viewers(
+				candidate_viewers,
+				planning_viewers,
+				maximum_refinement_radius_chunks,
+				maximum_retention_viewers
+			);
+			return lod_planner_->plan(
+				planning_viewers,
+				desired_->get_desired_chunks(),
+				collision_policy,
+				candidate_plan
+			);
+		};
+	WtBalancedLodPlannerStatus plan_status = try_plan_with_retention(
+		kWtEditLodRetentionMaximumRefinementRadiusChunks,
+		retention_viewer_capacity
+	);
 	if (plan_status != WtBalancedLodPlannerStatus::Ok &&
 			edit_retention_viewers != 0) {
-		edit_retention_viewers = 0;
 		edit_retention_fallback = true;
-		planning_viewers = candidate_viewers;
-		candidate_plan.clear();
-		plan_status = lod_planner_->plan(
-			planning_viewers,
-			desired_->get_desired_chunks(),
-			collision_policy,
-			candidate_plan
-		);
+		const std::size_t retry_retention_viewers = edit_retention_viewers;
+		bool accepted_degraded_retention = false;
+		for (std::uint32_t radius =
+				kWtEditLodRetentionMaximumRefinementRadiusChunks;
+				radius >= kWtEditLodRetentionMinimumRefinementRadiusChunks;
+				--radius) {
+			std::size_t viewer_limit = retry_retention_viewers;
+			if (radius == kWtEditLodRetentionMaximumRefinementRadiusChunks) {
+				if (viewer_limit == 0) {
+					break;
+				}
+				--viewer_limit;
+			}
+			while (viewer_limit > 0) {
+				plan_status = try_plan_with_retention(radius, viewer_limit);
+				if (plan_status == WtBalancedLodPlannerStatus::Ok &&
+						edit_retention_viewers != 0) {
+					accepted_degraded_retention = true;
+					break;
+				}
+				--viewer_limit;
+			}
+			if (accepted_degraded_retention ||
+					radius == kWtEditLodRetentionMinimumRefinementRadiusChunks) {
+				break;
+			}
+		}
+		if (!accepted_degraded_retention) {
+			edit_retention_viewers = 0;
+			planning_viewers = candidate_viewers;
+			candidate_plan.clear();
+			plan_status = lod_planner_->plan(
+				planning_viewers,
+				desired_->get_desired_chunks(),
+				collision_policy,
+				candidate_plan
+			);
+		}
 	}
 	if (plan_status != WtBalancedLodPlannerStatus::Ok ||
 			plan_revision_ == std::numeric_limits<std::uint64_t>::max()) {

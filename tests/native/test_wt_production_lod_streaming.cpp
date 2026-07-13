@@ -1,11 +1,13 @@
 #include "services/wt_read_only_world_runtime.h"
 #include "storage/wt_async_storage_service.h"
+#include "storage/wt_edit_journal_store.h"
 #include "storage/wt_hash256.h"
 #include "streaming/wt_balanced_lod_planner.h"
 #include "wt_production_world_fixture.h"
 
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
@@ -24,6 +26,14 @@ void check(bool condition, const char *message) {
 		std::fprintf(stderr, "FAIL: %s\n", message);
 		++failure_count;
 	}
+}
+
+wt::WtId128 id(std::uint8_t seed) {
+	wt::WtId128 output{};
+	for (std::size_t index = 0; index < output.size(); ++index) {
+		output[index] = static_cast<std::uint8_t>(seed + index);
+	}
+	return output;
 }
 
 void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
@@ -67,9 +77,54 @@ const wt::WtLodMapEntry *find_entry(
 wt::WtLodPlannerViewer planner_viewer(
 	std::uint64_t id,
 	std::uint64_t revision,
-	double x
+	double x,
+	std::uint32_t radius_chunks = 1,
+	std::uint8_t maximum_lod = 1,
+	std::uint32_t refinement_radius_chunks = 0
 ) {
-	return { { id, x, 8.0, 8.0, revision }, 1, 1 };
+	return {
+		{ id, x, 8.0, 8.0, revision },
+		radius_chunks,
+		maximum_lod,
+		refinement_radius_chunks,
+	};
+}
+
+wt::WtEditTransaction carve_transaction(
+	std::uint64_t source_revision,
+	std::uint64_t base_revision,
+	std::uint8_t seed,
+	double center_x
+) {
+	const auto q16 = [](double value) {
+		return static_cast<std::int64_t>(std::llround(
+			value * static_cast<double>(wt::kWtEditCoordinateScale)
+		));
+	};
+	wt::WtEditTransaction transaction;
+	transaction.source_revision = source_revision;
+	transaction.transaction_id = id(seed);
+	transaction.base_revision = base_revision;
+	transaction.committed_revision = base_revision + 1U;
+	transaction.author_id = 41;
+	wt::WtEditCommand command;
+	command.command_id = id(static_cast<std::uint8_t>(seed + 64U));
+	command.sequence = 0;
+	command.world_revision = transaction.committed_revision;
+	command.operation = wt::WtEditOperation::SdfCarve;
+	command.shape = wt::WtEditShape::Sphere;
+	command.density_value = 1.0F;
+	command.sphere = {
+		q16(center_x),
+		q16(8.0),
+		q16(8.0),
+		static_cast<std::uint64_t>(2U) *
+			static_cast<std::uint64_t>(wt::kWtEditCoordinateScale),
+	};
+	check(wt::wt_edit_sphere_bounds(command.sphere, command.bounds),
+		"edit retention regression command bounds failed");
+	transaction.commands.push_back(command);
+	return transaction;
 }
 
 struct PublicationEvidence {
@@ -81,6 +136,61 @@ struct PublicationEvidence {
 	std::vector<std::uint64_t> bridge_vertices;
 	std::vector<std::uint64_t> bridge_indices;
 };
+
+void drain_publications(wt::WtReadOnlyWorldRuntime &runtime) {
+	wt::WtReadOnlyPublication publication;
+	while (runtime.pop_publication(publication)) {}
+}
+
+bool runtime_idle(const wt::WtReadOnlyRuntimeMetrics &metrics) noexcept {
+	return metrics.scheduler_queued_jobs == 0 &&
+		metrics.scheduler_queued_completions == 0 &&
+		metrics.scheduler_failed_records == 0 &&
+		metrics.page_sample_failures == 0 &&
+		metrics.page_mesh_failures == 0 &&
+		metrics.page_storage_failures == 0 &&
+		metrics.page_cache_failures == 0;
+}
+
+template <typename Predicate>
+bool wait_for_runtime(
+	wt::WtReadOnlyWorldRuntime &runtime,
+	Predicate predicate
+) {
+	const auto deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(8);
+	while (std::chrono::steady_clock::now() < deadline) {
+		drain_publications(runtime);
+		if (predicate()) return true;
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	drain_publications(runtime);
+	return predicate();
+}
+
+bool wait_for_viewer_update_idle(
+	wt::WtReadOnlyWorldRuntime &runtime,
+	std::uint64_t expected_viewer_updates
+) {
+	return wait_for_runtime(runtime, [&]() {
+		const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+		return metrics.viewer_updates >= expected_viewer_updates &&
+			runtime_idle(metrics);
+	});
+}
+
+bool wait_for_edit_commit_idle(
+	wt::WtReadOnlyWorldRuntime &runtime,
+	std::uint64_t expected_revision,
+	std::uint64_t expected_commits
+) {
+	return wait_for_runtime(runtime, [&]() {
+		const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+		return runtime.world_revision() >= expected_revision &&
+			metrics.edit_commits >= expected_commits &&
+			runtime_idle(metrics);
+	});
+}
 
 bool collect_until(
 	wt::WtReadOnlyWorldRuntime &runtime,
@@ -135,6 +245,173 @@ bool collect_until(
 		if (!consumed) std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 	return false;
+}
+
+std::size_t edit_retention_fallback_capacity(
+	const std::vector<wt::WtChunkKey> &page_keys
+) {
+	const wt::WtLodPlannerViewer real =
+		planner_viewer(1, 4, 8.0, 1, 1, 0);
+	const std::vector<wt::WtLodPlannerViewer> full_retention = {
+		real,
+		planner_viewer(0x8000000000000001ULL, 1, 48.0, 0, 1, 2),
+		planner_viewer(0x8000000000000002ULL, 2, 88.0, 0, 1, 2),
+		planner_viewer(0x8000000000000003ULL, 3, 8.0, 0, 1, 2),
+	};
+	const std::vector<wt::WtLodPlannerViewer> newest_retention = {
+		real,
+		planner_viewer(0x8000000000000003ULL, 3, 8.0, 0, 1, 2),
+	};
+	const std::vector<wt::WtLodPlannerViewer> reduced_retention = {
+		real,
+		planner_viewer(0x8000000000000001ULL, 1, 48.0, 0, 1, 1),
+		planner_viewer(0x8000000000000002ULL, 2, 88.0, 0, 1, 1),
+		planner_viewer(0x8000000000000003ULL, 3, 8.0, 0, 1, 1),
+	};
+	for (std::size_t capacity = 10; capacity <= 40; ++capacity) {
+		wt::WtBalancedLodPlanner planner(capacity, page_keys);
+		if (!planner.valid()) continue;
+		wt::WtBalancedLodPlan base_plan;
+		wt::WtBalancedLodPlan full_plan;
+		wt::WtBalancedLodPlan newest_plan;
+		wt::WtBalancedLodPlan reduced_plan;
+		if (planner.plan({ real }, {}, {}, base_plan) !=
+			wt::WtBalancedLodPlannerStatus::Ok) {
+			continue;
+		}
+		const wt::WtBalancedLodPlannerStatus full_status =
+			planner.plan(full_retention, {}, {}, full_plan);
+		const wt::WtBalancedLodPlannerStatus newest_status =
+			planner.plan(newest_retention, {}, {}, newest_plan);
+		const wt::WtBalancedLodPlannerStatus reduced_status =
+			planner.plan(reduced_retention, {}, {}, reduced_plan);
+		if (full_status != wt::WtBalancedLodPlannerStatus::Ok &&
+			(newest_status == wt::WtBalancedLodPlannerStatus::Ok ||
+				reduced_status == wt::WtBalancedLodPlannerStatus::Ok)) {
+			return capacity;
+		}
+	}
+	return 0;
+}
+
+bool run_edit_retention_fallback_regression(
+	wt::WtAsyncStorageService &storage,
+	const std::filesystem::path &root
+) {
+	const std::size_t fallback_capacity =
+		edit_retention_fallback_capacity(storage.page_keys());
+	check(fallback_capacity != 0,
+		"edit retention fallback capacity search failed");
+	if (fallback_capacity == 0) return false;
+
+	wt::WtEditJournalStore journal;
+	const std::filesystem::path journal_path =
+		root / "edit_retention_fallback.wtedit";
+	check(journal.open(
+		journal_path,
+		storage.source_revision(),
+		storage.world_revision()
+	) == wt::WtEditJournalStoreStatus::Ok,
+		"edit retention fallback journal open failed");
+	if (!journal.is_open()) return false;
+
+	wt::WtRuntimeConfig config;
+	config.active_chunk_capacity = fallback_capacity;
+	config.viewer_capacity = 4;
+	config.demand_capacity_per_viewer = 125;
+	config.storage_request_capacity = 128;
+	config.storage_completion_capacity = 128;
+	config.encoded_page_entry_capacity = 128;
+	config.decoded_page_entry_capacity = 128;
+	config.mesh_entry_capacity = 128;
+	config.render_entry_capacity = 128;
+	config.collision_entry_capacity = 128;
+	wt::WtReadOnlyWorldRuntime runtime(config, storage, &journal);
+	check(runtime.valid(),
+		"edit retention fallback runtime configuration rejected");
+	if (!runtime.valid()) {
+		journal.close();
+		return false;
+	}
+
+	std::atomic<wt::WtReadOnlyRuntimeStatus> run_status {
+		wt::WtReadOnlyRuntimeStatus::Ok
+	};
+	std::thread worker([&]() { run_status.store(runtime.run()); });
+	bool ok = true;
+	const double centers[] = { 48.0, 88.0, 8.0 };
+	for (std::size_t index = 0; ok && index < 3; ++index) {
+		if (runtime.update_viewer(
+				{ 1, centers[index], 8.0, 8.0, index + 1U },
+				1,
+				1
+			) != wt::WtReadOnlyRuntimeStatus::Ok) {
+			check(false, "edit retention fallback viewer update rejected");
+			ok = false;
+			break;
+		}
+		if (!wait_for_viewer_update_idle(runtime, index + 1U)) {
+			check(false, "edit retention fallback viewer update did not idle");
+			ok = false;
+			break;
+		}
+		const std::uint64_t base_revision = runtime.world_revision();
+		const wt::WtEditTransaction transaction = carve_transaction(
+			storage.source_revision(),
+			base_revision,
+			static_cast<std::uint8_t>(11U + index),
+			centers[index]
+		);
+		if (runtime.submit_edit(transaction) != wt::WtReadOnlyRuntimeStatus::Ok) {
+			check(false, "edit retention fallback edit submit rejected");
+			ok = false;
+			break;
+		}
+		if (!wait_for_edit_commit_idle(
+				runtime,
+				transaction.committed_revision,
+				index + 1U
+			)) {
+			check(false, "edit retention fallback edit did not commit and idle");
+			ok = false;
+			break;
+		}
+	}
+	if (ok && runtime.update_viewer({ 1, 8.0, 8.0, 8.0, 4 }, 1, 1) !=
+			wt::WtReadOnlyRuntimeStatus::Ok) {
+		check(false, "edit retention fallback final viewer update rejected");
+		ok = false;
+	}
+	if (ok && !wait_for_viewer_update_idle(runtime, 4)) {
+		check(false, "edit retention fallback final viewer update did not idle");
+		ok = false;
+	}
+	drain_publications(runtime);
+	const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+	check(metrics.edit_commits == 3 && metrics.edit_rejections == 0,
+		"edit retention fallback edit metrics mismatch");
+	check(metrics.edit_lod_retention_zones == 3,
+		"edit retention fallback did not keep three separated zones");
+	check(metrics.edit_lod_retention_fallbacks != 0,
+		"edit retention fallback path was not exercised");
+	check(metrics.edit_lod_retention_active_viewers != 0,
+		"edit retention fallback dropped all retention viewers");
+	check(metrics.rejected_events == 0,
+		"edit retention fallback rejected a viewer event");
+
+	runtime.request_stop();
+	worker.join();
+	journal.close();
+	check(run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok,
+		"edit retention fallback runtime did not stop cleanly");
+	return ok && metrics.edit_commits == 3 && metrics.edit_rejections == 0 &&
+		metrics.edit_lod_retention_zones == 3 &&
+		metrics.edit_lod_retention_fallbacks != 0 &&
+		metrics.edit_lod_retention_active_viewers != 0 &&
+		metrics.rejected_events == 0 &&
+		run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok;
 }
 
 } // namespace
@@ -258,7 +535,6 @@ int main() {
 
 	runtime.request_stop();
 	worker.join();
-	storage.close();
 	const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
 	check(run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
 		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok,
@@ -267,6 +543,9 @@ int main() {
 		metrics.transition_mesh_completions >= 3 &&
 		metrics.mesh_completions >= 27 && metrics.rejected_events == 0,
 		"multi-LOD runtime metrics mismatch");
+	const bool fallback_retention_ok =
+		run_edit_retention_fallback_regression(storage, fixture.path);
+	storage.close();
 
 	std::vector<std::uint8_t> evidence;
 	append_u64(evidence, plan.entries.size());
@@ -283,6 +562,7 @@ int main() {
 	append_u64(evidence, metrics.viewer_removals);
 	append_u64(evidence, metrics.transition_mesh_completions);
 	append_u64(evidence, storage.page_count());
+	append_u64(evidence, fallback_retention_ok ? 1U : 0U);
 
 	if (failure_count != 0) {
 		std::fprintf(stderr, "PRODUCTION_LOD_STREAMING_FAIL failures=%d\n",
@@ -292,11 +572,13 @@ int main() {
 	std::printf(
 		"PRODUCTION_LOD_STREAMING_EVIDENCE entries=%zu mask=%u "
 		"retained_entries=%zu retained_edit_key=%d "
-		"bridge0=%llu/%llu bridge1=%llu/%llu transition_completions=%llu\n",
+		"fallback_retention=%d bridge0=%llu/%llu bridge1=%llu/%llu "
+		"transition_completions=%llu\n",
 		plan.entries.size(),
 		bridge == nullptr ? 0U : static_cast<unsigned int>(bridge->transition_mask),
 		retained_plan.entries.size(),
 		find_entry(retained_plan, retained_edit_key) != nullptr ? 1 : 0,
+		fallback_retention_ok ? 1 : 0,
 		static_cast<unsigned long long>(publications.bridge_vertices[0]),
 		static_cast<unsigned long long>(publications.bridge_indices[0]),
 		static_cast<unsigned long long>(publications.bridge_vertices[1]),
