@@ -23,10 +23,13 @@
 namespace world_transvoxel {
 namespace {
 
-constexpr std::size_t kWtEditLodRetentionCapacity = 32;
+constexpr std::size_t kWtEditLodRetentionCapacity = 64;
 constexpr std::uint64_t kWtEditLodRetentionViewerIdBase =
 	0x8000000000000000ULL;
-constexpr std::uint32_t kWtEditLodRetentionRadiusChunks = 1;
+constexpr std::uint32_t kWtEditLodRetentionRootRadiusChunks = 0;
+constexpr std::uint32_t kWtEditLodRetentionMinimumRefinementRadiusChunks = 1;
+constexpr std::uint32_t kWtEditLodRetentionMaximumRefinementRadiusChunks = 3;
+constexpr std::uint32_t kWtEditLodRetentionRefinementMarginChunks = 1;
 constexpr double kWtEditLodRetentionMergeDistance = 32.0;
 constexpr double kWtEditLodRetentionVisibilitySlackRoots = 1.0;
 
@@ -85,18 +88,77 @@ double bounds_center_axis(
 		static_cast<double>(maximum) * 0.5;
 }
 
-double squared_distance(
-	double ax,
-	double ay,
-	double az,
-	double bx,
-	double by,
-	double bz
+double interval_distance(
+	std::int64_t a_minimum,
+	std::int64_t a_maximum,
+	std::int64_t b_minimum,
+	std::int64_t b_maximum
 ) noexcept {
-	const double dx = ax - bx;
-	const double dy = ay - by;
-	const double dz = az - bz;
+	if (a_maximum < b_minimum) {
+		return static_cast<double>(b_minimum - a_maximum);
+	}
+	if (b_maximum < a_minimum) {
+		return static_cast<double>(a_minimum - b_maximum);
+	}
+	return 0.0;
+}
+
+double point_interval_distance(
+	double point,
+	std::int64_t minimum,
+	std::int64_t maximum
+) noexcept {
+	if (point < static_cast<double>(minimum)) {
+		return static_cast<double>(minimum) - point;
+	}
+	if (point > static_cast<double>(maximum)) {
+		return point - static_cast<double>(maximum);
+	}
+	return 0.0;
+}
+
+double bounds_distance_squared(
+	const WtEditBounds &a,
+	const WtEditBounds &b
+) noexcept {
+	const double dx = interval_distance(
+		a.minimum.x, a.maximum.x, b.minimum.x, b.maximum.x
+	);
+	const double dy = interval_distance(
+		a.minimum.y, a.maximum.y, b.minimum.y, b.maximum.y
+	);
+	const double dz = interval_distance(
+		a.minimum.z, a.maximum.z, b.minimum.z, b.maximum.z
+	);
 	return dx * dx + dy * dy + dz * dz;
+}
+
+std::uint32_t edit_lod_retention_unbounded_refinement_radius(
+	const WtGridPoint &minimum,
+	const WtGridPoint &maximum
+) noexcept {
+	const double half_x = std::abs(bounds_center_axis(minimum.x, maximum.x) -
+		static_cast<double>(minimum.x));
+	const double half_y = std::abs(bounds_center_axis(minimum.y, maximum.y) -
+		static_cast<double>(minimum.y));
+	const double half_z = std::abs(bounds_center_axis(minimum.z, maximum.z) -
+		static_cast<double>(minimum.z));
+	const double half_extent = std::max({ half_x, half_y, half_z });
+	const double lod0_extent = static_cast<double>(wt_chunk_extent(0));
+	return static_cast<std::uint32_t>(
+		std::ceil(half_extent / lod0_extent)
+	) + kWtEditLodRetentionRefinementMarginChunks;
+}
+
+std::uint32_t edit_lod_retention_refinement_radius(
+	const WtGridPoint &minimum,
+	const WtGridPoint &maximum
+) noexcept {
+	return std::clamp(
+		edit_lod_retention_unbounded_refinement_radius(minimum, maximum),
+		kWtEditLodRetentionMinimumRefinementRadiusChunks,
+		kWtEditLodRetentionMaximumRefinementRadiusChunks
+	);
 }
 
 } // namespace
@@ -272,27 +334,63 @@ void WtReadOnlyWorldRuntime::remember_edit_lod_retention_zones(
 ) {
 	for (const WtEditCommand &command : transaction.commands) {
 		EditLodRetentionZone zone;
-		zone.x = bounds_center_axis(command.bounds.minimum.x,
-			command.bounds.maximum.x);
-		zone.y = bounds_center_axis(command.bounds.minimum.y,
-			command.bounds.maximum.y);
-		zone.z = bounds_center_axis(command.bounds.minimum.z,
-			command.bounds.maximum.z);
+		zone.minimum = command.bounds.minimum;
+		zone.maximum = command.bounds.maximum;
+		zone.x = bounds_center_axis(zone.minimum.x, zone.maximum.x);
+		zone.y = bounds_center_axis(zone.minimum.y, zone.maximum.y);
+		zone.z = bounds_center_axis(zone.minimum.z, zone.maximum.z);
+		zone.refinement_radius_chunks =
+			edit_lod_retention_refinement_radius(zone.minimum, zone.maximum);
 		zone.revision = next_edit_lod_retention_revision_++;
 		bool merged = false;
 		const double merge_distance_squared =
 			kWtEditLodRetentionMergeDistance *
 			kWtEditLodRetentionMergeDistance;
+		const WtEditBounds zone_bounds{ zone.minimum, zone.maximum };
 		for (EditLodRetentionZone &existing : edit_lod_retention_zones_) {
-			if (squared_distance(
-					existing.x, existing.y, existing.z,
-					zone.x, zone.y, zone.z
-				) > merge_distance_squared) {
+			const WtEditBounds existing_bounds{
+				existing.minimum,
+				existing.maximum
+			};
+			if (bounds_distance_squared(existing_bounds, zone_bounds) >
+				merge_distance_squared) {
 				continue;
 			}
-			existing.x = (existing.x + zone.x) * 0.5;
-			existing.y = (existing.y + zone.y) * 0.5;
-			existing.z = (existing.z + zone.z) * 0.5;
+			const WtGridPoint merged_minimum{
+				std::min(existing.minimum.x, zone.minimum.x),
+				std::min(existing.minimum.y, zone.minimum.y),
+				std::min(existing.minimum.z, zone.minimum.z),
+			};
+			const WtGridPoint merged_maximum{
+				std::max(existing.maximum.x, zone.maximum.x),
+				std::max(existing.maximum.y, zone.maximum.y),
+				std::max(existing.maximum.z, zone.maximum.z),
+			};
+			if (edit_lod_retention_unbounded_refinement_radius(
+					merged_minimum,
+					merged_maximum
+				) > kWtEditLodRetentionMaximumRefinementRadiusChunks) {
+				continue;
+			}
+			existing.minimum = merged_minimum;
+			existing.maximum = merged_maximum;
+			existing.x = bounds_center_axis(
+				existing.minimum.x,
+				existing.maximum.x
+			);
+			existing.y = bounds_center_axis(
+				existing.minimum.y,
+				existing.maximum.y
+			);
+			existing.z = bounds_center_axis(
+				existing.minimum.z,
+				existing.maximum.z
+			);
+			existing.refinement_radius_chunks =
+				edit_lod_retention_refinement_radius(
+					existing.minimum,
+					existing.maximum
+				);
 			existing.revision = zone.revision;
 			merged = true;
 			break;
@@ -341,8 +439,16 @@ std::size_t WtReadOnlyWorldRuntime::append_edit_lod_retention_viewers(
 			const double active_distance =
 				(static_cast<double>(viewer.radius_chunks) +
 					kWtEditLodRetentionVisibilitySlackRoots) * root_extent;
-			if (std::abs(zone.x - viewer.snapshot.x) <= active_distance &&
-				std::abs(zone.z - viewer.snapshot.z) <= active_distance) {
+			if (point_interval_distance(
+					viewer.snapshot.x,
+					zone.minimum.x,
+					zone.maximum.x
+				) <= active_distance &&
+				point_interval_distance(
+					viewer.snapshot.z,
+					zone.minimum.z,
+					zone.maximum.z
+				) <= active_distance) {
 				visible_to_real_viewer = true;
 				break;
 			}
@@ -359,8 +465,9 @@ std::size_t WtReadOnlyWorldRuntime::append_edit_lod_retention_viewers(
 				zone.z,
 				zone.revision,
 			},
-			kWtEditLodRetentionRadiusChunks,
+			kWtEditLodRetentionRootRadiusChunks,
 			maximum_lod,
+			zone.refinement_radius_chunks,
 		});
 		++appended;
 	}

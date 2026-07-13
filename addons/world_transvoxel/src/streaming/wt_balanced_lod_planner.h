@@ -14,6 +14,7 @@ struct WtLodPlannerViewer {
 	WtViewerSnapshot snapshot;
 	std::uint32_t radius_chunks = 0;
 	std::uint8_t maximum_lod = 0;
+	std::uint32_t refinement_radius_chunks = 0;
 };
 
 struct WtBalancedLodPlan {

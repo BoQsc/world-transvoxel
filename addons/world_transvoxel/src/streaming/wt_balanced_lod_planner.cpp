@@ -159,8 +159,11 @@ bool WtBalancedLodPlanner::should_refine(
 	if (key.lod == 0) return false;
 	const double child_extent = static_cast<double>(wt_chunk_extent(key.lod - 1));
 	for (const WtLodPlannerViewer &viewer : viewers) {
-		std::uint32_t refinement_radius = viewer.radius_chunks;
-		if (refinement_radius_limit_chunks_ != 0) {
+		std::uint32_t refinement_radius = viewer.refinement_radius_chunks != 0 ?
+			viewer.refinement_radius_chunks :
+			viewer.radius_chunks;
+		if (viewer.refinement_radius_chunks == 0 &&
+			refinement_radius_limit_chunks_ != 0) {
 			refinement_radius = std::min(
 				refinement_radius,
 				refinement_radius_limit_chunks_
@@ -281,7 +284,8 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 			!std::isfinite(viewer.snapshot.y) ||
 			!std::isfinite(viewer.snapshot.z) ||
 			viewer.maximum_lod > kWtMaximumLod ||
-			!bounded_radius(viewer.radius_chunks)) {
+			!bounded_radius(viewer.radius_chunks) ||
+			!bounded_radius(viewer.refinement_radius_chunks)) {
 			return WtBalancedLodPlannerStatus::InvalidViewer;
 		}
 		if (index != 0 && ordered[index - 1].snapshot.id == viewer.snapshot.id) {

@@ -229,6 +229,9 @@ private:
 		double x = 0.0;
 		double y = 0.0;
 		double z = 0.0;
+		WtGridPoint minimum;
+		WtGridPoint maximum;
+		std::uint32_t refinement_radius_chunks = 1;
 		std::uint64_t revision = 0;
 	};
 
