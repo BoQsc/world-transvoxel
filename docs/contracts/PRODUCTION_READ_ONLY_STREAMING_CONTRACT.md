@@ -43,6 +43,32 @@ Distance priority and collision hysteresis are evaluated against every active
 viewer. GDScript owns no page catalog, chunk map, balancing loop, or meshing
 work.
 
+## Edited terrain LOD retention boundary
+
+Edited terrain LOD retention is part of the streaming contract, but it is not an
+unlimited promise that every edit remains at near-detail LOD from every future
+camera distance. The runtime remembers recent edit-retention zones and injects
+them into planning as temporary retention viewers. When a full retention plan is
+too expensive, planning must degrade retention in priority order instead of
+dropping all retention:
+
+1. keep newest/visible edit zones first;
+2. reduce edit-retention refinement radius when needed;
+3. fall back to no edit-retention only if no degraded plan fits.
+
+This boundary is serious for games with mining, tunneling, or player-made
+terrain structures. A distant edited hole may still simplify if the project
+chooses budgets that cannot keep that edit refined. That is acceptable only when
+the game has explicitly chosen that tradeoff and has validated the resulting
+visual behavior. It is not acceptable for fallback pressure to silently erase all
+edit-retention viewers while reporting a settled runtime.
+
+Downstream projects must carry this contract forward. Any profile that claims
+seamless edited terrain must include close/mid/far/back movement validation after
+player-like edits and must record whether edit-retention remained active,
+whether persistence samples changed, and whether rendered geometry stayed free of
+open/nonmanifold gaps.
+
 ## Thread and queue ownership
 
 The lifecycle control thread owns the planner, desired set, scheduler,
@@ -74,11 +100,11 @@ Debug and release hash:
 `test_wt_production_lod_streaming.cpp` bakes 28 hierarchical LOD1/LOD0 plane
 pages and proves bounded planning, capacity/duplicate rejection, 2:1 leaves,
 coarse transition ownership, two-viewer balancing, movement, transition-mask
-generation replacement, page-backed official MIT transition meshing, and
-shutdown. Debug and release hash:
+generation replacement, page-backed official MIT transition meshing, edit-LOD
+fallback retention under planner pressure, and shutdown. Debug and release hash:
 
 ```text
-cf0d7ca3f67013d99d0f909368d179aa6878a0bbd7b57ee409ac5c8994681102
+ef4df95133626103ee5a11db6a73e444000a587ffb24bb9643470e4642dccb9d
 ```
 
 `production_streaming_test.gd` and `production_lod_streaming_test.gd` prove

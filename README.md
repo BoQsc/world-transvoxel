@@ -63,6 +63,18 @@ acceptance tests, and production finish line.
 
 If another project document conflicts with the charter, the charter controls.
 
+## Critical edited-terrain LOD boundary
+
+World Transvoxel streams a bounded active chunk set. Recent edit-retention keeps
+newly dug or placed terrain refined longer as a player moves away, and fallback
+pressure now degrades retention instead of dropping it all at once. This is still
+a budgeted guarantee, not a promise that every edited region remains high-detail
+from every distance. Games with mining, tunneling, or player-made terrain must
+carry the edited-LOD-retention contract in
+[addons/world_transvoxel/OPERATING_LIMITS.md](addons/world_transvoxel/OPERATING_LIMITS.md)
+and validate their chosen camera distances, active chunk capacity, viewer radius,
+and edit-retention behavior before claiming seamless edited terrain.
+
 ## Current phase
 
 R0 through M5 are complete. The addon now has the exact native cell backend,
