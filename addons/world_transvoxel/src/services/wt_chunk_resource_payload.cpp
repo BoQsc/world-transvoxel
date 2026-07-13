@@ -133,6 +133,7 @@ bool wt_is_valid_render_payload(const WtRenderPayload &render) noexcept {
 	if (!wt_is_valid_chunk_key(render.key) ||
 		render.generation.value == 0 ||
 		render.world_origin != wt_chunk_bounds(render.key).minimum ||
+		(render.transition_mask & 0xC0U) != 0 ||
 		render.vertices.size() > kWtMaximumRenderVertices ||
 		render.indices.size() > kWtMaximumRenderIndices ||
 		(render.indices.size() % 3U) != 0) {
@@ -158,6 +159,7 @@ bool wt_equal_render_payload(
 	if (left.key != right.key ||
 		left.generation != right.generation ||
 		left.world_origin != right.world_origin ||
+		left.transition_mask != right.transition_mask ||
 		left.vertices.size() != right.vertices.size() ||
 		left.indices != right.indices) {
 		return false;

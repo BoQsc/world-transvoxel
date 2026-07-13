@@ -13,6 +13,9 @@ namespace world_transvoxel {
 void WorldTransvoxelTerrain::_process(double delta) {
 	(void)delta;
 	drain_world_publications();
+	render_sink_->set_visibility_staging_reference_chunks(
+		pending_chunk_retirements_
+	);
 	render_sink_->set_new_record_visibility_staging_enabled(
 		!pending_chunk_retirements_.empty()
 	);

@@ -77,7 +77,8 @@ public:
 		const WtChunkKey &key,
 		std::uint64_t source_revision,
 		std::uint64_t world_revision,
-		std::int32_t priority
+		std::int32_t priority,
+		bool force_remesh = false
 	);
 	WtSchedulerStatus cancel_chunk(const WtChunkKey &key);
 	WtSchedulerStatus forget_chunk(const WtChunkKey &key);

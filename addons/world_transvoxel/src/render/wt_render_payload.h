@@ -24,6 +24,7 @@ struct WtRenderPayload {
 	WtChunkKey key;
 	WtGenerationToken generation;
 	WtGridPoint world_origin;
+	std::uint8_t transition_mask = 0;
 	std::vector<WtRenderVertex> vertices;
 	std::vector<std::uint32_t> indices;
 

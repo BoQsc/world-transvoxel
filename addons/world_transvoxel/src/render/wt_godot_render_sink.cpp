@@ -15,6 +15,7 @@
 #include <godot_cpp/variant/vector3.hpp>
 
 #include <cstdint>
+#include <vector>
 
 namespace world_transvoxel {
 namespace {
@@ -108,7 +109,6 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	positions.resize(static_cast<std::int64_t>(payload.vertices.size()));
 	normals.resize(static_cast<std::int64_t>(payload.vertices.size()));
 	materials.resize(static_cast<std::int64_t>(payload.vertices.size()));
-	indices.resize(static_cast<std::int64_t>(payload.indices.size()));
 	// Render chunks share seam vertices across separate MeshInstance3D draw
 	// calls. Store render positions in a common world-space frame and keep the
 	// instance transform identity so the GPU receives identical seam positions
@@ -126,21 +126,21 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 			static_cast<godot::real_t>(vertex.material), 0.0
 		});
 	}
+	std::vector<std::int32_t> godot_indices;
+	godot_indices.reserve(payload.indices.size());
 	for (std::size_t triangle = 0; triangle < payload.indices.size(); triangle += 3) {
-		// World Transvoxel stores outward triangles counterclockwise. Godot
-		// defines clockwise triangle winding as front-facing, so adapt only at
-		// the engine boundary while preserving the authoritative payload.
+		const std::uint32_t index_a = payload.indices[triangle];
+		const std::uint32_t index_b = payload.indices[triangle + 1];
+		const std::uint32_t index_c = payload.indices[triangle + 2];
+		godot_indices.push_back(static_cast<std::int32_t>(index_a));
+		godot_indices.push_back(static_cast<std::int32_t>(index_c));
+		godot_indices.push_back(static_cast<std::int32_t>(index_b));
+	}
+	indices.resize(static_cast<std::int64_t>(godot_indices.size()));
+	for (std::size_t index = 0; index < godot_indices.size(); ++index) {
 		indices.set(
-			static_cast<std::int64_t>(triangle),
-			static_cast<std::int32_t>(payload.indices[triangle])
-		);
-		indices.set(
-			static_cast<std::int64_t>(triangle + 1),
-			static_cast<std::int32_t>(payload.indices[triangle + 2])
-		);
-		indices.set(
-			static_cast<std::int64_t>(triangle + 2),
-			static_cast<std::int32_t>(payload.indices[triangle + 1])
+			static_cast<std::int64_t>(index),
+			godot_indices[index]
 		);
 	}
 	godot::Array arrays;
@@ -160,8 +160,18 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 		record.key = payload.key;
 		record.instance->set_name(chunk_name(payload.key));
 		owner_.add_child(record.instance);
-		record.staged = new_record_visibility_staging_enabled_;
+		record.staged = should_stage_created_record(payload.key);
 	} else {
+		if (should_stage_existing_replacement(payload.key)) {
+			record.staged_mesh = mesh;
+			record.staged_generation = payload.generation;
+			record.staged = true;
+			record.retiring = false;
+			record.introducing = false;
+			record.retirement_frame = 0;
+			record.introduction_frame = 0;
+			return true;
+		}
 		godot::Ref<godot::Mesh> retiring_mesh = record.instance->get_mesh();
 		if (transition_frames_ > 0U && retiring_mesh.is_valid()) {
 			Record retirement;
@@ -189,6 +199,8 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	record.retirement_start_transparency = 0.0F;
 	record.introducing = transition_frames_ > 0U;
 	record.introduction_frame = 0;
+	record.staged_mesh.unref();
+	record.staged_generation = {};
 	record.instance->set_position(godot::Vector3{});
 	record.instance->set_mesh(mesh);
 	record.instance->set_visible(!record.staged);
@@ -348,6 +360,12 @@ void WtGodotRenderSink::set_new_record_visibility_staging_enabled(
 	new_record_visibility_staging_enabled_ = enabled;
 }
 
+void WtGodotRenderSink::set_visibility_staging_reference_chunks(
+	const std::vector<WtChunkKey> &keys
+) {
+	visibility_staging_reference_chunks_ = keys;
+}
+
 bool WtGodotRenderSink::has_staged_records() const noexcept {
 	for (const auto &entry : records_) {
 		if (entry.second.staged) {
@@ -365,6 +383,18 @@ void WtGodotRenderSink::publish_staged_records() noexcept {
 		Record &record = entry.second;
 		if (!record.staged || record.instance == nullptr) {
 			continue;
+		}
+		if (record.staged_mesh.is_valid()) {
+			record.instance->set_mesh(record.staged_mesh);
+			record.generation = record.staged_generation;
+			record.staged_mesh.unref();
+			record.staged_generation = {};
+			record.retiring = false;
+			record.introducing = false;
+			record.retirement_frame = 0;
+			record.introduction_frame = 0;
+			record.retirement_start_transparency = 0.0F;
+			set_record_transparency(record, 0.0F);
 		}
 		record.staged = false;
 		record.instance->set_visible(true);
@@ -430,6 +460,46 @@ std::uint32_t WtGodotRenderSink::get_transition_frames() const noexcept {
 
 bool WtGodotRenderSink::on_owner_thread() const noexcept {
 	return std::this_thread::get_id() == owner_thread_;
+}
+
+bool WtGodotRenderSink::should_stage_created_record(
+	const WtChunkKey &key
+) const noexcept {
+	if (!new_record_visibility_staging_enabled_) {
+		return false;
+	}
+	if (visibility_staging_reference_chunks_.empty()) {
+		return true;
+	}
+	const WtChunkBounds bounds = wt_chunk_bounds(key);
+	for (const WtChunkKey &reference_key : visibility_staging_reference_chunks_) {
+		const WtChunkBounds reference_bounds = wt_chunk_bounds(reference_key);
+		const bool overlaps =
+			bounds.minimum.x < reference_bounds.maximum.x &&
+			reference_bounds.minimum.x < bounds.maximum.x &&
+			bounds.minimum.y < reference_bounds.maximum.y &&
+			reference_bounds.minimum.y < bounds.maximum.y &&
+			bounds.minimum.z < reference_bounds.maximum.z &&
+			reference_bounds.minimum.z < bounds.maximum.z;
+		const bool touches_or_overlaps =
+			bounds.minimum.x <= reference_bounds.maximum.x &&
+			reference_bounds.minimum.x <= bounds.maximum.x &&
+			bounds.minimum.y <= reference_bounds.maximum.y &&
+			reference_bounds.minimum.y <= bounds.maximum.y &&
+			bounds.minimum.z <= reference_bounds.maximum.z &&
+			reference_bounds.minimum.z <= bounds.maximum.z;
+		if (overlaps || (touches_or_overlaps && key.lod != reference_key.lod)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool WtGodotRenderSink::should_stage_existing_replacement(
+	const WtChunkKey &key
+) const noexcept {
+	(void)key;
+	return new_record_visibility_staging_enabled_;
 }
 
 } // namespace world_transvoxel

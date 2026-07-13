@@ -135,6 +135,38 @@ double mesh_triangle_normal_alignment(
 	return cross_x * normal_x + cross_y * normal_y + cross_z * normal_z;
 }
 
+int face_axis(wt::WtChunkFace face) {
+	return static_cast<int>(face) / 2;
+}
+
+bool positive_face(wt::WtChunkFace face) {
+	return (static_cast<unsigned int>(face) & 1U) != 0U;
+}
+
+QuantizedPoint quantize_test_point(
+	const wt::WtVec3 &position,
+	const wt::WtGridPoint &origin
+) {
+	constexpr double scale = 1000000.0;
+	return {
+		static_cast<std::int64_t>(std::llround(
+			(static_cast<double>(origin.x) + position.x) * scale)),
+		static_cast<std::int64_t>(std::llround(
+			(static_cast<double>(origin.y) + position.y) * scale)),
+		static_cast<std::int64_t>(std::llround(
+			(static_cast<double>(origin.z) + position.z) * scale)),
+	};
+}
+
+Edge make_test_edge(QuantizedPoint a, QuantizedPoint b) {
+	if (b < a) {
+		const QuantizedPoint temporary = a;
+		a = b;
+		b = temporary;
+	}
+	return { a, b };
+}
+
 std::vector<wt::WtEditCommand> human_boundary_repro_commands() {
 	const ReproSphereEdit edits[] = {
 		{ 1183.96289, 119.422333, 1006.94098, 1.80000305 },
@@ -184,26 +216,41 @@ wt::WtProceduralWorldDescriptor human_boundary_repro_descriptor() {
 	return descriptor;
 }
 
-wt::WtChunkPage generate_procedural_page(
+bool try_generate_procedural_page(
 	const wt::WtProceduralWorldDescriptor &descriptor,
-	const wt::WtChunkKey &key
+	const wt::WtChunkKey &key,
+	wt::WtChunkPage &page
 ) {
 	std::uint64_t bytes_read = 0;
 	const wt::WtPageLoadCompletion completion =
 		wt::wt_generate_procedural_page(descriptor, key, {}, bytes_read);
-	check(completion.status == wt::WtPageLoadStatus::Ok &&
-		completion.page_bytes != nullptr, "human boundary repro page generation failed");
+	if (completion.status != wt::WtPageLoadStatus::Ok ||
+		completion.page_bytes == nullptr) {
+		return false;
+	}
 	wt::WtChunkPageView view;
-	check(wt::wt_open_chunk_page(
+	if (wt::wt_open_chunk_page(
 			{ completion.page_bytes->data(), completion.page_bytes->size() },
 			view
-		) == wt::WtChunkPageStatus::Ok,
-		"human boundary repro page open failed");
+		) != wt::WtChunkPageStatus::Ok) {
+		return false;
+	}
+	if (wt::wt_decode_chunk_page(view, page) != wt::WtChunkPageStatus::Ok) {
+		return false;
+	}
+	if (page.metadata.key != key) {
+		return false;
+	}
+	return true;
+}
+
+wt::WtChunkPage generate_procedural_page(
+	const wt::WtProceduralWorldDescriptor &descriptor,
+	const wt::WtChunkKey &key
+) {
 	wt::WtChunkPage page;
-	check(wt::wt_decode_chunk_page(view, page) == wt::WtChunkPageStatus::Ok,
-		"human boundary repro page decode failed");
-	check(page.metadata.key == key,
-		"human boundary repro generated wrong page key");
+	check(try_generate_procedural_page(descriptor, key, page),
+		"human boundary repro page generation failed");
 	return page;
 }
 
@@ -246,6 +293,80 @@ wt::WtChunkMeshResult mesh_page_direct(
 	return result;
 }
 
+bool try_mesh_procedural_page_with_transition_support(
+	const wt::WtChunkMesher &mesher,
+	wt::WtChunkMeshingScratch &scratch,
+	const wt::WtProceduralWorldDescriptor &descriptor,
+	const wt::WtChunkKey &key,
+	std::uint8_t transition_mask,
+	wt::WtChunkMeshResult &result
+) {
+	std::vector<wt::WtChunkPage> pages;
+	pages.reserve(1U + wt::kWtMaximumTransitionSupportPages);
+	pages.emplace_back();
+	if (!try_generate_procedural_page(descriptor, key, pages.back())) {
+		return false;
+	}
+	wt::WtChunkPageSampleSource source(pages.front());
+	if (source.status() != wt::WtChunkPageSampleSourceStatus::Ok) {
+		return false;
+	}
+	for (unsigned int face_index = 0; face_index < 6; ++face_index) {
+		const wt::WtChunkFace face = static_cast<wt::WtChunkFace>(face_index);
+		if ((transition_mask & wt::wt_face_bit(face)) == 0) {
+			continue;
+		}
+		std::array<wt::WtChunkKey, wt::kWtTransitionSupportPagesPerFace> support_keys{};
+		if (!wt::wt_transition_support_page_keys(key, face, support_keys)) {
+			return false;
+		}
+		for (const wt::WtChunkKey &support_key : support_keys) {
+			pages.emplace_back();
+			if (!try_generate_procedural_page(descriptor, support_key, pages.back())) {
+				return false;
+			}
+			if (source.add_transition_support_page(pages.back()) !=
+					wt::WtChunkPageSampleSourceStatus::Ok) {
+				return false;
+			}
+		}
+	}
+	if (!source.has_transition_support(transition_mask)) {
+		return false;
+	}
+	return mesher.mesh(
+			{ key, transition_mask, 0.0F, 0.25F },
+			source,
+			result,
+			scratch
+		) == wt::WtChunkMeshingStatus::Ok;
+}
+
+wt::WtChunkMeshResult mesh_procedural_page_with_transition_support(
+	const wt::WtChunkMesher &mesher,
+	wt::WtChunkMeshingScratch &scratch,
+	const wt::WtProceduralWorldDescriptor &descriptor,
+	const wt::WtChunkKey &key,
+	std::uint8_t transition_mask
+) {
+	wt::WtChunkMeshResult result;
+	check(try_mesh_procedural_page_with_transition_support(
+			mesher,
+			scratch,
+			descriptor,
+			key,
+			transition_mask,
+			result
+		),
+		"streaming pixel repro transition mesh failed");
+	validate_buffer(result.regular, "invalid streaming pixel repro regular mesh");
+	for (unsigned int face_index = 0; face_index < 6; ++face_index) {
+		validate_buffer(result.transitions[face_index],
+			"invalid streaming pixel repro transition mesh");
+	}
+	return result;
+}
+
 void check_mesh_winding_matches_normals(
 	const wt::WtChunkMeshBuffer &mesh,
 	const char *message
@@ -257,6 +378,106 @@ void check_mesh_winding_matches_normals(
 		}
 	}
 	check(negative == 0, message);
+}
+
+void test_streaming_pixel_transition_repro(std::vector<std::uint8_t> &evidence) {
+	const wt::WtChunkMesher mesher(wt::wt_get_transvoxel_mit_backend());
+	wt::WtChunkMeshingScratch scratch;
+	const wt::WtProceduralWorldDescriptor descriptor =
+		human_boundary_repro_descriptor();
+	const wt::WtChunkKey coarse_key = { 16, 1, 17, 2 };
+	const wt::WtChunkFace face = wt::WtChunkFace::NegativeZ;
+	const std::uint8_t mask = wt::wt_face_bit(face);
+	wt::WtChunkMeshResult coarse = mesh_procedural_page_with_transition_support(
+		mesher,
+		scratch,
+		descriptor,
+		coarse_key,
+		mask
+	);
+	const std::size_t face_index = static_cast<std::size_t>(face);
+	check(!coarse.transitions[face_index].indices.empty(),
+		"streaming pixel repro transition face is empty");
+	check_mesh_winding_matches_normals(
+		coarse.regular,
+		"streaming pixel repro coarse regular winding mismatch"
+	);
+	check_mesh_winding_matches_normals(
+		coarse.transitions[face_index],
+		"streaming pixel repro coarse transition winding mismatch"
+	);
+	const wt::WtChunkBounds coarse_bounds = wt::wt_chunk_bounds(coarse_key);
+	const int axis = face_axis(face);
+	const double full_plane = positive_face(face) ?
+		static_cast<double>(coarse_bounds.maximum.z) :
+		static_cast<double>(coarse_bounds.minimum.z);
+	const double width =
+		static_cast<double>(wt::wt_lod_cell_size(coarse_key.lod)) * 0.25;
+	const double half_plane = positive_face(face) ?
+		full_plane - width :
+		full_plane + width;
+	const EdgeSet transition_full = plane_boundary_edges(
+		coarse.transitions[face_index],
+		coarse.world_origin,
+		axis,
+		full_plane
+	);
+	const EdgeSet transition_half = plane_boundary_edges(
+		coarse.transitions[face_index],
+		coarse.world_origin,
+		axis,
+		half_plane
+	);
+	const EdgeSet coarse_regular = plane_boundary_edges(
+		coarse.regular,
+		coarse.world_origin,
+		axis,
+		half_plane
+	);
+	check(!transition_full.empty(),
+		"streaming pixel repro transition full contour is empty");
+	check(transition_half == coarse_regular,
+		"streaming pixel repro transition half contour does not match coarse regular mesh");
+
+	std::array<wt::WtChunkKey, wt::kWtTransitionSupportPagesPerFace> support_keys{};
+	check(wt::wt_transition_support_page_keys(coarse_key, face, support_keys),
+		"streaming pixel repro support key query failed");
+	EdgeSet fine_edges;
+	for (const wt::WtChunkKey &support_key : support_keys) {
+		wt::WtChunkPage page = generate_procedural_page(descriptor, support_key);
+		wt::WtChunkMeshResult fine = mesh_page_direct(mesher, scratch, page);
+		check_mesh_winding_matches_normals(
+			fine.regular,
+			"streaming pixel repro fine winding mismatch"
+		);
+		const EdgeSet edges = plane_boundary_edges(
+			fine.regular,
+			fine.world_origin,
+			axis,
+			full_plane
+		);
+		fine_edges.insert(edges.begin(), edges.end());
+	}
+	std::size_t missing_fine_edges = 0;
+	for (const Edge &edge : fine_edges) {
+		if (transition_full.find(edge) == transition_full.end()) {
+			++missing_fine_edges;
+		}
+	}
+	std::size_t extra_transition_edges = 0;
+	for (const Edge &edge : transition_full) {
+		if (fine_edges.find(edge) == fine_edges.end()) {
+			++extra_transition_edges;
+		}
+	}
+	check(missing_fine_edges == 0,
+		"streaming pixel repro transition full contour is missing fine neighbor edges");
+	evidence.push_back(static_cast<std::uint8_t>(transition_full.size()));
+	evidence.push_back(static_cast<std::uint8_t>(fine_edges.size()));
+	evidence.push_back(static_cast<std::uint8_t>(missing_fine_edges));
+	evidence.push_back(static_cast<std::uint8_t>(extra_transition_edges));
+	evidence.push_back(static_cast<std::uint8_t>(transition_half.size()));
+	evidence.push_back(static_cast<std::uint8_t>(coarse_regular.size()));
 }
 
 void test_human_boundary_edit_repro(std::vector<std::uint8_t> &evidence) {
@@ -908,6 +1129,7 @@ int main() {
 	);
 	std::vector<std::uint8_t> evidence;
 	test_human_boundary_edit_repro(evidence);
+	test_streaming_pixel_transition_repro(evidence);
 	test_runtime_lifecycle(fixture, evidence);
 	test_storage_backpressure_retry(fixture);
 	test_missing_support(fixture);

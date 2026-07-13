@@ -108,7 +108,14 @@ and release it proves:
 - official MIT page-backed transition meshing and post-mesh pin release;
 - invalidation through a support key after meshing;
 - generation cancellation and rejection of thirteen late completions;
-- typed failure when one required support key is absent from the manifest.
+- typed failure when one required support key is absent from the manifest;
+- the captured human boundary edit repro keeps same-LOD chunk seams matched
+  after multiple small sphere carves;
+- the captured streaming-pixel transition repro keeps required fine-neighbor
+  transition coverage and winding valid at a protected LOD seam corner. Extra
+  protected-corner contour edges are tracked as evidence; they are not treated
+  as a native missing-fine-edge failure by this contract. Godot-side visibility
+  of this case is owned by the integration terrain material/visual gates.
 
 The workload and edit-replacement tests additionally prove desired-set
 release/repriority and edit-replacement cancellation calls through the narrow
@@ -117,7 +124,7 @@ owner interface.
 The locked aggregate hash is:
 
 ```text
-6a48df5bc3b9b3111e054893fcae59be6558ed5d82aeaf93d74ed4f8fc65bf4c
+eda16ec77cd4f6deb8ef30fcc8ac5ed9cf4137fef8f4977ee9072063e632a0aa
 ```
 
 This completes native support-page scheduling, pinning, cancellation, and

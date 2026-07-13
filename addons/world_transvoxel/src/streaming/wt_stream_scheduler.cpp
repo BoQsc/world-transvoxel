@@ -162,13 +162,16 @@ WtSchedulerStatus WtStreamScheduler::request_chunk_version(
 	const WtChunkKey &key,
 	std::uint64_t source_revision,
 	std::uint64_t world_revision,
-	std::int32_t priority
+	std::int32_t priority,
+	bool force_remesh
 ) {
 	if (!wt_is_valid_chunk_key(key)) {
 		return WtSchedulerStatus::InvalidKey;
 	}
 	WtChunkRecord *record = find_record_mutable(key);
-	if (record != nullptr && record->source_revision == source_revision &&
+	if (!force_remesh &&
+		record != nullptr &&
+		record->source_revision == source_revision &&
 		record->world_revision == world_revision &&
 		record->lifecycle == WtChunkLifecycle::Ready) {
 		return WtSchedulerStatus::AlreadyCurrent;

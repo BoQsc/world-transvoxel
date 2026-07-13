@@ -79,7 +79,7 @@ func _run_test() -> void:
 	if bridge == null or bridge.get_instance_id() != first_bridge_id or \
 			bridge.mesh.get_rid() == first_bridge_mesh_rid or \
 			terrain.get_node_or_null("WT_Render_3_0_0_L1") == null:
-		_fail("transition-mask change did not replace the coarse bridge")
+		_fail("transition-mask change did not remesh the coarse bridge in place")
 		return
 
 	terrain.call("set_render_apply_budget", 0)

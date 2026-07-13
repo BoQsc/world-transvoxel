@@ -172,7 +172,8 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 				page_meshing_runtime->release_owned_chunk(key);
 			if (status == WtPageMeshingRuntimeOwnerStatus::Ok) {
 				++metrics_.released_page_meshing_records;
-			} else if (status != WtPageMeshingRuntimeOwnerStatus::NotFound) {
+			} else if (status != WtPageMeshingRuntimeOwnerStatus::NotFound &&
+				status != WtPageMeshingRuntimeOwnerStatus::StaleGeneration) {
 				++metrics_.page_meshing_runtime_failures;
 				return WtDesiredSetRuntimeStatus::PageMeshingRuntimeFailure;
 			}
@@ -199,7 +200,8 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 				);
 			if (status == WtPageMeshingRuntimeOwnerStatus::Ok) {
 				++metrics_.reprioritized_page_meshing_records;
-			} else if (status != WtPageMeshingRuntimeOwnerStatus::NotFound) {
+			} else if (status != WtPageMeshingRuntimeOwnerStatus::NotFound &&
+				status != WtPageMeshingRuntimeOwnerStatus::StaleGeneration) {
 				++metrics_.page_meshing_runtime_failures;
 				return WtDesiredSetRuntimeStatus::PageMeshingRuntimeFailure;
 			}

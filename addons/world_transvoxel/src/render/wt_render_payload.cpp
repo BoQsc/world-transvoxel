@@ -1,6 +1,8 @@
 #include "render/wt_render_payload.h"
 
 #include <cmath>
+#include <cstring>
+#include <unordered_map>
 
 namespace world_transvoxel {
 namespace {
@@ -26,9 +28,68 @@ double triangle_area_squared(
 	return cross_x * cross_x + cross_y * cross_y + cross_z * cross_z;
 }
 
+std::uint32_t float_bits(float value) noexcept {
+	std::uint32_t bits = 0;
+	static_assert(sizeof(bits) == sizeof(value));
+	std::memcpy(&bits, &value, sizeof(bits));
+	return bits;
+}
+
+struct RenderVertexKey {
+	std::uint32_t position_x = 0;
+	std::uint32_t position_y = 0;
+	std::uint32_t position_z = 0;
+	std::uint32_t normal_x = 0;
+	std::uint32_t normal_y = 0;
+	std::uint32_t normal_z = 0;
+	std::uint16_t material = 0;
+
+	bool operator==(const RenderVertexKey &other) const noexcept {
+		return position_x == other.position_x &&
+			position_y == other.position_y &&
+			position_z == other.position_z &&
+			normal_x == other.normal_x &&
+			normal_y == other.normal_y &&
+			normal_z == other.normal_z &&
+			material == other.material;
+	}
+};
+
+struct RenderVertexKeyHash {
+	std::size_t operator()(const RenderVertexKey &key) const noexcept {
+		std::size_t hash = static_cast<std::size_t>(key.position_x);
+		const std::uint32_t values[] = {
+			key.position_y,
+			key.position_z,
+			key.normal_x,
+			key.normal_y,
+			key.normal_z,
+			static_cast<std::uint32_t>(key.material),
+		};
+		for (const std::uint32_t value : values) {
+			hash ^= static_cast<std::size_t>(value) + 0x9e3779b9U +
+				(hash << 6U) + (hash >> 2U);
+		}
+		return hash;
+	}
+};
+
+RenderVertexKey make_vertex_key(const WtCellVertex &vertex) noexcept {
+	return {
+		float_bits(vertex.position.x),
+		float_bits(vertex.position.y),
+		float_bits(vertex.position.z),
+		float_bits(vertex.normal.x),
+		float_bits(vertex.normal.y),
+		float_bits(vertex.normal.z),
+		vertex.material,
+	};
+}
+
 WtRenderBuildStatus append_buffer(
 	const WtChunkMeshBuffer &source,
-	WtRenderPayload &output
+	WtRenderPayload &output,
+	std::unordered_map<RenderVertexKey, std::uint32_t, RenderVertexKeyHash> &vertices
 ) {
 	if ((source.indices.size() % 3U) != 0) {
 		return WtRenderBuildStatus::InvalidMesh;
@@ -37,12 +98,26 @@ WtRenderBuildStatus append_buffer(
 		source.indices.size() > kWtMaximumRenderIndices - output.indices.size()) {
 		return WtRenderBuildStatus::CapacityExceeded;
 	}
-	const std::uint32_t base = static_cast<std::uint32_t>(output.vertices.size());
+	std::vector<std::uint32_t> remap;
+	remap.reserve(source.vertices.size());
 	for (const WtCellVertex &vertex : source.vertices) {
 		if (!is_finite(vertex.position) || !is_finite(vertex.normal)) {
 			return WtRenderBuildStatus::InvalidMesh;
 		}
+		const RenderVertexKey key = make_vertex_key(vertex);
+		const auto found = vertices.find(key);
+		if (found != vertices.end()) {
+			remap.push_back(found->second);
+			continue;
+		}
+		if (output.vertices.size() >= kWtMaximumRenderVertices) {
+			return WtRenderBuildStatus::CapacityExceeded;
+		}
+		const std::uint32_t index =
+			static_cast<std::uint32_t>(output.vertices.size());
 		output.vertices.push_back({ vertex.position, vertex.normal, vertex.material });
+		vertices.emplace(key, index);
+		remap.push_back(index);
 	}
 	for (std::size_t triangle = 0; triangle < source.indices.size(); triangle += 3) {
 		const std::uint32_t a = source.indices[triangle];
@@ -56,9 +131,9 @@ WtRenderBuildStatus append_buffer(
 			) == 0.0) {
 			return WtRenderBuildStatus::InvalidMesh;
 		}
-		output.indices.push_back(base + a);
-		output.indices.push_back(base + b);
-		output.indices.push_back(base + c);
+		output.indices.push_back(remap[a]);
+		output.indices.push_back(remap[b]);
+		output.indices.push_back(remap[c]);
 	}
 	return WtRenderBuildStatus::Ok;
 }
@@ -72,6 +147,7 @@ void WtRenderPayload::clear() noexcept {
 	key = {};
 	generation = {};
 	world_origin = {};
+	transition_mask = 0;
 	vertices.clear();
 	indices.clear();
 }
@@ -91,6 +167,7 @@ WtRenderBuildStatus wt_build_render_payload(
 	output.key = mesh.key;
 	output.generation = generation;
 	output.world_origin = mesh.world_origin;
+	output.transition_mask = mesh.transition_mask;
 	std::size_t expected_vertices = mesh.regular.vertices.size();
 	std::size_t expected_indices = mesh.regular.indices.size();
 	for (unsigned int face_index = 0; face_index < 6; ++face_index) {
@@ -113,14 +190,16 @@ WtRenderBuildStatus wt_build_render_payload(
 	}
 	output.vertices.reserve(expected_vertices);
 	output.indices.reserve(expected_indices);
-	WtRenderBuildStatus status = append_buffer(mesh.regular, output);
+	std::unordered_map<RenderVertexKey, std::uint32_t, RenderVertexKeyHash> vertices;
+	vertices.reserve(expected_vertices);
+	WtRenderBuildStatus status = append_buffer(mesh.regular, output, vertices);
 	for (unsigned int face_index = 0;
 		status == WtRenderBuildStatus::Ok && face_index < 6;
 		++face_index) {
 		const bool active = (mesh.transition_mask & wt_face_bit(
 			static_cast<WtChunkFace>(face_index))) != 0;
 		if (active) {
-			status = append_buffer(mesh.transitions[face_index], output);
+			status = append_buffer(mesh.transitions[face_index], output, vertices);
 		} else if (!mesh.transitions[face_index].vertices.empty() ||
 			!mesh.transitions[face_index].indices.empty()) {
 			status = WtRenderBuildStatus::InvalidMesh;

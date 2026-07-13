@@ -27,10 +27,12 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 		progressed = scheduler_->apply_completions(
 			static_cast<std::size_t>(config_.active_chunk_capacity)
 		) != 0 || progressed;
+		progressed = process_pending_transition_remeshes() || progressed;
 		progressed = process_scheduler_jobs() || progressed;
 		progressed = scheduler_->apply_completions(
 			static_cast<std::size_t>(config_.active_chunk_capacity)
 		) != 0 || progressed;
+		progressed = process_pending_transition_remeshes() || progressed;
 		progressed = process_mesh_completions() || progressed;
 		if (last_status_.load() != WtReadOnlyRuntimeStatus::Ok) break;
 		if (!progressed) {
@@ -169,6 +171,20 @@ const char *wt_read_only_runtime_status_message(
 			return "viewer desired-set update failed";
 		case WtReadOnlyRuntimeStatus::RuntimeDeltaFailure:
 			return "streaming runtime delta failed";
+		case WtReadOnlyRuntimeStatus::RuntimeDeltaChangeCapacityExceeded:
+			return "streaming runtime delta exceeded change capacity";
+		case WtReadOnlyRuntimeStatus::RuntimeDeltaStateMismatch:
+			return "streaming runtime delta state mismatch";
+		case WtReadOnlyRuntimeStatus::RuntimeDeltaRecordCapacityExceeded:
+			return "streaming runtime delta exceeded record capacity";
+		case WtReadOnlyRuntimeStatus::RuntimeDeltaJobQueueCapacityExceeded:
+			return "streaming runtime delta exceeded job queue capacity";
+		case WtReadOnlyRuntimeStatus::RuntimeDeltaSchedulerFailure:
+			return "streaming runtime delta scheduler operation failed";
+		case WtReadOnlyRuntimeStatus::RuntimeDeltaApplicationFailure:
+			return "streaming runtime delta application operation failed";
+		case WtReadOnlyRuntimeStatus::RuntimeDeltaPageMeshingRuntimeFailure:
+			return "streaming runtime delta page meshing runtime operation failed";
 		case WtReadOnlyRuntimeStatus::PipelineFailure:
 			return "read-only page or meshing pipeline failed";
 		case WtReadOnlyRuntimeStatus::PublicationFailure:

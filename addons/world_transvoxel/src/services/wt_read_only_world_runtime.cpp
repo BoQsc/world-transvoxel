@@ -36,6 +36,33 @@ bool valid_radius(std::uint32_t radius, std::uint64_t capacity) noexcept {
 		width * width <= capacity / width;
 }
 
+WtReadOnlyRuntimeStatus read_only_delta_failure_status(
+	WtDesiredSetRuntimeStatus status
+) noexcept {
+	switch (status) {
+		case WtDesiredSetRuntimeStatus::Ok:
+			return WtReadOnlyRuntimeStatus::Ok;
+		case WtDesiredSetRuntimeStatus::ChangeCapacityExceeded:
+			return WtReadOnlyRuntimeStatus::RuntimeDeltaChangeCapacityExceeded;
+		case WtDesiredSetRuntimeStatus::RuntimeStateMismatch:
+			return WtReadOnlyRuntimeStatus::RuntimeDeltaStateMismatch;
+		case WtDesiredSetRuntimeStatus::RecordCapacityExceeded:
+			return WtReadOnlyRuntimeStatus::RuntimeDeltaRecordCapacityExceeded;
+		case WtDesiredSetRuntimeStatus::JobQueueCapacityExceeded:
+			return WtReadOnlyRuntimeStatus::RuntimeDeltaJobQueueCapacityExceeded;
+		case WtDesiredSetRuntimeStatus::SchedulerFailure:
+			return WtReadOnlyRuntimeStatus::RuntimeDeltaSchedulerFailure;
+		case WtDesiredSetRuntimeStatus::ApplicationFailure:
+			return WtReadOnlyRuntimeStatus::RuntimeDeltaApplicationFailure;
+		case WtDesiredSetRuntimeStatus::PageMeshingRuntimeFailure:
+			return WtReadOnlyRuntimeStatus::RuntimeDeltaPageMeshingRuntimeFailure;
+		case WtDesiredSetRuntimeStatus::InvalidConfiguration:
+		case WtDesiredSetRuntimeStatus::InvalidDelta:
+			return WtReadOnlyRuntimeStatus::RuntimeDeltaFailure;
+	}
+	return WtReadOnlyRuntimeStatus::RuntimeDeltaFailure;
+}
+
 const WtLodMapEntry *find_plan_entry(
 	const std::vector<WtLodMapEntry> &entries,
 	const WtChunkKey &key
@@ -135,7 +162,9 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 			static_cast<std::size_t>(config_.collision_byte_capacity),
 		}
 	);
-	desired_runtime_ = std::make_unique<WtDesiredSetRuntimeService>(active);
+	desired_runtime_ = std::make_unique<WtDesiredSetRuntimeService>(
+		std::min<std::size_t>(kWtMaximumDesiredChunkCount, active * 2U)
+	);
 	edit_spatial_index_ = std::make_unique<WtEditSpatialIndex>(
 		active,
 		kWtMaximumDesiredChunkCount,
@@ -436,14 +465,13 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		return true;
 	}
 
-	WtDesiredSetDelta transition_removals;
+	std::vector<WtDesiredChunk> transition_remeshes;
 	for (const WtLodMapEntry &current : current_plan_.entries) {
 		const WtLodMapEntry *next = find_plan_entry(
 			candidate_plan.entries, current.key
 		);
 		if (next == nullptr ||
 			next->transition_mask == current.transition_mask) continue;
-		transition_removals.removed.push_back(current.key);
 		const WtDesiredChunk *desired = candidate_desired.find_desired(
 			current.key
 		);
@@ -451,27 +479,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			set_failure(WtReadOnlyRuntimeStatus::DesiredSetFailure);
 			return true;
 		}
-		delta.added.push_back(*desired);
-	}
-	if (!transition_removals.removed.empty()) {
-		delta.updated.erase(
-			std::remove_if(
-				delta.updated.begin(), delta.updated.end(),
-				[&](const WtDesiredChunk &item) {
-					return std::binary_search(
-						transition_removals.removed.begin(),
-						transition_removals.removed.end(),
-						item.key
-					);
-				}
-			),
-			delta.updated.end()
-		);
-		std::sort(delta.added.begin(), delta.added.end(),
-			[](const WtDesiredChunk &a, const WtDesiredChunk &b) {
-				return a.key < b.key;
-			}
-		);
+		transition_remeshes.push_back(*desired);
 	}
 
 	const auto apply_delta = [&](const WtDesiredSetDelta &change) {
@@ -484,13 +492,20 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			*resource_cache_,
 			*application_,
 			page_runtime_.get()
-		) == WtDesiredSetRuntimeStatus::Ok;
+		);
 	};
-	if (!apply_delta(transition_removals) || !apply_delta(delta)) {
-		set_failure(WtReadOnlyRuntimeStatus::RuntimeDeltaFailure);
+	const WtDesiredSetRuntimeStatus delta_status = apply_delta(delta);
+	if (delta_status == WtDesiredSetRuntimeStatus::JobQueueCapacityExceeded &&
+		scheduler_->queued_job_count() != 0) {
+		std::lock_guard<std::mutex> lock(input_mutex_);
+		viewer_events_.insert(viewer_events_.begin(), event);
 		return true;
 	}
-	if (!publish_delta(transition_removals) || !publish_delta(delta)) {
+	if (delta_status != WtDesiredSetRuntimeStatus::Ok) {
+		set_failure(read_only_delta_failure_status(delta_status));
+		return true;
+	}
+	if (!publish_delta(delta)) {
 		if (!stop_requested_.load()) {
 			set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
 		}
@@ -500,6 +515,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	*desired_ = std::move(candidate_desired);
 	planner_viewers_ = std::move(candidate_viewers);
 	current_plan_ = std::move(candidate_plan);
+	queue_transition_remeshes(transition_remeshes);
 	plan_revision_ = plan_snapshot.revision;
 	std::vector<WtChunkKey> active_keys;
 	active_keys.reserve(current_plan_.entries.size());
@@ -551,7 +567,29 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			++metrics_.edit_lod_retention_plans;
 		}
 	}
+	process_pending_transition_remeshes();
 	return true;
+}
+
+void WtReadOnlyWorldRuntime::queue_transition_remeshes(
+	const std::vector<WtDesiredChunk> &chunks
+) {
+	for (const WtDesiredChunk &chunk : chunks) {
+		const auto position = std::lower_bound(
+			pending_transition_remeshes_.begin(),
+			pending_transition_remeshes_.end(),
+			chunk.key,
+			[](const WtDesiredChunk &item, const WtChunkKey &key) {
+				return item.key < key;
+			}
+		);
+		if (position != pending_transition_remeshes_.end() &&
+			position->key == chunk.key) {
+			*position = chunk;
+		} else {
+			pending_transition_remeshes_.insert(position, chunk);
+		}
+	}
 }
 
 bool WtReadOnlyWorldRuntime::publish_delta(
@@ -590,6 +628,83 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 			})) return false;
 	}
 	return true;
+}
+
+bool WtReadOnlyWorldRuntime::process_pending_transition_remeshes() {
+	bool progressed = false;
+	for (std::size_t index = 0; index < pending_transition_remeshes_.size();) {
+		if (scheduler_->available_job_capacity() == 0) {
+			break;
+		}
+		const WtDesiredChunk item = pending_transition_remeshes_[index];
+		const WtDesiredChunk *desired = desired_->find_desired(item.key);
+		if (desired == nullptr ||
+			find_plan_entry(current_plan_.entries, item.key) == nullptr) {
+			pending_transition_remeshes_.erase(
+				pending_transition_remeshes_.begin() + index
+			);
+			progressed = true;
+			continue;
+		}
+		const WtChunkRecord *record = scheduler_->find_record(item.key);
+		if (record == nullptr) {
+			pending_transition_remeshes_.erase(
+				pending_transition_remeshes_.begin() + index
+			);
+			progressed = true;
+			continue;
+		}
+		if (record->lifecycle != WtChunkLifecycle::Ready) {
+			++index;
+			continue;
+		}
+		const WtSchedulerStatus scheduler_status =
+			scheduler_->request_chunk_version(
+				item.key,
+				storage_.source_revision(),
+				world_revision_.load(),
+				desired->priority,
+				true
+			);
+		if (scheduler_status == WtSchedulerStatus::JobQueueFull) {
+			break;
+		}
+		if (scheduler_status != WtSchedulerStatus::Ok) {
+			set_failure(WtReadOnlyRuntimeStatus::RuntimeDeltaFailure);
+			return true;
+		}
+		record = scheduler_->find_record(item.key);
+		const WtApplicationStatus application_status =
+			record == nullptr ? WtApplicationStatus::NotFound :
+			application_->expect_chunk(
+				item.key,
+				record->generation,
+				desired->collision_required
+			);
+		if (application_status != WtApplicationStatus::Ok &&
+			application_status != WtApplicationStatus::AlreadyCurrent) {
+			set_failure(WtReadOnlyRuntimeStatus::RuntimeDeltaFailure);
+			return true;
+		}
+		if (!push_publication({
+				WtReadOnlyPublicationKind::ExpectChunk,
+				item.key,
+				record->generation,
+				desired->collision_required,
+				{},
+				{},
+			})) {
+			if (!stop_requested_.load()) {
+				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
+			}
+			return true;
+		}
+		pending_transition_remeshes_.erase(
+			pending_transition_remeshes_.begin() + index
+		);
+		progressed = true;
+	}
+	return progressed;
 }
 
 bool WtReadOnlyWorldRuntime::process_storage_completions() {

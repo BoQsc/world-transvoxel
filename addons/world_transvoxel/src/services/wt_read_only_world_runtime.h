@@ -49,6 +49,13 @@ enum class WtReadOnlyRuntimeStatus : std::uint8_t {
 	OperationQueueFull,
 	DesiredSetFailure,
 	RuntimeDeltaFailure,
+	RuntimeDeltaChangeCapacityExceeded,
+	RuntimeDeltaStateMismatch,
+	RuntimeDeltaRecordCapacityExceeded,
+	RuntimeDeltaJobQueueCapacityExceeded,
+	RuntimeDeltaSchedulerFailure,
+	RuntimeDeltaApplicationFailure,
+	RuntimeDeltaPageMeshingRuntimeFailure,
 	PipelineFailure,
 	PublicationFailure,
 };
@@ -234,10 +241,14 @@ private:
 	bool process_sample_batch_query_operation(const WorldOperation &operation);
 	bool process_snapshot_operation(const WorldOperation &operation);
 	bool process_storage_completions();
+	bool process_pending_transition_remeshes();
 	bool process_scheduler_jobs();
 	bool process_mesh_completions();
 	bool publish_delta(const WtDesiredSetDelta &delta);
 	bool push_publication(WtReadOnlyPublication publication);
+	void queue_transition_remeshes(
+		const std::vector<WtDesiredChunk> &chunks
+	);
 	void remember_edit_lod_retention_zones(
 		const WtEditTransaction &transaction
 	);
@@ -280,6 +291,7 @@ private:
 	std::unique_ptr<WtBalancedLodPlanner> lod_planner_;
 	std::vector<WtLodPlannerViewer> planner_viewers_;
 	std::vector<EditLodRetentionZone> edit_lod_retention_zones_;
+	std::vector<WtDesiredChunk> pending_transition_remeshes_;
 	std::uint64_t next_edit_lod_retention_revision_ = 1;
 	WtBalancedLodPlan current_plan_;
 	std::uint64_t plan_revision_ = 0;

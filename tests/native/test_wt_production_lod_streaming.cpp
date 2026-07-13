@@ -228,6 +228,7 @@ int main() {
 		publications.bridge_indices.front() != 0,
 		"initial transition bridge geometry was not published");
 
+	const std::size_t removals_before_second_viewer = publications.removals;
 	check(runtime.update_viewer({ 2, 80.0, 8.0, 8.0, 1 }, 1, 1) ==
 		wt::WtReadOnlyRuntimeStatus::Ok,
 		"second multi-LOD viewer was rejected");
@@ -236,8 +237,9 @@ int main() {
 	check(publications.bridge_generations.size() == 2 &&
 		publications.bridge_generations[0] !=
 			publications.bridge_generations[1] &&
-		publications.removals >= 1 && publications.expects >= 19,
-		"transition-mask change did not force bridge remeshing");
+		publications.removals == removals_before_second_viewer &&
+		publications.expects >= 19,
+		"transition-mask change did not remesh bridge without removal");
 
 	check(runtime.update_viewer({ 1, 40.0, 8.0, 8.0, 2 }, 1, 1) ==
 		wt::WtReadOnlyRuntimeStatus::Ok,
