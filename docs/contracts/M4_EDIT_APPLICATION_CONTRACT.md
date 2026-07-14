@@ -43,6 +43,30 @@ These schema-1 brushes are hard inclusive shapes. They do not imply falloff,
 blend curves, smoothing, or material interpolation. Those require explicit
 future operation/schema values.
 
+## Terrain standard brush boundary
+
+The current downstream terrain standard uses SDF sphere edits as the
+player-facing default for digging and placing. Native M4 edit application must
+therefore keep sphere evaluation deterministic, journal ordered, and independent
+of rendered mesh topology.
+
+The standard terrain edit metadata boundary is:
+
+- operation mode;
+- brush shape;
+- center;
+- radius or conservative bounds;
+- material id when applicable;
+- density value / strength;
+- author and command identifiers when supplied;
+- affected command bounds.
+
+This boundary prepares later systems to inspect edited regions, but M4 does not
+implement collapse, shaft stability, debris simulation, octahedron mining, or
+any gameplay-specific brush. Future collapse or stability logic must operate on
+voxel/SDF support data and ordered edit state, not rendered mesh triangles and
+not a mandatory player brush shape.
+
 An additive command first validates every affected result. If any result would
 be non-finite, the command fails before modifying any sample or world
 revision. Set-density values were already proven finite by transaction
