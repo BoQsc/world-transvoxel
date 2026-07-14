@@ -2,6 +2,7 @@
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_chunk_page.h"
 #include "storage/wt_hash256.h"
+#include "storage/wt_procedural_world_source.h"
 
 #include <chrono>
 #include <cstdint>
@@ -744,6 +745,44 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 		"compact procedural LOD1 page from integration traversal failed"
 	);
 	compact_service.close();
+
+	wt::WtProceduralWorldDescriptor deep_descriptor;
+	deep_descriptor.chunk_count_x = 128;
+	deep_descriptor.chunk_count_y = 16;
+	deep_descriptor.chunk_y = -8;
+	deep_descriptor.chunk_count_z = 128;
+	deep_descriptor.source_revision = 190256;
+	deep_descriptor.world_revision = 0;
+	deep_descriptor.seed = 19020;
+	check(
+		wt::wt_procedural_page_count(deep_descriptor) == 299520,
+		"deep 2K procedural page count mismatch"
+	);
+	check(
+		wt::wt_valid_procedural_descriptor(deep_descriptor),
+		"deep 2K procedural descriptor was rejected"
+	);
+	wt::WtAsyncStorageService deep_service({
+		2,
+		2,
+		wt::kWtMaximumContainerSize,
+	});
+	check(
+		deep_service.open_procedural(deep_descriptor) ==
+			wt::WtAsyncStorageStatus::Ok,
+		"deep 2K procedural storage service open failed"
+	);
+	check(
+		deep_service.page_count() == 299520 &&
+			deep_service.has_page({ 0, -8, 0, 0 }) &&
+			deep_service.has_page({ 127, 7, 127, 0 }) &&
+			deep_service.has_page({ 0, -4, 0, 1 }) &&
+			deep_service.has_page({ 0, -1, 0, 3 }) &&
+			!deep_service.has_page({ 0, -9, 0, 0 }) &&
+			!deep_service.has_page({ 0, 8, 0, 0 }),
+		"deep 2K procedural vertical catalog mismatch"
+	);
+	deep_service.close();
 
 	wt::WtProceduralWorldDescriptor flat_descriptor;
 	flat_descriptor.chunk_count_x = 128;

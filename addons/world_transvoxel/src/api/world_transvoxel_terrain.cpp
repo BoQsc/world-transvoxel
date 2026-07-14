@@ -114,6 +114,31 @@ void WorldTransvoxelTerrain::_bind_methods() {
 	);
 	godot::ClassDB::bind_method(
 		godot::D_METHOD(
+			"start_procedural_world_with_vertical",
+			"chunk_count_x",
+			"chunk_count_y",
+			"chunk_count_z",
+			"seed",
+			"source_revision",
+			"object_root"
+		),
+		&WorldTransvoxelTerrain::start_procedural_world_with_vertical
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"start_procedural_world_with_vertical_origin",
+			"chunk_count_x",
+			"chunk_count_y",
+			"chunk_origin_y",
+			"chunk_count_z",
+			"seed",
+			"source_revision",
+			"object_root"
+		),
+		&WorldTransvoxelTerrain::start_procedural_world_with_vertical_origin
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
 			"start_flat_world",
 			"chunk_count_x",
 			"chunk_count_z",
@@ -121,6 +146,29 @@ void WorldTransvoxelTerrain::_bind_methods() {
 			"object_root"
 		),
 		&WorldTransvoxelTerrain::start_flat_world
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"start_flat_world_with_vertical",
+			"chunk_count_x",
+			"chunk_count_y",
+			"chunk_count_z",
+			"source_revision",
+			"object_root"
+		),
+		&WorldTransvoxelTerrain::start_flat_world_with_vertical
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"start_flat_world_with_vertical_origin",
+			"chunk_count_x",
+			"chunk_count_y",
+			"chunk_origin_y",
+			"chunk_count_z",
+			"source_revision",
+			"object_root"
+		),
+		&WorldTransvoxelTerrain::start_flat_world_with_vertical_origin
 	);
 	godot::ClassDB::bind_method(
 		godot::D_METHOD("stop_world"),

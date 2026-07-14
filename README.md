@@ -90,6 +90,20 @@ journals, snapshots, and validated edit transactions. Client meshes, LOD fades,
 materials, collision presentation, and screenshots are derived data and must not
 become saved or network-authoritative terrain state.
 
+## Critical bounded vertical-volume boundary
+
+Procedural worlds now expose native vertical chunk coverage instead of assuming
+a fixed Y span. Use `start_procedural_world_with_vertical_origin()` or
+`start_flat_world_with_vertical_origin()` when a game needs underground
+coverage below Y=0. The current integration-game deep proof profile uses
+`128 x 16 x 128` LOD0 procedural chunks, vertical chunk origin `-8`, and a
+bounded `2048 x 2048 x 256` cell reference volume.
+
+This is still bounded terrain. The native procedural/catalog page ceiling is
+`524288` pages so the 2K x 256 profile, at roughly `299520` pages across LOD0
+through LOD3, can start without falling back to a heightmap, duplicate render
+surface, or presentation cap.
+
 ## Current phase
 
 R0 through M5 are complete. The addon now has the exact native cell backend,

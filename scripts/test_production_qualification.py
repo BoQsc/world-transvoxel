@@ -38,7 +38,7 @@ EXPECTED_STREAMING_HASH = (
     "39db05c67fc2f4b8d8beaab2e7da927ae968efb3d75118bcd80c5523116d9b3b"
 )
 EXPECTED_LOD_STREAMING_HASH = (
-    "6d0a6dc82c2930d5b4bd2a568f022abf6afac2ad6a2b36a8ddbf7ce36feeac94"
+    "89d35e6d4cdd963535394df4b62bb9e38f1b4a1f8885adaa1a563d2e8dd43098"
 )
 LIFECYCLE_FIXTURE_ROOT = REPO_ROOT / "build" / "production-lifecycle-fixture"
 

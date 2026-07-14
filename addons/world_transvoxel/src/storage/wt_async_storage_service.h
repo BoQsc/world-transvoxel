@@ -31,6 +31,7 @@ enum class WtProceduralWorldMode : std::uint8_t {
 
 struct WtProceduralWorldDescriptor {
 	std::uint32_t chunk_count_x = 0;
+	std::uint32_t chunk_count_y = 8;
 	std::uint32_t chunk_count_z = 0;
 	std::int32_t chunk_y = 0;
 	std::uint64_t source_revision = 0;

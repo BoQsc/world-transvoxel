@@ -71,6 +71,15 @@ builds are not the deterministic PQ4 release artifact. The release ships
 API/limit documentation, addon-local bake/storage wrappers, runtime DLLs, and
 native tools. Compute acceleration is optional later work.
 
+Procedural startup supports explicit vertical coverage through
+`start_procedural_world_with_vertical_origin()` and
+`start_flat_world_with_vertical_origin()`. The default legacy overloads still
+use 8 vertical chunks at origin 0. Larger bounded volumes must pass explicit
+`chunk_count_y` and `chunk_origin_y`; the current deep 2K proof profile uses
+`128 x 16 x 128` LOD0 chunks and vertical origin `-8`. The native page/catalog
+ceiling is `524288` pages so this 2K x 256 reference volume can start as real
+volumetric terrain.
+
 Build from the repository root:
 
 ```console

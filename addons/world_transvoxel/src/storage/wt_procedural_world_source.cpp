@@ -31,8 +31,11 @@ std::uint32_t lod_span(std::uint8_t lod) noexcept {
 	return std::uint32_t{ 1 } << lod;
 }
 
-std::uint32_t vertical_layer_count(std::uint8_t lod) noexcept {
-	return std::uint32_t{ 1 } << (kWtProceduralMaximumLod - lod);
+std::uint32_t vertical_layer_count(
+	const WtProceduralWorldDescriptor &descriptor,
+	std::uint8_t lod
+) noexcept {
+	return ceil_divide_u32(descriptor.chunk_count_y, lod_span(lod));
 }
 
 std::int32_t vertical_origin(
@@ -193,6 +196,7 @@ bool wt_valid_procedural_descriptor(
 ) noexcept {
 	const std::uint64_t page_count = wt_procedural_page_count(descriptor);
 	return descriptor.chunk_count_x != 0 &&
+		descriptor.chunk_count_y != 0 &&
 		descriptor.chunk_count_z != 0 &&
 		descriptor.source_revision != 0 &&
 		page_count != 0 &&
@@ -202,7 +206,13 @@ bool wt_valid_procedural_descriptor(
 std::uint64_t wt_procedural_page_count(
 	const WtProceduralWorldDescriptor &descriptor
 ) noexcept {
-	if (descriptor.chunk_count_x == 0 || descriptor.chunk_count_z == 0) return 0;
+	if (
+		descriptor.chunk_count_x == 0 ||
+		descriptor.chunk_count_y == 0 ||
+		descriptor.chunk_count_z == 0
+	) {
+		return 0;
+	}
 	std::uint64_t pages = 0;
 	for (std::uint8_t lod = 0; lod <= kWtProceduralMaximumLod; ++lod) {
 		const std::uint32_t span = lod_span(lod);
@@ -210,7 +220,9 @@ std::uint64_t wt_procedural_page_count(
 			ceil_divide_u32(descriptor.chunk_count_x, span)
 		) * static_cast<std::uint64_t>(
 			ceil_divide_u32(descriptor.chunk_count_z, span)
-		) * static_cast<std::uint64_t>(vertical_layer_count(lod));
+		) * static_cast<std::uint64_t>(
+			vertical_layer_count(descriptor, lod)
+		);
 	}
 	return pages;
 }
@@ -224,7 +236,7 @@ std::vector<WtChunkKey> wt_procedural_keys(
 		const std::uint32_t span = lod_span(lod);
 		const std::uint32_t count_x = ceil_divide_u32(descriptor.chunk_count_x, span);
 		const std::uint32_t count_z = ceil_divide_u32(descriptor.chunk_count_z, span);
-		const std::uint32_t count_y = vertical_layer_count(lod);
+		const std::uint32_t count_y = vertical_layer_count(descriptor, lod);
 		const std::int32_t origin_y = vertical_origin(descriptor, lod);
 		for (std::uint32_t z = 0; z < count_z; ++z) {
 			for (std::uint32_t y = 0; y < count_y; ++y) {
@@ -266,7 +278,7 @@ bool wt_procedural_can_generate_page(
 	);
 	const std::int32_t min_y = vertical_origin(descriptor, key.lod);
 	const std::int32_t max_y = static_cast<std::int32_t>(
-		min_y + static_cast<std::int32_t>(vertical_layer_count(key.lod))
+		min_y + static_cast<std::int32_t>(vertical_layer_count(descriptor, key.lod))
 	);
 	return key.x >= -1 &&
 		key.x <= count_x &&

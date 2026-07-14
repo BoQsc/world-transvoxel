@@ -68,8 +68,40 @@ public:
 		std::int64_t source_revision,
 		const godot::String &object_root
 	);
+	bool start_procedural_world_with_vertical(
+		std::int64_t chunk_count_x,
+		std::int64_t chunk_count_y,
+		std::int64_t chunk_count_z,
+		std::int64_t seed,
+		std::int64_t source_revision,
+		const godot::String &object_root
+	);
+	bool start_procedural_world_with_vertical_origin(
+		std::int64_t chunk_count_x,
+		std::int64_t chunk_count_y,
+		std::int64_t chunk_origin_y,
+		std::int64_t chunk_count_z,
+		std::int64_t seed,
+		std::int64_t source_revision,
+		const godot::String &object_root
+	);
 	bool start_flat_world(
 		std::int64_t chunk_count_x,
+		std::int64_t chunk_count_z,
+		std::int64_t source_revision,
+		const godot::String &object_root
+	);
+	bool start_flat_world_with_vertical(
+		std::int64_t chunk_count_x,
+		std::int64_t chunk_count_y,
+		std::int64_t chunk_count_z,
+		std::int64_t source_revision,
+		const godot::String &object_root
+	);
+	bool start_flat_world_with_vertical_origin(
+		std::int64_t chunk_count_x,
+		std::int64_t chunk_count_y,
+		std::int64_t chunk_origin_y,
 		std::int64_t chunk_count_z,
 		std::int64_t source_revision,
 		const godot::String &object_root

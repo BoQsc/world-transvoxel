@@ -84,6 +84,44 @@ bool WorldTransvoxelTerrain::start_procedural_world(
 	std::int64_t source_revision,
 	const godot::String &object_root
 ) {
+	return start_procedural_world_with_vertical(
+		chunk_count_x,
+		8,
+		chunk_count_z,
+		seed,
+		source_revision,
+		object_root
+	);
+}
+
+bool WorldTransvoxelTerrain::start_procedural_world_with_vertical(
+	std::int64_t chunk_count_x,
+	std::int64_t chunk_count_y,
+	std::int64_t chunk_count_z,
+	std::int64_t seed,
+	std::int64_t source_revision,
+	const godot::String &object_root
+) {
+	return start_procedural_world_with_vertical_origin(
+		chunk_count_x,
+		chunk_count_y,
+		0,
+		chunk_count_z,
+		seed,
+		source_revision,
+		object_root
+	);
+}
+
+bool WorldTransvoxelTerrain::start_procedural_world_with_vertical_origin(
+	std::int64_t chunk_count_x,
+	std::int64_t chunk_count_y,
+	std::int64_t chunk_origin_y,
+	std::int64_t chunk_count_z,
+	std::int64_t seed,
+	std::int64_t source_revision,
+	const godot::String &object_root
+) {
 	if (!is_configuration_valid()) {
 		synchronous_world_error_ = get_configuration_error();
 		return false;
@@ -94,8 +132,9 @@ bool WorldTransvoxelTerrain::start_procedural_world(
 			"world lifecycle state does not allow startup";
 		return false;
 	}
-	if (chunk_count_x <= 0 || chunk_count_z <= 0 ||
-		chunk_count_x > 4096 || chunk_count_z > 4096 ||
+	if (chunk_count_x <= 0 || chunk_count_y <= 0 || chunk_count_z <= 0 ||
+		chunk_count_x > 4096 || chunk_count_y > 4096 || chunk_count_z > 4096 ||
+		chunk_origin_y < -4096 || chunk_origin_y > 4096 ||
 		source_revision <= 0 || object_root.is_empty()) {
 		synchronous_world_error_ =
 			"procedural world descriptor is invalid";
@@ -103,13 +142,14 @@ bool WorldTransvoxelTerrain::start_procedural_world(
 	}
 	WtProceduralWorldDescriptor descriptor;
 	descriptor.chunk_count_x = static_cast<std::uint32_t>(chunk_count_x);
+	descriptor.chunk_count_y = static_cast<std::uint32_t>(chunk_count_y);
 	descriptor.chunk_count_z = static_cast<std::uint32_t>(chunk_count_z);
-	descriptor.chunk_y = 0;
+	descriptor.chunk_y = static_cast<std::int32_t>(chunk_origin_y);
 	descriptor.source_revision = static_cast<std::uint64_t>(source_revision);
 	descriptor.world_revision = 0;
 	descriptor.seed = compact_seed(seed);
 	const std::uint64_t page_count = wt_procedural_page_count(descriptor);
-	if (page_count == 0 || page_count > 262144U) {
+	if (page_count == 0 || page_count > kWtMaximumProceduralPageCount) {
 		synchronous_world_error_ =
 			"procedural world page count exceeds compact runtime limit";
 		return false;
@@ -154,6 +194,40 @@ bool WorldTransvoxelTerrain::start_flat_world(
 	std::int64_t source_revision,
 	const godot::String &object_root
 ) {
+	return start_flat_world_with_vertical(
+		chunk_count_x,
+		8,
+		chunk_count_z,
+		source_revision,
+		object_root
+	);
+}
+
+bool WorldTransvoxelTerrain::start_flat_world_with_vertical(
+	std::int64_t chunk_count_x,
+	std::int64_t chunk_count_y,
+	std::int64_t chunk_count_z,
+	std::int64_t source_revision,
+	const godot::String &object_root
+) {
+	return start_flat_world_with_vertical_origin(
+		chunk_count_x,
+		chunk_count_y,
+		0,
+		chunk_count_z,
+		source_revision,
+		object_root
+	);
+}
+
+bool WorldTransvoxelTerrain::start_flat_world_with_vertical_origin(
+	std::int64_t chunk_count_x,
+	std::int64_t chunk_count_y,
+	std::int64_t chunk_origin_y,
+	std::int64_t chunk_count_z,
+	std::int64_t source_revision,
+	const godot::String &object_root
+) {
 	if (!is_configuration_valid()) {
 		synchronous_world_error_ = get_configuration_error();
 		return false;
@@ -164,8 +238,9 @@ bool WorldTransvoxelTerrain::start_flat_world(
 			"world lifecycle state does not allow startup";
 		return false;
 	}
-	if (chunk_count_x <= 0 || chunk_count_z <= 0 ||
-		chunk_count_x > 4096 || chunk_count_z > 4096 ||
+	if (chunk_count_x <= 0 || chunk_count_y <= 0 || chunk_count_z <= 0 ||
+		chunk_count_x > 4096 || chunk_count_y > 4096 || chunk_count_z > 4096 ||
+		chunk_origin_y < -4096 || chunk_origin_y > 4096 ||
 		source_revision <= 0 || object_root.is_empty()) {
 		synchronous_world_error_ =
 			"flat world descriptor is invalid";
@@ -173,14 +248,15 @@ bool WorldTransvoxelTerrain::start_flat_world(
 	}
 	WtProceduralWorldDescriptor descriptor;
 	descriptor.chunk_count_x = static_cast<std::uint32_t>(chunk_count_x);
+	descriptor.chunk_count_y = static_cast<std::uint32_t>(chunk_count_y);
 	descriptor.chunk_count_z = static_cast<std::uint32_t>(chunk_count_z);
-	descriptor.chunk_y = 0;
+	descriptor.chunk_y = static_cast<std::int32_t>(chunk_origin_y);
 	descriptor.source_revision = static_cast<std::uint64_t>(source_revision);
 	descriptor.world_revision = 0;
 	descriptor.seed = 0;
 	descriptor.mode = WtProceduralWorldMode::Flat;
 	const std::uint64_t page_count = wt_procedural_page_count(descriptor);
-	if (page_count == 0 || page_count > 262144U) {
+	if (page_count == 0 || page_count > kWtMaximumProceduralPageCount) {
 		synchronous_world_error_ =
 			"flat world page count exceeds compact runtime limit";
 		return false;
