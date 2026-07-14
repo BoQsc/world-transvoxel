@@ -77,6 +77,10 @@ activation distance.
 
 ## Streaming and edited-LOD continuity
 
+The authoritative contract is
+[`docs/contracts/PRODUCTION_EDITED_TERRAIN_LOD_CORRECTNESS_CONTRACT.md`](../../docs/contracts/PRODUCTION_EDITED_TERRAIN_LOD_CORRECTNESS_CONTRACT.md).
+This section records the practical runtime limits that implement it.
+
 - Moving-viewer terrain is streamed from an active desired chunk set. Projects
   should expect coarse far terrain plus detailed chunks around active viewers,
   not every LOD0 chunk of a large world resident at once.
@@ -92,13 +96,14 @@ activation distance.
   LOD-popping artifacts.
 - Recent edit LOD-retention zones are promoted into temporary planner viewers so
   recently dug or placed terrain remains detailed longer when the player moves
-  away and returns. The current implementation keeps the newest eight
-  edit-retention zones active even without a real viewer nearby, then still
-  applies the normal retention-zone merge and capacity limits. When the full
-  retention plan exceeds capacity, runtime planning degrades retention by keeping
-  the newest/visible zones first and reducing retention refinement before dropping
-  retention entirely. This prevents the known all-or-nothing fallback failure, but
-  it does not make every far edit permanently high-detail.
+  away and returns. The current implementation remembers up to 256
+  edit-retention zones, keeps the newest 32 zones active even without a real
+  viewer nearby, merges zones within 64 m, uses one LOD0 root-radius chunk, and
+  clamps edit refinement to one through six LOD0 chunks. When the full retention
+  plan exceeds capacity, runtime planning degrades retention by keeping the
+  newest/visible zones first and reducing retention refinement before dropping
+  retention entirely. This prevents the known all-or-nothing fallback failure,
+  but it does not make every far edit permanently high-detail.
 - Multi-site edit retention is capacity-sensitive. The compact 2K profile with
   two distant edited sites is qualified with active/render/collision capacities
   of 2048. A 1024 active-chunk cap was observed to trigger retention fallback

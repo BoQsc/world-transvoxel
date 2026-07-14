@@ -510,6 +510,23 @@ bool run_edit_retention_many_zone_regression(
 		"edit retention many-zone edit metrics mismatch");
 	check(metrics.edit_lod_retention_zones == kEditCount,
 		"edit retention many-zone cap regressed below 96 zones");
+	if (ok && runtime.update_viewer({ 1, 8.0, 8.0, 8.0, 1 }, 1, 1) !=
+			wt::WtReadOnlyRuntimeStatus::Ok) {
+		check(false, "edit retention many-zone viewer update rejected");
+		ok = false;
+	}
+	if (ok && !wait_for_viewer_update_idle(runtime, 1)) {
+		check(false, "edit retention many-zone viewer update did not idle");
+		ok = false;
+	}
+	drain_publications(runtime);
+	const wt::WtReadOnlyRuntimeMetrics planned_metrics = runtime.get_metrics();
+	check(planned_metrics.edit_lod_retention_active_viewers != 0,
+		"edit retention many-zone retained zones were not planned");
+	check(planned_metrics.edit_lod_retention_plans != 0,
+		"edit retention many-zone did not record a retained plan");
+	check(planned_metrics.rejected_events == 0,
+		"edit retention many-zone rejected a viewer event");
 	runtime.request_stop();
 	worker.join();
 	journal.close();
@@ -519,6 +536,9 @@ bool run_edit_retention_many_zone_regression(
 	return ok && metrics.edit_commits == kEditCount &&
 		metrics.edit_rejections == 0 &&
 		metrics.edit_lod_retention_zones == kEditCount &&
+		planned_metrics.edit_lod_retention_active_viewers != 0 &&
+		planned_metrics.edit_lod_retention_plans != 0 &&
+		planned_metrics.rejected_events == 0 &&
 		run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
 		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok;
 }

@@ -45,12 +45,14 @@ work.
 
 ## Edited terrain LOD retention boundary
 
-Edited terrain LOD retention is part of the streaming contract, but it is not an
-unlimited promise that every edit remains at near-detail LOD from every future
-camera distance. The runtime remembers recent edit-retention zones and injects
-them into planning as temporary retention viewers. When a full retention plan is
-too expensive, planning must degrade retention in priority order instead of
-dropping all retention:
+The detailed edited-terrain rule is
+`PRODUCTION_EDITED_TERRAIN_LOD_CORRECTNESS_CONTRACT.md`. Edited terrain LOD
+retention is part of the streaming contract, but it is not an unlimited promise
+that every edit remains at near-detail LOD from every future camera distance.
+The runtime remembers recent edit-retention zones and injects them into planning
+as temporary retention viewers. When a full retention plan is too expensive,
+planning must degrade retention in priority order instead of dropping all
+retention:
 
 1. keep newest/visible edit zones first;
 2. reduce edit-retention refinement radius when needed;

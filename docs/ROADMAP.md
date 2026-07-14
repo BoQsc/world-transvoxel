@@ -177,3 +177,30 @@ Finite qualification gates are tracked in
 
 The 0BSD backend may now enter the same contract and production qualification
 suite. It does not replace MIT based on isolated case tests alone.
+
+## Active downstream Terrain 1.0 gate - edited terrain LOD correctness
+
+Status: active qualification gate for terrain/gameworld downstream projects.
+This does not reopen M1-M5. It clarifies what a terrain addon or integration
+game may claim when it exposes mining, tunneling, placing, map editing, or other
+player-authored terrain changes.
+
+The authoritative rule is
+`docs/contracts/PRODUCTION_EDITED_TERRAIN_LOD_CORRECTNESS_CONTRACT.md`.
+
+Exit: the chosen downstream profile proves all of the following for its actual
+camera distances, active chunk capacity, viewer radius, movement speed, and
+render/collision application budgets:
+
+- committed edits persist through movement, reload, and compaction;
+- edited chunks and dependent LOD/transition support are regenerated from
+  edited authoritative samples;
+- no human-visible terrain is cleared before replacement render/collision is
+  ready after initial scene readiness;
+- close-range player edits remain exact and collision-consistent;
+- close/mid/far/return movement does not restore, hide, or harshly reshape
+  edited terrain beyond the profile's documented tolerance;
+- multi-site editing remains within retention budget or documents the chosen
+  simplification behavior;
+- map-editor exact-region workflows force exactness and bake/validate derived
+  LOD pages instead of relying on runtime recent-edit heuristics.

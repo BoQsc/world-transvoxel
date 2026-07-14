@@ -70,10 +70,12 @@ newly dug or placed terrain refined longer as a player moves away, and fallback
 pressure now degrades retention instead of dropping it all at once. This is still
 a budgeted guarantee, not a promise that every edited region remains high-detail
 from every distance. Games with mining, tunneling, or player-made terrain must
-carry the edited-LOD-retention contract in
-[addons/world_transvoxel/OPERATING_LIMITS.md](addons/world_transvoxel/OPERATING_LIMITS.md)
-and validate their chosen camera distances, active chunk capacity, viewer radius,
-and edit-retention behavior before claiming seamless edited terrain.
+carry the edited terrain contract in
+[docs/contracts/PRODUCTION_EDITED_TERRAIN_LOD_CORRECTNESS_CONTRACT.md](docs/contracts/PRODUCTION_EDITED_TERRAIN_LOD_CORRECTNESS_CONTRACT.md)
+and the runtime limits in
+[addons/world_transvoxel/OPERATING_LIMITS.md](addons/world_transvoxel/OPERATING_LIMITS.md),
+then validate their chosen camera distances, active chunk capacity, viewer
+radius, and edit-retention behavior before claiming seamless edited terrain.
 
 ## Current phase
 
