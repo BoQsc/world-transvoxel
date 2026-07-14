@@ -114,14 +114,13 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 	}
 	for (const WtEditRuntimeReplacementRecord &replacement :
 			edit_replacement_->get_last_replacements()) {
-		if (!push_publication({
-				WtReadOnlyPublicationKind::ExpectChunk,
-				replacement.key,
-				replacement.replacement_generation,
-				replacement.collision_required,
-				{},
-				{},
-			})) {
+		WtReadOnlyPublication publication;
+		publication.kind = WtReadOnlyPublicationKind::ExpectChunk;
+		publication.key = replacement.key;
+		publication.generation = replacement.replacement_generation;
+		publication.collision_required = replacement.collision_required;
+		publication.staged_replacement = true;
+		if (!push_publication(std::move(publication))) {
 			if (!stop_requested_.load()) {
 				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
 			}

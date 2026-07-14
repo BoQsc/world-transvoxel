@@ -98,9 +98,12 @@ Application budgets and metrics:
 
 The metrics dictionary includes `pending_chunk_retirements`, the number of old
 chunk records/resources retained until the current replacement set is fully
-ready. `visual_ready_chunk_records` and `fully_ready_chunk_records` provide
-explicit settlement counts against `active_chunk_records`. Pending retirement
-must return to zero and fully-ready must equal active after streaming settles.
+ready, and `pending_chunk_replacements`, the number of same-key edit
+replacements waiting for their render/collision resources before publication.
+`visual_ready_chunk_records` and `fully_ready_chunk_records` provide explicit
+settlement counts against `active_chunk_records`. Pending retirements and
+pending replacements must both return to zero, and fully-ready must equal active,
+after streaming settles.
 
 Signals:
 

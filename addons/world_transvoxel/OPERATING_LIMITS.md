@@ -99,6 +99,11 @@ activation distance.
   the newest/visible zones first and reducing retention refinement before dropping
   retention entirely. This prevents the known all-or-nothing fallback failure, but
   it does not make every far edit permanently high-detail.
+- Multi-site edit retention is capacity-sensitive. The compact 2K profile with
+  two distant edited sites is qualified with active/render/collision capacities
+  of 2048. A 1024 active-chunk cap was observed to trigger retention fallback
+  under two-site digging and could produce distance-dependent edited-hole
+  simplification or disappearance.
 - Any downstream game or addon that depends on long-distance visibility of mined,
   dug, placed, or restored terrain must explicitly budget and validate it. The
   required validation class is: create player-like edits, move/fly close, mid,
@@ -162,16 +167,17 @@ through a controlled stop/start before it becomes active.
   current replacement set is fully ready. During sustained movement, resource
   and application-record ownership can temporarily approach twice the active
   chunk capacity; it returns to the current desired set after streaming settles.
-  Once replacements are fully ready, old chunk removal is capped at four chunks
-  per frame to avoid a large one-frame dynamic LOD visual swap. Render
-  transition fading is disabled by default: same-key render mesh replacements
-  swap directly, so terrain edits do not create a white blink/fade. Projects
-  that explicitly set `WorldTransvoxelConfig.render_transition_frames` above
-  zero opt into temporary retiring render instances, retirement fade-out, and
-  introduction fade-in for that many frames. Custom terrain shaders that want
-  deterministic native fade behavior through `ALPHA` must declare an instance
-  uniform named `wt_fade_opacity` with default `1.0`, apply it to `ALPHA`, set a
-  positive render transition frame count, and explicitly enable
+  Runtime metrics expose both `pending_chunk_retirements` and
+  `pending_chunk_replacements`; both must be zero before a profile claims
+  settled visual readiness. Render transition fading is disabled by default:
+  same-key render mesh replacements swap directly, so terrain edits do not
+  create a white blink/fade. Projects that explicitly set
+  `WorldTransvoxelConfig.render_transition_frames` above zero opt into temporary
+  retiring render instances, retirement fade-out, and introduction fade-in for
+  that many frames. Custom terrain shaders that want deterministic native fade
+  behavior through `ALPHA` must declare an instance uniform named
+  `wt_fade_opacity` with default `1.0`, apply it to `ALPHA`, set a positive
+  render transition frame count, and explicitly enable
   `WorldTransvoxelConfig.shader_fade_parameter_enabled`. This switch is off by
   default because Godot retains per-instance shader-parameter slots after use;
   stable large-scale scenes must keep the default unless the project has a

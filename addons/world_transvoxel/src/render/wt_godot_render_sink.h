@@ -58,6 +58,7 @@ private:
 		bool introducing = false;
 		bool retiring = false;
 		bool staged = false;
+		bool staged_empty = false;
 	};
 
 	bool on_owner_thread() const noexcept;

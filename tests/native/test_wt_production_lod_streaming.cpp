@@ -132,6 +132,7 @@ struct PublicationEvidence {
 	std::size_t removals = 0;
 	std::size_t renders = 0;
 	std::size_t collisions = 0;
+	std::vector<std::uint8_t> expect_remove_order;
 	std::vector<std::uint64_t> bridge_generations;
 	std::vector<std::uint64_t> bridge_vertices;
 	std::vector<std::uint64_t> bridge_indices;
@@ -209,9 +210,11 @@ bool collect_until(
 			switch (publication.kind) {
 				case wt::WtReadOnlyPublicationKind::ExpectChunk:
 					++counts.expects;
+					counts.expect_remove_order.push_back(1);
 					break;
 				case wt::WtReadOnlyPublicationKind::RemoveChunk:
 					++counts.removals;
+					counts.expect_remove_order.push_back(2);
 					break;
 				case wt::WtReadOnlyPublicationKind::RenderPayload:
 					++counts.renders;
@@ -292,6 +295,33 @@ std::size_t edit_retention_fallback_capacity(
 		}
 	}
 	return 0;
+}
+
+bool run_global_coarse_lod_coverage_regression(
+	const std::vector<wt::WtChunkKey> &page_keys
+) {
+	const wt::WtLodPlannerViewer viewer =
+		planner_viewer(1, 1, 8.0, 1, 1, 0);
+	wt::WtBalancedLodPlan local_plan;
+	wt::WtBalancedLodPlanner local_planner(64, page_keys);
+	check(local_planner.valid() && local_planner.plan(
+		{ viewer }, {}, {}, local_plan
+	) == wt::WtBalancedLodPlannerStatus::Ok,
+		"local balanced LOD coverage plan failed");
+	check(find_entry(local_plan, { 3, 0, 0, 1 }) == nullptr,
+		"local balanced LOD planner unexpectedly kept far coarse root");
+
+	wt::WtBalancedLodPlan global_plan;
+	wt::WtBalancedLodPlanner global_planner(64, page_keys, 0, true);
+	check(global_planner.valid() && global_planner.plan(
+		{ viewer }, {}, {}, global_plan
+	) == wt::WtBalancedLodPlannerStatus::Ok,
+		"global coarse balanced LOD coverage plan failed");
+	check(find_entry(global_plan, { 3, 0, 0, 1 }) != nullptr,
+		"global coarse LOD coverage did not keep far coarse root active");
+	check(global_plan.entries.size() >= local_plan.entries.size(),
+		"global coarse LOD coverage unexpectedly shrank active coverage");
+	return failure_count == 0;
 }
 
 bool run_edit_retention_fallback_regression(
@@ -462,6 +492,8 @@ int main() {
 		"edit-retention balanced LOD plan failed");
 	check(find_entry(retained_plan, retained_edit_key) != nullptr,
 		"edit-retention viewer did not keep far edited LOD0 key active");
+	const bool global_coarse_ok =
+		run_global_coarse_lod_coverage_regression(storage.page_keys());
 
 	wt::WtBalancedLodPlanner bounded(8, storage.page_keys());
 	wt::WtBalancedLodPlan rejected_plan;
@@ -518,11 +550,35 @@ int main() {
 		publications.expects >= 19,
 		"transition-mask change did not remesh bridge without removal");
 
+	const std::size_t order_before_moving_viewer =
+		publications.expect_remove_order.size();
 	check(runtime.update_viewer({ 1, 40.0, 8.0, 8.0, 2 }, 1, 1) ==
 		wt::WtReadOnlyRuntimeStatus::Ok,
 		"moving multi-LOD viewer was rejected");
 	check(collect_until(runtime, publications, 27, 27),
 		"moving viewer did not complete balanced refinement");
+	bool moving_viewer_saw_expect = false;
+	bool moving_viewer_saw_removal = false;
+	bool moving_viewer_expect_after_removal = false;
+	bool moving_viewer_seen_removal = false;
+	for (std::size_t index = order_before_moving_viewer;
+			index < publications.expect_remove_order.size();
+			++index) {
+		const std::uint8_t marker = publications.expect_remove_order[index];
+		if (marker == 1) {
+			moving_viewer_saw_expect = true;
+			if (moving_viewer_seen_removal) {
+				moving_viewer_expect_after_removal = true;
+			}
+		} else if (marker == 2) {
+			moving_viewer_saw_removal = true;
+			moving_viewer_seen_removal = true;
+		}
+	}
+	check(moving_viewer_saw_expect && moving_viewer_saw_removal,
+		"moving viewer did not exercise mixed addition/removal publications");
+	check(!moving_viewer_expect_after_removal,
+		"viewer delta published a removal before all additions were expected");
 	check(runtime.remove_viewer(1, 3) == wt::WtReadOnlyRuntimeStatus::Ok &&
 		runtime.remove_viewer(2, 2) == wt::WtReadOnlyRuntimeStatus::Ok,
 		"multi-LOD viewer removal was rejected");
@@ -563,6 +619,7 @@ int main() {
 	append_u64(evidence, metrics.transition_mesh_completions);
 	append_u64(evidence, storage.page_count());
 	append_u64(evidence, fallback_retention_ok ? 1U : 0U);
+	append_u64(evidence, global_coarse_ok ? 1U : 0U);
 
 	if (failure_count != 0) {
 		std::fprintf(stderr, "PRODUCTION_LOD_STREAMING_FAIL failures=%d\n",
@@ -573,7 +630,7 @@ int main() {
 		"PRODUCTION_LOD_STREAMING_EVIDENCE entries=%zu mask=%u "
 		"retained_entries=%zu retained_edit_key=%d "
 		"fallback_retention=%d bridge0=%llu/%llu bridge1=%llu/%llu "
-		"transition_completions=%llu\n",
+		"global_coarse=%d transition_completions=%llu\n",
 		plan.entries.size(),
 		bridge == nullptr ? 0U : static_cast<unsigned int>(bridge->transition_mask),
 		retained_plan.entries.size(),
@@ -583,6 +640,7 @@ int main() {
 		static_cast<unsigned long long>(publications.bridge_indices[0]),
 		static_cast<unsigned long long>(publications.bridge_vertices[1]),
 		static_cast<unsigned long long>(publications.bridge_indices[1]),
+		global_coarse_ok ? 1 : 0,
 		static_cast<unsigned long long>(metrics.transition_mesh_completions)
 	);
 	std::printf("PRODUCTION_LOD_STREAMING_HASH ");

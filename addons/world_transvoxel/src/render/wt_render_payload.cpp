@@ -1,5 +1,7 @@
 #include "render/wt_render_payload.h"
 
+#include "meshing/wt_chunk_mesh_finalize.h"
+
 #include <cmath>
 #include <cstring>
 #include <unordered_map>
@@ -138,6 +140,33 @@ WtRenderBuildStatus append_buffer(
 	return WtRenderBuildStatus::Ok;
 }
 
+WtRenderBuildStatus append_combined_buffer(
+	const WtChunkMeshBuffer &source,
+	WtChunkMeshBuffer &combined
+) {
+	if ((source.indices.size() % 3U) != 0) {
+		return WtRenderBuildStatus::InvalidMesh;
+	}
+	if (source.vertices.size() > combined.vertex_limit - combined.vertices.size() ||
+		source.indices.size() > combined.index_limit - combined.indices.size()) {
+		return WtRenderBuildStatus::CapacityExceeded;
+	}
+	const std::uint32_t base_index =
+		static_cast<std::uint32_t>(combined.vertices.size());
+	combined.vertices.insert(
+		combined.vertices.end(),
+		source.vertices.begin(),
+		source.vertices.end()
+	);
+	for (const std::uint32_t index : source.indices) {
+		if (index >= source.vertices.size()) {
+			return WtRenderBuildStatus::InvalidMesh;
+		}
+		combined.indices.push_back(base_index + index);
+	}
+	return WtRenderBuildStatus::Ok;
+}
+
 } // namespace
 
 WtRenderPayload::WtRenderPayload() {
@@ -188,22 +217,31 @@ WtRenderBuildStatus wt_build_render_payload(
 		output.clear();
 		return WtRenderBuildStatus::CapacityExceeded;
 	}
-	output.vertices.reserve(expected_vertices);
-	output.indices.reserve(expected_indices);
-	std::unordered_map<RenderVertexKey, std::uint32_t, RenderVertexKeyHash> vertices;
-	vertices.reserve(expected_vertices);
-	WtRenderBuildStatus status = append_buffer(mesh.regular, output, vertices);
+	WtChunkMeshBuffer combined;
+	combined.vertex_limit = expected_vertices;
+	combined.index_limit = expected_indices;
+	combined.vertices.reserve(expected_vertices);
+	combined.indices.reserve(expected_indices);
+	WtRenderBuildStatus status = append_combined_buffer(mesh.regular, combined);
 	for (unsigned int face_index = 0;
 		status == WtRenderBuildStatus::Ok && face_index < 6;
 		++face_index) {
 		const bool active = (mesh.transition_mask & wt_face_bit(
 			static_cast<WtChunkFace>(face_index))) != 0;
 		if (active) {
-			status = append_buffer(mesh.transitions[face_index], output, vertices);
+			status = append_combined_buffer(mesh.transitions[face_index], combined);
 		} else if (!mesh.transitions[face_index].vertices.empty() ||
 			!mesh.transitions[face_index].indices.empty()) {
 			status = WtRenderBuildStatus::InvalidMesh;
 		}
+	}
+	if (status == WtRenderBuildStatus::Ok) {
+		wt_finalize_deformed_triangles(combined);
+		output.vertices.reserve(combined.vertices.size());
+		output.indices.reserve(combined.indices.size());
+		std::unordered_map<RenderVertexKey, std::uint32_t, RenderVertexKeyHash> vertices;
+		vertices.reserve(combined.vertices.size());
+		status = append_buffer(combined, output, vertices);
 	}
 	if (status != WtRenderBuildStatus::Ok) {
 		output.clear();

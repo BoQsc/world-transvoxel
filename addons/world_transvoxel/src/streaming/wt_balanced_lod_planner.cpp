@@ -119,10 +119,12 @@ void WtBalancedLodPlan::clear() noexcept {
 WtBalancedLodPlanner::WtBalancedLodPlanner(
 	std::size_t active_capacity,
 	std::vector<WtChunkKey> page_catalog,
-	std::uint32_t refinement_radius_limit_chunks
+	std::uint32_t refinement_radius_limit_chunks,
+	bool global_coarse_lod_coverage
 ) :
 		active_capacity_(active_capacity),
 		refinement_radius_limit_chunks_(refinement_radius_limit_chunks),
+		global_coarse_lod_coverage_(global_coarse_lod_coverage),
 		page_catalog_(std::move(page_catalog)) {
 	std::sort(page_catalog_.begin(), page_catalog_.end());
 	valid_ = active_capacity_ != 0 &&
@@ -296,6 +298,22 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 	if (ordered.empty()) return WtBalancedLodPlannerStatus::Ok;
 
 	std::vector<WtChunkKey> roots;
+	if (global_coarse_lod_coverage_) {
+		std::size_t coarse_root_count = 0;
+		for (const WtChunkKey &key : page_catalog_) {
+			if (key.lod == maximum_lod) {
+				++coarse_root_count;
+			}
+		}
+		if (coarse_root_count <= active_capacity_) {
+			roots.reserve(coarse_root_count);
+			for (const WtChunkKey &key : page_catalog_) {
+				if (key.lod == maximum_lod) {
+					roots.push_back(key);
+				}
+			}
+		}
+	}
 	for (const WtLodPlannerViewer &viewer : ordered) {
 		std::int32_t center_x = 0;
 		std::int32_t center_y = 0;

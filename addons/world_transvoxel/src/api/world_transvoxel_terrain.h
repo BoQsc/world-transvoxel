@@ -151,7 +151,12 @@ private:
 	void drain_world_publications();
 	void stage_chunk_retirement(const WtChunkKey &key);
 	void cancel_chunk_retirement(const WtChunkKey &key);
+	void stage_chunk_replacement(const WtChunkKey &key);
+	void cancel_chunk_replacement(const WtChunkKey &key);
 	void flush_ready_chunk_retirements();
+	void flush_ready_chunk_replacements();
+	void update_visibility_staging_state();
+	void publish_staged_records_if_ready();
 	void reset_world_application(std::size_t capacity);
 
 	godot::Ref<WorldTransvoxelConfig> configuration_;
@@ -162,6 +167,7 @@ private:
 	WtReadOnlyPublication deferred_publication_;
 	bool has_deferred_publication_ = false;
 	std::vector<WtChunkKey> pending_chunk_retirements_;
+	std::vector<WtChunkKey> pending_chunk_replacements_;
 	std::unique_ptr<WtChunkApplicationService> application_;
 	std::unique_ptr<WtGodotRenderSink> render_sink_;
 	std::unique_ptr<WtGodotCollisionSink> collision_sink_;

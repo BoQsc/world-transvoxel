@@ -160,6 +160,7 @@ m3_application_test = native_test_env.Program(
     source=[
         "tests/native/test_wt_m3_application.cpp",
         "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/meshing/wt_chunk_mesh_finalize.cpp",
         "addons/world_transvoxel/src/physics/wt_collision_apply_queue.cpp",
         "addons/world_transvoxel/src/physics/wt_collision_builder.cpp",
         "addons/world_transvoxel/src/render/wt_render_apply_queue.cpp",
@@ -403,6 +404,7 @@ m5_resource_cache_test = native_test_env.Program(
     source=[
         "tests/native/test_wt_m5_resource_cache.cpp",
         "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/meshing/wt_chunk_mesh_finalize.cpp",
         "addons/world_transvoxel/src/physics/wt_collision_builder.cpp",
         "addons/world_transvoxel/src/render/wt_render_payload.cpp",
         "addons/world_transvoxel/src/services/wt_chunk_resource_cache.cpp",
@@ -445,6 +447,7 @@ m5_edit_replacement_test = native_test_env.Program(
         "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
         "addons/world_transvoxel/src/editing/wt_edit_spatial_index.cpp",
         "addons/world_transvoxel/src/editing/wt_edit_types.cpp",
+        "addons/world_transvoxel/src/meshing/wt_chunk_mesh_finalize.cpp",
         "addons/world_transvoxel/src/physics/wt_collision_apply_queue.cpp",
         "addons/world_transvoxel/src/physics/wt_collision_builder.cpp",
         "addons/world_transvoxel/src/render/wt_render_apply_queue.cpp",
@@ -467,6 +470,7 @@ m5_workload_runtime_sources = [
     "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
     "addons/world_transvoxel/src/editing/wt_edit_spatial_index.cpp",
     "addons/world_transvoxel/src/editing/wt_edit_types.cpp",
+    "addons/world_transvoxel/src/meshing/wt_chunk_mesh_finalize.cpp",
     "addons/world_transvoxel/src/physics/wt_collision_apply_queue.cpp",
     "addons/world_transvoxel/src/physics/wt_collision_builder.cpp",
     "addons/world_transvoxel/src/render/wt_render_apply_queue.cpp",

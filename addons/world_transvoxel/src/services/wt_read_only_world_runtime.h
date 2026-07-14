@@ -95,6 +95,7 @@ struct WtReadOnlyPublication {
 	WtCollisionPayloadPtr collision;
 	std::uint64_t world_revision = 0;
 	WtReadOnlyEditStatus edit_status = WtReadOnlyEditStatus::Ok;
+	bool staged_replacement = false;
 	std::uint64_t request_id = 0;
 	WtAuthoritativeSampleQueryStatus sample_status =
 		WtAuthoritativeSampleQueryStatus::Ok;
@@ -233,6 +234,7 @@ private:
 		WtGridPoint maximum;
 		std::uint32_t refinement_radius_chunks = 1;
 		std::uint64_t revision = 0;
+		std::uint64_t viewer_id = 0;
 	};
 
 	bool enqueue_viewer_event(const ViewerEvent &event);
@@ -247,6 +249,7 @@ private:
 	bool process_pending_transition_remeshes();
 	bool process_scheduler_jobs();
 	bool process_mesh_completions();
+	bool process_visual_readiness_repairs();
 	bool publish_delta(const WtDesiredSetDelta &delta);
 	bool push_publication(WtReadOnlyPublication publication);
 	void queue_transition_remeshes(
@@ -298,6 +301,7 @@ private:
 	std::vector<EditLodRetentionZone> edit_lod_retention_zones_;
 	std::vector<WtDesiredChunk> pending_transition_remeshes_;
 	std::uint64_t next_edit_lod_retention_revision_ = 1;
+	std::uint64_t next_edit_lod_retention_viewer_id_ = 1;
 	WtBalancedLodPlan current_plan_;
 	std::uint64_t plan_revision_ = 0;
 	std::unique_ptr<WtStreamScheduler> scheduler_;

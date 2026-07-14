@@ -39,7 +39,8 @@ public:
 	WtBalancedLodPlanner(
 		std::size_t active_capacity,
 		std::vector<WtChunkKey> page_catalog,
-		std::uint32_t refinement_radius_limit_chunks = 0
+		std::uint32_t refinement_radius_limit_chunks = 0,
+		bool global_coarse_lod_coverage = false
 	);
 
 	bool valid() const noexcept;
@@ -76,6 +77,7 @@ private:
 	std::size_t active_capacity_ = 0;
 	std::uint32_t refinement_radius_limit_chunks_ = 0;
 	std::vector<WtChunkKey> page_catalog_;
+	bool global_coarse_lod_coverage_ = false;
 	bool valid_ = false;
 };
 

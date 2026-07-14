@@ -33,6 +33,7 @@ struct WtRuntimeConfig {
 	std::uint64_t collision_apply_budget = 2;
 	double collision_activation_distance = 96.0;
 	double collision_deactivation_distance = 128.0;
+	bool global_coarse_lod_coverage = false;
 };
 
 enum class WtRuntimeConfigStatus : std::uint8_t {

@@ -34,6 +34,7 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 		) != 0 || progressed;
 		progressed = process_pending_transition_remeshes() || progressed;
 		progressed = process_mesh_completions() || progressed;
+		progressed = process_visual_readiness_repairs() || progressed;
 		if (last_status_.load() != WtReadOnlyRuntimeStatus::Ok) break;
 		if (!progressed) {
 			std::unique_lock<std::mutex> lock(wake_mutex_);

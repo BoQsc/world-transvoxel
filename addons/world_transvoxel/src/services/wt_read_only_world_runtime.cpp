@@ -26,9 +26,11 @@ namespace {
 constexpr std::size_t kWtEditLodRetentionCapacity = 64;
 constexpr std::uint64_t kWtEditLodRetentionViewerIdBase =
 	0x8000000000000000ULL;
+constexpr std::uint64_t kWtEditLodRetentionViewerIdMaximum =
+	0xFFFFFFFFFFFFFFFFULL - kWtEditLodRetentionViewerIdBase;
 constexpr std::uint32_t kWtEditLodRetentionRootRadiusChunks = 0;
 constexpr std::uint32_t kWtEditLodRetentionMinimumRefinementRadiusChunks = 1;
-constexpr std::uint32_t kWtEditLodRetentionMaximumRefinementRadiusChunks = 3;
+constexpr std::uint32_t kWtEditLodRetentionMaximumRefinementRadiusChunks = 1;
 constexpr std::uint32_t kWtEditLodRetentionRefinementMarginChunks = 1;
 constexpr double kWtEditLodRetentionMergeDistance = 32.0;
 constexpr double kWtEditLodRetentionVisibilitySlackRoots = 1.0;
@@ -198,7 +200,8 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 	lod_planner_ = std::make_unique<WtBalancedLodPlanner>(
 		active,
 		storage_.page_keys(),
-		static_cast<std::uint32_t>(config_.lod_refinement_radius_chunks)
+		static_cast<std::uint32_t>(config_.lod_refinement_radius_chunks),
+		config_.global_coarse_lod_coverage
 	);
 	planner_viewers_.reserve(viewers);
 	scheduler_ = std::make_unique<WtStreamScheduler>(
@@ -343,6 +346,12 @@ void WtReadOnlyWorldRuntime::remember_edit_lod_retention_zones(
 		zone.refinement_radius_chunks =
 			edit_lod_retention_refinement_radius(zone.minimum, zone.maximum);
 		zone.revision = next_edit_lod_retention_revision_++;
+		zone.viewer_id = kWtEditLodRetentionViewerIdBase +
+			next_edit_lod_retention_viewer_id_;
+		if (next_edit_lod_retention_viewer_id_ <
+				kWtEditLodRetentionViewerIdMaximum) {
+			++next_edit_lod_retention_viewer_id_;
+		}
 		bool merged = false;
 		const double merge_distance_squared =
 			kWtEditLodRetentionMergeDistance *
@@ -498,8 +507,7 @@ std::size_t WtReadOnlyWorldRuntime::append_edit_lod_retention_viewers(
 		const EditLodRetentionZone &zone = *visible_zones[index];
 		planning_viewers.push_back({
 			{
-				kWtEditLodRetentionViewerIdBase +
-					static_cast<std::uint64_t>(appended) + 1ULL,
+				zone.viewer_id,
 				zone.x,
 				zone.y,
 				zone.z,
@@ -573,8 +581,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	std::size_t edit_retention_viewers = 0;
 	WtBalancedLodPlan candidate_plan;
 	const std::size_t retention_viewer_capacity =
-		config_.viewer_capacity > candidate_viewers.size() ?
-		config_.viewer_capacity - candidate_viewers.size() : 0;
+		kWtEditLodRetentionCapacity;
 	const auto try_plan_with_retention =
 		[&](
 			std::uint32_t maximum_refinement_radius_chunks,
@@ -794,15 +801,51 @@ void WtReadOnlyWorldRuntime::queue_transition_remeshes(
 bool WtReadOnlyWorldRuntime::publish_delta(
 	const WtDesiredSetDelta &delta
 ) {
-	for (const WtChunkKey &key : delta.removed) {
-		if (!push_publication({
-				WtReadOnlyPublicationKind::RemoveChunk,
-				key,
-				{},
-				false,
-				{},
-				{},
-			})) return false;
+	// Publish additions before removals. The Godot/front-end application keeps
+	// old visible chunks alive while replacements are staged, but it can only do
+	// that correctly for chunks it already knows are expected. If removals are
+	// published first during a large viewer movement, the front-end can retire
+	// old chunks before it has received all new chunk expectations, producing
+	// visible rectangular skybox holes while the scheduler is still working.
+	const bool contains_replacement = !delta.removed.empty();
+	for (const WtDesiredChunk &item : delta.added) {
+		const WtChunkRecord *record = scheduler_->find_record(item.key);
+		if (record == nullptr) return false;
+		WtReadOnlyPublication publication;
+		publication.kind = WtReadOnlyPublicationKind::ExpectChunk;
+		publication.key = item.key;
+		publication.generation = record->generation;
+		publication.collision_required = item.collision_required;
+		publication.staged_replacement = contains_replacement;
+		if (!push_publication(std::move(publication))) return false;
+		const auto render = resource_cache_->find_render(
+			item.key,
+			record->generation
+		);
+		if (render) {
+			WtReadOnlyPublication render_publication;
+			render_publication.kind = WtReadOnlyPublicationKind::RenderPayload;
+			render_publication.key = render->key;
+			render_publication.generation = render->generation;
+			render_publication.render = render;
+			if (!push_publication(std::move(render_publication))) return false;
+		}
+		if (item.collision_required) {
+			const auto collision = resource_cache_->find_collision(
+				item.key,
+				record->generation
+			);
+			if (collision) {
+				WtReadOnlyPublication collision_publication;
+				collision_publication.kind =
+					WtReadOnlyPublicationKind::CollisionPayload;
+				collision_publication.key = collision->key;
+				collision_publication.generation = collision->generation;
+				collision_publication.collision_required = true;
+				collision_publication.collision = collision;
+				if (!push_publication(std::move(collision_publication))) return false;
+			}
+		}
 	}
 	for (const WtDesiredChunk &item : delta.updated) {
 		const WtChunkRecord *record = scheduler_->find_record(item.key);
@@ -815,13 +858,12 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 				{},
 			})) return false;
 	}
-	for (const WtDesiredChunk &item : delta.added) {
-		const WtChunkRecord *record = scheduler_->find_record(item.key);
-		if (record == nullptr || !push_publication({
-				WtReadOnlyPublicationKind::ExpectChunk,
-				item.key,
-				record->generation,
-				item.collision_required,
+	for (const WtChunkKey &key : delta.removed) {
+		if (!push_publication({
+				WtReadOnlyPublicationKind::RemoveChunk,
+				key,
+				{},
+				false,
 				{},
 				{},
 			})) return false;
@@ -1052,6 +1094,74 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 		if (completion.mesh->transition_mask != 0) {
 			++metrics_.transition_mesh_completions;
 		}
+	}
+	return progressed;
+}
+
+bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
+	if (!desired_) return false;
+	const WtSchedulerMetrics scheduler_metrics = scheduler_->get_metrics();
+	if (scheduler_->queued_job_count() != 0 ||
+		scheduler_->queued_completion_count() != 0 ||
+		scheduler_metrics.sampling_records != 0 ||
+		scheduler_metrics.meshing_records != 0) {
+		return false;
+	}
+	bool progressed = false;
+	std::size_t repairs = 0;
+	for (const WtDesiredChunk &item : desired_->get_desired_chunks()) {
+		if (repairs >= 64U || scheduler_->available_job_capacity() == 0) {
+			break;
+		}
+		const WtChunkRecord *record = scheduler_->find_record(item.key);
+		if (record == nullptr || record->lifecycle != WtChunkLifecycle::Ready) {
+			continue;
+		}
+		if (resource_cache_->find_render(item.key, record->generation)) {
+			continue;
+		}
+		const WtSchedulerStatus scheduler_status =
+			scheduler_->request_chunk_version(
+				item.key,
+				storage_.source_revision(),
+				world_revision_.load(),
+				item.priority,
+				true
+			);
+		if (scheduler_status == WtSchedulerStatus::JobQueueFull) {
+			break;
+		}
+		if (scheduler_status != WtSchedulerStatus::Ok) {
+			set_failure(WtReadOnlyRuntimeStatus::RuntimeDeltaFailure);
+			return progressed;
+		}
+		record = scheduler_->find_record(item.key);
+		const WtApplicationStatus application_status =
+			record == nullptr ? WtApplicationStatus::NotFound :
+			application_->expect_chunk(
+				item.key,
+				record->generation,
+				item.collision_required
+			);
+		if (application_status != WtApplicationStatus::Ok &&
+			application_status != WtApplicationStatus::AlreadyCurrent) {
+			set_failure(WtReadOnlyRuntimeStatus::RuntimeDeltaFailure);
+			return progressed;
+		}
+		WtReadOnlyPublication publication;
+		publication.kind = WtReadOnlyPublicationKind::ExpectChunk;
+		publication.key = item.key;
+		publication.generation = record->generation;
+		publication.collision_required = item.collision_required;
+		publication.staged_replacement = true;
+		if (!push_publication(std::move(publication))) {
+			if (!stop_requested_.load()) {
+				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
+			}
+			return progressed;
+		}
+		++repairs;
+		progressed = true;
 	}
 	return progressed;
 }

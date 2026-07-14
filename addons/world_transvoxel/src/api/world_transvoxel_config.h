@@ -67,6 +67,8 @@ public:
 	std::int64_t get_render_transition_frames() const noexcept;
 	void set_shader_fade_parameter_enabled(bool value);
 	bool is_shader_fade_parameter_enabled() const noexcept;
+	void set_global_coarse_lod_coverage(bool value);
+	bool is_global_coarse_lod_coverage() const noexcept;
 
 private:
 	std::int64_t active_chunk_capacity_ = 256;
@@ -92,6 +94,7 @@ private:
 	double collision_deactivation_distance_ = 128.0;
 	std::int64_t render_transition_frames_ = 0;
 	bool shader_fade_parameter_enabled_ = false;
+	bool global_coarse_lod_coverage_ = false;
 };
 
 } // namespace world_transvoxel

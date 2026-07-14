@@ -95,6 +95,21 @@ void WorldTransvoxelConfig::_bind_methods() {
 		"set_shader_fade_parameter_enabled",
 		"is_shader_fade_parameter_enabled"
 	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("set_global_coarse_lod_coverage", "enabled"),
+		&WorldTransvoxelConfig::set_global_coarse_lod_coverage
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("is_global_coarse_lod_coverage"),
+		&WorldTransvoxelConfig::is_global_coarse_lod_coverage
+	);
+	ADD_PROPERTY(
+		godot::PropertyInfo(
+			godot::Variant::BOOL, "global_coarse_lod_coverage"
+		),
+		"set_global_coarse_lod_coverage",
+		"is_global_coarse_lod_coverage"
+	);
 }
 
 #undef WT_BIND_FLOAT_PROPERTY
@@ -137,6 +152,7 @@ WtRuntimeConfig WorldTransvoxelConfig::to_native() const noexcept {
 	result.collision_apply_budget = collision_apply_budget_;
 	result.collision_activation_distance = collision_activation_distance_;
 	result.collision_deactivation_distance = collision_deactivation_distance_;
+	result.global_coarse_lod_coverage = global_coarse_lod_coverage_;
 	return result;
 }
 
@@ -216,6 +232,16 @@ void WorldTransvoxelConfig::set_shader_fade_parameter_enabled(bool value) {
 
 bool WorldTransvoxelConfig::is_shader_fade_parameter_enabled() const noexcept {
 	return shader_fade_parameter_enabled_;
+}
+
+void WorldTransvoxelConfig::set_global_coarse_lod_coverage(bool value) {
+	if (global_coarse_lod_coverage_ == value) return;
+	global_coarse_lod_coverage_ = value;
+	emit_changed();
+}
+
+bool WorldTransvoxelConfig::is_global_coarse_lod_coverage() const noexcept {
+	return global_coarse_lod_coverage_;
 }
 
 } // namespace world_transvoxel

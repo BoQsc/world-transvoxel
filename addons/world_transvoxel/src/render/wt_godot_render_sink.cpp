@@ -99,6 +99,20 @@ void WtGodotRenderSink::apply_record_material_override(Record &record) {
 bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	if (!on_owner_thread()) return false;
 	if (payload.indices.empty()) {
+		const auto iterator = records_.find(payload.key);
+		if (iterator != records_.end() &&
+				should_stage_existing_replacement(payload.key)) {
+			Record &record = iterator->second;
+			record.staged_mesh.unref();
+			record.staged_generation = payload.generation;
+			record.staged = true;
+			record.staged_empty = true;
+			record.retiring = false;
+			record.introducing = false;
+			record.retirement_frame = 0;
+			record.introduction_frame = 0;
+			return true;
+		}
 		remove_render(payload.key);
 		return true;
 	}
@@ -166,6 +180,7 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 			record.staged_mesh = mesh;
 			record.staged_generation = payload.generation;
 			record.staged = true;
+			record.staged_empty = false;
 			record.retiring = false;
 			record.introducing = false;
 			record.retirement_frame = 0;
@@ -201,6 +216,7 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	record.introduction_frame = 0;
 	record.staged_mesh.unref();
 	record.staged_generation = {};
+	record.staged_empty = false;
 	record.instance->set_position(godot::Vector3{});
 	record.instance->set_mesh(mesh);
 	record.instance->set_visible(!record.staged);
@@ -248,6 +264,19 @@ bool WtGodotRenderSink::begin_render_retirement(const WtChunkKey &key) {
 	if (record.instance == nullptr) {
 		records_.erase(iterator);
 		return false;
+	}
+	if (new_record_visibility_staging_enabled_) {
+		record.staged = true;
+		record.staged_empty = true;
+		record.staged_mesh.unref();
+		record.staged_generation = {};
+		record.retiring = false;
+		record.introducing = false;
+		record.retirement_frame = 0;
+		record.introduction_frame = 0;
+		record.retirement_start_transparency = 0.0F;
+		set_record_transparency(record, 0.0F);
+		return true;
 	}
 	if (transition_frames_ == 0U) {
 		owner_.remove_child(record.instance);
@@ -384,11 +413,15 @@ void WtGodotRenderSink::publish_staged_records() noexcept {
 		if (!record.staged || record.instance == nullptr) {
 			continue;
 		}
+		if (record.staged_empty) {
+			continue;
+		}
 		if (record.staged_mesh.is_valid()) {
 			record.instance->set_mesh(record.staged_mesh);
 			record.generation = record.staged_generation;
 			record.staged_mesh.unref();
 			record.staged_generation = {};
+			record.staged_empty = false;
 			record.retiring = false;
 			record.introducing = false;
 			record.retirement_frame = 0;
@@ -398,6 +431,16 @@ void WtGodotRenderSink::publish_staged_records() noexcept {
 		}
 		record.staged = false;
 		record.instance->set_visible(true);
+	}
+	for (auto iterator = records_.begin(); iterator != records_.end();) {
+		Record &record = iterator->second;
+		if (!record.staged || !record.staged_empty || record.instance == nullptr) {
+			++iterator;
+			continue;
+		}
+		owner_.remove_child(record.instance);
+		record.instance->queue_free();
+		iterator = records_.erase(iterator);
 	}
 }
 
@@ -469,9 +512,10 @@ bool WtGodotRenderSink::should_stage_created_record(
 		return false;
 	}
 	if (visibility_staging_reference_chunks_.empty()) {
-		return true;
+		return false;
 	}
 	const WtChunkBounds bounds = wt_chunk_bounds(key);
+	bool touches_replacement_region = false;
 	for (const WtChunkKey &reference_key : visibility_staging_reference_chunks_) {
 		const WtChunkBounds reference_bounds = wt_chunk_bounds(reference_key);
 		const bool overlaps =
@@ -489,6 +533,29 @@ bool WtGodotRenderSink::should_stage_created_record(
 			bounds.minimum.z <= reference_bounds.maximum.z &&
 			reference_bounds.minimum.z <= bounds.maximum.z;
 		if (overlaps || (touches_or_overlaps && key.lod != reference_key.lod)) {
+			touches_replacement_region = true;
+			break;
+		}
+	}
+	if (!touches_replacement_region) {
+		return false;
+	}
+	for (const auto &entry : records_) {
+		const WtChunkKey &visible_key = entry.first;
+		const Record &record = entry.second;
+		if (visible_key == key || record.instance == nullptr ||
+				!record.instance->is_visible()) {
+			continue;
+		}
+		const WtChunkBounds visible_bounds = wt_chunk_bounds(visible_key);
+		const bool visible_overlap =
+			bounds.minimum.x < visible_bounds.maximum.x &&
+			visible_bounds.minimum.x < bounds.maximum.x &&
+			bounds.minimum.y < visible_bounds.maximum.y &&
+			visible_bounds.minimum.y < bounds.maximum.y &&
+			bounds.minimum.z < visible_bounds.maximum.z &&
+			visible_bounds.minimum.z < bounds.maximum.z;
+		if (visible_overlap) {
 			return true;
 		}
 	}
