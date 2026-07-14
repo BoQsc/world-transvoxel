@@ -79,6 +79,17 @@ and the runtime limits in
 then validate their chosen camera distances, active chunk capacity, viewer
 radius, and edit-retention behavior before claiming seamless edited terrain.
 
+## Critical future multiplayer/server boundary
+
+World Transvoxel is still a local terrain addon today, but current terrain
+decisions must remain compatible with future multiplayer and large dedicated
+servers. The authoritative boundary is
+[docs/contracts/PRODUCTION_MULTIPLAYER_SERVER_COMPATIBILITY_CONTRACT.md](docs/contracts/PRODUCTION_MULTIPLAYER_SERVER_COMPATIBILITY_CONTRACT.md).
+Terrain authority belongs to density/material pages, world revisions, edit
+journals, snapshots, and validated edit transactions. Client meshes, LOD fades,
+materials, collision presentation, and screenshots are derived data and must not
+become saved or network-authoritative terrain state.
+
 ## Current phase
 
 R0 through M5 are complete. The addon now has the exact native cell backend,

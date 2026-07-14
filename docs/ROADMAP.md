@@ -193,6 +193,11 @@ projects must treat Transvoxel terrain as an authoritative 3D signed
 density/material volume. Height-derived procedural sources are allowed only as
 initial volume generators; heightmap-only or mesh-authoritative terrain is
 outside the standard.
+Future multiplayer and dedicated-server compatibility is governed by
+`docs/contracts/PRODUCTION_MULTIPLAYER_SERVER_COMPATIBILITY_CONTRACT.md`. This
+does not claim networked gameplay today; it prevents current terrain work from
+depending on client meshes, visual LOD state, GPU presentation, or unvalidated
+client edits as terrain authority.
 
 Exit: the chosen downstream profile proves all of the following for its actual
 camera distances, active chunk capacity, viewer radius, movement speed, and
