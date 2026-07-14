@@ -187,6 +187,12 @@ player-authored terrain changes.
 
 The authoritative rule is
 `docs/contracts/PRODUCTION_EDITED_TERRAIN_LOD_CORRECTNESS_CONTRACT.md`.
+The downstream volume rule is
+`docs/contracts/PRODUCTION_TERRAIN_VOLUME_CONTRACT.md`: terrain/gameworld
+projects must treat Transvoxel terrain as an authoritative 3D signed
+density/material volume. Height-derived procedural sources are allowed only as
+initial volume generators; heightmap-only or mesh-authoritative terrain is
+outside the standard.
 
 Exit: the chosen downstream profile proves all of the following for its actual
 camera distances, active chunk capacity, viewer radius, movement speed, and

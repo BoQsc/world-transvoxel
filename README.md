@@ -72,6 +72,8 @@ a budgeted guarantee, not a promise that every edited region remains high-detail
 from every distance. Games with mining, tunneling, or player-made terrain must
 carry the edited terrain contract in
 [docs/contracts/PRODUCTION_EDITED_TERRAIN_LOD_CORRECTNESS_CONTRACT.md](docs/contracts/PRODUCTION_EDITED_TERRAIN_LOD_CORRECTNESS_CONTRACT.md)
+and the volumetric terrain contract in
+[docs/contracts/PRODUCTION_TERRAIN_VOLUME_CONTRACT.md](docs/contracts/PRODUCTION_TERRAIN_VOLUME_CONTRACT.md)
 and the runtime limits in
 [addons/world_transvoxel/OPERATING_LIMITS.md](addons/world_transvoxel/OPERATING_LIMITS.md),
 then validate their chosen camera distances, active chunk capacity, viewer
