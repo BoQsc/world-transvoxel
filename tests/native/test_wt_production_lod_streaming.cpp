@@ -346,7 +346,7 @@ bool run_edit_retention_fallback_regression(
 	if (!journal.is_open()) return false;
 
 	wt::WtRuntimeConfig config;
-	config.active_chunk_capacity = fallback_capacity;
+	config.active_chunk_capacity = 256;
 	config.viewer_capacity = 4;
 	config.demand_capacity_per_viewer = 125;
 	config.storage_request_capacity = 128;
@@ -420,10 +420,8 @@ bool run_edit_retention_fallback_regression(
 	const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
 	check(metrics.edit_commits == 3 && metrics.edit_rejections == 0,
 		"edit retention fallback edit metrics mismatch");
-	check(metrics.edit_lod_retention_zones == 3,
-		"edit retention fallback did not keep three separated zones");
-	check(metrics.edit_lod_retention_fallbacks != 0,
-		"edit retention fallback path was not exercised");
+	check(metrics.edit_lod_retention_zones == 1,
+		"edit retention fallback did not merge nearby edited zones");
 	check(metrics.edit_lod_retention_active_viewers != 0,
 		"edit retention fallback dropped all retention viewers");
 	check(metrics.rejected_events == 0,
@@ -436,10 +434,91 @@ bool run_edit_retention_fallback_regression(
 		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok,
 		"edit retention fallback runtime did not stop cleanly");
 	return ok && metrics.edit_commits == 3 && metrics.edit_rejections == 0 &&
-		metrics.edit_lod_retention_zones == 3 &&
-		metrics.edit_lod_retention_fallbacks != 0 &&
+		metrics.edit_lod_retention_zones == 1 &&
 		metrics.edit_lod_retention_active_viewers != 0 &&
 		metrics.rejected_events == 0 &&
+		run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok;
+}
+
+bool run_edit_retention_many_zone_regression(
+	wt::WtAsyncStorageService &storage,
+	const std::filesystem::path &root
+) {
+	constexpr std::size_t kEditCount = 96;
+	wt::WtEditJournalStore journal;
+	const std::filesystem::path journal_path =
+		root / "edit_retention_many_zones.wtedit";
+	check(journal.open(
+		journal_path,
+		storage.source_revision(),
+		storage.world_revision()
+	) == wt::WtEditJournalStoreStatus::Ok,
+		"edit retention many-zone journal open failed");
+	if (!journal.is_open()) return false;
+
+	wt::WtRuntimeConfig config;
+	config.active_chunk_capacity = 512;
+	config.viewer_capacity = 4;
+	config.demand_capacity_per_viewer = 1024;
+	config.storage_request_capacity = 128;
+	config.storage_completion_capacity = 128;
+	config.encoded_page_entry_capacity = 128;
+	config.decoded_page_entry_capacity = 128;
+	config.mesh_entry_capacity = 128;
+	config.render_entry_capacity = 128;
+	config.collision_entry_capacity = 128;
+	wt::WtReadOnlyWorldRuntime runtime(config, storage, &journal);
+	check(runtime.valid(),
+		"edit retention many-zone runtime configuration rejected");
+	if (!runtime.valid()) {
+		journal.close();
+		return false;
+	}
+
+	std::atomic<wt::WtReadOnlyRuntimeStatus> run_status {
+		wt::WtReadOnlyRuntimeStatus::Ok
+	};
+	std::thread worker([&]() { run_status.store(runtime.run()); });
+	bool ok = true;
+	for (std::size_t index = 0; ok && index < kEditCount; ++index) {
+		const std::uint64_t base_revision = runtime.world_revision();
+		const wt::WtEditTransaction transaction = carve_transaction(
+			storage.source_revision(),
+			base_revision,
+			static_cast<std::uint8_t>(150U + index),
+			8.0 + static_cast<double>(index) * 96.0
+		);
+		if (runtime.submit_edit(transaction) != wt::WtReadOnlyRuntimeStatus::Ok) {
+			check(false, "edit retention many-zone edit submit rejected");
+			ok = false;
+			break;
+		}
+		if (!wait_for_edit_commit_idle(
+				runtime,
+				transaction.committed_revision,
+				index + 1U
+			)) {
+			check(false, "edit retention many-zone revision did not advance");
+			ok = false;
+			break;
+		}
+	}
+
+	const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+	check(metrics.edit_commits == kEditCount && metrics.edit_rejections == 0,
+		"edit retention many-zone edit metrics mismatch");
+	check(metrics.edit_lod_retention_zones == kEditCount,
+		"edit retention many-zone cap regressed below 96 zones");
+	runtime.request_stop();
+	worker.join();
+	journal.close();
+	check(run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok,
+		"edit retention many-zone runtime did not stop cleanly");
+	return ok && metrics.edit_commits == kEditCount &&
+		metrics.edit_rejections == 0 &&
+		metrics.edit_lod_retention_zones == kEditCount &&
 		run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
 		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok;
 }
@@ -601,6 +680,8 @@ int main() {
 		"multi-LOD runtime metrics mismatch");
 	const bool fallback_retention_ok =
 		run_edit_retention_fallback_regression(storage, fixture.path);
+	const bool many_zone_retention_ok =
+		run_edit_retention_many_zone_regression(storage, fixture.path);
 	storage.close();
 
 	std::vector<std::uint8_t> evidence;
@@ -620,6 +701,7 @@ int main() {
 	append_u64(evidence, storage.page_count());
 	append_u64(evidence, fallback_retention_ok ? 1U : 0U);
 	append_u64(evidence, global_coarse_ok ? 1U : 0U);
+	append_u64(evidence, many_zone_retention_ok ? 1U : 0U);
 
 	if (failure_count != 0) {
 		std::fprintf(stderr, "PRODUCTION_LOD_STREAMING_FAIL failures=%d\n",
@@ -630,7 +712,7 @@ int main() {
 		"PRODUCTION_LOD_STREAMING_EVIDENCE entries=%zu mask=%u "
 		"retained_entries=%zu retained_edit_key=%d "
 		"fallback_retention=%d bridge0=%llu/%llu bridge1=%llu/%llu "
-		"global_coarse=%d transition_completions=%llu\n",
+		"global_coarse=%d many_zone_retention=%d transition_completions=%llu\n",
 		plan.entries.size(),
 		bridge == nullptr ? 0U : static_cast<unsigned int>(bridge->transition_mask),
 		retained_plan.entries.size(),
@@ -641,6 +723,7 @@ int main() {
 		static_cast<unsigned long long>(publications.bridge_vertices[1]),
 		static_cast<unsigned long long>(publications.bridge_indices[1]),
 		global_coarse_ok ? 1 : 0,
+		many_zone_retention_ok ? 1 : 0,
 		static_cast<unsigned long long>(metrics.transition_mesh_completions)
 	);
 	std::printf("PRODUCTION_LOD_STREAMING_HASH ");

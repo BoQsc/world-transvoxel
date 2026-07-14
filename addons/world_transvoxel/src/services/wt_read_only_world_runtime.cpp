@@ -23,18 +23,18 @@
 namespace world_transvoxel {
 namespace {
 
-constexpr std::size_t kWtEditLodRetentionCapacity = 64;
+constexpr std::size_t kWtEditLodRetentionCapacity = 256;
 constexpr std::uint64_t kWtEditLodRetentionViewerIdBase =
 	0x8000000000000000ULL;
 constexpr std::uint64_t kWtEditLodRetentionViewerIdMaximum =
 	0xFFFFFFFFFFFFFFFFULL - kWtEditLodRetentionViewerIdBase;
-constexpr std::uint32_t kWtEditLodRetentionRootRadiusChunks = 0;
+constexpr std::uint32_t kWtEditLodRetentionRootRadiusChunks = 1;
 constexpr std::uint32_t kWtEditLodRetentionMinimumRefinementRadiusChunks = 1;
-constexpr std::uint32_t kWtEditLodRetentionMaximumRefinementRadiusChunks = 1;
+constexpr std::uint32_t kWtEditLodRetentionMaximumRefinementRadiusChunks = 6;
 constexpr std::uint32_t kWtEditLodRetentionRefinementMarginChunks = 1;
-constexpr double kWtEditLodRetentionMergeDistance = 32.0;
+constexpr double kWtEditLodRetentionMergeDistance = 64.0;
 constexpr double kWtEditLodRetentionVisibilitySlackRoots = 1.0;
-constexpr std::size_t kWtEditLodRetentionAlwaysActiveRecentZones = 8;
+constexpr std::size_t kWtEditLodRetentionAlwaysActiveRecentZones = 32;
 
 bool valid_radius(std::uint32_t radius, std::uint64_t capacity) noexcept {
 	const std::uint64_t width = static_cast<std::uint64_t>(radius) * 2U + 1U;
