@@ -5,6 +5,7 @@
 
 #include <cstdio>
 #include <limits>
+#include <map>
 #include <vector>
 
 namespace wt = world_transvoxel;
@@ -55,6 +56,131 @@ double triangle_alignment(const wt::WtChunkMeshBuffer &mesh, std::size_t index) 
 		static_cast<double>(vertex_b.normal.z) +
 		static_cast<double>(vertex_c.normal.z);
 	return cross_x * normal_x + cross_y * normal_y + cross_z * normal_z;
+}
+
+struct FlatYSource final : wt::WtChunkSampleSource {
+	double height = 7.0;
+
+	bool sample(const wt::WtGridPoint &point, wt::WtScalarSample &output) const noexcept override {
+		const double value = static_cast<double>(point.y) - height;
+		output.density = static_cast<float>(value);
+		output.material = value < 0.0 ? 7 : 3;
+		return true;
+	}
+};
+
+QuantizedPoint quantize_world(
+	const wt::WtVec3 &position,
+	const wt::WtGridPoint &origin
+) {
+	constexpr double scale = 1000000.0;
+	return {
+		static_cast<std::int64_t>(std::llround(
+			(static_cast<double>(origin.x) + position.x) * scale)),
+		static_cast<std::int64_t>(std::llround(
+			(static_cast<double>(origin.y) + position.y) * scale)),
+		static_cast<std::int64_t>(std::llround(
+			(static_cast<double>(origin.z) + position.z) * scale)),
+	};
+}
+
+Edge sorted_edge(QuantizedPoint a, QuantizedPoint b) {
+	if (b < a) {
+		const QuantizedPoint temporary = a;
+		a = b;
+		b = temporary;
+	}
+	return { a, b };
+}
+
+bool edge_forward(QuantizedPoint a, QuantizedPoint b) {
+	return !(b < a);
+}
+
+double world_axis_value(
+	const wt::WtVec3 &position,
+	const wt::WtGridPoint &origin,
+	int axis
+) {
+	if (axis == 0) return static_cast<double>(origin.x) + position.x;
+	if (axis == 1) return static_cast<double>(origin.y) + position.y;
+	return static_cast<double>(origin.z) + position.z;
+}
+
+void add_directed_plane_edges(
+	const wt::WtChunkMeshBuffer &mesh,
+	const wt::WtGridPoint &origin,
+	int axis,
+	double plane,
+	std::map<Edge, std::pair<unsigned int, unsigned int>> &directions
+) {
+	for (std::size_t index = 0; index < mesh.indices.size(); index += 3) {
+		const std::uint32_t triangle[3] = {
+			mesh.indices[index], mesh.indices[index + 1], mesh.indices[index + 2]
+		};
+		for (unsigned int edge_index = 0; edge_index < 3; ++edge_index) {
+			const wt::WtCellVertex &a = mesh.vertices[triangle[edge_index]];
+			const wt::WtCellVertex &b = mesh.vertices[triangle[(edge_index + 1) % 3]];
+			if (std::fabs(world_axis_value(a.position, origin, axis) - plane) >= 0.00001 ||
+				std::fabs(world_axis_value(b.position, origin, axis) - plane) >= 0.00001) {
+				continue;
+			}
+			const QuantizedPoint point_a = quantize_world(a.position, origin);
+			const QuantizedPoint point_b = quantize_world(b.position, origin);
+			std::pair<unsigned int, unsigned int> &counts =
+				directions[sorted_edge(point_a, point_b)];
+			if (edge_forward(point_a, point_b)) {
+				++counts.first;
+			} else {
+				++counts.second;
+			}
+		}
+	}
+}
+
+void add_directed_mesh_edges(
+	const wt::WtChunkMeshBuffer &mesh,
+	const wt::WtGridPoint &origin,
+	std::map<Edge, std::pair<unsigned int, unsigned int>> &directions
+) {
+	for (std::size_t index = 0; index < mesh.indices.size(); index += 3) {
+		const std::uint32_t triangle[3] = {
+			mesh.indices[index], mesh.indices[index + 1], mesh.indices[index + 2]
+		};
+		for (unsigned int edge_index = 0; edge_index < 3; ++edge_index) {
+			const wt::WtCellVertex &a = mesh.vertices[triangle[edge_index]];
+			const wt::WtCellVertex &b = mesh.vertices[triangle[(edge_index + 1) % 3]];
+			const QuantizedPoint point_a = quantize_world(a.position, origin);
+			const QuantizedPoint point_b = quantize_world(b.position, origin);
+			std::pair<unsigned int, unsigned int> &counts =
+				directions[sorted_edge(point_a, point_b)];
+			if (edge_forward(point_a, point_b)) {
+				++counts.first;
+			} else {
+				++counts.second;
+			}
+		}
+	}
+}
+
+void check_opposite_directed_shared_edges(
+	const std::map<Edge, std::pair<unsigned int, unsigned int>> &directions,
+	const char *message
+) {
+	std::size_t shared_count = 0;
+	std::size_t conflicted_count = 0;
+	for (const auto &entry : directions) {
+		const unsigned int uses = entry.second.first + entry.second.second;
+		if (uses != 2U) {
+			continue;
+		}
+		++shared_count;
+		if (entry.second.first != 1U || entry.second.second != 1U) {
+			++conflicted_count;
+		}
+	}
+	check(shared_count > 0, "same-LOD direction check found no shared seam edges");
+	check(conflicted_count == 0, message);
 }
 
 std::vector<wt::WtChunkKey> fine_neighbors(wt::WtChunkFace face) {
@@ -153,8 +279,52 @@ void test_same_lod_seam(
 	const std::set<Edge> left_edges = plane_boundary_edges(left.regular, left.world_origin, 0, 16.0);
 	const std::set<Edge> right_edges = plane_boundary_edges(right.regular, right.world_origin, 0, 16.0);
 	check(!left_edges.empty() && left_edges == right_edges, "same-LOD seam mismatch");
+	std::map<Edge, std::pair<unsigned int, unsigned int>> directions;
+	add_directed_plane_edges(left.regular, left.world_origin, 0, 16.0, directions);
+	add_directed_plane_edges(right.regular, right.world_origin, 0, 16.0, directions);
+	check_opposite_directed_shared_edges(
+		directions,
+		"same-LOD seam retained an orientation-conflicted shared edge"
+	);
 	hash_result(hash, left);
 	hash_result(hash, right);
+}
+
+void test_flat_lod0_seam_direction(
+	const wt::WtChunkMesher &mesher,
+	wt::WtChunkMeshingScratch &scratch,
+	std::uint64_t &hash
+) {
+	FlatYSource source;
+	source.height = 7.0;
+	const wt::WtChunkKey south_key = { 69, 0, 58, 0 };
+	const wt::WtChunkKey north_key = { 69, 0, 59, 0 };
+	wt::WtChunkMeshResult south;
+	wt::WtChunkMeshResult north;
+	check(mesher.mesh({ south_key, 0, 0.0F, 0.25F }, source, south, scratch) ==
+		wt::WtChunkMeshingStatus::Ok, "flat seam south chunk failed");
+	check(mesher.mesh({ north_key, 0, 0.0F, 0.25F }, source, north, scratch) ==
+		wt::WtChunkMeshingStatus::Ok, "flat seam north chunk failed");
+	validate_buffer(south.regular, "invalid flat seam south buffer");
+	validate_buffer(north.regular, "invalid flat seam north buffer");
+	const double seam_z = static_cast<double>(wt::wt_chunk_bounds(north_key).minimum.z);
+	const std::set<Edge> south_edges = plane_boundary_edges(
+		south.regular, south.world_origin, 2, seam_z
+	);
+	const std::set<Edge> north_edges = plane_boundary_edges(
+		north.regular, north.world_origin, 2, seam_z
+	);
+	check(!south_edges.empty() && south_edges == north_edges,
+		"flat same-LOD seam edge positions mismatch");
+	std::map<Edge, std::pair<unsigned int, unsigned int>> directions;
+	add_directed_plane_edges(south.regular, south.world_origin, 2, seam_z, directions);
+	add_directed_plane_edges(north.regular, north.world_origin, 2, seam_z, directions);
+	check_opposite_directed_shared_edges(
+		directions,
+		"flat same-LOD seam retained an orientation-conflicted shared edge"
+	);
+	hash_result(hash, south);
+	hash_result(hash, north);
 }
 
 void test_finalizer_orients_inverted_connected_component() {
@@ -235,6 +405,13 @@ void test_extreme_same_lod_gallery(
 	add_mesh_edges(left.regular, left.world_origin, edge_counts, left_bounds.minimum);
 	add_mesh_edges(right.regular, right.world_origin, edge_counts, left_bounds.minimum);
 	check_closed_surface(edge_counts, "extreme-coordinate same-LOD gallery is open");
+	std::map<Edge, std::pair<unsigned int, unsigned int>> directions;
+	add_directed_mesh_edges(left.regular, left.world_origin, directions);
+	add_directed_mesh_edges(right.regular, right.world_origin, directions);
+	check_opposite_directed_shared_edges(
+		directions,
+		"extreme-coordinate same-LOD gallery retained orientation-conflicted shared edges"
+	);
 	hash_result(hash, left);
 	hash_result(hash, right);
 }
@@ -406,6 +583,7 @@ int main() {
 	test_finalizer_rejects_near_zero_area_slivers();
 	test_finalizer_orients_quantized_edge_component();
 	test_same_lod_seam(mesher, scratch, hash);
+	test_flat_lod0_seam_direction(mesher, scratch, hash);
 	test_extreme_same_lod_gallery(
 		mesher,
 		scratch,
@@ -455,7 +633,7 @@ int main() {
 	test_convex_refined_corner_gallery(mesher, scratch, hash);
 	test_errors(mesher, scratch);
 
-	constexpr std::uint64_t expected_hash = 0x20a67f299820f5c3ULL;
+	constexpr std::uint64_t expected_hash = 0xaa3479d9633a83aaULL;
 	check(hash == expected_hash, "M2 chunk aggregate hash mismatch");
 	std::printf("M2_MESH_HASH %016llx\n", static_cast<unsigned long long>(hash));
 	if (failure_count != 0) {
