@@ -1,12 +1,12 @@
-# World Transvoxel 1.0.13-dev Operating Limits
+# World Transvoxel 1.0.14-dev Operating Limits
 
 ## Qualified release matrix
 
-The 1.0.13-dev development build inherits the 1.0.9 Windows x86-64
+The 1.0.14-dev development build inherits the 1.0.9 Windows x86-64
 qualification matrix, includes the documented 1.0.10-dev batched authoritative
 sample query, keeps native render transition fading opt-in/default-off, keeps
 fade shader instance-parameter writes opt-in/default-off, and adds the
-quantized mesh-finalizer topology boundary documented below. It is
+endpoint-regularized mesh extraction boundary documented below. It is
 qualified only for:
 
 | Component | Supported value |
@@ -24,13 +24,20 @@ release even if the source can be compiled for them.
 
 ## Mesh finalizer and topology boundary
 
+- Mesh extraction regularizes the isosurface interpolation fraction to
+  `[1/32, 31/32]` before canonical chunk positioning and normal interpolation.
+  This prevents closed edited SDF surfaces from generating near-grid-sample
+  sliver triangles that are topologically valid but visually unstable in carved
+  terrain.
 - The finalizer builds its edge-connectivity graph from quantized position keys
   at 1/1024 world-unit precision. This is a connectivity/orientation key only;
   it does not snap exported vertex positions.
-- The official M2 mesh topology hash remains `20a67f299820f5c3`.
-- Matched interior or chunk-face near-zero connector slivers may exist after
-  official Transvoxel meshing and dynamic edits. They are accepted only when the
-  topology probe proves they are not open holes: `boundary_edges=0`,
+- The M2 mesh topology hash is `02f60fe4c93375f9`.
+- Matched interior or chunk-face connector slivers are no longer an accepted
+  endpoint artifact for edited terrain. If a marker reports open-gap-free mesh
+  quality warnings, it must be promoted into a targeted gate and resolved or
+  explicitly scoped to a nonstandard profile.
+- Topology probes must still report `boundary_edges=0`,
   `interior_boundary_edges=0`, `unknown_boundary_edges=0`,
   `nonmanifold_edges=0`, `orientation_conflict_edges=0`,
   `repeated_point_key_triangles=0`, `zero_area_unknown_triangles=0`, and
@@ -39,9 +46,9 @@ release even if the source can be compiled for them.
   triangles, interior/unknown boundary edges, nonmanifold edges, and orientation
   conflicts are hard failures.
 - Do not delete matched connector slivers as a generic cleanup step. That was
-  tested and opened real cracks in edited terrain. If a downstream profile sees
-  sky through terrain, it must be diagnosed as topology, culling/material, or
-  streaming/LOD continuity, not hidden by deleting triangles blindly.
+  tested and opened real cracks in edited terrain. Endpoint regularization is
+  the accepted fix for the reproduced closed-surface sliver case because it
+  keeps neighboring chunks deterministic instead of removing surface triangles.
 - Double-sided terrain, duplicate backstop geometry, and full-map/backdrop
   presentation layers are not part of this topology claim. They may hide visual
   symptoms but do not prove mesh correctness.

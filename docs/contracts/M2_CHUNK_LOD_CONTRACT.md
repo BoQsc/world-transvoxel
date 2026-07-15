@@ -104,6 +104,12 @@ Stale viewer revisions and capacity overflow are rejected.
   mesher recomputes interpolation in double precision and snaps local
   positions to a `1/65536` base-unit lattice before vertex reuse. Integer chunk
   origins keep that lattice aligned between neighbors.
+- Mesh extraction regularizes the isosurface interpolation fraction to the
+  inclusive range `[1/32, 31/32]` before canonical positioning and normal
+  interpolation. This keeps official table topology and endpoint ownership, but
+  prevents edited SDF surfaces from placing render/collision vertices
+  infinitesimally close to grid samples, which produced closed but visually
+  pathological sliver triangles in carved terrain.
 - Boundary vertices retain primary and secondary positions conceptually. The
   secondary offset follows Lengyel equations 4.2 and 4.3: all applicable axis
   offsets are projected onto the vertex tangent plane. A vertex uses the
@@ -150,7 +156,7 @@ quantized triangle edge to have exactly two incident triangles. Individual
 transition tests also require exact matching contours at both full and half
 faces.
 
-The locked chunk aggregate hash is `20a67f299820f5c3`. Debug and optimized
+The locked chunk aggregate hash is `02f60fe4c93375f9`. Debug and optimized
 release builds must produce the same hash. `scripts/test_m2.py` runs both M2
 native contracts, the complete M1 contract, repository validation, and both
 Godot compatibility load tests.

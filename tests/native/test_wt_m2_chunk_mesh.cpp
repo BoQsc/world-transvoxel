@@ -633,7 +633,7 @@ int main() {
 	test_convex_refined_corner_gallery(mesher, scratch, hash);
 	test_errors(mesher, scratch);
 
-	constexpr std::uint64_t expected_hash = 0xaa3479d9633a83aaULL;
+	constexpr std::uint64_t expected_hash = 0x02f60fe4c93375f9ULL;
 	check(hash == expected_hash, "M2 chunk aggregate hash mismatch");
 	std::printf("M2_MESH_HASH %016llx\n", static_cast<unsigned long long>(hash));
 	if (failure_count != 0) {

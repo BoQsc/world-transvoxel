@@ -1,5 +1,7 @@
 #include "meshing/wt_chunk_mesh_finalize.h"
 
+#include "meshing/wt_chunk_mesh_geometry.h"
+
 #include <algorithm>
 #include <cstdint>
 #include <cmath>
@@ -328,9 +330,11 @@ WtVec3 wt_interpolated_mesh_normal(
 	const WtCellSample &b,
 	float isovalue
 ) noexcept {
-	const float alpha = std::max(
-		0.0F,
-		std::min(1.0F, (isovalue - a.density) / (b.density - a.density))
+	const float alpha = static_cast<float>(
+		wt_regularized_isosurface_alpha(
+			(static_cast<double>(isovalue) - static_cast<double>(a.density)) /
+			(static_cast<double>(b.density) - static_cast<double>(a.density))
+		)
 	);
 	WtVec3 normal = {
 		a.gradient.x + (b.gradient.x - a.gradient.x) * alpha,

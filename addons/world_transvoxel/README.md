@@ -59,17 +59,15 @@ development build that makes `wt_fade_opacity` instance-parameter writes
 opt-in/default-off because Godot retains per-instance shader-parameter slots
 after use. Version 1.0.12-dev also makes native render transition fading
 opt-in/default-off; the default replacement path is a direct swap so terrain
-edits do not blink. Version 1.0.13-dev keeps the official M2 topology hash
-`20a67f299820f5c3` while stabilizing mesh-finalizer edge ownership with
-quantized position keys at 1/1024 world-unit precision. It explicitly permits
-matched interior/chunk-face near-zero connector slivers only when topology
-probes report zero interior/unknown boundary edges, zero nonmanifold edges,
-zero orientation-conflict edges, zero repeated-point-key triangles, and zero
-unknown zero-area triangles. Blindly deleting those connector slivers is
-forbidden because it opened real cracks in edited terrain. These development
-builds are not the deterministic PQ4 release artifact. The release ships
-API/limit documentation, addon-local bake/storage wrappers, runtime DLLs, and
-native tools. Compute acceleration is optional later work.
+edits do not blink. Version 1.0.13-dev stabilizes mesh-finalizer edge ownership
+with quantized position keys at 1/1024 world-unit precision. Version
+1.0.14-dev endpoint-regularizes isosurface interpolation to `[1/32, 31/32]`
+before canonical chunk positioning and normal interpolation, replacing the old
+M2 mesh hash with `02f60fe4c93375f9` and resolving the reproduced closed
+edited-surface sliver warning without deleting surface triangles. These
+development builds are not the deterministic PQ4 release artifact. The release
+ships API/limit documentation, addon-local bake/storage wrappers, runtime
+DLLs, and native tools. Compute acceleration is optional later work.
 
 Procedural startup supports explicit vertical coverage through
 `start_procedural_world_with_vertical_origin()` and

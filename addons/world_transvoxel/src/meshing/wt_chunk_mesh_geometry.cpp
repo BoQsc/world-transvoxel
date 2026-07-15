@@ -54,7 +54,7 @@ WtVec3 wt_canonical_chunk_position(
 	double alpha =
 		(static_cast<double>(isovalue) - static_cast<double>(sample_a.density)) /
 		denominator;
-	alpha = std::max(0.0, std::min(1.0, alpha));
+	alpha = wt_regularized_isosurface_alpha(alpha);
 	const WtVec3 &a = endpoint_positions[vertex.endpoint_a];
 	const WtVec3 &b = endpoint_positions[vertex.endpoint_b];
 	constexpr double scale = 65536.0;
