@@ -701,6 +701,9 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 	wt::WtScalarSample deep_sample;
 	wt::WtScalarSample mid_sample;
 	wt::WtScalarSample shallow_sample;
+	const auto is_surface_cover_material = [](std::uint16_t material) {
+		return material == 2 || material == 3 || material == 4 || material == 5;
+	};
 	check(
 		wt::wt_sample_chunk_page(strata_page, { 47, 35, 25 }, deep_sample) &&
 			wt::wt_sample_chunk_page(strata_page, { 47, 40, 25 }, mid_sample) &&
@@ -708,9 +711,9 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 			deep_sample.density < mid_sample.density &&
 			mid_sample.density < shallow_sample.density &&
 			deep_sample.material == 1 &&
-			mid_sample.material == 7 &&
-			shallow_sample.material == 4,
-		"procedural underground strata samples mismatch"
+			is_surface_cover_material(mid_sample.material) &&
+			is_surface_cover_material(shallow_sample.material),
+		"procedural surface-cover/deep-strata samples mismatch"
 	);
 	check(
 		service.load_page_now({ 9, 0, 1, 0 }, immediate_bytes) ==

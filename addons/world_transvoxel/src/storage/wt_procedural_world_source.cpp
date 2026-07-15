@@ -210,8 +210,6 @@ private:
 			return 8;
 		}
 		if (depth >= 8.0) return 1;
-		if (depth >= 3.0) return 7;
-		if (depth >= 1.0) return 4;
 
 		const double macro_biome =
 			std::sin(static_cast<double>(x) * 0.0042 + seed_phase * 1.5) +
