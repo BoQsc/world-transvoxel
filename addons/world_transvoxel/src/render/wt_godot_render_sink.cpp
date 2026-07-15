@@ -5,7 +5,9 @@
 #include <godot_cpp/classes/mesh_instance3d.hpp>
 #include <godot_cpp/core/memory.hpp>
 #include <godot_cpp/variant/array.hpp>
+#include <godot_cpp/variant/color.hpp>
 #include <godot_cpp/variant/packed_int32_array.hpp>
+#include <godot_cpp/variant/packed_color_array.hpp>
 #include <godot_cpp/variant/packed_vector2_array.hpp>
 #include <godot_cpp/variant/packed_vector3_array.hpp>
 #include <godot_cpp/variant/string.hpp>
@@ -59,6 +61,21 @@ float clamp_unit(float value) {
 		return 1.0F;
 	}
 	return value;
+}
+
+godot::Color surface_material_blend_weights(std::uint16_t material) {
+	switch (material) {
+		case 2:
+			return { 1.0F, 0.0F, 0.0F, 0.0F };
+		case 3:
+			return { 0.0F, 1.0F, 0.0F, 0.0F };
+		case 4:
+			return { 0.0F, 0.0F, 1.0F, 0.0F };
+		case 5:
+			return { 0.0F, 0.0F, 0.0F, 1.0F };
+		default:
+			return { 0.0F, 0.0F, 0.0F, 0.0F };
+	}
 }
 
 } // namespace
@@ -119,10 +136,12 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	godot::PackedVector3Array positions;
 	godot::PackedVector3Array normals;
 	godot::PackedVector2Array materials;
+	godot::PackedColorArray surface_material_blends;
 	godot::PackedInt32Array indices;
 	positions.resize(static_cast<std::int64_t>(payload.vertices.size()));
 	normals.resize(static_cast<std::int64_t>(payload.vertices.size()));
 	materials.resize(static_cast<std::int64_t>(payload.vertices.size()));
+	surface_material_blends.resize(static_cast<std::int64_t>(payload.vertices.size()));
 	// Render chunks share seam vertices across separate MeshInstance3D draw
 	// calls. Store render positions in a common world-space frame and keep the
 	// instance transform identity so the GPU receives identical seam positions
@@ -139,6 +158,10 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 		materials.set(static_cast<std::int64_t>(index), {
 			static_cast<godot::real_t>(vertex.material), 0.0
 		});
+		surface_material_blends.set(
+			static_cast<std::int64_t>(index),
+			surface_material_blend_weights(vertex.material)
+		);
 	}
 	std::vector<std::int32_t> godot_indices;
 	godot_indices.reserve(payload.indices.size());
@@ -161,6 +184,7 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	arrays.resize(godot::Mesh::ARRAY_MAX);
 	arrays[godot::Mesh::ARRAY_VERTEX] = positions;
 	arrays[godot::Mesh::ARRAY_NORMAL] = normals;
+	arrays[godot::Mesh::ARRAY_COLOR] = surface_material_blends;
 	arrays[godot::Mesh::ARRAY_TEX_UV2] = materials;
 	arrays[godot::Mesh::ARRAY_INDEX] = indices;
 	godot::Ref<godot::ArrayMesh> mesh;

@@ -57,6 +57,35 @@ float regularized_density(double density) noexcept {
 	return static_cast<float>(density);
 }
 
+double procedural_wave(
+	std::int64_t x,
+	std::int64_t y,
+	std::int64_t z,
+	double seed_phase
+) noexcept {
+	return
+		std::sin(static_cast<double>(x) * 0.031 + seed_phase * 1.73) *
+			0.47 +
+		std::cos(static_cast<double>(z) * 0.027 - seed_phase * 1.19) *
+			0.38 +
+		std::sin(static_cast<double>(x + z) * 0.014 +
+			static_cast<double>(y) * 0.041 + seed_phase) * 0.29;
+}
+
+bool underground_ore_patch(
+	std::int64_t x,
+	std::int64_t y,
+	std::int64_t z,
+	double seed_phase
+) noexcept {
+	const double vein =
+		std::sin(static_cast<double>(x) * 0.073 + seed_phase) *
+		std::cos(static_cast<double>(y) * 0.097 - seed_phase * 0.7) *
+		std::sin(static_cast<double>(z) * 0.061 + seed_phase * 1.3);
+	const double pocket = procedural_wave(x, y, z, seed_phase * 0.37);
+	return vein > 0.48 && pocket > 0.08;
+}
+
 class WtProceduralTerrainVolumeSource final : public WtChunkSampleSource {
 public:
 	explicit WtProceduralTerrainVolumeSource(
@@ -174,16 +203,33 @@ private:
 		std::int64_t y,
 		std::int64_t z
 	) const noexcept {
+		const double seed_phase =
+			static_cast<double>(descriptor_.seed % 100000U) * 0.0001;
 		const double depth = surface - static_cast<double>(y);
+		if (depth >= 12.0 && underground_ore_patch(x, y, z, seed_phase)) {
+			return 8;
+		}
 		if (depth >= 8.0) return 1;
 		if (depth >= 3.0) return 7;
 		if (depth >= 1.0) return 4;
-		if (surface < 7.6) return 2;
-		if (surface > 11.0) return 7;
-		const std::int64_t band =
-			(x >= 0 ? x / 96 : (x - 95) / 96) +
-			(z >= 0 ? z / 96 : (z - 95) / 96);
-		return band % 3 == 0 ? 4 : 3;
+
+		const double macro_biome =
+			std::sin(static_cast<double>(x) * 0.0042 + seed_phase * 1.5) +
+			std::cos(static_cast<double>(z) * 0.0037 - seed_phase * 0.8) +
+			0.55 * std::sin(static_cast<double>(x - z) * 0.0021 + seed_phase);
+		const double dry_biome =
+			std::sin(static_cast<double>(x + z) * 0.0051 - seed_phase * 0.4) +
+			0.42 * std::cos(static_cast<double>(x) * 0.0063 + seed_phase);
+		if (surface > 40.0 || (surface > 30.0 && macro_biome > 0.35)) {
+			return 5;
+		}
+		if (surface < 10.0 || dry_biome > 0.85) {
+			return 4;
+		}
+		if (surface > 22.0 || macro_biome < -0.70) {
+			return 3;
+		}
+		return 2;
 	}
 
 	WtProceduralWorldDescriptor descriptor_;

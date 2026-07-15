@@ -69,6 +69,14 @@ WtVec3 normalized(const WtVec3 &value) noexcept {
 	return multiply(value, 1.0F / std::sqrt(squared_length));
 }
 
+std::uint16_t outside_endpoint_material(
+	const WtCellSample &sample_a,
+	const WtCellSample &sample_b,
+	float isovalue
+) noexcept {
+	return sample_a.density >= isovalue ? sample_a.material : sample_b.material;
+}
+
 template <std::size_t SampleCount>
 WtCellStatus validate_samples(
 	const std::array<WtCellSample, SampleCount> &samples,
@@ -112,7 +120,7 @@ WtCellStatus make_vertex(
 		alpha
 	);
 	vertex.normal = normalized(lerp(sample_a.gradient, sample_b.gradient, alpha));
-	vertex.material = sample_a.density < isovalue ? sample_a.material : sample_b.material;
+	vertex.material = outside_endpoint_material(sample_a, sample_b, isovalue);
 	vertex.endpoint_a = endpoint_a;
 	vertex.endpoint_b = endpoint_b;
 	return WtCellStatus::Ok;

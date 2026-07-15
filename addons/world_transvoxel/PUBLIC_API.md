@@ -58,6 +58,17 @@ native render sink to every existing and newly created render chunk. Higher-leve
 addons should prefer this over frame-by-frame recursive material scans so newly
 streamed chunks do not flash with the engine default material.
 
+Render meshes expose material data for that override:
+
+- `UV2.x` is the primary authoritative material ID for the rendered vertex.
+- vertex color stores derived surface-biome blend weights
+  (`R=grass/material 2`, `G=gravel/material 3`, `B=sand/material 4`,
+  `A=snow/material 5`).
+
+The vertex-color weights are deterministic render derivatives of material IDs.
+They are not a second terrain authority and must not replace stored material
+samples, edit journals, or authoritative sample queries.
+
 Streaming and readiness:
 
 - `update_viewer(viewer_id, revision, position, radius_chunks, maximum_lod=0) -> bool`
