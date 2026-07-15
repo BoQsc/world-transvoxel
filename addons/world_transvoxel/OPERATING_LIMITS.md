@@ -152,6 +152,13 @@ This section records the practical runtime limits that implement it.
 - Production edit journal: 4,096 transactions, 65,536 commands, and 64 MiB.
 - One edit transaction: 4,096 commands maximum.
 - Runtime world-operation queue: 16 requests.
+- Edit operations are foreground operations in the world-operation queue. They
+  preserve relative edit order but are processed ahead of non-edit
+  sample/snapshot requests already waiting in the queue.
+- Projects must not depend on collision-only player targeting. Collision can lag
+  visible terrain during fast viewer movement; gameplay layers need a bounded
+  fallback target path or an explicit rejection reason before reporting an edit
+  as attempted.
 - One authoritative sample batch query: 4,096 grid points maximum.
 - Side-by-side snapshot compaction: 4,096 pages and 256 MiB of source page
   bytes maximum.

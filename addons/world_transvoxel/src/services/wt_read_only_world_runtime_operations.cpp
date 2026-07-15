@@ -4,6 +4,7 @@
 #include "storage/wt_edit_journal_store.h"
 
 #include <limits>
+#include <algorithm>
 #include <utility>
 
 namespace world_transvoxel {
@@ -21,6 +22,18 @@ bool WtReadOnlyWorldRuntime::enqueue_world_operation(
 			return false;
 		}
 		operation.request_id = ++next_request_id_;
+	}
+	if (operation.kind == WorldOperationKind::Edit) {
+		const auto insertion = std::find_if(
+			world_operations_.begin(),
+			world_operations_.end(),
+			[](const WorldOperation &queued) {
+				return queued.kind != WorldOperationKind::Edit;
+			}
+		);
+		world_operations_.insert(insertion, std::move(operation));
+		notify_work();
+		return true;
 	}
 	world_operations_.push_back(std::move(operation));
 	notify_work();
