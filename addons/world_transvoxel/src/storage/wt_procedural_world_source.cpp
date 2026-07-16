@@ -99,7 +99,16 @@ public:
 		WtScalarSample &output
 	) const noexcept override {
 		const double surface = height(point.x, point.z);
-		output.density = regularized_density(static_cast<double>(point.y) - surface);
+		double density = static_cast<double>(point.y) - surface;
+		if (descriptor_.mode == WtProceduralWorldMode::RollingHillsCave) {
+			density = rolling_hills_cave_density(
+				density,
+				point.x,
+				point.y,
+				point.z
+			);
+		}
+		output.density = regularized_density(density);
 		output.material = material(surface, point.x, point.y, point.z);
 		return std::isfinite(output.density);
 	}
@@ -108,6 +117,9 @@ private:
 	double height(std::int64_t x, std::int64_t z) const noexcept {
 		if (descriptor_.mode == WtProceduralWorldMode::Flat) {
 			return 8.0;
+		}
+		if (descriptor_.mode == WtProceduralWorldMode::RollingHillsCave) {
+			return rolling_hills_height(x, z);
 		}
 		const double width = std::max(
 			16.0,
@@ -195,6 +207,169 @@ private:
 		return 12.0 + central_highland + mountain_range + spire_a +
 			spire_b + spire_c + knife_ridge + cliff + basin + macro +
 			hills + crags + long_wave + local;
+	}
+
+	double rolling_hills_height(
+		std::int64_t x,
+		std::int64_t z
+	) const noexcept {
+		const double width = std::max(
+			16.0,
+			static_cast<double>(descriptor_.chunk_count_x) *
+				static_cast<double>(kWtChunkCellsPerAxis)
+		);
+		const double depth = std::max(
+			16.0,
+			static_cast<double>(descriptor_.chunk_count_z) *
+				static_cast<double>(kWtChunkCellsPerAxis)
+		);
+		const double center_x = width * 0.5 - 0.5;
+		const double center_z = depth * 0.5 - 0.5;
+		const double normalized_x =
+			(static_cast<double>(x) - center_x) / std::max(center_x, 1.0);
+		const double normalized_z =
+			(static_cast<double>(z) - center_z) / std::max(center_z, 1.0);
+		const double phase =
+			static_cast<double>(descriptor_.seed % 100000U) * 0.0001;
+		const double broad =
+			7.5 * std::sin(static_cast<double>(x) * 0.0052 + phase * 1.7) +
+			5.0 * std::cos(static_cast<double>(z) * 0.0047 - phase * 1.2) +
+			3.0 * std::sin(static_cast<double>(x + z) * 0.0034 + phase);
+		const double rolling =
+			4.0 * std::sin(static_cast<double>(x - z) * 0.008 + phase) *
+				std::cos(static_cast<double>(x + z) * 0.006 - phase * 0.6);
+		const double central_mound = 8.0 * std::exp(
+			-2.7 * (
+				(normalized_x - 0.03) * (normalized_x - 0.03) +
+				(normalized_z + 0.06) * (normalized_z + 0.06)
+			)
+		);
+		const double shallow_valley = -5.5 * std::exp(
+			-5.0 * (
+				(normalized_x + 0.34) * (normalized_x + 0.34) +
+				(normalized_z - 0.22) * (normalized_z - 0.22)
+			)
+		);
+		const double local =
+			1.2 * std::sin(static_cast<double>(x) * 0.018 - phase * 0.5) +
+			0.9 * std::cos(static_cast<double>(z) * 0.016 + phase * 0.9);
+		return 26.0 + broad + rolling + central_mound + shallow_valley + local;
+	}
+
+	static double ellipsoid_sdf(
+		double x,
+		double y,
+		double z,
+		double center_x,
+		double center_y,
+		double center_z,
+		double radius_x,
+		double radius_y,
+		double radius_z
+	) noexcept {
+		const double dx = (x - center_x) / radius_x;
+		const double dy = (y - center_y) / radius_y;
+		const double dz = (z - center_z) / radius_z;
+		return std::sqrt(dx * dx + dy * dy + dz * dz) - 1.0;
+	}
+
+	static double capsule_sdf(
+		double x,
+		double y,
+		double z,
+		double ax,
+		double ay,
+		double az,
+		double bx,
+		double by,
+		double bz,
+		double radius
+	) noexcept {
+		const double abx = bx - ax;
+		const double aby = by - ay;
+		const double abz = bz - az;
+		const double apx = x - ax;
+		const double apy = y - ay;
+		const double apz = z - az;
+		const double ab_length_squared = std::max(
+			abx * abx + aby * aby + abz * abz,
+			1.0
+		);
+		const double t = std::clamp(
+			(apx * abx + apy * aby + apz * abz) / ab_length_squared,
+			0.0,
+			1.0
+		);
+		const double closest_x = ax + abx * t;
+		const double closest_y = ay + aby * t;
+		const double closest_z = az + abz * t;
+		const double dx = x - closest_x;
+		const double dy = y - closest_y;
+		const double dz = z - closest_z;
+		return std::sqrt(dx * dx + dy * dy + dz * dz) - radius;
+	}
+
+	double rolling_hills_cave_density(
+		double terrain_density,
+		std::int64_t x,
+		std::int64_t y,
+		std::int64_t z
+	) const noexcept {
+		const double px = static_cast<double>(x);
+		const double py = static_cast<double>(y);
+		const double pz = static_cast<double>(z);
+		const double main_chamber = ellipsoid_sdf(
+			px,
+			py,
+			pz,
+			1024.0,
+			-20.0,
+			1024.0,
+			170.0,
+			38.0,
+			130.0
+		);
+		const double entrance_chamber = ellipsoid_sdf(
+			px,
+			py,
+			pz,
+			900.0,
+			15.0,
+			1030.0,
+			68.0,
+			46.0,
+			58.0
+		);
+		const double entry_tunnel = capsule_sdf(
+			px,
+			py,
+			pz,
+			900.0,
+			13.0,
+			1030.0,
+			1032.0,
+			-18.0,
+			1024.0,
+			24.0
+		);
+		const double side_gallery = capsule_sdf(
+			px,
+			py,
+			pz,
+			1050.0,
+			-18.0,
+			1024.0,
+			1190.0,
+			-10.0,
+			1110.0,
+			18.0
+		);
+		const double cave_sdf = std::min(
+			std::min(main_chamber, entrance_chamber),
+			std::min(entry_tunnel, side_gallery)
+		);
+		const double cave_air_density = -cave_sdf * 14.0;
+		return std::max(terrain_density, cave_air_density);
 	}
 
 	std::uint16_t material(

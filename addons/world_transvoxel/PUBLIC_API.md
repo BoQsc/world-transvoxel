@@ -27,6 +27,7 @@ Configuration and lifecycle:
 - `set_render_material_override(material)` / `get_render_material_override()`
 - `start_world(world_manifest_path, object_root) -> bool`
 - `start_procedural_world(chunk_count_x, chunk_count_z, seed, source_revision, object_root) -> bool`
+- `start_procedural_world_preset_with_vertical_origin(chunk_count_x, chunk_count_y, chunk_origin_y, chunk_count_z, seed, source_revision, preset_id, object_root) -> bool`
 - `start_flat_world(chunk_count_x, chunk_count_z, source_revision, object_root) -> bool`
 - `stop_world() -> bool`
 - `get_world_state() -> int`
@@ -47,6 +48,16 @@ demand through the same native page format, cache, meshing, editing, and
 streaming pipeline used by manifest-backed worlds. The supported procedural
 descriptor emits a bounded LOD0..LOD3 hierarchy, up to 262,144 indexed hierarchy
 pages, with persistent edits stored in the object root journal.
+
+`start_procedural_world_preset_with_vertical_origin()` starts the same native
+procedural path with explicit vertical chunk coverage and a named procedural
+preset. Supported preset IDs are:
+
+- `mountain_reference` / `deterministic_reference`: the default deterministic
+  mountain stress terrain;
+- `rolling_hills_cave`: a bounded rolling-hills inspection terrain with a real
+  carved density-volume cave/chamber, intended for terrain-shape inspection
+  profiles.
 
 `start_flat_world()` starts the same native procedural/storage/streaming path
 with a flat surface at y=8. It is intended for baseline playtests and games

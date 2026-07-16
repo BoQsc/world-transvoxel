@@ -27,6 +27,31 @@ std::uint32_t compact_seed(std::int64_t seed) noexcept {
 	return static_cast<std::uint32_t>(magnitude);
 }
 
+bool procedural_mode_from_preset_id(
+	const godot::String &preset_id,
+	WtProceduralWorldMode &mode
+) {
+	const godot::String normalized = preset_id.strip_edges().to_lower();
+	if (
+		normalized.is_empty() ||
+		normalized == "default" ||
+		normalized == "terrain" ||
+		normalized == "mountain_reference" ||
+		normalized == "deterministic_reference"
+	) {
+		mode = WtProceduralWorldMode::Terrain;
+		return true;
+	}
+	if (
+		normalized == "rolling_hills_cave" ||
+		normalized == "g21_rolling_hills_cave"
+	) {
+		mode = WtProceduralWorldMode::RollingHillsCave;
+		return true;
+	}
+	return false;
+}
+
 } // namespace
 
 bool WorldTransvoxelTerrain::start_world(
@@ -122,6 +147,28 @@ bool WorldTransvoxelTerrain::start_procedural_world_with_vertical_origin(
 	std::int64_t source_revision,
 	const godot::String &object_root
 ) {
+	return start_procedural_world_preset_with_vertical_origin(
+		chunk_count_x,
+		chunk_count_y,
+		chunk_origin_y,
+		chunk_count_z,
+		seed,
+		source_revision,
+		"mountain_reference",
+		object_root
+	);
+}
+
+bool WorldTransvoxelTerrain::start_procedural_world_preset_with_vertical_origin(
+	std::int64_t chunk_count_x,
+	std::int64_t chunk_count_y,
+	std::int64_t chunk_origin_y,
+	std::int64_t chunk_count_z,
+	std::int64_t seed,
+	std::int64_t source_revision,
+	const godot::String &preset_id,
+	const godot::String &object_root
+) {
 	if (!is_configuration_valid()) {
 		synchronous_world_error_ = get_configuration_error();
 		return false;
@@ -140,6 +187,12 @@ bool WorldTransvoxelTerrain::start_procedural_world_with_vertical_origin(
 			"procedural world descriptor is invalid";
 		return false;
 	}
+	WtProceduralWorldMode mode = WtProceduralWorldMode::Terrain;
+	if (!procedural_mode_from_preset_id(preset_id, mode)) {
+		synchronous_world_error_ =
+			"procedural world preset is unknown";
+		return false;
+	}
 	WtProceduralWorldDescriptor descriptor;
 	descriptor.chunk_count_x = static_cast<std::uint32_t>(chunk_count_x);
 	descriptor.chunk_count_y = static_cast<std::uint32_t>(chunk_count_y);
@@ -148,6 +201,7 @@ bool WorldTransvoxelTerrain::start_procedural_world_with_vertical_origin(
 	descriptor.source_revision = static_cast<std::uint64_t>(source_revision);
 	descriptor.world_revision = 0;
 	descriptor.seed = compact_seed(seed);
+	descriptor.mode = mode;
 	const std::uint64_t page_count = wt_procedural_page_count(descriptor);
 	if (page_count == 0 || page_count > kWtMaximumProceduralPageCount) {
 		synchronous_world_error_ =
