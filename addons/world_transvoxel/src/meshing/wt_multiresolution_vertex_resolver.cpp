@@ -83,6 +83,7 @@ WtMultiresolutionVertexStatus get_finest_cell_sample(
 			(samples[6].density - samples[5].density) * 0.5F,
 		},
 		samples[0].material,
+		samples[0].material_authored,
 	};
 	scratch.cell_samples.emplace(point, output);
 	return WtMultiresolutionVertexStatus::Ok;

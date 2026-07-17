@@ -72,13 +72,22 @@ streamed chunks do not flash with the engine default material.
 Render meshes expose material data for that override:
 
 - `UV2.x` is the primary authoritative material ID for the rendered vertex.
+- `UV2.y` is `1` when that material was explicitly authored by an edit and `0`
+  when it still comes from the base source.
 - vertex color stores derived surface-biome blend weights
   (`R=grass/material 2`, `G=gravel/material 3`, `B=sand/material 4`,
   `A=snow/material 5`).
 
-The vertex-color weights are deterministic render derivatives of material IDs.
-They are not a second terrain authority and must not replace stored material
-samples, edit journals, or authoritative sample queries.
+The authored flag is persisted with samples and follows the same solid
+isosurface endpoint as the material ID. It lets a higher-level material keep
+edited material categorical while applying an LOD-stable presentation derived
+from a known procedural source only to unedited source material. The
+vertex-color weights are deterministic render derivatives of material IDs.
+Neither render channel is a second terrain authority, and neither may replace
+stored material samples, edit journals, or authoritative sample queries.
+Legacy pages without provenance are conservatively exposed as `UV2.y = 1`;
+rebake the base and replay edits to recover source/edit provenance in schema
+1.2.
 
 Streaming and readiness:
 

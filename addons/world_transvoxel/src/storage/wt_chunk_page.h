@@ -11,15 +11,20 @@
 namespace world_transvoxel {
 
 constexpr std::uint16_t kWtChunkPageSchemaMajor = 1;
-constexpr std::uint16_t kWtChunkPageSchemaMinor = 1;
+constexpr std::uint16_t kWtChunkPageSchemaMinor = 2;
 constexpr std::size_t kWtChunkPageHeaderSize = 48;
 constexpr std::size_t kWtChunkPageSampleCount =
 	kWtChunkMeshingSamplesPerAxis *
 	kWtChunkMeshingSamplesPerAxis *
 	kWtChunkMeshingSamplesPerAxis;
 constexpr std::size_t kWtChunkPageSampleBytes = 6;
+constexpr std::size_t kWtChunkPageMaterialProvenanceBytes = 1;
+constexpr std::size_t kWtChunkPageCurrentSampleBytes =
+	kWtChunkPageSampleBytes + kWtChunkPageMaterialProvenanceBytes;
 constexpr std::size_t kWtChunkSurfaceShiftHeaderBytes = 8;
 constexpr std::size_t kWtChunkSurfaceShiftRecordBytes = 42;
+constexpr std::size_t kWtChunkSurfaceShiftCurrentRecordBytes =
+	kWtChunkSurfaceShiftRecordBytes + 2 * kWtChunkPageMaterialProvenanceBytes;
 constexpr std::size_t kWtChunkSurfaceEdgeCount =
 	3 * kWtChunkCellsPerAxis *
 	(kWtChunkCellsPerAxis + 1) *

@@ -264,7 +264,8 @@ void test_replay_and_overlap(std::vector<std::uint8_t> &evidence) {
 	const wt::WtScalarSample center =
 		left.page().samples[sample_index(left.page(), { 16, 0, 0 })];
 	check(
-		center.density == 14.0F && center.material == 9,
+		center.density == 14.0F && center.material == 9 &&
+			center.material_authored,
 		"overlap center edit result mismatch"
 	);
 	check(
@@ -282,7 +283,9 @@ void test_replay_and_overlap(std::vector<std::uint8_t> &evidence) {
 					right.page().samples[sample_index(right.page(), point)];
 				check(
 					left_sample.density == right_sample.density &&
-						left_sample.material == right_sample.material,
+						left_sample.material == right_sample.material &&
+						left_sample.material_authored ==
+							right_sample.material_authored,
 					"neighbor page overlap diverged after replay"
 				);
 			}
@@ -600,8 +603,10 @@ void test_material_volume_placement() {
 	check(
 		state.page().samples[solid_index].density == -2.0F &&
 		state.page().samples[solid_index].material == 3 &&
+		!state.page().samples[solid_index].material_authored &&
 		state.page().samples[air_index].density == 2.0F &&
-		state.page().samples[air_index].material == 9,
+		state.page().samples[air_index].material == 9 &&
+		state.page().samples[air_index].material_authored,
 		"material volume placement repainted solid or missed air"
 	);
 }

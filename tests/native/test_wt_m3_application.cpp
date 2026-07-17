@@ -19,8 +19,21 @@ void check(bool condition, const char *message) {
 	}
 }
 
-wt::WtCellVertex vertex(float x, float y, float z, std::uint16_t material) {
-	return { { x, y, z }, { 0.0F, 1.0F, 0.0F }, material, 0, 0 };
+wt::WtCellVertex vertex(
+	float x,
+	float y,
+	float z,
+	std::uint16_t material,
+	bool material_authored = false
+) {
+	return {
+		{ x, y, z },
+		{ 0.0F, 1.0F, 0.0F },
+		material,
+		material_authored,
+		0,
+		0,
+	};
 }
 
 void add_triangle(
@@ -45,9 +58,9 @@ wt::WtChunkMeshResult make_chunk_mesh() {
 	mesh.transition_mask = wt::wt_face_bit(wt::WtChunkFace::PositiveX);
 	add_triangle(
 		mesh.regular,
-		vertex(1.0F, 0.0F, 1.0F, 3),
-		vertex(2.0F, 0.0F, 1.0F, 3),
-		vertex(1.0F, 0.0F, 2.0F, 3)
+		vertex(1.0F, 0.0F, 1.0F, 3, true),
+		vertex(2.0F, 0.0F, 1.0F, 3, true),
+		vertex(1.0F, 0.0F, 2.0F, 3, true)
 	);
 	add_triangle(
 		mesh.transitions[static_cast<std::size_t>(wt::WtChunkFace::PositiveX)],
@@ -66,6 +79,9 @@ void test_render_builder(wt::WtRenderPayload &render) {
 		"render payload did not combine regular and transition buffers");
 	check(render.vertices[0].material == 3 && render.vertices[3].material == 5,
 		"render payload lost categorical materials");
+	check(render.vertices[0].material_authored &&
+		!render.vertices[3].material_authored,
+		"render payload lost material-authoring provenance");
 
 	wt::WtChunkMeshResult invalid = mesh;
 	add_triangle(

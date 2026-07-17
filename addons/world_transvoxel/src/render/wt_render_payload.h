@@ -18,6 +18,7 @@ struct WtRenderVertex {
 	WtVec3 position;
 	WtVec3 normal;
 	std::uint16_t material = 0;
+	bool material_authored = false;
 };
 
 struct WtRenderPayload {

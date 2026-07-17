@@ -22,6 +22,7 @@ bool equal_vertex(
 	return equal_vec3(left.position, right.position) &&
 		equal_vec3(left.normal, right.normal) &&
 		left.material == right.material &&
+		left.material_authored == right.material_authored &&
 		left.endpoint_a == right.endpoint_a &&
 		left.endpoint_b == right.endpoint_b;
 }
@@ -184,7 +185,8 @@ bool wt_equal_render_payload(
 		const WtRenderVertex &b = right.vertices[index];
 		if (!equal_vec3(a.position, b.position) ||
 			!equal_vec3(a.normal, b.normal) ||
-			a.material != b.material) {
+			a.material != b.material ||
+			a.material_authored != b.material_authored) {
 			return false;
 		}
 	}
@@ -193,7 +195,8 @@ bool wt_equal_render_payload(
 		const WtRenderVertex &b = right.water_vertices[index];
 		if (!equal_vec3(a.position, b.position) ||
 			!equal_vec3(a.normal, b.normal) ||
-			a.material != b.material) {
+			a.material != b.material ||
+			a.material_authored != b.material_authored) {
 			return false;
 		}
 	}

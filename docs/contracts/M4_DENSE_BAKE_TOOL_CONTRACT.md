@@ -121,13 +121,14 @@ proves:
 - non-finite density outside requested chunks still fails before output;
 - a later uncovered chunk fails and removes already-written temporary pages.
 
-The bounded release fixture page files were compared byte-for-byte with the
-installed World Transvoxel 1.0.2 release baker. The page files matched. The
-world manifest includes release-versioned generator provenance, so the locked
-World Transvoxel 1.0.11-dev world SHA-256 is:
+The bounded schema-1.2 fixture includes material-authoring provenance and is
+byte-identical across current debug and release bakers. Older release bakers
+that wrote schema 1.1 are intentionally not byte-identical, although their
+pages remain readable with missing provenance conservatively treated as
+authored. The locked current world SHA-256 is:
 
 ```text
-b1513d5b1ae66a6e1a00c5d49353bd49603aa7437d874bfcc900af42fdc56ad7
+81f5ed3c7dd62d8d7eec2cf49799239eafb6d6b6e75d3484513805b303876026
 ```
 
 No generated bake artifacts remain in the repository.

@@ -69,20 +69,20 @@ WtVec3 normalized(const WtVec3 &value) noexcept {
 	return multiply(value, 1.0F / std::sqrt(squared_length));
 }
 
-std::uint16_t solid_isosurface_endpoint_material(
+const WtCellSample &solid_isosurface_endpoint_sample(
 	const WtCellSample &sample_a,
 	const WtCellSample &sample_b,
 	float isovalue
 ) noexcept {
 	if (sample_a.density < isovalue) {
-		return sample_a.material;
+		return sample_a;
 	}
 	if (sample_b.density < isovalue) {
-		return sample_b.material;
+		return sample_b;
 	}
 	const float distance_a = std::fabs(sample_a.density - isovalue);
 	const float distance_b = std::fabs(sample_b.density - isovalue);
-	return distance_a <= distance_b ? sample_a.material : sample_b.material;
+	return distance_a <= distance_b ? sample_a : sample_b;
 }
 
 template <std::size_t SampleCount>
@@ -128,7 +128,10 @@ WtCellStatus make_vertex(
 		alpha
 	);
 	vertex.normal = normalized(lerp(sample_a.gradient, sample_b.gradient, alpha));
-	vertex.material = solid_isosurface_endpoint_material(sample_a, sample_b, isovalue);
+	const WtCellSample &surface_material =
+		solid_isosurface_endpoint_sample(sample_a, sample_b, isovalue);
+	vertex.material = surface_material.material;
+	vertex.material_authored = surface_material.material_authored;
 	vertex.endpoint_a = endpoint_a;
 	vertex.endpoint_b = endpoint_b;
 	return WtCellStatus::Ok;

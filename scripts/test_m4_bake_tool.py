@@ -14,7 +14,7 @@ from wt_script_common import REPO_ROOT, native_tool_path
 
 
 EXPECTED_RELEASE_COMPAT_WORLD_SHA256 = (
-    "c9632d9e64377f5cea0cca0053f850f203261b154309c467a53c63243ef72e9a"
+    "81f5ed3c7dd62d8d7eec2cf49799239eafb6d6b6e75d3484513805b303876026"
 )
 
 
@@ -118,9 +118,13 @@ def page_key_and_center(page: bytes) -> tuple[tuple[int, int, int, int], float, 
     header = parsed[fourcc(b"CHDR")]
     samples = parsed[fourcc(b"DATA")]
     x, y, z = struct.unpack_from("<iii", header, 4)
+    schema_minor = struct.unpack_from("<H", header, 2)[0]
     lod = header[16]
     index = ((1 * 19 + 1) * 19 + 1)
-    density, material = struct.unpack_from("<fH", samples, index * 6)
+    sample_bytes = 7 if schema_minor >= 2 else 6
+    density, material = struct.unpack_from(
+        "<fH", samples, index * sample_bytes
+    )
     return (x, y, z, lod), density, material
 
 

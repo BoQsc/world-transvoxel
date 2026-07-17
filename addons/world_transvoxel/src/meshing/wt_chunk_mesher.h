@@ -22,6 +22,7 @@ constexpr std::size_t kWtMaximumCachedCellSamples = 32768;
 struct WtScalarSample {
 	float density = 0.0F;
 	std::uint16_t material = 0;
+	bool material_authored = false;
 };
 
 struct WtResolvedMultiresolutionEdge;
@@ -94,6 +95,7 @@ struct WtGridPointHash {
 struct WtChunkVertexKey {
 	std::array<std::uint32_t, 6> vector_bits{};
 	std::uint16_t material = 0;
+	bool material_authored = false;
 
 	bool operator==(const WtChunkVertexKey &other) const noexcept;
 };

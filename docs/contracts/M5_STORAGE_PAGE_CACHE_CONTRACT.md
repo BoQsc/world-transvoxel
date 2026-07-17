@@ -102,7 +102,7 @@ Metrics expose:
 - deterministic metrics and matching debug/release evidence hash:
 
 ```text
-11b2749ef19124bf73f6f2e287f0cc0da3c877fd9876d3cd42e0d031bd0f740f
+fb90e70ff92bae7ed83f33cf37afbe220eac63fbadd6a46fee6f62becbe3aa8d
 ```
 
 This completes authoritative page/sample cache ownership. Derived cache,

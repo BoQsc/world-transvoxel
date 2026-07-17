@@ -88,20 +88,20 @@ WtVec3 wt_canonical_edge_position(
 	};
 }
 
-std::uint16_t wt_solid_isosurface_endpoint_material(
+const WtCellSample &wt_solid_isosurface_endpoint_sample(
 	const WtCellSample &sample_a,
 	const WtCellSample &sample_b,
 	float isovalue
 ) noexcept {
 	if (sample_a.density < isovalue) {
-		return sample_a.material;
+		return sample_a;
 	}
 	if (sample_b.density < isovalue) {
-		return sample_b.material;
+		return sample_b;
 	}
 	const float distance_a = std::fabs(sample_a.density - isovalue);
 	const float distance_b = std::fabs(sample_b.density - isovalue);
-	return distance_a <= distance_b ? sample_a.material : sample_b.material;
+	return distance_a <= distance_b ? sample_a : sample_b;
 }
 
 WtVec3 wt_deform_chunk_position(

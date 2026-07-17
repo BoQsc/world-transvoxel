@@ -215,6 +215,7 @@ bool apply_valid_command_to_sample(
 	}
 	const float previous_density = sample.density;
 	const std::uint16_t previous_material = sample.material;
+	const bool previous_material_authored = sample.material_authored;
 	if (command.operation == WtEditOperation::AddDensity) {
 		const float result = sample.density + command.density_value;
 		if (!std::isfinite(result)) {
@@ -257,18 +258,22 @@ bool apply_valid_command_to_sample(
 				sample.density = result;
 				if (command.material != 0 && result <= 0.0F) {
 					sample.material = command.material;
+					sample.material_authored = true;
 				}
 			}
 		}
 	} else if (command.operation == WtEditOperation::PlaceMaterialVolume) {
 		if (sample.density >= 0.0F) {
 			sample.material = command.material;
+			sample.material_authored = true;
 		}
 	} else {
 		sample.material = command.material;
+		sample.material_authored = true;
 	}
 	changed = sample.density != previous_density ||
-		sample.material != previous_material;
+		sample.material != previous_material ||
+		sample.material_authored != previous_material_authored;
 	return std::isfinite(sample.density);
 }
 

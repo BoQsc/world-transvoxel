@@ -70,7 +70,8 @@ bool same_sample(
 	const WtScalarSample &right
 ) noexcept {
 	return left.density == right.density &&
-		left.material == right.material;
+		left.material == right.material &&
+		left.material_authored == right.material_authored;
 }
 
 struct EditedPageCacheEntry {

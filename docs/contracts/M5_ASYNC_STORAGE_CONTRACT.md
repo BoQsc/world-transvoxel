@@ -88,7 +88,7 @@ store. It proves:
 - matching debug/release evidence hash:
 
 ```text
-96ba7123c6b86fe9e2f07aa17f27553f58db92cca6427a069eced98de1471402
+e269d25e9b1cc7f2178d07342519c65dca64187ee89ab202b86caa944943b072
 ```
 
 This contract completed the first M5 work item. Bounded caches, multi-viewer

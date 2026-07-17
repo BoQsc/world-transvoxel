@@ -36,7 +36,7 @@ WtVec3 wt_canonical_edge_position(
 	float isovalue
 ) noexcept;
 
-std::uint16_t wt_solid_isosurface_endpoint_material(
+const WtCellSample &wt_solid_isosurface_endpoint_sample(
 	const WtCellSample &sample_a,
 	const WtCellSample &sample_b,
 	float isovalue

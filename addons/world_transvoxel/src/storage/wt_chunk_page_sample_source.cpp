@@ -113,7 +113,8 @@ bool same_sample(
 	const WtScalarSample &right
 ) noexcept {
 	return left.density == right.density &&
-		left.material == right.material;
+		left.material == right.material &&
+		left.material_authored == right.material_authored;
 }
 
 bool same_sample(
@@ -124,7 +125,8 @@ bool same_sample(
 		left.gradient.x == right.gradient.x &&
 		left.gradient.y == right.gradient.y &&
 		left.gradient.z == right.gradient.z &&
-		left.material == right.material;
+		left.material == right.material &&
+		left.material_authored == right.material_authored;
 }
 
 bool same_resolved_edge(

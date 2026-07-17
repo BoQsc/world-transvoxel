@@ -21,12 +21,14 @@ struct WtCellSample {
 	float density = 0.0F;
 	WtVec3 gradient;
 	std::uint16_t material = 0;
+	bool material_authored = false;
 };
 
 struct WtCellVertex {
 	WtVec3 position;
 	WtVec3 normal;
 	std::uint16_t material = 0;
+	bool material_authored = false;
 	std::uint8_t endpoint_a = 0;
 	std::uint8_t endpoint_b = 0;
 };

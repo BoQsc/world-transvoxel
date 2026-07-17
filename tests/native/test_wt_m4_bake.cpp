@@ -38,6 +38,7 @@ public:
 			static_cast<std::uint64_t>(point.y) * 19349663ULL ^
 			static_cast<std::uint64_t>(point.z) * 83492791ULL;
 		output.material = static_cast<std::uint16_t>(mixed);
+		output.material_authored = (mixed & 1ULL) != 0ULL;
 		return true;
 	}
 };
@@ -80,7 +81,9 @@ bool same_sample(
 	const wt::WtScalarSample &left,
 	const wt::WtScalarSample &right
 ) {
-	return left.density == right.density && left.material == right.material;
+	return left.density == right.density &&
+		left.material == right.material &&
+		left.material_authored == right.material_authored;
 }
 
 void print_hash(const wt::WtHash256 &hash) {
@@ -271,6 +274,136 @@ void test_schema_rejection(const wt::WtBakedChunkPage &valid) {
 	);
 }
 
+void test_legacy_material_provenance_fallback(
+	const wt::WtBakedChunkPage &current
+) {
+	wt::WtChunkPageView current_view;
+	check(
+		wt::wt_open_chunk_page(
+			{ current.bytes.data(), current.bytes.size() },
+			current_view
+		) == wt::WtChunkPageStatus::Ok,
+		"legacy provenance fixture failed to open"
+	);
+	const wt::WtContainerSection *header =
+		current_view.container.find_section(wt::kWtChunkHeaderSection);
+	const wt::WtContainerSection *data =
+		current_view.container.find_section(wt::kWtChunkDataSection);
+	const wt::WtContainerSection *surface_shift =
+		current_view.container.find_section(wt::kWtChunkSurfaceShiftSection);
+	if (header == nullptr || data == nullptr || surface_shift == nullptr) {
+		check(false, "legacy provenance fixture sections missing");
+		return;
+	}
+
+	std::vector<std::uint8_t> legacy_header(
+		header->payload.data,
+		header->payload.data + header->payload.size
+	);
+	legacy_header[2] = 1;
+	legacy_header[3] = 0;
+
+	std::vector<std::uint8_t> legacy_data;
+	legacy_data.reserve(
+		wt::kWtChunkPageSampleCount * wt::kWtChunkPageSampleBytes
+	);
+	for (std::size_t index = 0;
+		index < wt::kWtChunkPageSampleCount;
+		++index) {
+		const std::uint8_t *sample = data->payload.data +
+			index * wt::kWtChunkPageCurrentSampleBytes;
+		legacy_data.insert(
+			legacy_data.end(), sample, sample + wt::kWtChunkPageSampleBytes
+		);
+	}
+
+	std::vector<std::uint8_t> legacy_surface_shift;
+	legacy_surface_shift.insert(
+		legacy_surface_shift.end(),
+		surface_shift->payload.data,
+		surface_shift->payload.data + wt::kWtChunkSurfaceShiftHeaderBytes
+	);
+	const std::size_t record_count =
+		(surface_shift->payload.size - wt::kWtChunkSurfaceShiftHeaderBytes) /
+		wt::kWtChunkSurfaceShiftCurrentRecordBytes;
+	check(record_count != 0, "legacy surface-shift fixture is empty");
+	constexpr std::size_t record_header_bytes = 6;
+	constexpr std::size_t legacy_cell_sample_bytes = 18;
+	constexpr std::size_t current_cell_sample_bytes = 19;
+	for (std::size_t index = 0; index < record_count; ++index) {
+		const std::uint8_t *record = surface_shift->payload.data +
+			wt::kWtChunkSurfaceShiftHeaderBytes +
+			index * wt::kWtChunkSurfaceShiftCurrentRecordBytes;
+		legacy_surface_shift.insert(
+			legacy_surface_shift.end(),
+			record,
+			record + record_header_bytes
+		);
+		const std::uint8_t *sample_a = record + record_header_bytes;
+		const std::uint8_t *sample_b =
+			sample_a + current_cell_sample_bytes;
+		legacy_surface_shift.insert(
+			legacy_surface_shift.end(),
+			sample_a,
+			sample_a + legacy_cell_sample_bytes
+		);
+		legacy_surface_shift.insert(
+			legacy_surface_shift.end(),
+			sample_b,
+			sample_b + legacy_cell_sample_bytes
+		);
+	}
+
+	const std::vector<wt::WtContainerSectionInput> sections = {
+		{ wt::kWtChunkHeaderSection, 0, wt::WtStorageCodec::None,
+			{ legacy_header.data(), legacy_header.size() } },
+		{ wt::kWtChunkDataSection, 0, wt::WtStorageCodec::None,
+			{ legacy_data.data(), legacy_data.size() } },
+		{ wt::kWtChunkSurfaceShiftSection, 0, wt::WtStorageCodec::None,
+			{ legacy_surface_shift.data(), legacy_surface_shift.size() } },
+	};
+	std::vector<std::uint8_t> legacy_bytes;
+	check(
+		wt::wt_write_container(
+			wt::kWtChunkMagic,
+			0,
+			current_view.metadata.source_revision,
+			sections,
+			legacy_bytes
+		) == wt::WtContainerStatus::Ok,
+		"legacy provenance fixture write failed"
+	);
+
+	wt::WtChunkPageView legacy_view;
+	wt::WtChunkPage legacy_page;
+	check(
+		wt::wt_open_chunk_page(
+			{ legacy_bytes.data(), legacy_bytes.size() }, legacy_view
+		) == wt::WtChunkPageStatus::Ok &&
+			wt::wt_decode_chunk_page(legacy_view, legacy_page) ==
+				wt::WtChunkPageStatus::Ok,
+		"legacy provenance fixture decode failed"
+	);
+	check(
+		legacy_view.metadata.schema_minor == 1,
+		"legacy provenance fixture schema mismatch"
+	);
+	for (const wt::WtScalarSample &sample : legacy_page.samples) {
+		check(
+			sample.material_authored,
+			"legacy scalar material was not treated as authored"
+		);
+	}
+	for (const wt::WtChunkSurfaceShiftRecord &record :
+		legacy_page.surface_shift_records) {
+		check(
+			record.sample_a.material_authored &&
+				record.sample_b.material_authored,
+			"legacy surface-shift material was not treated as authored"
+		);
+	}
+}
+
 void test_deterministic_bake(wt::WtHash256 &aggregate_hash) {
 	const LinearSource source;
 	const std::vector<wt::WtChunkKey> keys = {
@@ -317,6 +450,7 @@ void test_deterministic_bake(wt::WtHash256 &aggregate_hash) {
 	}
 	aggregate_hash = wt::wt_sha256(hashes.data(), hashes.size());
 	test_schema_rejection(first[0]);
+	test_legacy_material_provenance_fallback(first[2]);
 
 	std::vector<std::uint8_t> corrupted = first[0].bytes;
 	corrupted.back() ^= 0x80U;

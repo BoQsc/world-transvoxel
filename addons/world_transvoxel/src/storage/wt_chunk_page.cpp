@@ -9,6 +9,17 @@
 namespace world_transvoxel {
 namespace {
 
+std::size_t sample_bytes(std::uint16_t schema_minor) noexcept {
+	return schema_minor >= 2 ?
+		kWtChunkPageCurrentSampleBytes : kWtChunkPageSampleBytes;
+}
+
+std::size_t surface_shift_record_bytes(std::uint16_t schema_minor) noexcept {
+	return schema_minor >= 2 ?
+		kWtChunkSurfaceShiftCurrentRecordBytes :
+		kWtChunkSurfaceShiftRecordBytes;
+}
+
 bool valid_metadata(const WtChunkPageMetadata &metadata) noexcept {
 	return metadata.schema_minor <= kWtChunkPageSchemaMinor &&
 		wt_is_valid_chunk_key(metadata.key) &&
@@ -158,7 +169,8 @@ WtChunkPageStatus encode_surface_shift(
 		return WtChunkPageStatus::InvalidInput;
 	}
 	const std::size_t size = kWtChunkSurfaceShiftHeaderBytes +
-		page.surface_shift_records.size() * kWtChunkSurfaceShiftRecordBytes;
+		page.surface_shift_records.size() *
+			kWtChunkSurfaceShiftCurrentRecordBytes;
 	WtBinaryWriter writer(size);
 	if (writer.write_f32(page.surface_shift_isovalue) != WtBinaryStatus::Ok ||
 		writer.write_u32(static_cast<std::uint32_t>(
@@ -181,7 +193,9 @@ WtChunkPageStatus encode_surface_shift(
 				writer.write_f32(sample.gradient.x) != WtBinaryStatus::Ok ||
 				writer.write_f32(sample.gradient.y) != WtBinaryStatus::Ok ||
 				writer.write_f32(sample.gradient.z) != WtBinaryStatus::Ok ||
-				writer.write_u16(sample.material) != WtBinaryStatus::Ok) {
+				writer.write_u16(sample.material) != WtBinaryStatus::Ok ||
+				writer.write_u8(sample.material_authored ? 1U : 0U) !=
+					WtBinaryStatus::Ok) {
 				return WtChunkPageStatus::CapacityExceeded;
 			}
 		}
@@ -191,7 +205,10 @@ WtChunkPageStatus encode_surface_shift(
 		WtChunkPageStatus::Ok : WtChunkPageStatus::CapacityExceeded;
 }
 
-bool valid_surface_shift_view(WtByteView bytes) noexcept {
+bool valid_surface_shift_view(
+	WtByteView bytes,
+	std::uint16_t schema_minor
+) noexcept {
 	if (bytes.size < kWtChunkSurfaceShiftHeaderBytes) {
 		return false;
 	}
@@ -205,14 +222,15 @@ bool valid_surface_shift_view(WtByteView bytes) noexcept {
 		return false;
 	}
 	return bytes.size == kWtChunkSurfaceShiftHeaderBytes +
-		static_cast<std::size_t>(count) * kWtChunkSurfaceShiftRecordBytes;
+		static_cast<std::size_t>(count) *
+			surface_shift_record_bytes(schema_minor);
 }
 
 WtChunkPageStatus decode_surface_shift(
 	WtByteView bytes,
 	WtChunkPage &output
 ) {
-	if (!valid_surface_shift_view(bytes)) {
+	if (!valid_surface_shift_view(bytes, output.metadata.schema_minor)) {
 		return WtChunkPageStatus::InvalidMetadata;
 	}
 	WtBinaryReader reader(bytes);
@@ -233,13 +251,19 @@ WtChunkPageStatus decode_surface_shift(
 			&record.sample_b,
 		};
 		for (WtCellSample *sample : samples) {
+			std::uint8_t material_authored =
+				output.metadata.schema_minor < 2 ? 1U : 0U;
 			if (reader.read_f32(sample->density) != WtBinaryStatus::Ok ||
 				reader.read_f32(sample->gradient.x) != WtBinaryStatus::Ok ||
 				reader.read_f32(sample->gradient.y) != WtBinaryStatus::Ok ||
 				reader.read_f32(sample->gradient.z) != WtBinaryStatus::Ok ||
-				reader.read_u16(sample->material) != WtBinaryStatus::Ok) {
+				reader.read_u16(sample->material) != WtBinaryStatus::Ok ||
+				(output.metadata.schema_minor >= 2 &&
+					(reader.read_u8(material_authored) != WtBinaryStatus::Ok ||
+						material_authored > 1U))) {
 				return WtChunkPageStatus::InvalidMetadata;
 			}
+			sample->material_authored = material_authored != 0;
 		}
 		output.surface_shift_records.push_back(record);
 	}
@@ -265,14 +289,16 @@ WtChunkPageStatus wt_write_chunk_page(
 		return status;
 	}
 	WtBinaryWriter sample_writer(
-		kWtChunkPageSampleCount * kWtChunkPageSampleBytes
+		kWtChunkPageSampleCount * kWtChunkPageCurrentSampleBytes
 	);
 	for (const WtScalarSample &sample : page.samples) {
 		if (!std::isfinite(sample.density)) {
 			return WtChunkPageStatus::InvalidSample;
 		}
 		if (sample_writer.write_f32(sample.density) != WtBinaryStatus::Ok ||
-			sample_writer.write_u16(sample.material) != WtBinaryStatus::Ok) {
+			sample_writer.write_u16(sample.material) != WtBinaryStatus::Ok ||
+			sample_writer.write_u8(sample.material_authored ? 1U : 0U) !=
+				WtBinaryStatus::Ok) {
 			return WtChunkPageStatus::CapacityExceeded;
 		}
 	}
@@ -327,10 +353,13 @@ WtChunkPageStatus wt_open_chunk_page(
 		current_surface_shift_schema ? 3 : 2;
 	if (output.container.sections.size() != expected_section_count ||
 		output.metadata.source_revision != output.container.header.source_revision ||
-		data->payload.size != kWtChunkPageSampleCount * kWtChunkPageSampleBytes ||
+		data->payload.size != kWtChunkPageSampleCount *
+			sample_bytes(output.metadata.schema_minor) ||
 		(current_surface_shift_schema &&
 			(surface_shift == nullptr || surface_shift->flags != 0 ||
-				!valid_surface_shift_view(surface_shift->payload))) ||
+				!valid_surface_shift_view(
+					surface_shift->payload, output.metadata.schema_minor
+				))) ||
 		(!current_surface_shift_schema && surface_shift != nullptr)) {
 		output = {};
 		return WtChunkPageStatus::InvalidMetadata;
@@ -349,7 +378,7 @@ WtChunkPageStatus wt_decode_chunk_page(
 	output = {};
 	if (!valid_metadata(view.metadata) ||
 		view.encoded_samples.size !=
-			kWtChunkPageSampleCount * kWtChunkPageSampleBytes) {
+			kWtChunkPageSampleCount * sample_bytes(view.metadata.schema_minor)) {
 		return WtChunkPageStatus::InvalidMetadata;
 	}
 	output.metadata = view.metadata;
@@ -357,12 +386,18 @@ WtChunkPageStatus wt_decode_chunk_page(
 	WtBinaryReader reader(view.encoded_samples);
 	for (std::size_t index = 0; index < kWtChunkPageSampleCount; ++index) {
 		WtScalarSample sample;
+		std::uint8_t material_authored =
+			view.metadata.schema_minor < 2 ? 1U : 0U;
 		if (reader.read_f32(sample.density) != WtBinaryStatus::Ok ||
 			reader.read_u16(sample.material) != WtBinaryStatus::Ok ||
+			(view.metadata.schema_minor >= 2 &&
+				(reader.read_u8(material_authored) != WtBinaryStatus::Ok ||
+					material_authored > 1U)) ||
 			!std::isfinite(sample.density)) {
 			output = {};
 			return WtChunkPageStatus::InvalidSample;
 		}
+		sample.material_authored = material_authored != 0;
 		output.samples.push_back(sample);
 	}
 	if (reader.remaining() != 0) {

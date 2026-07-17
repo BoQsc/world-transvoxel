@@ -46,6 +46,7 @@ struct RenderVertexKey {
 	std::uint32_t normal_y = 0;
 	std::uint32_t normal_z = 0;
 	std::uint16_t material = 0;
+	bool material_authored = false;
 
 	bool operator==(const RenderVertexKey &other) const noexcept {
 		return position_x == other.position_x &&
@@ -54,7 +55,8 @@ struct RenderVertexKey {
 			normal_x == other.normal_x &&
 			normal_y == other.normal_y &&
 			normal_z == other.normal_z &&
-			material == other.material;
+			material == other.material &&
+			material_authored == other.material_authored;
 	}
 };
 
@@ -68,6 +70,7 @@ struct RenderVertexKeyHash {
 			key.normal_y,
 			key.normal_z,
 			static_cast<std::uint32_t>(key.material),
+			key.material_authored ? 1U : 0U,
 		};
 		for (const std::uint32_t value : values) {
 			hash ^= static_cast<std::size_t>(value) + 0x9e3779b9U +
@@ -86,6 +89,7 @@ RenderVertexKey make_vertex_key(const WtCellVertex &vertex) noexcept {
 		float_bits(vertex.normal.y),
 		float_bits(vertex.normal.z),
 		vertex.material,
+		vertex.material_authored,
 	};
 }
 
@@ -118,7 +122,12 @@ WtRenderBuildStatus append_buffer(
 		}
 		const std::uint32_t index =
 			static_cast<std::uint32_t>(output.vertices.size());
-		output.vertices.push_back({ vertex.position, vertex.normal, vertex.material });
+		output.vertices.push_back({
+			vertex.position,
+			vertex.normal,
+			vertex.material,
+			vertex.material_authored,
+		});
 		vertices.emplace(key, index);
 		remap.push_back(index);
 	}

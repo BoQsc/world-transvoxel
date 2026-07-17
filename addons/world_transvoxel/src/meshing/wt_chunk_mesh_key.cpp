@@ -36,6 +36,7 @@ WtChunkVertexKey wt_make_chunk_vertex_key(const WtCellVertex &vertex) noexcept {
 			float_bits(vertex.normal.z),
 		},
 		vertex.material,
+		vertex.material_authored,
 	};
 }
 
@@ -47,7 +48,8 @@ std::size_t WtGridPointHash::operator()(const WtGridPoint &point) const noexcept
 }
 
 bool WtChunkVertexKey::operator==(const WtChunkVertexKey &other) const noexcept {
-	return vector_bits == other.vector_bits && material == other.material;
+	return vector_bits == other.vector_bits && material == other.material &&
+		material_authored == other.material_authored;
 }
 
 std::size_t WtChunkVertexKeyHash::operator()(
@@ -57,7 +59,8 @@ std::size_t WtChunkVertexKeyHash::operator()(
 	for (std::uint32_t bits : key.vector_bits) {
 		hash = mix_hash(hash, bits);
 	}
-	return mix_hash(hash, key.material);
+	hash = mix_hash(hash, key.material);
+	return mix_hash(hash, key.material_authored ? 1U : 0U);
 }
 
 }

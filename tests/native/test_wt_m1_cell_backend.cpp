@@ -281,6 +281,7 @@ void test_contract_edges(const wt::WtMeshingBackend &backend) {
 	);
 	check(dot(regular_normal, { 1.0F, 1.0F, 1.0F }) > 0.0F, "regular winding is not outward");
 	regular.samples[0].gradient = { 1.0F, 0.0F, 0.0F };
+	regular.samples[0].material_authored = true;
 	regular.samples[1].density = 3.0F;
 	regular.samples[1].gradient = { 0.0F, 1.0F, 0.0F };
 	check(backend.mesh_regular_cell(regular, mesh, scratch) == wt::WtCellStatus::Ok,
@@ -292,12 +293,16 @@ void test_contract_edges(const wt::WtMeshingBackend &backend) {
 		{ 0.75F * inverse_probe_length, 0.25F * inverse_probe_length, 0.0F }),
 		"regular gradient interpolation mismatch");
 	check(mesh.vertices[0].material == 1, "regular solid-endpoint material mismatch");
+	check(mesh.vertices[0].material_authored,
+		"regular solid-endpoint material provenance mismatch");
 	regular.samples[0].density = -3.0F;
 	regular.samples[1].density = 1.0F;
 	check(backend.mesh_regular_cell(regular, mesh, scratch) == wt::WtCellStatus::Ok,
 		"regular solid-material ownership probe failed");
 	check(mesh.vertices[0].material == 1,
 		"air endpoint closer to the isosurface owned the material");
+	check(mesh.vertices[0].material_authored,
+		"solid endpoint lost material-authoring provenance");
 
 	wt::WtTransitionCellInput transition = make_transition_input(1);
 	check(backend.mesh_transition_cell(transition, mesh, scratch) == wt::WtCellStatus::Ok,

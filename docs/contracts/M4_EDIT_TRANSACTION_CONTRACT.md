@@ -138,7 +138,7 @@ commands therefore cannot commit.
 `tests/native/test_wt_m4_edit.cpp` locks this debug/release transaction hash:
 
 ```text
-791614cdc4f30d9d346c7ca11ae520d3b52c6b3a8dc804db12bd6a51cc544301
+8ecb3f387478877235fef366805b9e72b6cdb927126e5fa9b545f5a957779f60
 ```
 
 The test covers both shapes, all five operations, material-aware SDF

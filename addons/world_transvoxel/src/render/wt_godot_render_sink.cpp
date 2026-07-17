@@ -109,7 +109,10 @@ bool add_render_surface(
 		);
 		normals.set(static_cast<std::int64_t>(index), to_godot(vertex.normal));
 		materials.set(static_cast<std::int64_t>(index), {
-			static_cast<godot::real_t>(vertex.material), 0.0
+			static_cast<godot::real_t>(vertex.material),
+			static_cast<godot::real_t>(
+				vertex.material_authored ? 1.0F : 0.0F
+			)
 		});
 		surface_material_blends.set(
 			static_cast<std::int64_t>(index),

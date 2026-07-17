@@ -106,7 +106,7 @@ for each tier:
 - deterministic metrics and matching debug/release evidence hash:
 
 ```text
-842a4104d541f930c88ed3c6bcea6a1a34f83c4725b88cd3da28803a90c17dc8
+6cb8536b3345905adb49bea038179a79e8c8a533ffd3fa022014aebf71b5ce99
 ```
 
 This completes M5's bounded cache foundation. Multi-viewer runtime ownership,

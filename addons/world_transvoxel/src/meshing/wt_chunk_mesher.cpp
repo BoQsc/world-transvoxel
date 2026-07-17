@@ -103,6 +103,7 @@ WtChunkMeshingStatus calculate_cell_sample(
 			(positive_z.density - negative_z.density) * 0.5F,
 		},
 		center.material,
+		center.material_authored,
 	};
 	return WtChunkMeshingStatus::Ok;
 }
@@ -323,9 +324,12 @@ WtChunkMeshingStatus append_cell_mesh(
 			vertex.normal = wt_interpolated_mesh_normal(
 				*sample_a, *sample_b, isovalue
 			);
-			vertex.material = wt_solid_isosurface_endpoint_material(
+			const WtCellSample &surface_material =
+				wt_solid_isosurface_endpoint_sample(
 				*sample_a, *sample_b, isovalue
 			);
+			vertex.material = surface_material.material;
+			vertex.material_authored = surface_material.material_authored;
 			vertex.position = wt_deform_chunk_position(
 				vertex.position,
 				vertex.normal,

@@ -59,6 +59,7 @@ bool cell_sample(
 			(samples[6].density - samples[5].density) * 0.5F,
 		},
 		samples[0].material,
+		samples[0].material_authored,
 	};
 	return true;
 }
@@ -92,6 +93,7 @@ bool WtMaterialVolumeSampleSource::sample(
 	output.density = is_surface_interior(point, source_sample) ?
 		-magnitude : magnitude;
 	output.material = material_;
+	output.material_authored = source_sample.material_authored;
 	return true;
 }
 

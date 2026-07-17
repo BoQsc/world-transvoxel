@@ -96,7 +96,7 @@ switching the active snapshot remain a storage-service atomic replace step.
 snapshot hash:
 
 ```text
-b4e61fad7fa7281567771d0d698a7234b402aae4d70d49deae3a3b50b5fe02f7
+ec53c231579f4786afca3ce354d16165baa0386f3586cd2709a17c07568cbe11
 ```
 
 The test covers:
