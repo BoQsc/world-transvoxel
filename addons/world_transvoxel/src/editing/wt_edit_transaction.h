@@ -34,6 +34,7 @@ enum class WtEditOperation : std::uint16_t {
 	PaintMaterial = 3,
 	SdfCarve = 4,
 	SdfConstruct = 5,
+	PlaceMaterialVolume = 6,
 };
 
 enum class WtEditShape : std::uint16_t {

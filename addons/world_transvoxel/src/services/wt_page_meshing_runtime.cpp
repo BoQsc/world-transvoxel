@@ -2,6 +2,7 @@
 
 #include "bake/wt_chunk_baker.h"
 #include "editing/wt_chunk_edit_state.h"
+#include "meshing/wt_material_volume_sample_source.h"
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_chunk_page_sample_source.h"
 #include "storage/wt_storage_page_cache.h"
@@ -433,10 +434,48 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 			*mesh,
 			scratch
 		) == WtChunkMeshingStatus::Ok;
+	auto water_mesh = std::make_shared<WtChunkMeshResult>();
+	bool water_present = false;
+	if (mesh_ok) {
+		for (const Dependency &dependency : record->dependencies) {
+			if (!dependency.page) {
+				continue;
+			}
+			for (const WtScalarSample &sample : dependency.page->samples) {
+				if (WtMaterialVolumeSampleSource::is_occupied(
+						sample,
+						kWtStaticWaterMaterialId
+					)) {
+					water_present = true;
+					break;
+				}
+			}
+			if (water_present) {
+				break;
+			}
+		}
+	}
+	bool water_mesh_ok = mesh_ok;
+	if (mesh_ok && water_present) {
+		const WtMaterialVolumeSampleSource water_source(
+			*source,
+			kWtStaticWaterMaterialId
+		);
+		water_mesh_ok = mesher.mesh(
+			{ record->key, record->transition_mask, 0.0F, 0.25F },
+			water_source,
+			*water_mesh,
+			scratch
+		) == WtChunkMeshingStatus::Ok;
+	} else if (mesh_ok) {
+		water_mesh->key = record->key;
+		water_mesh->world_origin = wt_chunk_bounds(record->key).minimum;
+		water_mesh->transition_mask = record->transition_mask;
+	}
 	for (Dependency &dependency : record->dependencies) {
 		dependency.page.reset();
 	}
-	if (!mesh_ok) {
+	if (!mesh_ok || !water_mesh_ok) {
 		record->phase = WtPageMeshingRuntimePhase::MeshFailedReady;
 		++metrics_.mesh_failures;
 		record_failure_key(metrics_, record->key);
@@ -444,6 +483,7 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 		return WtPageMeshingRuntimeStatus::MeshingFailure;
 	}
 	record->mesh = std::move(mesh);
+	record->water_mesh = std::move(water_mesh);
 	record->phase = WtPageMeshingRuntimePhase::MeshReady;
 	++metrics_.mesh_successes;
 	return submit_pending_result(record_index, scheduler);
@@ -517,9 +557,15 @@ bool WtPageMeshingRuntimeService::pop_mesh_completion(
 	completion = {};
 	for (Record &record : records_) {
 		if (record.phase == WtPageMeshingRuntimePhase::Ready &&
-			record.mesh) {
-			completion = { record.key, record.generation, record.mesh };
+			record.mesh && record.water_mesh) {
+			completion = {
+				record.key,
+				record.generation,
+				record.mesh,
+				record.water_mesh,
+			};
 			record.mesh.reset();
+			record.water_mesh.reset();
 			return true;
 		}
 	}

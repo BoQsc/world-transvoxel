@@ -42,6 +42,8 @@ public:
 	std::uint32_t get_transition_frames() const noexcept;
 	void set_material_override(const godot::Variant &material);
 	godot::Variant get_material_override() const;
+	void set_water_material_override(const godot::Variant &material);
+	godot::Variant get_water_material_override() const;
 
 private:
 	struct Record {
@@ -71,6 +73,7 @@ private:
 	std::map<WtChunkKey, Record> records_;
 	std::vector<Record> replacement_retirements_;
 	godot::Variant material_override_;
+	godot::Variant water_material_override_;
 	std::vector<WtChunkKey> visibility_staging_reference_chunks_;
 	bool shader_fade_parameter_enabled_ = false;
 	bool new_record_visibility_staging_enabled_ = false;

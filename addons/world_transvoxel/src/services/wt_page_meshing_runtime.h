@@ -71,6 +71,7 @@ struct WtPageMeshCompletion {
 	WtChunkKey key;
 	WtGenerationToken generation;
 	std::shared_ptr<const WtChunkMeshResult> mesh;
+	std::shared_ptr<const WtChunkMeshResult> water_mesh;
 };
 
 struct WtPageMeshingRuntimeMetrics {
@@ -192,6 +193,7 @@ private:
 			WtPageMeshingRuntimePhase::Loading;
 		std::vector<Dependency> dependencies;
 		std::shared_ptr<const WtChunkMeshResult> mesh;
+		std::shared_ptr<const WtChunkMeshResult> water_mesh;
 	};
 
 	std::vector<Record>::iterator find_record(

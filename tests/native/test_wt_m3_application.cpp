@@ -81,6 +81,33 @@ void test_render_builder(wt::WtRenderPayload &render) {
 		"failed render build retained output");
 	check(wt::wt_build_render_payload(mesh, { 7 }, render) ==
 		wt::WtRenderBuildStatus::Ok, "render payload rebuild failed");
+
+	wt::WtChunkMeshResult water = mesh;
+	water.regular.vertices.clear();
+	water.regular.indices.clear();
+	for (wt::WtChunkMeshBuffer &transition : water.transitions) {
+		transition.vertices.clear();
+		transition.indices.clear();
+	}
+	add_triangle(
+		water.regular,
+		vertex(4.0F, 1.0F, 4.0F, 9),
+		vertex(5.0F, 1.0F, 4.0F, 9),
+		vertex(4.0F, 1.0F, 5.0F, 9)
+	);
+	add_triangle(
+		water.regular,
+		{ { 6.0F, 0.0F, 4.0F }, { 1.0F, 0.0F, 0.0F }, 9, 0, 0 },
+		{ { 6.0F, 1.0F, 4.0F }, { 1.0F, 0.0F, 0.0F }, 9, 0, 0 },
+		{ { 6.0F, 0.0F, 5.0F }, { 1.0F, 0.0F, 0.0F }, 9, 0, 0 }
+	);
+	check(wt::wt_build_render_payload(mesh, water, { 7 }, render) ==
+		wt::WtRenderBuildStatus::Ok, "water render payload failed");
+	check(render.vertices.size() == 6 && render.indices.size() == 6 &&
+		render.water_vertices.size() == 6 && render.water_indices.size() == 3,
+		"water free surface was not separated from wall geometry");
+	check(render.water_vertices[0].material == 9,
+		"water render surface lost its material identity");
 }
 
 void test_collision_builder() {
@@ -100,11 +127,19 @@ void test_collision_builder() {
 		{ { 6.0F, 0.0000001F, 0.0F }, {}, 1 },
 	};
 	render.indices = { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
+	render.water_vertices = {
+		{ { 10.0F, 0.0F, 0.0F }, {}, 9 },
+		{ { 11.0F, 0.0F, 0.0F }, {}, 9 },
+		{ { 10.0F, 1.0F, 0.0F }, {}, 9 },
+	};
+	render.water_indices = { 0, 1, 2 };
 	wt::WtCollisionPayload collision;
 	const wt::WtCollisionPolicy policy;
 	check(wt::wt_build_collision_payload(render, policy, collision) ==
 		wt::WtCollisionBuildStatus::Ok, "collision sanitation failed");
 	check(collision.faces.size() == 3, "collision sanitation retained invalid faces");
+	check(collision.metrics.input_triangles == 3,
+		"water surface leaked into solid collision input");
 	check(collision.metrics.input_triangles == 3 &&
 		collision.metrics.output_triangles == 1 &&
 		collision.metrics.degenerate_triangles == 1 &&

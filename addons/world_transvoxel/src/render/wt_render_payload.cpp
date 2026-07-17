@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstring>
 #include <unordered_map>
+#include <utility>
 
 namespace world_transvoxel {
 namespace {
@@ -167,6 +168,31 @@ WtRenderBuildStatus append_combined_buffer(
 	return WtRenderBuildStatus::Ok;
 }
 
+void keep_static_water_free_surface(WtRenderPayload &water) {
+	constexpr float minimum_average_up_normal = 0.99F;
+	std::vector<std::uint32_t> free_surface;
+	free_surface.reserve(water.indices.size());
+	for (std::size_t triangle = 0; triangle < water.indices.size(); triangle += 3) {
+		const std::uint32_t a = water.indices[triangle];
+		const std::uint32_t b = water.indices[triangle + 1];
+		const std::uint32_t c = water.indices[triangle + 2];
+		const float average_up = (
+			water.vertices[a].normal.y +
+			water.vertices[b].normal.y +
+			water.vertices[c].normal.y
+		) / 3.0F;
+		if (average_up >= minimum_average_up_normal) {
+			free_surface.push_back(a);
+			free_surface.push_back(b);
+			free_surface.push_back(c);
+		}
+	}
+	water.indices = std::move(free_surface);
+	if (water.indices.empty()) {
+		water.vertices.clear();
+	}
+}
+
 } // namespace
 
 WtRenderPayload::WtRenderPayload() {
@@ -179,6 +205,8 @@ void WtRenderPayload::clear() noexcept {
 	transition_mask = 0;
 	vertices.clear();
 	indices.clear();
+	water_vertices.clear();
+	water_indices.clear();
 }
 
 WtRenderBuildStatus wt_build_render_payload(
@@ -247,6 +275,38 @@ WtRenderBuildStatus wt_build_render_payload(
 		output.clear();
 	}
 	return status;
+}
+
+WtRenderBuildStatus wt_build_render_payload(
+	const WtChunkMeshResult &mesh,
+	const WtChunkMeshResult &water_mesh,
+	WtGenerationToken generation,
+	WtRenderPayload &output
+) {
+	if (water_mesh.key != mesh.key ||
+		water_mesh.world_origin != mesh.world_origin ||
+		water_mesh.transition_mask != mesh.transition_mask) {
+		output.clear();
+		return WtRenderBuildStatus::InvalidInput;
+	}
+	WtRenderBuildStatus status = wt_build_render_payload(
+		mesh,
+		generation,
+		output
+	);
+	if (status != WtRenderBuildStatus::Ok) {
+		return status;
+	}
+	WtRenderPayload water;
+	status = wt_build_render_payload(water_mesh, generation, water);
+	if (status != WtRenderBuildStatus::Ok) {
+		output.clear();
+		return status;
+	}
+	keep_static_water_free_surface(water);
+	output.water_vertices = std::move(water.vertices);
+	output.water_indices = std::move(water.indices);
+	return WtRenderBuildStatus::Ok;
 }
 
 } // namespace world_transvoxel

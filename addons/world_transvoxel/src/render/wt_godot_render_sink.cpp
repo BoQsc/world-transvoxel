@@ -78,6 +78,73 @@ godot::Color surface_material_blend_weights(std::uint16_t material) {
 	}
 }
 
+bool add_render_surface(
+	godot::ArrayMesh &mesh,
+	const std::vector<WtRenderVertex> &vertices,
+	const std::vector<std::uint32_t> &source_indices,
+	const WtGridPoint &origin,
+	const godot::String &name
+) {
+	if (source_indices.empty()) {
+		return vertices.empty();
+	}
+	if ((source_indices.size() % 3U) != 0) {
+		return false;
+	}
+	godot::PackedVector3Array positions;
+	godot::PackedVector3Array normals;
+	godot::PackedVector2Array materials;
+	godot::PackedColorArray surface_material_blends;
+	godot::PackedInt32Array indices;
+	positions.resize(static_cast<std::int64_t>(vertices.size()));
+	normals.resize(static_cast<std::int64_t>(vertices.size()));
+	materials.resize(static_cast<std::int64_t>(vertices.size()));
+	surface_material_blends.resize(static_cast<std::int64_t>(vertices.size()));
+	const godot::Vector3 world_origin = to_godot(origin);
+	for (std::size_t index = 0; index < vertices.size(); ++index) {
+		const WtRenderVertex &vertex = vertices[index];
+		positions.set(
+			static_cast<std::int64_t>(index),
+			to_godot(vertex.position) + world_origin
+		);
+		normals.set(static_cast<std::int64_t>(index), to_godot(vertex.normal));
+		materials.set(static_cast<std::int64_t>(index), {
+			static_cast<godot::real_t>(vertex.material), 0.0
+		});
+		surface_material_blends.set(
+			static_cast<std::int64_t>(index),
+			surface_material_blend_weights(vertex.material)
+		);
+	}
+	std::vector<std::int32_t> godot_indices;
+	godot_indices.reserve(source_indices.size());
+	for (std::size_t triangle = 0; triangle < source_indices.size(); triangle += 3) {
+		const std::uint32_t a = source_indices[triangle];
+		const std::uint32_t b = source_indices[triangle + 1];
+		const std::uint32_t c = source_indices[triangle + 2];
+		if (a >= vertices.size() || b >= vertices.size() || c >= vertices.size()) {
+			return false;
+		}
+		godot_indices.push_back(static_cast<std::int32_t>(a));
+		godot_indices.push_back(static_cast<std::int32_t>(c));
+		godot_indices.push_back(static_cast<std::int32_t>(b));
+	}
+	indices.resize(static_cast<std::int64_t>(godot_indices.size()));
+	for (std::size_t index = 0; index < godot_indices.size(); ++index) {
+		indices.set(static_cast<std::int64_t>(index), godot_indices[index]);
+	}
+	godot::Array arrays;
+	arrays.resize(godot::Mesh::ARRAY_MAX);
+	arrays[godot::Mesh::ARRAY_VERTEX] = positions;
+	arrays[godot::Mesh::ARRAY_NORMAL] = normals;
+	arrays[godot::Mesh::ARRAY_COLOR] = surface_material_blends;
+	arrays[godot::Mesh::ARRAY_TEX_UV2] = materials;
+	arrays[godot::Mesh::ARRAY_INDEX] = indices;
+	mesh.add_surface_from_arrays(godot::Mesh::PRIMITIVE_TRIANGLES, arrays);
+	mesh.surface_set_name(mesh.get_surface_count() - 1, name);
+	return true;
+}
+
 } // namespace
 
 WtGodotRenderSink::WtGodotRenderSink(godot::Node3D &owner) noexcept :
@@ -110,12 +177,31 @@ void WtGodotRenderSink::apply_record_material_override(Record &record) {
 	if (record.instance == nullptr) {
 		return;
 	}
-	record.instance->set(godot::StringName("material_override"), material_override_);
+	record.instance->set(godot::StringName("material_override"), godot::Variant());
+	const godot::Ref<godot::Mesh> mesh = record.instance->get_mesh();
+	const godot::ArrayMesh *array_mesh = mesh.is_valid() ?
+		godot::Object::cast_to<godot::ArrayMesh>(mesh.ptr()) : nullptr;
+	if (array_mesh == nullptr) {
+		return;
+	}
+	for (std::int32_t surface = 0; surface < array_mesh->get_surface_count(); ++surface) {
+		const bool water = array_mesh->surface_get_name(surface) == godot::String("water");
+		const godot::Variant &material = water &&
+			water_material_override_.get_type() != godot::Variant::NIL ?
+			water_material_override_ : material_override_;
+		record.instance->set(
+			godot::StringName(
+				godot::String("surface_material_override/") +
+				godot::String::num_int64(surface)
+			),
+			material
+		);
+	}
 }
 
 bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	if (!on_owner_thread()) return false;
-	if (payload.indices.empty()) {
+	if (payload.indices.empty() && payload.water_indices.empty()) {
 		const auto iterator = records_.find(payload.key);
 		if (iterator != records_.end() &&
 				should_stage_existing_replacement(payload.key)) {
@@ -133,63 +219,28 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 		remove_render(payload.key);
 		return true;
 	}
-	godot::PackedVector3Array positions;
-	godot::PackedVector3Array normals;
-	godot::PackedVector2Array materials;
-	godot::PackedColorArray surface_material_blends;
-	godot::PackedInt32Array indices;
-	positions.resize(static_cast<std::int64_t>(payload.vertices.size()));
-	normals.resize(static_cast<std::int64_t>(payload.vertices.size()));
-	materials.resize(static_cast<std::int64_t>(payload.vertices.size()));
-	surface_material_blends.resize(static_cast<std::int64_t>(payload.vertices.size()));
 	// Render chunks share seam vertices across separate MeshInstance3D draw
 	// calls. Store render positions in a common world-space frame and keep the
 	// instance transform identity so the GPU receives identical seam positions
 	// instead of recomputing equivalent world positions from different chunk
 	// origins.
-	const godot::Vector3 world_origin = to_godot(payload.world_origin);
-	for (std::size_t index = 0; index < payload.vertices.size(); ++index) {
-		const WtRenderVertex &vertex = payload.vertices[index];
-		positions.set(
-			static_cast<std::int64_t>(index),
-			to_godot(vertex.position) + world_origin
-		);
-		normals.set(static_cast<std::int64_t>(index), to_godot(vertex.normal));
-		materials.set(static_cast<std::int64_t>(index), {
-			static_cast<godot::real_t>(vertex.material), 0.0
-		});
-		surface_material_blends.set(
-			static_cast<std::int64_t>(index),
-			surface_material_blend_weights(vertex.material)
-		);
-	}
-	std::vector<std::int32_t> godot_indices;
-	godot_indices.reserve(payload.indices.size());
-	for (std::size_t triangle = 0; triangle < payload.indices.size(); triangle += 3) {
-		const std::uint32_t index_a = payload.indices[triangle];
-		const std::uint32_t index_b = payload.indices[triangle + 1];
-		const std::uint32_t index_c = payload.indices[triangle + 2];
-		godot_indices.push_back(static_cast<std::int32_t>(index_a));
-		godot_indices.push_back(static_cast<std::int32_t>(index_c));
-		godot_indices.push_back(static_cast<std::int32_t>(index_b));
-	}
-	indices.resize(static_cast<std::int64_t>(godot_indices.size()));
-	for (std::size_t index = 0; index < godot_indices.size(); ++index) {
-		indices.set(
-			static_cast<std::int64_t>(index),
-			godot_indices[index]
-		);
-	}
-	godot::Array arrays;
-	arrays.resize(godot::Mesh::ARRAY_MAX);
-	arrays[godot::Mesh::ARRAY_VERTEX] = positions;
-	arrays[godot::Mesh::ARRAY_NORMAL] = normals;
-	arrays[godot::Mesh::ARRAY_COLOR] = surface_material_blends;
-	arrays[godot::Mesh::ARRAY_TEX_UV2] = materials;
-	arrays[godot::Mesh::ARRAY_INDEX] = indices;
 	godot::Ref<godot::ArrayMesh> mesh;
 	mesh.instantiate();
-	mesh->add_surface_from_arrays(godot::Mesh::PRIMITIVE_TRIANGLES, arrays);
+	if (!add_render_surface(
+			**mesh,
+			payload.vertices,
+			payload.indices,
+			payload.world_origin,
+			"terrain"
+		) || !add_render_surface(
+			**mesh,
+			payload.water_vertices,
+			payload.water_indices,
+			payload.world_origin,
+			"water"
+		)) {
+		return false;
+	}
 
 	Record &record = records_[payload.key];
 	const bool created = record.instance == nullptr;
@@ -442,6 +493,7 @@ void WtGodotRenderSink::publish_staged_records() noexcept {
 		}
 		if (record.staged_mesh.is_valid()) {
 			record.instance->set_mesh(record.staged_mesh);
+			apply_record_material_override(record);
 			record.generation = record.staged_generation;
 			record.staged_mesh.unref();
 			record.staged_generation = {};
@@ -499,6 +551,22 @@ void WtGodotRenderSink::set_material_override(
 
 godot::Variant WtGodotRenderSink::get_material_override() const {
 	return material_override_;
+}
+
+void WtGodotRenderSink::set_water_material_override(
+	const godot::Variant &material
+) {
+	water_material_override_ = material;
+	for (auto &entry : records_) {
+		apply_record_material_override(entry.second);
+	}
+	for (Record &record : replacement_retirements_) {
+		apply_record_material_override(record);
+	}
+}
+
+godot::Variant WtGodotRenderSink::get_water_material_override() const {
+	return water_material_override_;
 }
 
 void WtGodotRenderSink::set_transition_frames(std::uint32_t frames) noexcept {

@@ -98,6 +98,24 @@ void WorldTransvoxelTerrain::_bind_methods() {
 		"get_render_material_override"
 	);
 	godot::ClassDB::bind_method(
+		godot::D_METHOD("set_water_material_override", "material"),
+		&WorldTransvoxelTerrain::set_water_material_override
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_water_material_override"),
+		&WorldTransvoxelTerrain::get_water_material_override
+	);
+	ADD_PROPERTY(
+		godot::PropertyInfo(
+			godot::Variant::OBJECT,
+			"water_material_override",
+			godot::PROPERTY_HINT_RESOURCE_TYPE,
+			"Material"
+		),
+		"set_water_material_override",
+		"get_water_material_override"
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD("start_world", "world_manifest_path", "object_root"),
 		&WorldTransvoxelTerrain::start_world
 	);
@@ -388,6 +406,16 @@ void WorldTransvoxelTerrain::set_render_material_override(const godot::Variant &
 
 godot::Variant WorldTransvoxelTerrain::get_render_material_override() const {
 	return render_sink_->get_material_override();
+}
+
+void WorldTransvoxelTerrain::set_water_material_override(
+	const godot::Variant &material
+) {
+	render_sink_->set_water_material_override(material);
+}
+
+godot::Variant WorldTransvoxelTerrain::get_water_material_override() const {
+	return render_sink_->get_water_material_override();
 }
 
 bool WorldTransvoxelTerrain::is_configuration_valid() const noexcept {

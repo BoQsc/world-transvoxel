@@ -1031,7 +1031,7 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 		progressed = true;
 		const WtChunkRecord *record = scheduler_->find_record(completion.key);
 		if (record == nullptr || record->generation != completion.generation ||
-			!completion.mesh) {
+			!completion.mesh || !completion.water_mesh) {
 			continue;
 		}
 		auto render = std::make_shared<WtRenderPayload>();
@@ -1048,6 +1048,7 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			) != WtChunkResourceCacheStatus::Ok ||
 			wt_build_render_payload(
 				*completion.mesh,
+				*completion.water_mesh,
 				completion.generation,
 				*render
 			) != WtRenderBuildStatus::Ok ||

@@ -501,6 +501,40 @@ void test_sdf_sphere_edits(std::vector<std::uint8_t> &evidence) {
 	evidence.insert(evidence.end(), bytes.begin(), bytes.end());
 }
 
+void test_material_volume_placement() {
+	wt::WtChunkPage page = bake_page({ 0, 0, 0, 0 });
+	const std::size_t solid_index = sample_index(page, { 0, 0, 0 });
+	const std::size_t air_index = sample_index(page, { 1, 0, 0 });
+	page.samples[solid_index] = { -2.0F, 3 };
+	page.samples[air_index] = { 2.0F, 1 };
+	wt::WtChunkEditState state;
+	check(
+		state.initialize(page, 100, 0) == wt::WtChunkEditStatus::Ok,
+		"material volume fixture initialization failed"
+	);
+	wt::WtEditCommand place = sphere(
+		94,
+		0,
+		1,
+		wt::WtEditOperation::PlaceMaterialVolume,
+		0,
+		2 * wt::kWtEditCoordinateScale,
+		0.0F
+	);
+	place.material = 9;
+	check(
+		state.apply_command(place) == wt::WtChunkEditStatus::Ok,
+		"material volume placement failed"
+	);
+	check(
+		state.page().samples[solid_index].density == -2.0F &&
+		state.page().samples[solid_index].material == 3 &&
+		state.page().samples[air_index].density == 2.0F &&
+		state.page().samples[air_index].material == 9,
+		"material volume placement repainted solid or missed air"
+	);
+}
+
 void test_failures() {
 	std::vector<wt::WtChunkPage> pages = bake_pages();
 	if (pages.empty()) return;
@@ -586,6 +620,7 @@ int main() {
 	test_replay_and_overlap(evidence);
 	test_cross_lod_pointwise_edit_consistency(evidence);
 	test_sdf_sphere_edits(evidence);
+	test_material_volume_placement();
 	test_failures();
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M4_APPLY_FAIL failures=%d\n", failure_count);

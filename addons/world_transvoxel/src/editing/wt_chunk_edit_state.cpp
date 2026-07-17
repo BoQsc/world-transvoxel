@@ -229,6 +229,10 @@ bool apply_valid_command_to_sample(
 				}
 			}
 		}
+	} else if (command.operation == WtEditOperation::PlaceMaterialVolume) {
+		if (sample.density >= 0.0F) {
+			sample.material = command.material;
+		}
 	} else {
 		sample.material = command.material;
 	}

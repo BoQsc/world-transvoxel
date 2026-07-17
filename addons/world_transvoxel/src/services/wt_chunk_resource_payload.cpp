@@ -136,7 +136,10 @@ bool wt_is_valid_render_payload(const WtRenderPayload &render) noexcept {
 		(render.transition_mask & 0xC0U) != 0 ||
 		render.vertices.size() > kWtMaximumRenderVertices ||
 		render.indices.size() > kWtMaximumRenderIndices ||
-		(render.indices.size() % 3U) != 0) {
+		(render.indices.size() % 3U) != 0 ||
+		render.water_vertices.size() > kWtMaximumRenderVertices ||
+		render.water_indices.size() > kWtMaximumRenderIndices ||
+		(render.water_indices.size() % 3U) != 0) {
 		return false;
 	}
 	for (const WtRenderVertex &vertex : render.vertices) {
@@ -146,6 +149,16 @@ bool wt_is_valid_render_payload(const WtRenderPayload &render) noexcept {
 	}
 	for (std::uint32_t index : render.indices) {
 		if (index >= render.vertices.size()) {
+			return false;
+		}
+	}
+	for (const WtRenderVertex &vertex : render.water_vertices) {
+		if (!finite_vec3(vertex.position) || !finite_vec3(vertex.normal)) {
+			return false;
+		}
+	}
+	for (std::uint32_t index : render.water_indices) {
+		if (index >= render.water_vertices.size()) {
 			return false;
 		}
 	}
@@ -161,12 +174,23 @@ bool wt_equal_render_payload(
 		left.world_origin != right.world_origin ||
 		left.transition_mask != right.transition_mask ||
 		left.vertices.size() != right.vertices.size() ||
-		left.indices != right.indices) {
+		left.indices != right.indices ||
+		left.water_vertices.size() != right.water_vertices.size() ||
+		left.water_indices != right.water_indices) {
 		return false;
 	}
 	for (std::size_t index = 0; index < left.vertices.size(); ++index) {
 		const WtRenderVertex &a = left.vertices[index];
 		const WtRenderVertex &b = right.vertices[index];
+		if (!equal_vec3(a.position, b.position) ||
+			!equal_vec3(a.normal, b.normal) ||
+			a.material != b.material) {
+			return false;
+		}
+	}
+	for (std::size_t index = 0; index < left.water_vertices.size(); ++index) {
+		const WtRenderVertex &a = left.water_vertices[index];
+		const WtRenderVertex &b = right.water_vertices[index];
 		if (!equal_vec3(a.position, b.position) ||
 			!equal_vec3(a.normal, b.normal) ||
 			a.material != b.material) {
@@ -181,7 +205,9 @@ std::size_t wt_render_payload_resident_bytes(
 ) noexcept {
 	return sizeof(WtRenderPayload) +
 		render.vertices.capacity() * sizeof(WtRenderVertex) +
-		render.indices.capacity() * sizeof(std::uint32_t);
+		render.indices.capacity() * sizeof(std::uint32_t) +
+		render.water_vertices.capacity() * sizeof(WtRenderVertex) +
+		render.water_indices.capacity() * sizeof(std::uint32_t);
 }
 
 bool wt_is_valid_collision_payload(

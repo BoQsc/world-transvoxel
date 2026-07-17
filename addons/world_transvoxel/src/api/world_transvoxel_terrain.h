@@ -55,6 +55,8 @@ public:
 	godot::Ref<WorldTransvoxelConfig> get_configuration() const;
 	void set_render_material_override(const godot::Variant &material);
 	godot::Variant get_render_material_override() const;
+	void set_water_material_override(const godot::Variant &material);
+	godot::Variant get_water_material_override() const;
 	bool is_configuration_valid() const noexcept;
 	godot::String get_configuration_error() const;
 	bool start_world(

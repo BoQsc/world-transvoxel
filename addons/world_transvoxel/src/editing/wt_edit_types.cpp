@@ -63,7 +63,8 @@ bool valid_operation(WtEditOperation operation) noexcept {
 		operation == WtEditOperation::SetDensity ||
 		operation == WtEditOperation::PaintMaterial ||
 		operation == WtEditOperation::SdfCarve ||
-		operation == WtEditOperation::SdfConstruct;
+		operation == WtEditOperation::SdfConstruct ||
+		operation == WtEditOperation::PlaceMaterialVolume;
 }
 
 bool valid_shape(WtEditShape shape) noexcept {
@@ -166,8 +167,13 @@ bool wt_is_valid_edit_command(const WtEditCommand &command) noexcept {
 			command.density_value <= 0.0F)) {
 		return false;
 	}
-	if (command.operation == WtEditOperation::PaintMaterial &&
+	if ((command.operation == WtEditOperation::PaintMaterial ||
+			command.operation == WtEditOperation::PlaceMaterialVolume) &&
 		command.density_value != 0.0F) {
+		return false;
+	}
+	if (command.operation == WtEditOperation::PlaceMaterialVolume &&
+		command.material == 0) {
 		return false;
 	}
 	WtEditBounds expected;

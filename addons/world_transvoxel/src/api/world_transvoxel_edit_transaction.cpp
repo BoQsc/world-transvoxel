@@ -80,9 +80,11 @@ void WorldTransvoxelEditTransaction::_bind_methods() {
 		"material"
 	);
 	WT_BIND_EDIT_METHOD(paint_material_sphere, "center", "radius", "material");
+	WT_BIND_EDIT_METHOD(place_material_volume_sphere, "center", "radius", "material");
 	WT_BIND_EDIT_METHOD(add_density_box, "minimum", "maximum", "value");
 	WT_BIND_EDIT_METHOD(set_density_box, "minimum", "maximum", "value");
 	WT_BIND_EDIT_METHOD(paint_material_box, "minimum", "maximum", "material");
+	WT_BIND_EDIT_METHOD(place_material_volume_box, "minimum", "maximum", "material");
 #undef WT_BIND_EDIT_METHOD
 	godot::ClassDB::bind_method(
 		godot::D_METHOD("get_base_revision"),
@@ -262,6 +264,18 @@ bool WorldTransvoxelEditTransaction::paint_material_sphere(
 	);
 }
 
+bool WorldTransvoxelEditTransaction::place_material_volume_sphere(
+	const godot::Vector3 &center, double radius, std::int64_t material
+) {
+	if (material <= 0) {
+		error_ = "volume material must be greater than zero";
+		return false;
+	}
+	return append_sphere(
+		WtEditOperation::PlaceMaterialVolume, center, radius, 0.0, material
+	);
+}
+
 bool WorldTransvoxelEditTransaction::add_density_box(
 	const godot::Vector3 &minimum,
 	const godot::Vector3 &maximum,
@@ -289,6 +303,24 @@ bool WorldTransvoxelEditTransaction::paint_material_box(
 ) {
 	return append_box(
 		WtEditOperation::PaintMaterial, minimum, maximum, 0.0, material
+	);
+}
+
+bool WorldTransvoxelEditTransaction::place_material_volume_box(
+	const godot::Vector3 &minimum,
+	const godot::Vector3 &maximum,
+	std::int64_t material
+) {
+	if (material <= 0) {
+		error_ = "volume material must be greater than zero";
+		return false;
+	}
+	return append_box(
+		WtEditOperation::PlaceMaterialVolume,
+		minimum,
+		maximum,
+		0.0,
+		material
 	);
 }
 

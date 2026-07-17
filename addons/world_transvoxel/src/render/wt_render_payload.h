@@ -27,6 +27,8 @@ struct WtRenderPayload {
 	std::uint8_t transition_mask = 0;
 	std::vector<WtRenderVertex> vertices;
 	std::vector<std::uint32_t> indices;
+	std::vector<WtRenderVertex> water_vertices;
+	std::vector<std::uint32_t> water_indices;
 
 	WtRenderPayload();
 	void clear() noexcept;
@@ -41,6 +43,13 @@ enum class WtRenderBuildStatus : std::uint8_t {
 
 WtRenderBuildStatus wt_build_render_payload(
 	const WtChunkMeshResult &mesh,
+	WtGenerationToken generation,
+	WtRenderPayload &output
+);
+
+WtRenderBuildStatus wt_build_render_payload(
+	const WtChunkMeshResult &mesh,
+	const WtChunkMeshResult &water_mesh,
 	WtGenerationToken generation,
 	WtRenderPayload &output
 );
