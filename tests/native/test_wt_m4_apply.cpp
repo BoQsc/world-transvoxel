@@ -416,6 +416,7 @@ void test_sdf_sphere_edits(std::vector<std::uint8_t> &evidence) {
 		wt::kWtEditCoordinateScale,
 		2.0F
 	);
+	construct.material = 8;
 	check(
 		state.apply_command(construct) == wt::WtChunkEditStatus::Ok,
 		"SDF construct sphere command failed"
@@ -423,11 +424,37 @@ void test_sdf_sphere_edits(std::vector<std::uint8_t> &evidence) {
 	check(
 		state.page().samples[sample_index(state.page(), { 0, 0, 0 })].density ==
 				-2.0F &&
+			state.page().samples[sample_index(state.page(), { 0, 0, 0 })].material ==
+				8 &&
 			state.page().samples[sample_index(state.page(), { -1, 0, 0 })].density <
 				0.0F &&
+			state.page().samples[sample_index(state.page(), { -1, 0, 0 })].material ==
+				8 &&
 			state.page().samples[sample_index(state.page(), { 3, 0, 0 })].density ==
-				3.0F,
-		"SDF construct sphere density values mismatch"
+				3.0F &&
+			state.page().samples[sample_index(state.page(), { 3, 0, 0 })].material ==
+				1,
+		"SDF construct sphere density/material values mismatch"
+	);
+	wt::WtChunkPage ownership_page = bake_page({ 0, 0, 0, 0 });
+	ownership_page.samples[sample_index(ownership_page, { 0, 0, 0 })] = {
+		-4.0F, 7
+	};
+	wt::WtChunkEditState ownership_state;
+	check(
+		ownership_state.initialize(ownership_page, 100, 1) ==
+			wt::WtChunkEditStatus::Ok &&
+		ownership_state.apply_command(construct) == wt::WtChunkEditStatus::Ok,
+		"SDF construct material ownership fixture failed"
+	);
+	check(
+		ownership_state.page().samples[
+			sample_index(ownership_state.page(), { 0, 0, 0 })
+		].density == -4.0F &&
+		ownership_state.page().samples[
+			sample_index(ownership_state.page(), { 0, 0, 0 })
+		].material == 7,
+		"SDF construct overwrote material of pre-existing denser solid"
 	);
 	wt::WtChunkPage support_page = bake_page({ 0, 0, 0, 0 });
 	support_page.samples[sample_index(support_page, { 3, 0, 0 })].density = -4.0F;

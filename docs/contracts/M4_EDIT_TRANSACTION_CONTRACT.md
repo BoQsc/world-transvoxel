@@ -28,6 +28,8 @@ Schema 1 operations are:
 | 1 | add density | finite, nonzero density; material zero |
 | 2 | set density | finite density; material zero |
 | 3 | paint material | density zero; material is the target |
+| 4 | SDF carve sphere | finite positive strength; material zero |
+| 5 | SDF construct sphere | finite positive strength; material zero for legacy density-only construction or the categorical material owned by newly constructed solid |
 
 Schema 1 shapes are:
 
@@ -54,14 +56,14 @@ codec-`none`, flag-zero sections are required:
 
 The common source revision must equal `EHDR.source_revision`.
 
-## `EHDR` schema 1.0
+## `EHDR` schema 1.1
 
 `EHDR` is exactly 64 bytes:
 
 | Offset | Type | Meaning |
 | ---: | --- | --- |
 | 0 | `u16` | schema major, `1` |
-| 2 | `u16` | schema minor, `0` |
+| 2 | `u16` | schema minor, `1` |
 | 4 | `u8[16]` | nonzero transaction ID |
 | 20 | `u64` | baked source revision |
 | 28 | `u64` | base world edit revision |
@@ -72,6 +74,9 @@ The common source revision must equal `EHDR.source_revision`.
 | 60 | `u32` | reserved, zero |
 
 The committed revision must equal `base_revision + 1`, without overflow.
+Readers continue to accept schema 1.0 transactions. Schema 1.1 adds the
+material-aware form of SDF construct operation 5 without changing record sizes;
+schema 1.0 construct commands always carry material zero.
 
 ## `CMDS` records
 
@@ -133,10 +138,11 @@ commands therefore cannot commit.
 `tests/native/test_wt_m4_edit.cpp` locks this debug/release transaction hash:
 
 ```text
-b8d28a739463c3e43a20d14f9d0496d3041c8e667e77f1e5f029256855a2b26d
+791614cdc4f30d9d346c7ca11ae520d3b52c6b3a8dc804db12bd6a51cc544301
 ```
 
-The test covers both shapes, all three operations, negative fractional
+The test covers both shapes, all five operations, material-aware SDF
+construction, negative fractional
 coordinates, exact conservative bounds, input-order independence,
 byte-identical round-trip, revision and sequence rules, duplicate IDs,
 non-finite and zero-strength values, invalid shape bounds, container

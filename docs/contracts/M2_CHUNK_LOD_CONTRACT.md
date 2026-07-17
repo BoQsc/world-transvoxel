@@ -166,7 +166,7 @@ quantized triangle edge to have exactly two incident triangles. Individual
 transition tests also require exact matching contours at both full and half
 faces.
 
-The locked chunk aggregate hash is `1ccb4b98d4ce8027`. Debug and optimized
+The locked chunk aggregate hash is `04bc06aebf0fed17`. Debug and optimized
 release builds must produce the same hash. `scripts/test_m2.py` runs both M2
 native contracts, the complete M1 contract, repository validation, and both
 Godot compatibility load tests.

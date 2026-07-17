@@ -56,6 +56,9 @@ Typed command-oriented editing owned by `WorldTransvoxelTerrain`.
 
 - `begin_edit_transaction(author_id)` snapshots the current world revision;
 - sphere and axis-aligned-box commands add/set density or paint material;
+- SDF sphere carve and construct commands include an atomic
+  `construct_material_sdf_sphere` form whose selected material is owned only by
+  solid samples supplied by the construct brush;
 - `commit_edit_transaction(transaction)` queues one atomic durable commit;
 - `edit_committed(world_revision)` and `edit_failed(error)` publish the
   asynchronous outcome;

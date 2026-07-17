@@ -202,6 +202,7 @@ void test_sdf_operations() {
 		sphere_command(0, wt::WtEditOperation::SdfCarve, 1.0F),
 		sphere_command(1, wt::WtEditOperation::SdfConstruct, 0.5F),
 	};
+	transaction.commands[1].material = 8;
 	std::vector<std::uint8_t> bytes;
 	wt::WtEditTransactionDocument document;
 	check(
@@ -218,7 +219,8 @@ void test_sdf_operations() {
 			document.transaction.commands[0].operation ==
 				wt::WtEditOperation::SdfCarve &&
 			document.transaction.commands[1].operation ==
-				wt::WtEditOperation::SdfConstruct,
+				wt::WtEditOperation::SdfConstruct &&
+			document.transaction.commands[1].material == 8,
 		"SDF sphere edit operation round trip mismatch"
 	);
 }
@@ -293,6 +295,18 @@ void test_write_failures() {
 	);
 	transaction.commands[1].material = 1;
 	expect_invalid(transaction, "SDF material payload accepted");
+
+	transaction = make_transaction();
+	transaction.commands[1] = sphere_command(
+		0, wt::WtEditOperation::SdfConstruct, 1.0F
+	);
+	transaction.commands[1].material = 8;
+	std::vector<std::uint8_t> construct_material_bytes;
+	check(
+		wt::wt_write_edit_transaction(transaction, construct_material_bytes) ==
+			wt::WtEditTransactionStatus::Ok,
+		"SDF construct material payload was rejected"
+	);
 
 	transaction = make_transaction();
 	transaction.commands[1] = box_command(0);

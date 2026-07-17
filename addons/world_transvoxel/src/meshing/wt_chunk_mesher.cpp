@@ -323,7 +323,7 @@ WtChunkMeshingStatus append_cell_mesh(
 			vertex.normal = wt_interpolated_mesh_normal(
 				*sample_a, *sample_b, isovalue
 			);
-			vertex.material = wt_closest_isosurface_endpoint_material(
+			vertex.material = wt_solid_isosurface_endpoint_material(
 				*sample_a, *sample_b, isovalue
 			);
 			vertex.position = wt_deform_chunk_position(

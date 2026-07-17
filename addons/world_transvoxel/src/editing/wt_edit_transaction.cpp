@@ -266,6 +266,8 @@ bool decode_command(WtByteView bytes, WtEditCommand &command) {
 	if (record_size != bytes.size ||
 		major != kWtEditSchemaMajor ||
 		minor > kWtEditSchemaMinor ||
+		(minor == 0 && command.operation == WtEditOperation::SdfConstruct &&
+			command.material != 0) ||
 		reserved_short != 0 || reserved != 0 ||
 		shape_payload_size != payload_size(command.shape) ||
 		reader.remaining() != shape_payload_size) {

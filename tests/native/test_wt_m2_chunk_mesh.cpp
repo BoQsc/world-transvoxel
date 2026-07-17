@@ -700,7 +700,7 @@ int main() {
 	test_multiresolution_vertices_match_lod0(mesher, scratch);
 	test_errors(mesher, scratch);
 
-	constexpr std::uint64_t expected_hash = 0x1ccb4b98d4ce8027ULL;
+	constexpr std::uint64_t expected_hash = 0x04bc06aebf0fed17ULL;
 	check(hash == expected_hash, "M2 chunk aggregate hash mismatch");
 	std::printf("M2_MESH_HASH %016llx\n", static_cast<unsigned long long>(hash));
 	if (failure_count != 0) {

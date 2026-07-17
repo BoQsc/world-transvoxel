@@ -39,6 +39,12 @@ public:
 		double radius,
 		double strength
 	);
+	bool construct_material_sdf_sphere(
+		const godot::Vector3 &center,
+		double radius,
+		double strength,
+		std::int64_t material
+	);
 	bool paint_material_sphere(
 		const godot::Vector3 &center,
 		double radius,

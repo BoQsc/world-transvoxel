@@ -153,7 +153,8 @@ bool wt_is_valid_edit_command(const WtEditCommand &command) noexcept {
 		!std::isfinite(command.density_value)) {
 		return false;
 	}
-	if (density_operation(command.operation) && command.material != 0) {
+	if (density_operation(command.operation) && command.material != 0 &&
+		command.operation != WtEditOperation::SdfConstruct) {
 		return false;
 	}
 	if (command.operation == WtEditOperation::AddDensity &&

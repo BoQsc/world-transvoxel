@@ -224,6 +224,9 @@ bool apply_valid_command_to_sample(
 			const float solid_density = -brush_density;
 			if (sample.density > solid_density) {
 				sample.density = solid_density;
+				if (command.material != 0 && solid_density <= 0.0F) {
+					sample.material = command.material;
+				}
 			}
 		}
 	} else {

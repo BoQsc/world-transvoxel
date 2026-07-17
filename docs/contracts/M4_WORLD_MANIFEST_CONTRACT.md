@@ -143,7 +143,7 @@ Writers sort dependencies and pages, so input order does not affect bytes.
 hash:
 
 ```text
-aec8e150c1001b91a816e9a3d9c5a04362b8098bda5fbace2d916b50de5e0e55
+7fd6b604222c4eee8092d8dea6f52c04a0e10435c3a76f55839f97cf24fc2b16
 ```
 
 The test covers schema-1.1 and schema-1.0 migration, manifest round-trip,

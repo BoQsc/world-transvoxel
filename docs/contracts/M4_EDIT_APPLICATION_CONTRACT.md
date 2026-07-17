@@ -38,10 +38,20 @@ For every included sample, commands apply in journal order:
 | add density | `density += value` |
 | set density | `density = value` |
 | paint material | `material = value` |
+| SDF carve sphere | `density = max(density, brush_sdf)` |
+| SDF construct sphere | `density = min(density, -brush_sdf)`; when the brush wins inside/on the surface and carries a nonzero material, that constructed solid takes the material |
 
-These schema-1 brushes are hard inclusive shapes. They do not imply falloff,
+Add/set/paint brushes are hard inclusive shapes. SDF sphere operations use a
+one-base-grid-unit support band so the signed field remains continuous across
+the brush boundary. They do not imply falloff,
 blend curves, smoothing, or material interpolation. Those require explicit
 future operation/schema values.
+
+Material-aware construction is one atomic command, not a density command
+followed by a paint command. It assigns the selected categorical material only
+where the construct brush supplies the winning solid field. A denser
+pre-existing solid and its material remain authoritative. Density-only legacy
+construct commands with material zero retain their previous behavior.
 
 ## Terrain standard brush boundary
 
@@ -109,12 +119,13 @@ history.
 `tests/native/test_wt_m4_apply.cpp` locks the debug/release edited-page hash:
 
 ```text
-86361ec1918d415539e73091c7a9710af9bfecd21a66e3ed5f5e48a3266536df
+79f6ee15201acb6862928f361db1f8900469a56cac48e91cb3cfdbb702938daa
 ```
 
 The test covers:
 
-- add-density, set-density, and paint-material replay;
+- add-density, set-density, paint-material, SDF carve, and material-aware SDF
+  construct replay;
 - exact sphere and box application;
 - two adjacent pages and all 1,083 shared padded samples;
 - changed-sample counts and revision/sequence state;

@@ -11,7 +11,7 @@
 namespace world_transvoxel {
 
 constexpr std::uint16_t kWtEditSchemaMajor = 1;
-constexpr std::uint16_t kWtEditSchemaMinor = 0;
+constexpr std::uint16_t kWtEditSchemaMinor = 1;
 constexpr std::size_t kWtEditHeaderSize = 64;
 constexpr std::size_t kWtEditCommitSize = 68;
 constexpr std::size_t kWtEditCommandSectionHeaderSize = 8;

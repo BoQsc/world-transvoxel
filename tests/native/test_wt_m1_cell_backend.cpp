@@ -161,13 +161,11 @@ void validate_mesh(
 			check((samples[source_a].density < 0.0F) !=
 				(samples[source_b].density < 0.0F),
 				"vertex endpoint provenance does not cross the isosurface");
-			const float distance_a = std::fabs(samples[source_a].density);
-			const float distance_b = std::fabs(samples[source_b].density);
 			const unsigned int material_source =
-				distance_a <= distance_b ? source_a : source_b;
+				samples[source_a].density < 0.0F ? source_a : source_b;
 			check(
 				vertex.material == samples[material_source].material,
-				"material did not come from closest isosurface endpoint"
+				"material did not come from solid isosurface endpoint"
 			);
 		}
 	}
@@ -293,7 +291,13 @@ void test_contract_edges(const wt::WtMeshingBackend &backend) {
 	check(equal_vec(mesh.vertices[0].normal,
 		{ 0.75F * inverse_probe_length, 0.25F * inverse_probe_length, 0.0F }),
 		"regular gradient interpolation mismatch");
-	check(mesh.vertices[0].material == 1, "regular closest-endpoint material mismatch");
+	check(mesh.vertices[0].material == 1, "regular solid-endpoint material mismatch");
+	regular.samples[0].density = -3.0F;
+	regular.samples[1].density = 1.0F;
+	check(backend.mesh_regular_cell(regular, mesh, scratch) == wt::WtCellStatus::Ok,
+		"regular solid-material ownership probe failed");
+	check(mesh.vertices[0].material == 1,
+		"air endpoint closer to the isosurface owned the material");
 
 	wt::WtTransitionCellInput transition = make_transition_input(1);
 	check(backend.mesh_transition_cell(transition, mesh, scratch) == wt::WtCellStatus::Ok,
@@ -381,8 +385,8 @@ int main() {
 	const std::uint64_t regular_hash = test_regular_cases(backend);
 	const std::uint64_t transition_hash = test_transition_cases(backend);
 
-	constexpr std::uint64_t kExpectedRegularHash = 0xabb624c491bd7ca1ULL;
-	constexpr std::uint64_t kExpectedTransitionHash = 0x5d34ef02bf7e420dULL;
+	constexpr std::uint64_t kExpectedRegularHash = 0x21294cb1188f4c45ULL;
+	constexpr std::uint64_t kExpectedTransitionHash = 0x94e9e05bd1719331ULL;
 	check(regular_hash == kExpectedRegularHash, "regular aggregate hash mismatch");
 	check(transition_hash == kExpectedTransitionHash, "transition aggregate hash mismatch");
 
