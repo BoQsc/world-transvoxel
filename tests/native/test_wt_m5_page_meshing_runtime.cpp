@@ -1,6 +1,7 @@
 #include "backend/wt_transvoxel_mit_backend.h"
 #include "bake/wt_chunk_baker.h"
 #include "editing/wt_chunk_edit_state.h"
+#include "meshing/wt_material_volume_sample_source.h"
 #include "services/wt_page_meshing_runtime.h"
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_chunk_page_sample_source.h"
@@ -9,6 +10,7 @@
 #include "storage/wt_storage_page_cache.h"
 #include "wt_m2_mesh_test_support.h"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -62,6 +64,68 @@ public:
 			std::sqrt(dx * dx + dy * dy + dz * dz) - 8.25
 		);
 		output.material = 7;
+		return true;
+	}
+};
+
+class SphereDifferenceSource final : public wt::WtChunkSampleSource {
+public:
+	SphereDifferenceSource(
+		double outer_radius,
+		double cavity_offset,
+		double cavity_radius
+	) noexcept : outer_radius_(outer_radius),
+		cavity_offset_(cavity_offset), cavity_radius_(cavity_radius) {
+	}
+
+	bool sample(
+		const wt::WtGridPoint &point,
+		wt::WtScalarSample &output
+	) const noexcept override {
+		constexpr double center = 32.0;
+		constexpr double boundary_epsilon = 0.01;
+		const double x = static_cast<double>(point.x) - center;
+		const double y = static_cast<double>(point.y) - center;
+		const double z = static_cast<double>(point.z) - center;
+		double construct_brush = outer_radius_ - std::sqrt(x * x + y * y + z * z);
+		if (std::abs(construct_brush) < boundary_epsilon) {
+			construct_brush = construct_brush < 0.0 ?
+				-boundary_epsilon : boundary_epsilon;
+		}
+		const double cavity_y = y - cavity_offset_;
+		double carve_brush = cavity_radius_ - std::sqrt(
+			x * x + cavity_y * cavity_y + z * z
+		);
+		if (std::abs(carve_brush) < boundary_epsilon) {
+			carve_brush = carve_brush < 0.0 ?
+				-boundary_epsilon : boundary_epsilon;
+		}
+		output.density = static_cast<float>(std::max(-construct_brush, carve_brush));
+		output.material = 1;
+		return true;
+	}
+
+private:
+	double outer_radius_ = 0.0;
+	double cavity_offset_ = 0.0;
+	double cavity_radius_ = 0.0;
+};
+
+class MaterialVolumeDistanceSource final : public wt::WtChunkSampleSource {
+public:
+	bool sample(
+		const wt::WtGridPoint &point,
+		wt::WtScalarSample &output
+	) const noexcept override {
+		if (point.x == 0 && point.y <= 0) {
+			output = { 3.0F, wt::kWtStaticWaterMaterialId };
+		} else if (point.x == -1) {
+			output = { -0.25F, 1 };
+		} else if (point.x == 10) {
+			output = { 0.75F, 0 };
+		} else {
+			output = { 0.5F, 0 };
+		}
 		return true;
 	}
 };
@@ -156,6 +220,121 @@ QuantizedPoint quantize_test_point(
 		static_cast<std::int64_t>(std::llround(
 			(static_cast<double>(origin.z) + position.z) * scale)),
 	};
+}
+
+using PointAdjacency = std::map<QuantizedPoint, std::set<QuantizedPoint>>;
+
+void append_mesh_connectivity(
+	const wt::WtChunkMeshBuffer &mesh,
+	const wt::WtGridPoint &origin,
+	PointAdjacency &adjacency
+) {
+	for (std::size_t index = 0; index < mesh.indices.size(); index += 3) {
+		const QuantizedPoint points[3] = {
+			quantize_test_point(mesh.vertices[mesh.indices[index]].position, origin),
+			quantize_test_point(mesh.vertices[mesh.indices[index + 1]].position, origin),
+			quantize_test_point(mesh.vertices[mesh.indices[index + 2]].position, origin),
+		};
+		for (unsigned int vertex = 0; vertex < 3; ++vertex) {
+			const QuantizedPoint &a = points[vertex];
+			const QuantizedPoint &b = points[(vertex + 1U) % 3U];
+			adjacency[a].insert(b);
+			adjacency[b].insert(a);
+		}
+	}
+}
+
+std::size_t connected_component_count(const PointAdjacency &adjacency) {
+	std::set<QuantizedPoint> visited;
+	std::size_t components = 0;
+	for (const auto &entry : adjacency) {
+		if (visited.find(entry.first) != visited.end()) {
+			continue;
+		}
+		++components;
+		std::vector<QuantizedPoint> pending = { entry.first };
+		visited.insert(entry.first);
+		while (!pending.empty()) {
+			const QuantizedPoint point = pending.back();
+			pending.pop_back();
+			const auto found = adjacency.find(point);
+			if (found == adjacency.end()) {
+				continue;
+			}
+			for (const QuantizedPoint &neighbor : found->second) {
+				if (visited.insert(neighbor).second) {
+					pending.push_back(neighbor);
+				}
+			}
+		}
+	}
+	return components;
+}
+
+std::size_t sphere_difference_component_count(
+	const SphereDifferenceSource &source,
+	std::uint8_t lod
+) {
+	const wt::WtChunkMesher mesher(wt::wt_get_transvoxel_mit_backend());
+	wt::WtChunkMeshingScratch scratch;
+	PointAdjacency adjacency;
+	const std::int64_t extent = wt::wt_chunk_extent(lod);
+	const std::int32_t minimum_key = static_cast<std::int32_t>(3 / extent);
+	const std::int32_t maximum_key = static_cast<std::int32_t>(61 / extent);
+	for (std::int32_t z = minimum_key; z <= maximum_key; ++z) {
+		for (std::int32_t y = minimum_key; y <= maximum_key; ++y) {
+			for (std::int32_t x = minimum_key; x <= maximum_key; ++x) {
+				wt::WtChunkMeshResult result;
+				const wt::WtChunkKey key = { x, y, z, lod };
+				check(mesher.mesh(
+						{ key, 0, 0.0F, 0.25F }, source, result, scratch
+					) == wt::WtChunkMeshingStatus::Ok,
+					"sphere difference topology mesh failed");
+				append_mesh_connectivity(result.regular, result.world_origin, adjacency);
+			}
+		}
+	}
+	return connected_component_count(adjacency);
+}
+
+void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value);
+
+void test_representable_sphere_difference_topology(
+	std::vector<std::uint8_t> &evidence
+) {
+	const SphereDifferenceSource near_tangent(24.0, 11.0, 14.0);
+	const std::size_t near_tangent_components =
+		sphere_difference_component_count(near_tangent, 0);
+	check(near_tangent_components > 1,
+		"sphere difference topology control did not reproduce detached components");
+	const SphereDifferenceSource representable(28.0, 19.0, 22.0);
+	for (std::uint8_t lod = 0; lod <= 2; ++lod) {
+		const std::size_t components =
+			sphere_difference_component_count(representable, lod);
+		check(components == 1,
+			"representable sphere difference produced detached components");
+		append_u64(evidence, components);
+	}
+	append_u64(evidence, near_tangent_components);
+}
+
+void test_material_volume_continuous_distance(
+	std::vector<std::uint8_t> &evidence
+) {
+	const MaterialVolumeDistanceSource terrain;
+	const wt::WtMaterialVolumeSampleSource water(
+		terrain, wt::kWtStaticWaterMaterialId
+	);
+	wt::WtScalarSample sample;
+	check(water.sample({ 0, 0, 0 }, sample) && sample.density == -1.0F,
+		"material volume did not classify occupied water as interior");
+	check(water.sample({ -1, 0, 0 }, sample) && sample.density == -0.25F,
+		"material volume lost continuous solid terrain distance");
+	check(water.sample({ 0, 1, 0 }, sample) && sample.density == 0.5F,
+		"material volume lost continuous air distance above water");
+	check(water.sample({ 10, 1, 0 }, sample) && sample.density == -0.75F,
+		"material volume did not suppress unrelated air");
+	append_u64(evidence, 1);
 }
 
 Edge make_test_edge(QuantizedPoint a, QuantizedPoint b) {
@@ -1259,6 +1438,8 @@ int main() {
 		"runtime fixture dependency count mismatch"
 	);
 	std::vector<std::uint8_t> evidence;
+	test_representable_sphere_difference_topology(evidence);
+	test_material_volume_continuous_distance(evidence);
 	test_human_boundary_edit_repro(evidence);
 	test_streaming_pixel_transition_repro(evidence);
 	test_runtime_lifecycle(fixture, evidence);
@@ -1275,7 +1456,8 @@ int main() {
 	std::printf(
 		"M5_PAGE_MESHING_RUNTIME_PASS dependencies=13 cache_entries=2 "
 		"backpressure=1 cancellations=1 invalidations=1 missing_support=1 "
-		"human_boundary_repro=1 edited_coarse_rebuild=1\n"
+		"human_boundary_repro=1 edited_coarse_rebuild=1 "
+		"sphere_difference_topology=1 material_volume_distance=1\n"
 	);
 	return 0;
 }

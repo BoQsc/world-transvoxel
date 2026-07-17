@@ -2,6 +2,7 @@
 
 #include "meshing/wt_multiresolution_vertex_resolver.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace world_transvoxel {
@@ -82,7 +83,14 @@ bool WtMaterialVolumeSampleSource::sample(
 	if (!source_.sample(point, source_sample)) {
 		return false;
 	}
-	output.density = is_surface_interior(point, source_sample) ? -1.0F : 1.0F;
+	// Preserve the terrain field's continuous distance magnitude so water-wall
+	// intersections use the same sub-voxel edge positions as terrain. Only the
+	// sign is replaced by the material-volume interior classification.
+	const float magnitude = std::clamp(
+		std::abs(source_sample.density), 0.01F, 1.0F
+	);
+	output.density = is_surface_interior(point, source_sample) ?
+		-magnitude : magnitude;
 	output.material = material_;
 	return true;
 }

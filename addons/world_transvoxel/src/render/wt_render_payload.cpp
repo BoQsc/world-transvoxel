@@ -168,8 +168,8 @@ WtRenderBuildStatus append_combined_buffer(
 	return WtRenderBuildStatus::Ok;
 }
 
-void keep_static_water_free_surface(WtRenderPayload &water) {
-	constexpr float minimum_average_up_normal = 0.99F;
+void keep_static_water_heightfield(WtRenderPayload &water) {
+	constexpr float minimum_upward_normal = 0.01F;
 	std::vector<std::uint32_t> free_surface;
 	free_surface.reserve(water.indices.size());
 	for (std::size_t triangle = 0; triangle < water.indices.size(); triangle += 3) {
@@ -181,7 +181,7 @@ void keep_static_water_free_surface(WtRenderPayload &water) {
 			water.vertices[b].normal.y +
 			water.vertices[c].normal.y
 		) / 3.0F;
-		if (average_up >= minimum_average_up_normal) {
+		if (average_up > minimum_upward_normal) {
 			free_surface.push_back(a);
 			free_surface.push_back(b);
 			free_surface.push_back(c);
@@ -303,7 +303,7 @@ WtRenderBuildStatus wt_build_render_payload(
 		output.clear();
 		return status;
 	}
-	keep_static_water_free_surface(water);
+	keep_static_water_heightfield(water);
 	output.water_vertices = std::move(water.vertices);
 	output.water_indices = std::move(water.indices);
 	return WtRenderBuildStatus::Ok;

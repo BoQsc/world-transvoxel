@@ -105,7 +105,7 @@ void test_render_builder(wt::WtRenderPayload &render) {
 		wt::WtRenderBuildStatus::Ok, "water render payload failed");
 	check(render.vertices.size() == 6 && render.indices.size() == 6 &&
 		render.water_vertices.size() == 6 && render.water_indices.size() == 3,
-		"water free surface was not separated from wall geometry");
+		"water heightfield did not reject vertical closure geometry");
 	check(render.water_vertices[0].material == 9,
 		"water render surface lost its material identity");
 }
