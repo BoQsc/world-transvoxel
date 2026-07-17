@@ -15,25 +15,30 @@ grid for one chunk key and one source revision. Pages are standalone,
 content-addressable units. The `wtworld` index maps chunk keys to complete
 page hashes and byte sizes without requiring a monolithic world decode.
 
-The page stores authoritative samples, not Transvoxel case IDs, lookup-table
-indices, generated vertices, render resources, collision resources, or
-backend-specific data.
+The page stores authoritative samples plus the source-derived finest-edge
+records required by standard Transvoxel surface shifting. It does not store
+Transvoxel case IDs, lookup-table indices, generated vertices, render
+resources, collision resources, or backend-specific data.
 
 ## Sections
 
-The container magic is `WTCHUNK`. Feature flags are zero for schema 1.0. The
+The container magic is `WTCHUNK`. Feature flags are zero for schema 1.1. The
 container source revision must equal the revision in `CHDR`.
 
-Exactly two sections are required:
+Schema 1.1 requires exactly three sections:
 
 | FourCC | Flags | Codec | Purpose |
 | --- | ---: | --- | --- |
 | `CHDR` | 0 | `none` | fixed chunk metadata |
 | `DATA` | 0 | `none` | interleaved scalar/material samples |
+| `SHFT` | 0 | `none` | sparse finest-resolution edge constraints |
 
 Unknown, missing, duplicate, or extra sections fail the schema reader.
+Legacy schema 1.0 remains readable with exactly `CHDR` and `DATA`. Because it
+contains no `SHFT` data, a decoded legacy page above LOD0 is not eligible for
+multiresolution meshing until its surface-shift records are regenerated.
 
-## `CHDR` schema 1.0
+## `CHDR` schema 1.1
 
 All integers and floating-point bit patterns are little-endian. `CHDR` is
 exactly 48 bytes:
@@ -41,7 +46,7 @@ exactly 48 bytes:
 | Offset | Type | Meaning |
 | ---: | --- | --- |
 | 0 | `u16` | schema major, `1` |
-| 2 | `u16` | schema minor, `0` |
+| 2 | `u16` | schema minor, `1` |
 | 4 | `i32` | chunk X |
 | 8 | `i32` | chunk Y |
 | 12 | `i32` | chunk Z |
@@ -87,8 +92,31 @@ and decoding.
 Regular gradients use this page's declared spacing. Higher-LOD transition
 faces obtain their half-spacing samples and gradients from the four canonical
 LOD-minus-one support pages defined by
-`M5_TRANSITION_PAGE_SOURCE_CONTRACT.md`; schema 1 is not extended or
-interpolated.
+`M5_TRANSITION_PAGE_SOURCE_CONTRACT.md`.
+
+## `SHFT` encoding and invariant
+
+`SHFT` is sparse. Its 8-byte header contains the finite `float32` isovalue and
+a `u32` record count. Each following 42-byte record contains:
+
+1. the `u16` canonical regular-grid edge index;
+2. the `u32` offset of the selected unit edge from the coarse edge's lower
+   endpoint;
+3. density, XYZ gradient, and material for both unit-edge endpoints.
+
+Records are strictly ordered by edge index and exist exactly for regular
+coarse edges whose coarse endpoints straddle the stored isovalue. An LOD0
+page has no records because its regular edges are already unit edges. For
+LOD `L > 0`, baking recursively bisects each sign-changing length-`2^L` edge
+using authoritative unit-resolution samples until it selects the sign-changing
+unit edge. Meshing interpolates the coarse vertex from those unit endpoints,
+so the coarse and finest meshes use the same surface position as required by
+Lengyel's surface-shifting construction.
+
+The format rejects unordered, duplicate, out-of-range, non-finite, same-sign,
+wrong-isovalue, or otherwise inconsistent records. A missing or invalid record
+is a meshing failure; the runtime must not silently fall back to interpolation
+on the coarse endpoints.
 
 ## Deterministic baker
 
@@ -102,6 +130,8 @@ The baker:
 - sorts pages by the canonical chunk-key order `(lod, z, y, x)`;
 - samples each page in the fixed Z/Y/X loop corresponding to the encoded
   order;
+- resolves every sign-changing higher-LOD regular edge to its authoritative
+  unit edge and writes the deterministic sparse `SHFT` section;
 - clears partial output after any failure;
 - writes each standalone page through the common deterministic container;
 - computes a SHA-256 identity over the complete page bytes.
@@ -114,7 +144,7 @@ Input key order does not affect output order, bytes, or hashes.
 
 - unsorted and reversed inputs produce identical sorted page bytes;
 - debug and release builds produce the locked aggregate page hash
-  `7ed6975c20b67762bd00016b4bebd982b6aafcd4766dc3c0e6bbffaf94dfe5ce`;
+  `5f01045e4846d377341a72fff5acb84f80d1b8761fe33a89b3b835c6e1a5ef3f`;
 - page metadata, padding coordinates, LOD spacing, sample order, source
   revision, and representative sample values round-trip exactly;
 - decoded pages re-encode byte-for-byte;

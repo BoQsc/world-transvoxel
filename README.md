@@ -145,9 +145,10 @@ underground and vertical traversal, two viewers, collision-demand changes, and
 edits while moving without record or queue growth.
 Reference-hardware budgets now cover native orchestration, real
 content-addressed warm page I/O/decode, decoded-page LOD0 MIT meshing, and
-higher-LOD MIT transition meshing. Schema-1 remains unchanged: each coarse
-transition face deterministically owns four adjacent LOD-minus-one pages, and
-decoded-page seams pass all face and corner contracts. Real runtime jobs now
+higher-LOD MIT transition meshing. Chunk-page schema 1.1 adds sparse validated
+finest-edge records for Lengyel surface shifting; each coarse transition face
+still deterministically owns four adjacent LOD-minus-one pages, and decoded-page
+seams pass all face and corner contracts. Real runtime jobs now
 request and pin those support pages, retry scheduler backpressure, discard late
 cancelled completions, invalidate dependent coarse generations, and release
 pins after official MIT meshing. Optimized Godot 4.6.3 and 4.7 evidence now

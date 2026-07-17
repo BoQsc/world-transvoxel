@@ -315,43 +315,65 @@ void test_replay_and_overlap(std::vector<std::uint8_t> &evidence) {
 	}
 }
 
-void test_coarse_lod_filtered_edit_coverage(std::vector<std::uint8_t> &evidence) {
-	wt::WtChunkEditState state;
+void test_cross_lod_pointwise_edit_consistency(
+	std::vector<std::uint8_t> &evidence
+) {
+	wt::WtChunkEditState fine;
+	wt::WtChunkEditState coarse;
 	check(
-		state.initialize(bake_page({ 0, 0, 0, 3 }), 100, 0) ==
-			wt::WtChunkEditStatus::Ok,
-		"coarse LOD edit fixture initialization failed"
+		fine.initialize(bake_page({ 0, 0, 0, 0 }), 100, 0) ==
+				wt::WtChunkEditStatus::Ok &&
+			coarse.initialize(bake_page({ 0, 0, 0, 3 }), 100, 0) ==
+				wt::WtChunkEditStatus::Ok,
+		"cross-LOD edit fixtures failed"
 	);
 	wt::WtEditCommand command = sphere(
 		90,
 		0,
 		1,
 		wt::WtEditOperation::AddDensity,
-		4,
+		0,
 		wt::kWtEditCoordinateScale,
 		-7.0F
 	);
 	check(
-		state.apply_command(command) == wt::WtChunkEditStatus::Ok,
-		"coarse LOD filtered edit command failed"
+		fine.apply_command(command) == wt::WtChunkEditStatus::Ok &&
+			coarse.apply_command(command) == wt::WtChunkEditStatus::Ok,
+		"cross-LOD pointwise edit command failed"
 	);
 	check(
-		state.changed_sample_count() == 2,
-		"coarse LOD filtered edit did not update intersected cells"
+		fine.changed_sample_count() == 7 &&
+			coarse.changed_sample_count() == 1,
+		"cross-LOD edit changed the wrong sample footprints"
 	);
 	check(
-		state.page().samples[sample_index(state.page(), { 0, 0, 0 })].density ==
+		fine.page().samples[sample_index(fine.page(), { 0, 0, 0 })].density ==
 				-7.0F &&
-			state.page().samples[sample_index(state.page(), { 8, 0, 0 })].density ==
-				1.0F &&
-			state.page().samples[sample_index(state.page(), { 16, 0, 0 })].density ==
+			coarse.page().samples[
+				sample_index(coarse.page(), { 0, 0, 0 })
+			].density ==
+				-7.0F &&
+			fine.page().samples[sample_index(fine.page(), { 8, 0, 0 })].density ==
+				8.0F &&
+			coarse.page().samples[
+				sample_index(coarse.page(), { 8, 0, 0 })
+			].density ==
+				8.0F &&
+			coarse.page().samples[
+				sample_index(coarse.page(), { 16, 0, 0 })
+			].density ==
 				16.0F,
-		"coarse LOD filtered edit sample values mismatch"
+		"shared cross-LOD samples received different edit values"
 	);
 	std::vector<std::uint8_t> bytes;
 	check(
-		wt::wt_write_chunk_page(state.page(), bytes) == wt::WtChunkPageStatus::Ok,
-		"coarse LOD filtered edit page write failed"
+		wt::wt_write_chunk_page(coarse.page(), bytes) ==
+			wt::WtChunkPageStatus::InvalidInput,
+		"stale coarse surface-shift data was serialized"
+	);
+	check(
+		wt::wt_write_chunk_page(fine.page(), bytes) == wt::WtChunkPageStatus::Ok,
+		"pointwise LOD0 edit page write failed"
 	);
 	evidence.insert(evidence.end(), bytes.begin(), bytes.end());
 }
@@ -535,7 +557,7 @@ void test_failures() {
 int main() {
 	std::vector<std::uint8_t> evidence;
 	test_replay_and_overlap(evidence);
-	test_coarse_lod_filtered_edit_coverage(evidence);
+	test_cross_lod_pointwise_edit_consistency(evidence);
 	test_sdf_sphere_edits(evidence);
 	test_failures();
 	if (failure_count != 0) {
@@ -545,7 +567,7 @@ int main() {
 	std::printf("M4_APPLY_HASH ");
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
-		"M4_APPLY_PASS pages=4 overlap_samples=1083 coarse_lod_filtered_samples=2 sdf_sphere_edits=3 failure_cases=7\n"
+		"M4_APPLY_PASS pages=5 overlap_samples=1083 cross_lod_pointwise=1 sdf_sphere_edits=3 failure_cases=7\n"
 	);
 	return 0;
 }

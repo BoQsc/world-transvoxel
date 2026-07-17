@@ -84,84 +84,12 @@ bool point_in_box(
 		z >= box.minimum_z_q16 && z <= box.maximum_z_q16;
 }
 
-WideUnsigned unsigned_magnitude(WideSigned value) noexcept {
-	return static_cast<WideUnsigned>(value < 0 ? -value : value);
-}
-
-WideUnsigned squared_distance_to_interval(
-	WideSigned value,
-	WideSigned minimum,
-	WideSigned maximum
-) noexcept {
-	if (value < minimum) {
-		const WideUnsigned delta = unsigned_magnitude(minimum - value);
-		return delta * delta;
-	}
-	if (value > maximum) {
-		const WideUnsigned delta = unsigned_magnitude(value - maximum);
-		return delta * delta;
-	}
-	return 0;
-}
-
-long double squared_distance_to_interval_float(
-	long double value,
-	long double minimum,
-	long double maximum
-) noexcept {
-	if (value < minimum) {
-		const long double delta = minimum - value;
-		return delta * delta;
-	}
-	if (value > maximum) {
-		const long double delta = value - maximum;
-		return delta * delta;
-	}
-	return 0.0L;
-}
-
-bool sphere_intersects_sample_footprint(
-	const WtGridPoint &point,
-	const WtEditSphere &sphere,
-	std::int64_t spacing
-) noexcept {
-	if (spacing <= 1) {
-		return point_in_sphere(point, sphere);
-	}
-	const WideSigned footprint_half =
-		static_cast<WideSigned>(spacing) *
-		static_cast<WideSigned>(kWtEditCoordinateScale) / 2;
-	const WideSigned coordinates[3] = {
-		static_cast<WideSigned>(point.x) * kWtEditCoordinateScale,
-		static_cast<WideSigned>(point.y) * kWtEditCoordinateScale,
-		static_cast<WideSigned>(point.z) * kWtEditCoordinateScale,
-	};
-	const WideSigned centers[3] = {
-		sphere.center_x_q16,
-		sphere.center_y_q16,
-		sphere.center_z_q16,
-	};
-	WideUnsigned squared_distance = 0;
-	for (std::size_t axis = 0; axis < 3; ++axis) {
-		squared_distance += squared_distance_to_interval(
-			centers[axis],
-			coordinates[axis] - footprint_half,
-			coordinates[axis] + footprint_half
-		);
-	}
-	const WideUnsigned radius =
-		static_cast<WideUnsigned>(sphere.radius_q16);
-	return squared_distance <= radius * radius;
-}
-
 bool sphere_intersects_sdf_support(
 	const WtGridPoint &point,
 	const WtEditSphere &sphere,
-	std::int64_t spacing
+	std::int64_t
 ) noexcept {
-	const std::int64_t clamped_spacing = std::max<std::int64_t>(spacing, 1);
 	const WideSigned support =
-		static_cast<WideSigned>(clamped_spacing) *
 		static_cast<WideSigned>(kWtEditCoordinateScale);
 	const WideSigned coordinates[3] = {
 		static_cast<WideSigned>(point.x) * kWtEditCoordinateScale,
@@ -193,17 +121,13 @@ bool sphere_intersects_sdf_support(
 bool sphere_sdf_brush_density(
 	const WtGridPoint &point,
 	const WtEditSphere &sphere,
-	std::int64_t spacing,
+	std::int64_t,
 	float strength,
 	float &output
 ) noexcept {
 	if (!(std::isfinite(strength) && strength > 0.0F)) {
 		return false;
 	}
-	const long double footprint_half = spacing > 1 ?
-		static_cast<long double>(spacing) *
-			static_cast<long double>(kWtEditCoordinateScale) / 2.0L :
-		0.0L;
 	const long double coordinates[3] = {
 		static_cast<long double>(point.x) *
 			static_cast<long double>(kWtEditCoordinateScale),
@@ -219,16 +143,8 @@ bool sphere_sdf_brush_density(
 	};
 	long double squared_distance = 0.0L;
 	for (std::size_t axis = 0; axis < 3; ++axis) {
-		if (spacing <= 1) {
-			const long double delta = coordinates[axis] - centers[axis];
-			squared_distance += delta * delta;
-		} else {
-			squared_distance += squared_distance_to_interval_float(
-				centers[axis],
-				coordinates[axis] - footprint_half,
-				coordinates[axis] + footprint_half
-			);
-		}
+		const long double delta = coordinates[axis] - centers[axis];
+		squared_distance += delta * delta;
 	}
 	const long double signed_distance =
 		static_cast<long double>(sphere.radius_q16) -
@@ -250,49 +166,72 @@ bool sphere_sdf_brush_density(
 	return std::isfinite(output);
 }
 
-bool box_intersects_sample_footprint(
-	const WtGridPoint &point,
-	const WtEditBox &box,
-	std::int64_t spacing
-) noexcept {
-	if (spacing <= 1) {
-		return point_in_box(point, box);
-	}
-	const WideSigned footprint_half =
-		static_cast<WideSigned>(spacing) *
-		static_cast<WideSigned>(kWtEditCoordinateScale) / 2;
-	const WideSigned x =
-		static_cast<WideSigned>(point.x) * kWtEditCoordinateScale;
-	const WideSigned y =
-		static_cast<WideSigned>(point.y) * kWtEditCoordinateScale;
-	const WideSigned z =
-		static_cast<WideSigned>(point.z) * kWtEditCoordinateScale;
-	return x >= static_cast<WideSigned>(box.minimum_x_q16) - footprint_half &&
-		x <= static_cast<WideSigned>(box.maximum_x_q16) + footprint_half &&
-		y >= static_cast<WideSigned>(box.minimum_y_q16) - footprint_half &&
-		y <= static_cast<WideSigned>(box.maximum_y_q16) + footprint_half &&
-		z >= static_cast<WideSigned>(box.minimum_z_q16) - footprint_half &&
-		z <= static_cast<WideSigned>(box.maximum_z_q16) + footprint_half;
-}
-
 bool contains(
 	const WtEditCommand &command,
 	const WtGridPoint &point,
-	std::int64_t spacing
+	std::int64_t
 ) noexcept {
 	if ((command.operation == WtEditOperation::SdfCarve ||
 			command.operation == WtEditOperation::SdfConstruct) &&
 			command.shape == WtEditShape::Sphere) {
-		return sphere_intersects_sdf_support(point, command.sphere, spacing);
+		return sphere_intersects_sdf_support(point, command.sphere, 1);
 	}
 	if (!point_in_bounds(point, command.bounds)) {
-		if (spacing <= 1) {
-			return false;
-		}
+		return false;
 	}
 	return command.shape == WtEditShape::Sphere ?
-		sphere_intersects_sample_footprint(point, command.sphere, spacing) :
-		box_intersects_sample_footprint(point, command.box, spacing);
+		point_in_sphere(point, command.sphere) :
+		point_in_box(point, command.box);
+}
+
+bool apply_valid_command_to_sample(
+	const WtEditCommand &command,
+	const WtGridPoint &point,
+	WtScalarSample &sample,
+	bool &changed
+) noexcept {
+	changed = false;
+	if (!contains(command, point, 1)) {
+		return true;
+	}
+	const float previous_density = sample.density;
+	const std::uint16_t previous_material = sample.material;
+	if (command.operation == WtEditOperation::AddDensity) {
+		const float result = sample.density + command.density_value;
+		if (!std::isfinite(result)) {
+			return false;
+		}
+		sample.density = result;
+	} else if (command.operation == WtEditOperation::SetDensity) {
+		sample.density = command.density_value;
+	} else if (command.operation == WtEditOperation::SdfCarve ||
+		command.operation == WtEditOperation::SdfConstruct) {
+		float brush_density = 0.0F;
+		if (!sphere_sdf_brush_density(
+				point,
+				command.sphere,
+				1,
+				command.density_value,
+				brush_density
+			)) {
+			return false;
+		}
+		if (command.operation == WtEditOperation::SdfCarve) {
+			if (sample.density < brush_density) {
+				sample.density = brush_density;
+			}
+		} else {
+			const float solid_density = -brush_density;
+			if (sample.density > solid_density) {
+				sample.density = solid_density;
+			}
+		}
+	} else {
+		sample.material = command.material;
+	}
+	changed = sample.density != previous_density ||
+		sample.material != previous_material;
+	return std::isfinite(sample.density);
 }
 
 WtGridPoint sample_point(
@@ -348,32 +287,17 @@ bool density_result_is_finite(
 	if ((!additive && !sdf) || !may_intersect_page(page.metadata, command.bounds)) {
 		return true;
 	}
-	const std::int64_t spacing =
-		static_cast<std::int64_t>(page.metadata.cell_spacing);
 	std::size_t index = 0;
 	for (int z = -1; z <= 17; ++z) {
 		for (int y = -1; y <= 17; ++y) {
 			for (int x = -1; x <= 17; ++x, ++index) {
 				const WtGridPoint point = sample_point(page.metadata, x, y, z);
-				if (!contains(command, point, spacing)) {
-					continue;
-				}
-				if (additive && !std::isfinite(
-						page.samples[index].density + command.density_value
+				WtScalarSample sample = page.samples[index];
+				bool changed = false;
+				if (!apply_valid_command_to_sample(
+						command, point, sample, changed
 					)) {
 					return false;
-				}
-				if (sdf) {
-					float brush_density = 0.0F;
-					if (!sphere_sdf_brush_density(
-							point,
-							command.sphere,
-							spacing,
-							command.density_value,
-							brush_density
-						)) {
-						return false;
-					}
 				}
 			}
 		}
@@ -388,51 +312,17 @@ std::size_t apply_values(
 	if (!may_intersect_page(page.metadata, command.bounds)) {
 		return 0;
 	}
-	const std::int64_t spacing =
-		static_cast<std::int64_t>(page.metadata.cell_spacing);
 	std::size_t changed = 0;
 	std::size_t index = 0;
 	for (int z = -1; z <= 17; ++z) {
 		for (int y = -1; y <= 17; ++y) {
 			for (int x = -1; x <= 17; ++x, ++index) {
 				const WtGridPoint point = sample_point(page.metadata, x, y, z);
-				if (!contains(command, point, spacing)) {
-					continue;
-				}
 				WtScalarSample &sample = page.samples[index];
-				const float previous_density = sample.density;
-				const std::uint16_t previous_material = sample.material;
-				if (command.operation == WtEditOperation::AddDensity) {
-					sample.density += command.density_value;
-				} else if (command.operation == WtEditOperation::SetDensity) {
-					sample.density = command.density_value;
-				} else if (command.operation == WtEditOperation::SdfCarve ||
-					command.operation == WtEditOperation::SdfConstruct) {
-					float brush_density = 0.0F;
-					if (!sphere_sdf_brush_density(
-							point,
-							command.sphere,
-							spacing,
-							command.density_value,
-							brush_density
-						)) {
-						continue;
-					}
-					if (command.operation == WtEditOperation::SdfCarve) {
-						if (sample.density < brush_density) {
-							sample.density = brush_density;
-						}
-					} else {
-						const float solid_density = -brush_density;
-						if (sample.density > solid_density) {
-							sample.density = solid_density;
-						}
-					}
-				} else {
-					sample.material = command.material;
-				}
-				if (sample.density != previous_density ||
-					sample.material != previous_material) {
+				bool sample_changed = false;
+				if (apply_valid_command_to_sample(
+						command, point, sample, sample_changed
+					) && sample_changed) {
 					++changed;
 				}
 			}
@@ -442,6 +332,18 @@ std::size_t apply_values(
 }
 
 } // namespace
+
+bool wt_apply_edit_command_to_sample(
+	const WtEditCommand &command,
+	const WtGridPoint &point,
+	WtScalarSample &sample,
+	bool &changed
+) noexcept {
+	changed = false;
+	return wt_is_valid_edit_command(command) &&
+		std::isfinite(sample.density) &&
+		apply_valid_command_to_sample(command, point, sample, changed);
+}
 
 WtChunkEditStatus WtChunkEditState::initialize(
 	WtChunkPage page,
@@ -504,11 +406,17 @@ WtChunkEditStatus WtChunkEditState::apply_command(
 		last_status_ = WtChunkEditStatus::NonFiniteResult;
 		return last_status_;
 	}
+	const bool invalidates_surface_shift =
+		page_.metadata.key.lod > 0 &&
+		may_intersect_page(page_.metadata, command.bounds);
 	if (command.world_revision != current_world_revision_) {
 		current_world_revision_ = command.world_revision;
 		next_sequence_ = 0;
 	}
 	changed_sample_count_ += apply_values(page_, command);
+	if (invalidates_surface_shift) {
+		page_.surface_shift_valid = false;
+	}
 	next_sequence_ = command.sequence + 1;
 	last_status_ = WtChunkEditStatus::Ok;
 	return last_status_;

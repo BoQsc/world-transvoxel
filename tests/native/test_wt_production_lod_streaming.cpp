@@ -2,6 +2,7 @@
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_edit_journal_store.h"
 #include "storage/wt_hash256.h"
+#include "storage/wt_procedural_world_source.h"
 #include "streaming/wt_balanced_lod_planner.h"
 #include "wt_production_world_fixture.h"
 
@@ -11,6 +12,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
+#include <limits>
 #include <thread>
 #include <vector>
 
@@ -88,6 +90,172 @@ wt::WtLodPlannerViewer planner_viewer(
 		maximum_lod,
 		refinement_radius_chunks,
 	};
+}
+
+std::vector<wt::WtDesiredChunk> desired_from_plan(
+	const wt::WtBalancedLodPlan &plan
+) {
+	std::vector<wt::WtDesiredChunk> desired;
+	desired.reserve(plan.demands.size());
+	for (const wt::WtViewerChunkDemand &demand : plan.demands) {
+		desired.push_back({
+			demand.key,
+			demand.priority,
+			1,
+			demand.collision_required,
+		});
+	}
+	return desired;
+}
+
+bool run_lod_hysteresis_regression() {
+	std::vector<wt::WtChunkKey> keys;
+	for (std::int32_t root_x = 0; root_x <= 2; ++root_x) {
+		keys.push_back({ root_x, 0, 0, 1 });
+		for (std::int32_t z = 0; z < 2; ++z) {
+			for (std::int32_t y = 0; y < 2; ++y) {
+				for (std::int32_t x = 0; x < 2; ++x) {
+					keys.push_back({ root_x * 2 + x, y, z, 0 });
+				}
+			}
+		}
+	}
+	wt::WtBalancedLodPlanner planner(64, std::move(keys));
+	wt::WtBalancedLodPlan initial;
+	wt::WtBalancedLodPlan fresh_boundary;
+	wt::WtBalancedLodPlan retained_boundary;
+	wt::WtBalancedLodPlan exited;
+	const wt::WtChunkKey first_root = { 0, 0, 0, 1 };
+	const std::vector<wt::WtLodPlannerViewer> initial_viewer = {
+		planner_viewer(1, 1, 8.0, 2, 1, 1),
+	};
+	const std::vector<wt::WtLodPlannerViewer> boundary_viewer = {
+		planner_viewer(1, 2, 50.0, 2, 1, 1),
+	};
+	const std::vector<wt::WtLodPlannerViewer> exited_viewer = {
+		planner_viewer(1, 3, 70.0, 2, 1, 1),
+	};
+	check(
+		planner.valid() &&
+		planner.plan(initial_viewer, {}, {}, initial) ==
+			wt::WtBalancedLodPlannerStatus::Ok &&
+		find_entry(initial, first_root) == nullptr,
+		"LOD hysteresis fixture did not start refined"
+	);
+	check(
+		planner.plan(boundary_viewer, {}, {}, fresh_boundary) ==
+			wt::WtBalancedLodPlannerStatus::Ok &&
+		find_entry(fresh_boundary, first_root) != nullptr,
+		"fresh LOD plan did not cross the refinement threshold"
+	);
+	check(
+		planner.plan(
+			boundary_viewer,
+			desired_from_plan(initial),
+			{},
+			retained_boundary
+		) == wt::WtBalancedLodPlannerStatus::Ok &&
+		find_entry(retained_boundary, first_root) == nullptr,
+		"LOD hysteresis did not retain the refined subtree"
+	);
+	check(
+		planner.plan(
+			exited_viewer,
+			desired_from_plan(retained_boundary),
+			{},
+			exited
+		) == wt::WtBalancedLodPlannerStatus::Ok &&
+		find_entry(exited, first_root) != nullptr,
+		"LOD hysteresis did not coarsen beyond its exit threshold"
+	);
+	return find_entry(initial, first_root) == nullptr &&
+		find_entry(fresh_boundary, first_root) != nullptr &&
+		find_entry(retained_boundary, first_root) == nullptr &&
+		find_entry(exited, first_root) != nullptr;
+}
+
+double distance_to_bounds(
+	double x,
+	double y,
+	double z,
+	const wt::WtChunkBounds &bounds
+) {
+	const auto axis_distance = [](double value, std::int64_t minimum,
+		std::int64_t maximum) {
+		if (value < static_cast<double>(minimum)) {
+			return static_cast<double>(minimum) - value;
+		}
+		if (value > static_cast<double>(maximum)) {
+			return value - static_cast<double>(maximum);
+		}
+		return 0.0;
+	};
+	const double dx = axis_distance(x, bounds.minimum.x, bounds.maximum.x);
+	const double dy = axis_distance(y, bounds.minimum.y, bounds.maximum.y);
+	const double dz = axis_distance(z, bounds.minimum.z, bounds.maximum.z);
+	return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+bool run_g21_near_field_capacity_regression(
+	std::size_t &entry_count,
+	double &nearest_coarse_distance
+) {
+	entry_count = 0;
+	nearest_coarse_distance = 0.0;
+	wt::WtProceduralWorldDescriptor descriptor;
+	descriptor.chunk_count_x = 128;
+	descriptor.chunk_count_y = 16;
+	descriptor.chunk_count_z = 128;
+	descriptor.chunk_y = -8;
+	descriptor.source_revision = 190321;
+	descriptor.seed = 19021;
+	descriptor.mode = wt::WtProceduralWorldMode::RollingHillsCave;
+	std::vector<wt::WtChunkKey> keys = wt::wt_procedural_keys(descriptor);
+	check(
+		keys.size() == 299520,
+		"g21 near-field page hierarchy size mismatch"
+	);
+	wt::WtBalancedLodPlanner planner(8192, std::move(keys), 3, true);
+	wt::WtBalancedLodPlan plan;
+	const std::vector<wt::WtLodPlannerViewer> viewers = {
+		{
+			{ 1, 900.0, 58.0, 1030.0, 1 },
+			10,
+			3,
+			0,
+		},
+	};
+	const wt::WtBalancedLodPlannerStatus status = planner.plan(
+		viewers, {}, {}, plan
+	);
+	check(
+		planner.valid() && status == wt::WtBalancedLodPlannerStatus::Ok,
+		"g21 three-chunk near-field plan exceeds production capacity"
+	);
+	if (status != wt::WtBalancedLodPlannerStatus::Ok) {
+		return false;
+	}
+	entry_count = plan.entries.size();
+	nearest_coarse_distance = std::numeric_limits<double>::infinity();
+	for (const wt::WtLodMapEntry &entry : plan.entries) {
+		if (entry.key.lod == 0) {
+			continue;
+		}
+		nearest_coarse_distance = std::min(
+			nearest_coarse_distance,
+			distance_to_bounds(
+				viewers.front().snapshot.x,
+				viewers.front().snapshot.y,
+				viewers.front().snapshot.z,
+				wt::wt_chunk_bounds(entry.key)
+			)
+		);
+	}
+	check(
+		entry_count <= 8192 && nearest_coarse_distance >= 48.0,
+		"g21 near-field plan placed coarse terrain inside its safety radius"
+	);
+	return entry_count <= 8192 && nearest_coarse_distance >= 48.0;
 }
 
 wt::WtEditTransaction carve_transaction(
@@ -593,6 +761,12 @@ int main() {
 		"edit-retention viewer did not keep far edited LOD0 key active");
 	const bool global_coarse_ok =
 		run_global_coarse_lod_coverage_regression(storage.page_keys());
+	const bool lod_hysteresis_ok = run_lod_hysteresis_regression();
+	std::size_t g21_entry_count = 0;
+	double g21_nearest_coarse_distance = 0.0;
+	const bool g21_near_field_ok = run_g21_near_field_capacity_regression(
+		g21_entry_count, g21_nearest_coarse_distance
+	);
 
 	wt::WtBalancedLodPlanner bounded(8, storage.page_keys());
 	wt::WtBalancedLodPlan rejected_plan;
@@ -722,6 +896,13 @@ int main() {
 	append_u64(evidence, fallback_retention_ok ? 1U : 0U);
 	append_u64(evidence, global_coarse_ok ? 1U : 0U);
 	append_u64(evidence, many_zone_retention_ok ? 1U : 0U);
+	append_u64(evidence, lod_hysteresis_ok ? 1U : 0U);
+	append_u64(evidence, g21_near_field_ok ? 1U : 0U);
+	append_u64(evidence, g21_entry_count);
+	append_u64(
+		evidence,
+		static_cast<std::uint64_t>(g21_nearest_coarse_distance)
+	);
 
 	if (failure_count != 0) {
 		std::fprintf(stderr, "PRODUCTION_LOD_STREAMING_FAIL failures=%d\n",
@@ -732,7 +913,8 @@ int main() {
 		"PRODUCTION_LOD_STREAMING_EVIDENCE entries=%zu mask=%u "
 		"retained_entries=%zu retained_edit_key=%d "
 		"fallback_retention=%d bridge0=%llu/%llu bridge1=%llu/%llu "
-		"global_coarse=%d many_zone_retention=%d transition_completions=%llu\n",
+		"global_coarse=%d many_zone_retention=%d lod_hysteresis=%d "
+		"g21_entries=%zu g21_nearest_coarse=%.1f transition_completions=%llu\n",
 		plan.entries.size(),
 		bridge == nullptr ? 0U : static_cast<unsigned int>(bridge->transition_mask),
 		retained_plan.entries.size(),
@@ -744,12 +926,16 @@ int main() {
 		static_cast<unsigned long long>(publications.bridge_indices[1]),
 		global_coarse_ok ? 1 : 0,
 		many_zone_retention_ok ? 1 : 0,
+		lod_hysteresis_ok ? 1 : 0,
+		g21_entry_count,
+		g21_nearest_coarse_distance,
 		static_cast<unsigned long long>(metrics.transition_mesh_completions)
 	);
 	std::printf("PRODUCTION_LOD_STREAMING_HASH ");
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
-		"PRODUCTION_LOD_STREAMING_PASS pages=28 viewers=2 transitions=3 backend=MIT\n"
+		"PRODUCTION_LOD_STREAMING_PASS pages=28 viewers=2 transitions=3 "
+		"lod_hysteresis=1 g21_near_field=1 backend=MIT\n"
 	);
 	return 0;
 }

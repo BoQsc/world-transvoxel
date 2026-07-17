@@ -32,8 +32,15 @@ For each source page:
 3. initialize edit state at the world manifest revision;
 4. replay the complete ordered journal;
 5. require the page state to reach the journal's current revision;
-6. change only the page source revision to the new snapshot revision;
-7. serialize and hash the new standalone page.
+6. for every invalidated higher-LOD page, resolve new surface-shift records
+   from the journal-replayed LOD0 page set;
+7. change only the page source revision to the new snapshot revision;
+8. serialize and hash the new standalone page.
+
+Regeneration is all-or-nothing. Missing LOD0 coverage, ambiguous samples, or a
+failed finest-edge resolution returns `SurfaceShiftFailure`; compaction does
+not publish pages whose scalar samples and `SHFT` records represent different
+edit revisions.
 
 The new manifest preserves the configuration and ordinary dependency
 identities, indexes the new page hashes and sizes, and stores:
@@ -89,7 +96,7 @@ switching the active snapshot remain a storage-service atomic replace step.
 snapshot hash:
 
 ```text
-e49dacbc1d728125f4846e7ca4dd3b19d7374b8df96fb346a23aca74d553293f
+ad582e696d3707ae0b16d1dcee4a34ffaa82c3c421dd59d94a59eadae153a43b
 ```
 
 The test covers:

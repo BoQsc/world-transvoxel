@@ -10,6 +10,8 @@
 
 namespace world_transvoxel {
 
+constexpr std::uint32_t kWtLodRefinementHysteresisChunks = 1;
+
 struct WtLodPlannerViewer {
 	WtViewerSnapshot snapshot;
 	std::uint32_t radius_chunks = 0;
@@ -59,11 +61,13 @@ private:
 	bool append_subtree(
 		const WtChunkKey &key,
 		const std::vector<WtLodPlannerViewer> &viewers,
+		const std::vector<WtChunkKey> &refined_ancestors,
 		std::vector<WtChunkKey> &leaves
 	) const;
 	bool should_refine(
 		const WtChunkKey &key,
-		const std::vector<WtLodPlannerViewer> &viewers
+		const std::vector<WtLodPlannerViewer> &viewers,
+		const std::vector<WtChunkKey> &refined_ancestors
 	) const noexcept;
 	WtBalancedLodPlannerStatus refine_leaf(
 		std::vector<WtChunkKey> &leaves,

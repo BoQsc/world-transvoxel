@@ -1142,6 +1142,11 @@ Resolved in M2:
 - chunk output uses local `float` vertices with signed 64-bit integer origins;
 - regular and transition source-edge interpolation is canonicalized on a
   `1/65536` base-unit local lattice;
+- every sign-changing higher-LOD source edge is recursively resolved to the
+  corresponding sign-changing unit edge, so regular and transition vertices
+  use Lengyel's highest-detail surface-shift position;
+- surviving full-face edges are split at quantized transition constraints
+  before degenerate cleanup, preserving closure after surface shifting;
 - simultaneous transition faces use progressive cross-face deformation so
   all signed edge and corner galleries close;
 - native job queues, completion queues, records, viewers, sample caches, and
@@ -1168,12 +1173,19 @@ Resolved in M3:
 Resolved in M4:
 
 - format schema 1 requires codec `none` and admits no compressed codec;
+- chunk-page schema 1.1 stores sparse validated finest-edge `SHFT` records;
+  edits invalidate those derived records, compaction rebuilds them from edited
+  LOD0 truth, and procedural runtime jobs rebuild them from the base generator
+  plus authoritative journal replay;
 - dependency-free byte RLE was rejected because it expanded all locked page
   fixtures, while another codec requires representative M5 I/O and latency
   evidence.
 
 Resolved in M5:
 
+- LOD refinement uses a one-child-chunk exit hysteresis shell derived from the
+  current desired plan; the production non-flat profile keeps three LOD0 child
+  chunks of near-field refinement before its first coarse boundary;
 - production collision hysteresis retains the M3 96-unit activation and
   128-unit deactivation defaults;
 - production main-thread application defaults are four render and two

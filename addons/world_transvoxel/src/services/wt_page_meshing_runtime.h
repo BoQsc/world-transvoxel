@@ -46,6 +46,7 @@ enum class WtPageMeshingRuntimeStatus : std::uint8_t {
 	NotReady,
 	MeshingFailure,
 	EditReplayFailure,
+	SurfaceShiftFailure,
 	NotFound,
 };
 
@@ -86,6 +87,8 @@ struct WtPageMeshingRuntimeMetrics {
 	std::uint64_t sample_failures = 0;
 	std::uint64_t mesh_successes = 0;
 	std::uint64_t mesh_failures = 0;
+	std::uint64_t surface_shift_rebuilds = 0;
+	std::uint64_t surface_shift_failures = 0;
 	std::uint64_t scheduler_backpressure = 0;
 	std::uint64_t cancellations = 0;
 	std::uint64_t invalidated_records = 0;
@@ -122,7 +125,8 @@ public:
 		WtChunkMeshingScratch &scratch,
 		WtStreamScheduler &scheduler,
 		const WtEditJournal *edit_journal = nullptr,
-		std::uint64_t initial_world_revision = 0
+		std::uint64_t initial_world_revision = 0,
+		WtAsyncStorageService *authoritative_storage = nullptr
 	);
 
 	std::size_t flush_scheduler_results(

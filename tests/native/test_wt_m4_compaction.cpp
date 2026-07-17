@@ -1,5 +1,7 @@
 #include "bake/wt_snapshot_compactor.h"
 #include "editing/wt_chunk_edit_state.h"
+#include "meshing/wt_multiresolution_vertex_resolver.h"
+#include "storage/wt_chunk_surface_shift.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -91,6 +93,27 @@ std::vector<wt::WtBakedChunkPage> bake_pages() {
 			pages
 		) == wt::WtChunkBakeStatus::Ok,
 		"compaction fixture bake failed"
+	);
+	return pages;
+}
+
+std::vector<wt::WtBakedChunkPage> bake_multiresolution_pages() {
+	std::vector<wt::WtChunkKey> keys;
+	keys.reserve(65);
+	for (int z = -1; z <= 2; ++z) {
+		for (int y = -1; y <= 2; ++y) {
+			for (int x = -1; x <= 2; ++x) {
+				keys.push_back({ x, y, z, 0 });
+			}
+		}
+	}
+	keys.push_back({ 0, 0, 0, 1 });
+	const Source source;
+	wt::WtChunkBaker baker(keys.size());
+	std::vector<wt::WtBakedChunkPage> pages;
+	check(
+		baker.bake(keys, 100, source, pages) == wt::WtChunkBakeStatus::Ok,
+		"multiresolution compaction fixture bake failed"
 	);
 	return pages;
 }
@@ -342,6 +365,127 @@ void test_compaction(wt::WtCompactedSnapshot &compacted) {
 	);
 }
 
+const wt::WtBakedChunkPage *find_page(
+	const std::vector<wt::WtBakedChunkPage> &pages,
+	const wt::WtChunkKey &key
+) {
+	const auto found = std::find_if(
+		pages.begin(),
+		pages.end(),
+		[&key](const wt::WtBakedChunkPage &page) {
+			return page.key == key;
+		}
+	);
+	return found == pages.end() ? nullptr : &*found;
+}
+
+bool same_sample(
+	const wt::WtCellSample &left,
+	const wt::WtCellSample &right
+) {
+	return left.density == right.density &&
+		left.gradient.x == right.gradient.x &&
+		left.gradient.y == right.gradient.y &&
+		left.gradient.z == right.gradient.z &&
+		left.material == right.material;
+}
+
+bool same_surface_records(
+	const wt::WtChunkPage &left,
+	const wt::WtChunkPage &right
+) {
+	if (left.surface_shift_records.size() !=
+		right.surface_shift_records.size()) {
+		return false;
+	}
+	for (std::size_t index = 0;
+		index < left.surface_shift_records.size();
+		++index) {
+		const wt::WtChunkSurfaceShiftRecord &left_record =
+			left.surface_shift_records[index];
+		const wt::WtChunkSurfaceShiftRecord &right_record =
+			right.surface_shift_records[index];
+		if (left_record.edge_index != right_record.edge_index ||
+			left_record.unit_offset != right_record.unit_offset ||
+			!same_sample(left_record.sample_a, right_record.sample_a) ||
+			!same_sample(left_record.sample_b, right_record.sample_b)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void test_multiresolution_compaction() {
+	const std::vector<wt::WtBakedChunkPage> pages =
+		bake_multiresolution_pages();
+	const std::vector<std::uint8_t> world = write_world(pages);
+	const wt::WtEditJournal journal = make_journal();
+	const wt::WtChunkKey coarse_key = { 0, 0, 0, 1 };
+	const wt::WtBakedChunkPage *source_coarse = find_page(pages, coarse_key);
+	check(source_coarse != nullptr, "source coarse page missing");
+	if (source_coarse == nullptr) return;
+
+	const wt::WtChunkPage original_coarse = decode_page(*source_coarse);
+	wt::WtChunkEditState direct_replay;
+	check(
+		direct_replay.initialize(original_coarse, 100, 0) ==
+				wt::WtChunkEditStatus::Ok &&
+			journal.replay(direct_replay) == wt::WtEditJournalStatus::Ok &&
+			!direct_replay.page().surface_shift_valid,
+		"coarse edit did not invalidate derived surface-shift data"
+	);
+
+	wt::WtCompactedSnapshot compacted;
+	check(
+		wt::wt_compact_snapshot(
+			{ world.data(), world.size() },
+			pages,
+			journal,
+			101,
+			pages.size(),
+			compacted
+		) == wt::WtSnapshotCompactionStatus::Ok,
+		"multiresolution snapshot compaction failed"
+	);
+	const wt::WtBakedChunkPage *compacted_coarse =
+		find_page(compacted.pages, coarse_key);
+	check(compacted_coarse != nullptr, "compacted coarse page missing");
+	if (compacted_coarse == nullptr) return;
+	const wt::WtChunkPage rebuilt = decode_page(*compacted_coarse);
+	check(
+		rebuilt.metadata.source_revision == 101 &&
+			rebuilt.surface_shift_valid &&
+			!rebuilt.surface_shift_records.empty(),
+		"compacted coarse page lacks regenerated surface-shift data"
+	);
+	check(
+		!same_surface_records(original_coarse, rebuilt),
+		"coarse edit retained stale surface-shift records"
+	);
+	for (const wt::WtChunkSurfaceShiftRecord &record :
+		rebuilt.surface_shift_records) {
+		wt::WtGridPoint endpoint_a;
+		wt::WtGridPoint endpoint_b;
+		wt::WtResolvedMultiresolutionEdge resolved;
+		check(
+			wt::wt_chunk_surface_edge_points(
+				rebuilt.metadata,
+				record.edge_index,
+				endpoint_a,
+				endpoint_b
+			) &&
+			wt::wt_resolve_chunk_surface_shift_record(
+				rebuilt,
+				endpoint_a,
+				endpoint_b,
+				0.0F,
+				resolved
+			),
+			"regenerated surface-shift record is not resolvable"
+		);
+	}
+}
+
 void test_failures() {
 	const std::vector<wt::WtBakedChunkPage> pages = bake_pages();
 	const std::vector<std::uint8_t> world = write_world(pages);
@@ -427,6 +571,7 @@ void test_failures() {
 int main() {
 	wt::WtCompactedSnapshot compacted;
 	test_compaction(compacted);
+	test_multiresolution_compaction();
 	test_failures();
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M4_COMPACTION_FAIL failures=%d\n", failure_count);
@@ -439,7 +584,8 @@ int main() {
 	std::printf("M4_COMPACTION_HASH ");
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
-		"M4_COMPACTION_PASS pages=2 compacted_revision=2 failure_cases=6\n"
+		"M4_COMPACTION_PASS pages=2 compacted_revision=2 "
+		"multiresolution=1 failure_cases=6\n"
 	);
 	return 0;
 }

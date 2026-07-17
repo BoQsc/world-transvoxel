@@ -32,7 +32,7 @@ container's source revision must equal the `META` source revision.
 | Offset | Type | Meaning |
 | ---: | --- | --- |
 | 0 | `u16` | schema major, `1` |
-| 2 | `u16` | schema minor, `0` |
+| 2 | `u16` | schema minor, `1` |
 | 4 | `u32` | indexed page count |
 | 8 | `u32` | dependency count |
 | 12 | `u16` | chunk cells per axis, `16` |
@@ -41,7 +41,7 @@ container's source revision must equal the `META` source revision.
 | 16 | `u64` | authoritative source revision |
 | 24 | `u8[32]` | nonzero configuration SHA-256 |
 | 56 | `u16` | required chunk-page schema major, `1` |
-| 58 | `u16` | maximum chunk-page schema minor, `0` |
+| 58 | `u16` | maximum chunk-page schema minor, `1` |
 | 60 | `u32` | reserved, zero |
 | 64 | `u64` | current authoritative world edit revision |
 

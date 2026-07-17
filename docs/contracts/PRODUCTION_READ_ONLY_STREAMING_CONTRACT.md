@@ -34,6 +34,13 @@ committing a new plan. Coarse leaves own transition faces toward finer leaves.
 A transition-mask change on a retained key increments its generation and
 forces remeshing; it is not treated as a priority-only update.
 
+Refinement selection has a one-child-chunk exit hysteresis shell. A subtree
+that is already refined remains refined until every viewer has moved beyond
+the configured refinement radius plus that shell; entering an unrefined
+subtree still uses the configured radius exactly. Hysteresis is derived from
+the current desired leaves and changes only temporal retention, never the
+balanced 2:1 topology or transition ownership.
+
 `radius_chunks` defines the root search cube and near-view refinement distance.
 `(2 * radius + 1)^3` must fit `demand_capacity_per_viewer`. Final global leaves
 must fit `active_chunk_capacity`. `remove_viewer(viewer_id, revision)` rebuilds
@@ -42,6 +49,12 @@ the same global plan without that viewer.
 Distance priority and collision hysteresis are evaluated against every active
 viewer. GDScript owns no page catalog, chunk map, balancing loop, or meshing
 work.
+
+The production non-flat integration profile uses a three-child-chunk
+refinement radius. With 16-cell LOD0 chunks, a newly entered LOD0-to-coarse
+boundary therefore cannot be selected closer than 48 base-grid units; an
+already refined subtree has one additional 16-unit exit shell. This is a
+quality policy, not a substitute for surface shifting.
 
 ## Edited terrain LOD retention boundary
 
@@ -106,7 +119,7 @@ generation replacement, page-backed official MIT transition meshing, edit-LOD
 fallback retention under planner pressure, and shutdown. Debug and release hash:
 
 ```text
-ef4df95133626103ee5a11db6a73e444000a587ffb24bb9643470e4642dccb9d
+74f842843e834076ec5b7fa6e171410cca1e3329167a633e3892316086325915
 ```
 
 `production_streaming_test.gd` and `production_lod_streaming_test.gd` prove

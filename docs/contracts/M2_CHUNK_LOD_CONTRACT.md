@@ -101,9 +101,15 @@ Stale viewer revisions and capacity overflow are rejected.
 - Output vertices are chunk-local `float` values paired with a signed 64-bit
   world origin. Large world origins never enter floating-point interpolation.
 - The cell backend reports each generated vertex's source edge. The chunk
-  mesher recomputes interpolation in double precision and snaps local
-  positions to a `1/65536` base-unit lattice before vertex reuse. Integer chunk
-  origins keep that lattice aligned between neighbors.
+  mesher recursively bisects every sign-changing length-`2^L` regular or
+  transition source edge against unit-resolution samples and interpolates from
+  the selected sign-changing unit edge. Page-backed sources resolve the same
+  result from validated schema-1.1 `SHFT` records. This is Lengyel's standard
+  surface-shifting rule: a coarse vertex uses the position it would have at the
+  highest detail level instead of sliding along the coarse edge.
+- Canonical interpolation is performed in double precision and snapped to a
+  `1/65536` base-unit lattice before vertex reuse. Integer chunk origins keep
+  that lattice aligned between neighbors.
 - Mesh extraction regularizes the isosurface interpolation fraction to the
   inclusive range `[1/32, 31/32]` before canonical positioning and normal
   interpolation. This keeps official table topology and endpoint ownership, but
@@ -122,6 +128,10 @@ Stale viewer revisions and capacity overflow are rejected.
   block corners. Newly degenerate triangles are removed, inverted triangles
   are restored to outward winding, and unreferenced vertices are compacted
   deterministically before payload creation.
+- Surface shifting can place a transition constraint on the interior of a
+  surviving full-face triangle edge. The finalizer deterministically splits
+  that edge at every quantized transition constraint before degenerate cleanup,
+  preventing a dropped collinear transition triangle from leaving a T-junction.
 - Vertex reuse is deterministic within each regular or transition buffer and
   keys position, normal, and material. Failed output is cleared.
 
@@ -156,7 +166,7 @@ quantized triangle edge to have exactly two incident triangles. Individual
 transition tests also require exact matching contours at both full and half
 faces.
 
-The locked chunk aggregate hash is `02f60fe4c93375f9`. Debug and optimized
+The locked chunk aggregate hash is `1ccb4b98d4ce8027`. Debug and optimized
 release builds must produce the same hash. `scripts/test_m2.py` runs both M2
 native contracts, the complete M1 contract, repository validation, and both
 Godot compatibility load tests.

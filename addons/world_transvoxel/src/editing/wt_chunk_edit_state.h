@@ -19,6 +19,13 @@ enum class WtChunkEditStatus : std::uint8_t {
 	NonFiniteResult,
 };
 
+bool wt_apply_edit_command_to_sample(
+	const WtEditCommand &command,
+	const WtGridPoint &point,
+	WtScalarSample &sample,
+	bool &changed
+) noexcept;
+
 class WtChunkEditState final : public WtEditReplaySink {
 public:
 	WtChunkEditStatus initialize(

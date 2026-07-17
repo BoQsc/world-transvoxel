@@ -1,5 +1,6 @@
 #include "services/wt_page_meshing_runtime.h"
 
+#include "bake/wt_chunk_baker.h"
 #include "editing/wt_chunk_edit_state.h"
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_chunk_page_sample_source.h"
@@ -29,6 +30,70 @@ void record_failure_key(
 	metrics.last_failure_key_z = key.z;
 	metrics.last_failure_key_lod = key.lod;
 }
+
+class PointEditReplaySink final : public WtEditReplaySink {
+public:
+	PointEditReplaySink(
+		const WtGridPoint &point,
+		WtScalarSample &sample
+	) noexcept :
+			point_(point),
+			sample_(sample) {
+	}
+
+	bool apply(const WtEditCommand &command) noexcept override {
+		bool changed = false;
+		return wt_apply_edit_command_to_sample(
+			command, point_, sample_, changed
+		);
+	}
+
+private:
+	WtGridPoint point_;
+	WtScalarSample &sample_;
+};
+
+class EditedProceduralSampleSource final : public WtChunkSampleSource {
+public:
+	EditedProceduralSampleSource(
+		WtAsyncStorageService &storage,
+		const WtEditJournal &journal,
+		std::uint64_t source_revision,
+		std::uint64_t initial_world_revision,
+		std::uint64_t world_revision
+	) noexcept :
+			storage_(storage),
+			journal_(journal),
+			world_revision_(world_revision),
+			valid_(journal.initialized() &&
+				journal.source_revision() == source_revision &&
+				journal.initial_world_revision() == initial_world_revision &&
+				world_revision >= initial_world_revision &&
+				world_revision <= journal.current_world_revision()) {
+	}
+
+	bool sample(
+		const WtGridPoint &point,
+		WtScalarSample &output
+	) const noexcept override {
+		if (!valid_ || !storage_.sample_procedural_base(point, output)) {
+			return false;
+		}
+		PointEditReplaySink sink(point, output);
+		return journal_.replay_until(world_revision_, sink) ==
+			WtEditJournalStatus::Ok;
+	}
+
+	bool valid() const noexcept {
+		return valid_;
+	}
+
+private:
+	WtAsyncStorageService &storage_;
+	const WtEditJournal &journal_;
+	std::uint64_t world_revision_ = 0;
+	bool valid_ = false;
+};
 
 } // namespace
 
@@ -231,7 +296,8 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 	WtChunkMeshingScratch &scratch,
 	WtStreamScheduler &scheduler,
 	const WtEditJournal *edit_journal,
-	std::uint64_t initial_world_revision
+	std::uint64_t initial_world_revision,
+	WtAsyncStorageService *authoritative_storage
 ) {
 	if (!valid_) {
 		return WtPageMeshingRuntimeStatus::InvalidConfiguration;
@@ -275,6 +341,17 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 		primary->key == record->key &&
 		static_cast<bool>(primary->page);
 	if (source_valid && edit_journal != nullptr) {
+		std::unique_ptr<EditedProceduralSampleSource> edited_source;
+		if (authoritative_storage != nullptr) {
+			edited_source = std::make_unique<EditedProceduralSampleSource>(
+				*authoritative_storage,
+				*edit_journal,
+				record->source_revision,
+				initial_world_revision,
+				record->world_revision
+			);
+		}
+		bool surface_shift_failure = false;
 		for (Dependency &dependency : record->dependencies) {
 			WtChunkEditState edit_state;
 			if (!dependency.page ||
@@ -291,8 +368,23 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 				source_valid = false;
 				break;
 			}
+			WtChunkPage edited_page = edit_state.page();
+			if (!edited_page.surface_shift_valid) {
+				if (!edited_source || !edited_source->valid() ||
+					wt_build_surface_shift_records(
+						edited_page,
+						*edited_source,
+						scratch.multiresolution
+					) != WtSurfaceShiftBuildStatus::Ok) {
+					source_valid = false;
+					surface_shift_failure = true;
+					++metrics_.surface_shift_failures;
+					break;
+				}
+				++metrics_.surface_shift_rebuilds;
+			}
 			dependency.page = std::make_shared<const WtChunkPage>(
-				edit_state.page()
+				std::move(edited_page)
 			);
 		}
 		if (!source_valid) {
@@ -303,7 +395,9 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 			++metrics_.mesh_failures;
 			record_failure_key(metrics_, record->key);
 			submit_pending_result(record_index, scheduler);
-			return WtPageMeshingRuntimeStatus::EditReplayFailure;
+			return surface_shift_failure ?
+				WtPageMeshingRuntimeStatus::SurfaceShiftFailure :
+				WtPageMeshingRuntimeStatus::EditReplayFailure;
 		}
 		primary = std::lower_bound(
 			record->dependencies.begin(),

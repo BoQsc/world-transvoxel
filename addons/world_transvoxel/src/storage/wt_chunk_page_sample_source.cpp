@@ -1,5 +1,8 @@
 #include "storage/wt_chunk_page_sample_source.h"
 
+#include "meshing/wt_multiresolution_vertex_resolver.h"
+#include "storage/wt_chunk_surface_shift.h"
+
 #include <algorithm>
 #include <limits>
 
@@ -111,6 +114,27 @@ bool same_sample(
 ) noexcept {
 	return left.density == right.density &&
 		left.material == right.material;
+}
+
+bool same_sample(
+	const WtCellSample &left,
+	const WtCellSample &right
+) noexcept {
+	return left.density == right.density &&
+		left.gradient.x == right.gradient.x &&
+		left.gradient.y == right.gradient.y &&
+		left.gradient.z == right.gradient.z &&
+		left.material == right.material;
+}
+
+bool same_resolved_edge(
+	const WtResolvedMultiresolutionEdge &left,
+	const WtResolvedMultiresolutionEdge &right
+) noexcept {
+	return left.endpoint_a == right.endpoint_a &&
+		left.endpoint_b == right.endpoint_b &&
+		same_sample(left.sample_a, right.sample_a) &&
+		same_sample(left.sample_b, right.sample_b);
 }
 
 } // namespace
@@ -291,6 +315,58 @@ bool WtChunkPageSampleSource::sample(
 		output = selected;
 	}
 	return found;
+}
+
+WtMultiresolutionEdgeSourceStatus
+WtChunkPageSampleSource::resolve_multiresolution_edge(
+	const WtGridPoint &endpoint_a,
+	const WtGridPoint &endpoint_b,
+	float isovalue,
+	WtResolvedMultiresolutionEdge &output
+) const noexcept {
+	output = {};
+	if (primary_page_ == nullptr) {
+		return WtMultiresolutionEdgeSourceStatus::SampleFailure;
+	}
+	bool found = false;
+	WtResolvedMultiresolutionEdge selected;
+	for (std::size_t index = 0;
+		index <= support_page_count_;
+		++index) {
+		const WtChunkPage *page = index < support_page_count_ ?
+			support_pages_[index] : primary_page_;
+		std::uint16_t edge_index = 0;
+		bool reversed = false;
+		if (!wt_chunk_surface_edge_index(
+				page->metadata,
+				endpoint_a,
+				endpoint_b,
+				edge_index,
+				reversed
+			)) {
+			continue;
+		}
+		WtResolvedMultiresolutionEdge candidate;
+		if (!wt_resolve_chunk_surface_shift_record(
+				*page,
+				endpoint_a,
+				endpoint_b,
+				isovalue,
+				candidate
+			)) {
+			return WtMultiresolutionEdgeSourceStatus::SampleFailure;
+		}
+		if (found && !same_resolved_edge(selected, candidate)) {
+			return WtMultiresolutionEdgeSourceStatus::SampleFailure;
+		}
+		selected = candidate;
+		found = true;
+	}
+	if (!found) {
+		return WtMultiresolutionEdgeSourceStatus::SampleFailure;
+	}
+	output = selected;
+	return WtMultiresolutionEdgeSourceStatus::Ok;
 }
 
 } // namespace world_transvoxel

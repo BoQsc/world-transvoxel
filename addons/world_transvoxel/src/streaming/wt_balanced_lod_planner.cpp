@@ -156,10 +156,14 @@ bool WtBalancedLodPlanner::catalog_contains(
 
 bool WtBalancedLodPlanner::should_refine(
 	const WtChunkKey &key,
-	const std::vector<WtLodPlannerViewer> &viewers
+	const std::vector<WtLodPlannerViewer> &viewers,
+	const std::vector<WtChunkKey> &refined_ancestors
 ) const noexcept {
 	if (key.lod == 0) return false;
 	const double child_extent = static_cast<double>(wt_chunk_extent(key.lod - 1));
+	const bool was_refined = std::binary_search(
+		refined_ancestors.begin(), refined_ancestors.end(), key
+	);
 	for (const WtLodPlannerViewer &viewer : viewers) {
 		std::uint32_t refinement_radius = viewer.refinement_radius_chunks != 0 ?
 			viewer.refinement_radius_chunks :
@@ -172,8 +176,13 @@ bool WtBalancedLodPlanner::should_refine(
 			);
 		}
 		if (refinement_radius == 0) continue;
+		const double threshold_chunks =
+			static_cast<double>(refinement_radius) +
+			(was_refined ?
+				static_cast<double>(kWtLodRefinementHysteresisChunks) :
+				0.0);
 		if (distance_to_chunk(viewer.snapshot, key) <
-			child_extent * static_cast<double>(refinement_radius)) {
+			child_extent * threshold_chunks) {
 			return true;
 		}
 	}
@@ -183,9 +192,10 @@ bool WtBalancedLodPlanner::should_refine(
 bool WtBalancedLodPlanner::append_subtree(
 	const WtChunkKey &key,
 	const std::vector<WtLodPlannerViewer> &viewers,
+	const std::vector<WtChunkKey> &refined_ancestors,
 	std::vector<WtChunkKey> &leaves
 ) const {
-	if (should_refine(key, viewers)) {
+	if (should_refine(key, viewers, refined_ancestors)) {
 		const auto children = child_keys(key);
 		const bool complete = std::all_of(
 			children.begin(), children.end(),
@@ -193,7 +203,9 @@ bool WtBalancedLodPlanner::append_subtree(
 		);
 		if (complete) {
 			for (const WtChunkKey &child : children) {
-				if (!append_subtree(child, viewers, leaves)) return false;
+				if (!append_subtree(
+						child, viewers, refined_ancestors, leaves
+					)) return false;
 			}
 			return true;
 		}
@@ -296,6 +308,25 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 		maximum_lod = std::max(maximum_lod, viewer.maximum_lod);
 	}
 	if (ordered.empty()) return WtBalancedLodPlannerStatus::Ok;
+	std::vector<WtChunkKey> refined_ancestors;
+	refined_ancestors.reserve(
+		current_desired.size() * static_cast<std::size_t>(maximum_lod)
+	);
+	for (const WtDesiredChunk &desired : current_desired) {
+		if (!wt_is_valid_chunk_key(desired.key)) {
+			continue;
+		}
+		WtChunkKey ancestor = desired.key;
+		while (ancestor.lod < maximum_lod) {
+			ancestor = wt_parent_chunk_key(ancestor);
+			refined_ancestors.push_back(ancestor);
+		}
+	}
+	std::sort(refined_ancestors.begin(), refined_ancestors.end());
+	refined_ancestors.erase(
+		std::unique(refined_ancestors.begin(), refined_ancestors.end()),
+		refined_ancestors.end()
+	);
 
 	std::vector<WtChunkKey> roots;
 	if (global_coarse_lod_coverage_) {
@@ -352,7 +383,7 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 	std::vector<WtChunkKey> leaves;
 	leaves.reserve(active_capacity_);
 	for (const WtChunkKey &root : roots) {
-		if (!append_subtree(root, ordered, leaves)) {
+		if (!append_subtree(root, ordered, refined_ancestors, leaves)) {
 			return WtBalancedLodPlannerStatus::CapacityExceeded;
 		}
 	}

@@ -1004,7 +1004,8 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 				*scheduler_,
 				edit_journal_store_ != nullptr ?
 					&edit_journal_store_->journal() : nullptr,
-				initial_world_revision_
+				initial_world_revision_,
+				&storage_
 			);
 			std::lock_guard<std::mutex> lock(metrics_mutex_);
 			++metrics_.mesh_jobs;
@@ -1014,6 +1015,7 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			status != WtPageMeshingRuntimeStatus::StorageRequestFailure &&
 			status != WtPageMeshingRuntimeStatus::CacheFailure &&
 			status != WtPageMeshingRuntimeStatus::MeshingFailure &&
+			status != WtPageMeshingRuntimeStatus::SurfaceShiftFailure &&
 			status != WtPageMeshingRuntimeStatus::NotReady) {
 			set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
 			break;

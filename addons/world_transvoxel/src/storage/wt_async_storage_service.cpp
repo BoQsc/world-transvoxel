@@ -339,6 +339,21 @@ bool WtAsyncStorageService::snapshot_manifest(
 	return true;
 }
 
+bool WtAsyncStorageService::sample_procedural_base(
+	const WtGridPoint &point,
+	WtScalarSample &output
+) const noexcept {
+	WtProceduralWorldDescriptor descriptor;
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		if (!open_ || stop_requested_ || !procedural_) {
+			return false;
+		}
+		descriptor = procedural_descriptor_;
+	}
+	return wt_sample_procedural_world(descriptor, point, output);
+}
+
 bool WtAsyncStorageService::pop_completion_locked(
 	WtPageLoadCompletion &completion
 ) {

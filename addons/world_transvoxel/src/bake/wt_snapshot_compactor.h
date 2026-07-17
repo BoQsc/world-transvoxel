@@ -39,6 +39,7 @@ enum class WtSnapshotCompactionStatus : std::uint8_t {
 	JournalMismatch,
 	PageMismatch,
 	EditReplayFailure,
+	SurfaceShiftFailure,
 	PageWriteFailure,
 	ManifestWriteFailure,
 };

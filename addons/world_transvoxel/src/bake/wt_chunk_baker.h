@@ -24,6 +24,18 @@ enum class WtChunkBakeStatus : std::uint8_t {
 	PageWriteFailure,
 };
 
+enum class WtSurfaceShiftBuildStatus : std::uint8_t {
+	Ok,
+	InvalidPage,
+	SampleSourceFailure,
+};
+
+WtSurfaceShiftBuildStatus wt_build_surface_shift_records(
+	WtChunkPage &page,
+	const WtChunkSampleSource &source,
+	WtMultiresolutionVertexScratch &scratch
+);
+
 class WtChunkBaker {
 public:
 	explicit WtChunkBaker(std::size_t page_capacity) noexcept;

@@ -16,6 +16,7 @@ constexpr std::size_t kWtMaximumRegularChunkIndices = 61440;
 constexpr std::size_t kWtMaximumTransitionFaceVertices = 3072;
 constexpr std::size_t kWtMaximumTransitionFaceIndices = 9216;
 constexpr std::size_t kWtMaximumCachedScalarSamples = 131072;
+constexpr std::size_t kWtMaximumSurfaceShiftScalarSamples = 524288;
 constexpr std::size_t kWtMaximumCachedCellSamples = 32768;
 
 struct WtScalarSample {
@@ -23,10 +24,47 @@ struct WtScalarSample {
 	std::uint16_t material = 0;
 };
 
+struct WtResolvedMultiresolutionEdge;
+
+enum class WtMultiresolutionEdgeSourceStatus : std::uint8_t {
+	Unsupported,
+	Ok,
+	InvalidEdge,
+	SampleFailure,
+};
+
 class WtChunkSampleSource {
 public:
 	virtual ~WtChunkSampleSource() = default;
 	virtual bool sample(const WtGridPoint &point, WtScalarSample &output) const noexcept = 0;
+	virtual WtMultiresolutionEdgeSourceStatus resolve_multiresolution_edge(
+		const WtGridPoint &,
+		const WtGridPoint &,
+		float,
+		WtResolvedMultiresolutionEdge &
+	) const noexcept {
+		return WtMultiresolutionEdgeSourceStatus::Unsupported;
+	}
+};
+
+struct WtMultiresolutionGridPointHash {
+	std::size_t operator()(const WtGridPoint &point) const noexcept;
+};
+
+struct WtMultiresolutionVertexScratch {
+	std::unordered_map<
+		WtGridPoint,
+		WtScalarSample,
+		WtMultiresolutionGridPointHash
+	> scalar_samples;
+	std::unordered_map<
+		WtGridPoint,
+		WtCellSample,
+		WtMultiresolutionGridPointHash
+	> cell_samples;
+
+	WtMultiresolutionVertexScratch();
+	void reset();
 };
 
 struct WtChunkMeshBuffer {
@@ -66,6 +104,7 @@ struct WtChunkVertexKeyHash {
 
 struct WtChunkMeshingScratch {
 	WtCellMeshingScratch cell;
+	WtMultiresolutionVertexScratch multiresolution;
 	std::unordered_map<WtGridPoint, WtScalarSample, WtGridPointHash> scalar_samples;
 	std::unordered_map<WtGridPoint, WtCellSample, WtGridPointHash> cell_samples;
 	std::unordered_map<WtChunkVertexKey, std::uint32_t, WtChunkVertexKeyHash> vertices;

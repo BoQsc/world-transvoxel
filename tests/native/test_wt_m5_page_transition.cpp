@@ -278,6 +278,43 @@ void run_face_gallery(
 		transition_full == fine_edges,
 		"decoded page transition does not match fine pages"
 	);
+	if (transition_full != fine_edges) {
+		std::fprintf(
+			stderr,
+			"PAGE_TRANSITION_EDGE_MISMATCH face=%u transition=%zu fine=%zu\n",
+			static_cast<unsigned int>(face),
+			transition_full.size(),
+			fine_edges.size()
+		);
+		for (const Edge &edge : fine_edges) {
+			if (transition_full.count(edge) == 0) {
+				std::fprintf(
+					stderr,
+					"PAGE_TRANSITION_MISSING (%lld,%lld,%lld)-(%lld,%lld,%lld)\n",
+					static_cast<long long>(edge.a.x),
+					static_cast<long long>(edge.a.y),
+					static_cast<long long>(edge.a.z),
+					static_cast<long long>(edge.b.x),
+					static_cast<long long>(edge.b.y),
+					static_cast<long long>(edge.b.z)
+				);
+			}
+		}
+		for (const Edge &edge : transition_full) {
+			if (fine_edges.count(edge) == 0) {
+				std::fprintf(
+					stderr,
+					"PAGE_TRANSITION_EXTRA (%lld,%lld,%lld)-(%lld,%lld,%lld)\n",
+					static_cast<long long>(edge.a.x),
+					static_cast<long long>(edge.a.y),
+					static_cast<long long>(edge.a.z),
+					static_cast<long long>(edge.b.x),
+					static_cast<long long>(edge.b.y),
+					static_cast<long long>(edge.b.z)
+				);
+			}
+		}
+	}
 	hash_result(hash, coarse);
 }
 
@@ -545,7 +582,7 @@ int main() {
 	}
 	test_page_lod_corner(mesher, scratch, hash);
 	test_source_failures();
-	constexpr std::uint64_t expected_hash = 0x43a27ee71c4039a6ULL;
+	constexpr std::uint64_t expected_hash = 0xc3dff243cf25a71bULL;
 	check(hash == expected_hash, "M5 page transition hash mismatch");
 	std::printf(
 		"M5_PAGE_TRANSITION_HASH %016llx\n",

@@ -49,26 +49,53 @@ WtVec3 wt_canonical_chunk_position(
 ) noexcept {
 	const WtCellSample &sample_a = samples[vertex.endpoint_a];
 	const WtCellSample &sample_b = samples[vertex.endpoint_b];
+	return wt_canonical_edge_position(
+		endpoint_positions[vertex.endpoint_a],
+		endpoint_positions[vertex.endpoint_b],
+		sample_a,
+		sample_b,
+		isovalue
+	);
+}
+
+WtVec3 wt_canonical_edge_position(
+	const WtVec3 &endpoint_a,
+	const WtVec3 &endpoint_b,
+	const WtCellSample &sample_a,
+	const WtCellSample &sample_b,
+	float isovalue
+) noexcept {
 	const double denominator =
 		static_cast<double>(sample_b.density) - static_cast<double>(sample_a.density);
 	double alpha =
 		(static_cast<double>(isovalue) - static_cast<double>(sample_a.density)) /
 		denominator;
 	alpha = wt_regularized_isosurface_alpha(alpha);
-	const WtVec3 &a = endpoint_positions[vertex.endpoint_a];
-	const WtVec3 &b = endpoint_positions[vertex.endpoint_b];
 	constexpr double scale = 65536.0;
 	const double local_x =
-		static_cast<double>(a.x) * (1.0 - alpha) + static_cast<double>(b.x) * alpha;
+		static_cast<double>(endpoint_a.x) * (1.0 - alpha) +
+		static_cast<double>(endpoint_b.x) * alpha;
 	const double local_y =
-		static_cast<double>(a.y) * (1.0 - alpha) + static_cast<double>(b.y) * alpha;
+		static_cast<double>(endpoint_a.y) * (1.0 - alpha) +
+		static_cast<double>(endpoint_b.y) * alpha;
 	const double local_z =
-		static_cast<double>(a.z) * (1.0 - alpha) + static_cast<double>(b.z) * alpha;
+		static_cast<double>(endpoint_a.z) * (1.0 - alpha) +
+		static_cast<double>(endpoint_b.z) * alpha;
 	return {
 		static_cast<float>(std::round(local_x * scale) / scale),
 		static_cast<float>(std::round(local_y * scale) / scale),
 		static_cast<float>(std::round(local_z * scale) / scale),
 	};
+}
+
+std::uint16_t wt_closest_isosurface_endpoint_material(
+	const WtCellSample &sample_a,
+	const WtCellSample &sample_b,
+	float isovalue
+) noexcept {
+	const float distance_a = std::fabs(sample_a.density - isovalue);
+	const float distance_b = std::fabs(sample_b.density - isovalue);
+	return distance_a <= distance_b ? sample_a.material : sample_b.material;
 }
 
 WtVec3 wt_deform_chunk_position(

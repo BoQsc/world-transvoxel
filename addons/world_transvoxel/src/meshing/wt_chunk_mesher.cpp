@@ -3,6 +3,8 @@
 #include "meshing/wt_chunk_mesh_finalize.h"
 #include "meshing/wt_chunk_mesh_geometry.h"
 #include "meshing/wt_chunk_mesh_key.h"
+#include "meshing/wt_multiresolution_vertex_resolver.h"
+#include "meshing/wt_transition_face_constraints.h"
 
 #include <algorithm>
 #include <cmath>
@@ -172,11 +174,71 @@ WtVec3 to_vec3(const WtGridPoint &point) noexcept {
 	};
 }
 
+WtVec3 to_local_vec3(
+	const WtGridPoint &point,
+	const WtGridPoint &origin
+) noexcept {
+	return {
+		static_cast<float>(point.x - origin.x),
+		static_cast<float>(point.y - origin.y),
+		static_cast<float>(point.z - origin.z),
+	};
+}
+
+WtVec3 add(const WtVec3 &a, const WtVec3 &b) noexcept {
+	return { a.x + b.x, a.y + b.y, a.z + b.z };
+}
+
+WtVec3 subtract(const WtVec3 &a, const WtVec3 &b) noexcept {
+	return { a.x - b.x, a.y - b.y, a.z - b.z };
+}
+
+std::int64_t grid_edge_length(
+	const WtGridPoint &a,
+	const WtGridPoint &b
+) noexcept {
+	const std::int64_t differences[3] = {
+		b.x - a.x,
+		b.y - a.y,
+		b.z - a.z,
+	};
+	std::int64_t length = 0;
+	unsigned int different_axes = 0;
+	for (const std::int64_t difference : differences) {
+		if (difference == 0) {
+			continue;
+		}
+		++different_axes;
+		length = difference < 0 ? -difference : difference;
+	}
+	return different_axes == 1 ? length : 0;
+}
+
+WtChunkMeshingStatus surface_shift_status(
+	WtMultiresolutionVertexStatus status
+) noexcept {
+	switch (status) {
+		case WtMultiresolutionVertexStatus::Ok:
+			return WtChunkMeshingStatus::Ok;
+		case WtMultiresolutionVertexStatus::SampleSourceFailure:
+			return WtChunkMeshingStatus::SampleSourceFailure;
+		case WtMultiresolutionVertexStatus::SampleCacheOverflow:
+		case WtMultiresolutionVertexStatus::CellSampleCacheOverflow:
+			return WtChunkMeshingStatus::SampleCacheOverflow;
+		case WtMultiresolutionVertexStatus::InvalidEdge:
+			return WtChunkMeshingStatus::CellBackendFailure;
+	}
+	return WtChunkMeshingStatus::CellBackendFailure;
+}
+
 WtChunkMeshingStatus append_cell_mesh(
 	const WtCellMesh &cell,
 	WtChunkMeshBuffer &output,
 	WtChunkMeshingScratch &scratch,
 	const std::array<WtVec3, kWtTransitionTopologySampleCount> &endpoint_positions,
+	const std::array<WtGridPoint, kWtTransitionTopologySampleCount> &endpoint_world_positions,
+	const WtGridPoint &world_origin,
+	const WtChunkSampleSource &source,
 	const WtCellSample *samples,
 	unsigned int topology_sample_count,
 	float isovalue,
@@ -210,13 +272,59 @@ WtChunkMeshingStatus append_cell_mesh(
 				samples[vertex.endpoint_a].density == samples[vertex.endpoint_b].density) {
 				return WtChunkMeshingStatus::CellBackendFailure;
 			}
-			vertex.position = wt_canonical_chunk_position(
-				vertex, endpoint_positions, samples, isovalue
+			const WtCellSample *sample_a = &samples[vertex.endpoint_a];
+			const WtCellSample *sample_b = &samples[vertex.endpoint_b];
+			WtVec3 position_a = endpoint_positions[vertex.endpoint_a];
+			WtVec3 position_b = endpoint_positions[vertex.endpoint_b];
+			const std::int64_t edge_length = grid_edge_length(
+				endpoint_world_positions[vertex.endpoint_a],
+				endpoint_world_positions[vertex.endpoint_b]
+			);
+			WtResolvedMultiresolutionEdge resolved_edge;
+			if (edge_length > 1) {
+				const WtMultiresolutionVertexStatus resolve_status =
+					wt_resolve_multiresolution_edge(
+						endpoint_world_positions[vertex.endpoint_a],
+						endpoint_world_positions[vertex.endpoint_b],
+						isovalue,
+						source,
+						scratch.multiresolution,
+						resolved_edge
+					);
+				if (resolve_status != WtMultiresolutionVertexStatus::Ok) {
+					return surface_shift_status(resolve_status);
+				}
+				const WtVec3 endpoint_a_offset = subtract(
+					position_a,
+					to_local_vec3(
+						endpoint_world_positions[vertex.endpoint_a], world_origin
+					)
+				);
+				const WtVec3 endpoint_b_offset = subtract(
+					position_b,
+					to_local_vec3(
+						endpoint_world_positions[vertex.endpoint_b], world_origin
+					)
+				);
+				position_a = add(
+					to_local_vec3(resolved_edge.endpoint_a, world_origin),
+					endpoint_a_offset
+				);
+				position_b = add(
+					to_local_vec3(resolved_edge.endpoint_b, world_origin),
+					endpoint_b_offset
+				);
+				sample_a = &resolved_edge.sample_a;
+				sample_b = &resolved_edge.sample_b;
+			}
+			vertex.position = wt_canonical_edge_position(
+				position_a, position_b, *sample_a, *sample_b, isovalue
 			);
 			vertex.normal = wt_interpolated_mesh_normal(
-				samples[vertex.endpoint_a],
-				samples[vertex.endpoint_b],
-				isovalue
+				*sample_a, *sample_b, isovalue
+			);
+			vertex.material = wt_closest_isosurface_endpoint_material(
+				*sample_a, *sample_b, isovalue
 			);
 			vertex.position = wt_deform_chunk_position(
 				vertex.position,
@@ -269,6 +377,8 @@ WtChunkMeshingStatus mesh_regular_cells(
 		for (int y = 0; y < kWtChunkCellsPerAxis; ++y) {
 			for (int x = 0; x < kWtChunkCellsPerAxis; ++x) {
 				WtRegularCellInput cell_input;
+				std::array<WtGridPoint, kWtTransitionTopologySampleCount>
+					endpoint_world_positions{};
 				cell_input.isovalue = input.isovalue;
 				cell_input.cell_size = spacing;
 				cell_input.origin = {
@@ -282,6 +392,7 @@ WtChunkMeshingStatus mesh_regular_cells(
 						bounds.minimum.y + static_cast<std::int64_t>(y + ((corner & 2U) != 0U)) * spacing_integer,
 						bounds.minimum.z + static_cast<std::int64_t>(z + ((corner & 4U) != 0U)) * spacing_integer,
 					};
+					endpoint_world_positions[corner] = point;
 					const WtChunkMeshingStatus sample_status =
 						get_cell_sample(
 							point,
@@ -317,6 +428,9 @@ WtChunkMeshingStatus mesh_regular_cells(
 					output.regular,
 					scratch,
 					endpoint_positions,
+					endpoint_world_positions,
+					bounds.minimum,
+					source,
 					cell_input.samples.data(),
 					kWtRegularSampleCount,
 					input.isovalue,
@@ -364,6 +478,8 @@ WtChunkMeshingStatus mesh_transition_face(
 			);
 			WtTransitionCellInput cell_input;
 			std::array<WtVec3, kWtTransitionTopologySampleCount> endpoint_positions{};
+			std::array<WtGridPoint, kWtTransitionTopologySampleCount>
+				endpoint_world_positions{};
 			std::array<WtGridPoint, 9> full_sample_world_positions{};
 			cell_input.isovalue = input.isovalue;
 			cell_input.full_resolution_origin = to_vec3(local_origin);
@@ -385,6 +501,7 @@ WtChunkMeshingStatus mesh_transition_face(
 					const unsigned int sample_index =
 						static_cast<unsigned int>(v_sample * 3 + u_sample);
 					full_sample_world_positions[sample_index] = sample_world;
+					endpoint_world_positions[sample_index] = sample_world;
 					endpoint_positions[sample_index] = to_vec3(sample_local);
 					const WtChunkMeshingStatus sample_status = get_cell_sample(
 						sample_world,
@@ -405,6 +522,8 @@ WtChunkMeshingStatus mesh_transition_face(
 			}
 			for (unsigned int alias_index = 0; alias_index < aliases.size(); ++alias_index) {
 				const unsigned int sample_index = aliases[alias_index];
+				endpoint_world_positions[9 + alias_index] =
+					full_sample_world_positions[sample_index];
 				endpoint_positions[9 + alias_index] = add(
 					endpoint_positions[sample_index], basis.w, width
 				);
@@ -434,6 +553,9 @@ WtChunkMeshingStatus mesh_transition_face(
 				face_output,
 				scratch,
 				endpoint_positions,
+				endpoint_world_positions,
+				bounds.minimum,
+				source,
 				endpoint_samples.data(),
 				kWtTransitionTopologySampleCount,
 				input.isovalue,
@@ -490,6 +612,7 @@ WtChunkMeshingScratch::WtChunkMeshingScratch() {
 void WtChunkMeshingScratch::reset_samples() {
 	scalar_samples.clear();
 	cell_samples.clear();
+	multiresolution.reset();
 }
 
 void WtChunkMeshingScratch::reset_vertices() {
@@ -547,7 +670,17 @@ WtChunkMeshingStatus WtChunkMesher::mesh(
 	}
 	if (status == WtChunkMeshingStatus::Ok) {
 		wt_finalize_deformed_triangles(output.regular);
-		for (WtChunkMeshBuffer &transition : output.transitions) {
+		for (unsigned int face_index = 0; face_index < 6; ++face_index) {
+			WtChunkMeshBuffer &transition = output.transitions[face_index];
+			if (!transition.indices.empty() &&
+				!wt_preserve_transition_face_constraints(
+					transition,
+					static_cast<WtChunkFace>(face_index),
+					static_cast<float>(wt_chunk_extent(input.key.lod))
+				)) {
+				status = WtChunkMeshingStatus::TransitionBufferOverflow;
+				break;
+			}
 			wt_finalize_deformed_triangles(transition);
 		}
 	}

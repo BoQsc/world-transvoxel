@@ -18,6 +18,8 @@ namespace world_transvoxel {
 
 constexpr std::size_t kWtMaximumStorageQueueCapacity = 65536;
 
+struct WtScalarSample;
+
 struct WtAsyncStorageLimits {
 	std::size_t request_capacity = 256;
 	std::size_t completion_capacity = 256;
@@ -120,6 +122,10 @@ public:
 	bool snapshot_manifest(
 		std::vector<std::uint8_t> &manifest_bytes
 	) const;
+	bool sample_procedural_base(
+		const WtGridPoint &point,
+		WtScalarSample &output
+	) const noexcept;
 	bool pop_completion(WtPageLoadCompletion &completion);
 	bool wait_pop_completion(
 		WtPageLoadCompletion &completion,

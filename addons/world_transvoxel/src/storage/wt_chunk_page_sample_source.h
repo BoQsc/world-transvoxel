@@ -45,6 +45,12 @@ public:
 		const WtGridPoint &point,
 		WtScalarSample &output
 	) const noexcept override;
+	WtMultiresolutionEdgeSourceStatus resolve_multiresolution_edge(
+		const WtGridPoint &endpoint_a,
+		const WtGridPoint &endpoint_b,
+		float isovalue,
+		WtResolvedMultiresolutionEdge &output
+	) const noexcept override;
 
 private:
 	const WtChunkPage *primary_page_ = nullptr;

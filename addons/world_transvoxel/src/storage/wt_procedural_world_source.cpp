@@ -410,6 +410,18 @@ private:
 
 } // namespace
 
+bool wt_sample_procedural_world(
+	const WtProceduralWorldDescriptor &descriptor,
+	const WtGridPoint &point,
+	WtScalarSample &output
+) noexcept {
+	output = {};
+	if (!wt_valid_procedural_descriptor(descriptor)) {
+		return false;
+	}
+	return WtProceduralTerrainVolumeSource(descriptor).sample(point, output);
+}
+
 bool wt_valid_procedural_descriptor(
 	const WtProceduralWorldDescriptor &descriptor
 ) noexcept {

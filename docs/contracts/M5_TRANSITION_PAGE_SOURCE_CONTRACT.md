@@ -9,8 +9,10 @@ coarse page therefore owns every sample required by its regular cells, but it
 does not independently contain the half-spacing samples required by a
 Transvoxel transition face.
 
-The schema remains unchanged. Transition samples are supplied by explicitly
-owned adjacent pages at the next finer LOD.
+Transition samples are supplied by explicitly owned adjacent pages at the next
+finer LOD. Chunk-page schema 1.1's `SHFT` section changes finest-edge
+resolution, but it does not change this four-page transition-support ownership
+rule.
 
 ## Ownership rule
 
@@ -79,7 +81,7 @@ single-face transition seam, multi-face edge, and corner closure test.
 The locked debug/release aggregate hash is:
 
 ```text
-43a27ee71c4039a6
+c3dff243cf25a71b
 ```
 
 The integrated performance workload loads 17 real content-addressed files:

@@ -69,6 +69,23 @@ struct FlatYSource final : wt::WtChunkSampleSource {
 	}
 };
 
+struct MultiresolutionYSource final : wt::WtChunkSampleSource {
+	bool sample(
+		const wt::WtGridPoint &point,
+		wt::WtScalarSample &output
+	) const noexcept override {
+		if (point.y <= 0) {
+			output.density = -1.0F;
+		} else if (point.y == 1) {
+			output.density = -0.25F;
+		} else {
+			output.density = static_cast<float>(point.y - 1);
+		}
+		output.material = output.density < 0.0F ? 7 : 3;
+		return true;
+	}
+};
+
 QuantizedPoint quantize_world(
 	const wt::WtVec3 &position,
 	const wt::WtGridPoint &origin
@@ -553,6 +570,55 @@ void test_convex_refined_corner_gallery(
 	);
 }
 
+void test_multiresolution_vertices_match_lod0(
+	const wt::WtChunkMesher &mesher,
+	wt::WtChunkMeshingScratch &scratch
+) {
+	MultiresolutionYSource source;
+	wt::WtChunkMeshResult coarse;
+	check(mesher.mesh(
+		{ { 0, 0, 0, 1 }, 0, 0.0F, 0.25F },
+		source,
+		coarse,
+		scratch
+	) == wt::WtChunkMeshingStatus::Ok,
+		"multiresolution coarse plane failed");
+	check(!coarse.regular.vertices.empty(),
+		"multiresolution coarse plane is empty");
+
+	std::set<QuantizedPoint> fine_vertices;
+	for (std::int32_t z = 0; z < 2; ++z) {
+		for (std::int32_t x = 0; x < 2; ++x) {
+			wt::WtChunkMeshResult fine;
+			check(mesher.mesh(
+				{ { x, 0, z, 0 }, 0, 0.0F, 0.25F },
+				source,
+				fine,
+				scratch
+			) == wt::WtChunkMeshingStatus::Ok,
+				"multiresolution fine plane failed");
+			for (const wt::WtCellVertex &vertex : fine.regular.vertices) {
+				fine_vertices.insert(quantize_world(
+					vertex.position,
+					fine.world_origin
+				));
+			}
+		}
+	}
+	check(!fine_vertices.empty(), "multiresolution fine plane is empty");
+	std::size_t unmatched_vertices = 0;
+	for (const wt::WtCellVertex &vertex : coarse.regular.vertices) {
+		if (fine_vertices.find(quantize_world(
+			vertex.position,
+			coarse.world_origin
+		)) == fine_vertices.end()) {
+			++unmatched_vertices;
+		}
+	}
+	check(unmatched_vertices == 0,
+		"coarse vertices do not coincide with the LOD0 surface");
+}
+
 void test_errors(const wt::WtChunkMesher &mesher, wt::WtChunkMeshingScratch &scratch) {
 	LinearSource source;
 	wt::WtChunkMeshResult output;
@@ -631,9 +697,10 @@ int main() {
 		mesher, scratch, hash, { -1, -1, -1, 1 }, { 1, 1, 1 }
 	);
 	test_convex_refined_corner_gallery(mesher, scratch, hash);
+	test_multiresolution_vertices_match_lod0(mesher, scratch);
 	test_errors(mesher, scratch);
 
-	constexpr std::uint64_t expected_hash = 0x1f2bcd3719b36d3dULL;
+	constexpr std::uint64_t expected_hash = 0x1ccb4b98d4ce8027ULL;
 	check(hash == expected_hash, "M2 chunk aggregate hash mismatch");
 	std::printf("M2_MESH_HASH %016llx\n", static_cast<unsigned long long>(hash));
 	if (failure_count != 0) {

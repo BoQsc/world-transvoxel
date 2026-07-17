@@ -987,6 +987,137 @@ void test_runtime_lifecycle(
 	storage.close();
 }
 
+void test_edited_coarse_procedural_rebuild(
+	std::vector<std::uint8_t> &evidence
+) {
+	wt::WtProceduralWorldDescriptor descriptor;
+	descriptor.chunk_count_x = 8;
+	descriptor.chunk_count_y = 8;
+	descriptor.chunk_count_z = 8;
+	descriptor.source_revision = 7201;
+	descriptor.world_revision = 0;
+	descriptor.seed = 17;
+	descriptor.mode = wt::WtProceduralWorldMode::Flat;
+	wt::WtAsyncStorageService storage({ 4, 4, wt::kWtMaximumContainerSize });
+	check(
+		storage.open_procedural(descriptor) == wt::WtAsyncStorageStatus::Ok,
+		"edited coarse procedural storage open failed"
+	);
+
+	wt::WtEditCommand command;
+	command.command_id = repro_id(1000);
+	command.sequence = 0;
+	command.world_revision = 1;
+	command.operation = wt::WtEditOperation::AddDensity;
+	command.shape = wt::WtEditShape::Sphere;
+	command.density_value = 20.0F;
+	command.sphere = { q16(8.0), q16(8.0), q16(8.0), uq16(4.0) };
+	check(
+		wt::wt_edit_sphere_bounds(command.sphere, command.bounds),
+		"edited coarse procedural bounds failed"
+	);
+	wt::WtEditTransaction transaction;
+	transaction.source_revision = descriptor.source_revision;
+	transaction.transaction_id = repro_id(1001);
+	transaction.base_revision = 0;
+	transaction.committed_revision = 1;
+	transaction.commands = { command };
+	wt::WtEditJournal journal(1, 1, 4096);
+	journal.reset(descriptor.source_revision, 0);
+	std::vector<std::uint8_t> journal_segment;
+	check(
+		journal.append(transaction, journal_segment) ==
+			wt::WtEditJournalStatus::Ok,
+		"edited coarse procedural journal append failed"
+	);
+
+	const wt::WtChunkKey key = { 0, 0, 0, 1 };
+	wt::WtStoragePageCache cache({
+		4,
+		wt::kWtMaximumContainerSize,
+		4,
+		wt::kWtMaximumContainerSize,
+	});
+	wt::WtStreamScheduler scheduler(4, 4, 4, 1);
+	wt::WtPageMeshingRuntimeService runtime(4);
+	check(
+		scheduler.request_chunk_version(
+			key,
+			descriptor.source_revision,
+			1,
+			9
+		) == wt::WtSchedulerStatus::Ok,
+		"edited coarse procedural request failed"
+	);
+	wt::WtChunkJob sample_job;
+	check(
+		scheduler.pop_job(sample_job) &&
+			sample_job.stage == wt::WtChunkJobStage::Sample &&
+			runtime.begin_sample_job(
+				sample_job,
+				0,
+				storage,
+				cache,
+				scheduler
+			) == wt::WtPageMeshingRuntimeStatus::Ok,
+		"edited coarse procedural sample start failed"
+	);
+	wt::WtPageLoadCompletion page_completion;
+	check(
+		wait_completion(storage, page_completion) &&
+			runtime.accept_storage_completion(
+				page_completion, cache, scheduler
+			) == wt::WtPageMeshingRuntimeStatus::Ok &&
+			scheduler.apply_completions(1) == 1,
+		"edited coarse procedural sample completion failed"
+	);
+	wt::WtChunkJob mesh_job;
+	check(
+		scheduler.pop_job(mesh_job) &&
+			mesh_job.stage == wt::WtChunkJobStage::Mesh,
+		"edited coarse procedural mesh job missing"
+	);
+	const wt::WtChunkMesher mesher(wt::wt_get_transvoxel_mit_backend());
+	wt::WtChunkMeshingScratch scratch;
+	check(
+		runtime.execute_mesh_job(
+			mesh_job,
+			mesher,
+			scratch,
+			scheduler,
+			&journal,
+			0,
+			&storage
+		) == wt::WtPageMeshingRuntimeStatus::Ok,
+		"edited coarse procedural surface-shift rebuild failed"
+	);
+	const wt::WtPageMeshingRuntimeMetrics metrics = runtime.get_metrics();
+	check(
+		metrics.surface_shift_rebuilds == 1 &&
+			metrics.surface_shift_failures == 0 &&
+			metrics.mesh_successes == 1,
+		"edited coarse procedural rebuild metrics mismatch"
+	);
+	check(
+		scheduler.apply_completions(1) == 1,
+		"edited coarse procedural mesh completion failed"
+	);
+	wt::WtPageMeshCompletion mesh_completion;
+	check(
+		runtime.pop_mesh_completion(mesh_completion) &&
+			mesh_completion.mesh != nullptr &&
+			!mesh_completion.mesh->regular.indices.empty(),
+		"edited coarse procedural mesh result missing"
+	);
+	std::uint64_t mesh_hash = 14695981039346656037ULL;
+	if (mesh_completion.mesh) {
+		hash_result(mesh_hash, *mesh_completion.mesh);
+	}
+	append_u64(evidence, mesh_hash);
+	append_u64(evidence, metrics.surface_shift_rebuilds);
+	storage.close();
+}
+
 void test_storage_backpressure_retry(const RuntimeFixture &fixture) {
 	wt::WtAsyncStorageService storage({ 2, 32, wt::kWtMaximumContainerSize });
 	check(
@@ -1131,6 +1262,7 @@ int main() {
 	test_human_boundary_edit_repro(evidence);
 	test_streaming_pixel_transition_repro(evidence);
 	test_runtime_lifecycle(fixture, evidence);
+	test_edited_coarse_procedural_rebuild(evidence);
 	test_storage_backpressure_retry(fixture);
 	test_missing_support(fixture);
 	if (failure_count != 0) {
@@ -1143,7 +1275,7 @@ int main() {
 	std::printf(
 		"M5_PAGE_MESHING_RUNTIME_PASS dependencies=13 cache_entries=2 "
 		"backpressure=1 cancellations=1 invalidations=1 missing_support=1 "
-		"human_boundary_repro=1\n"
+		"human_boundary_repro=1 edited_coarse_rebuild=1\n"
 	);
 	return 0;
 }

@@ -28,6 +28,20 @@ WtVec3 wt_canonical_chunk_position(
 	float isovalue
 ) noexcept;
 
+WtVec3 wt_canonical_edge_position(
+	const WtVec3 &endpoint_a,
+	const WtVec3 &endpoint_b,
+	const WtCellSample &sample_a,
+	const WtCellSample &sample_b,
+	float isovalue
+) noexcept;
+
+std::uint16_t wt_closest_isosurface_endpoint_material(
+	const WtCellSample &sample_a,
+	const WtCellSample &sample_b,
+	float isovalue
+) noexcept;
+
 WtVec3 wt_deform_chunk_position(
 	WtVec3 position,
 	const WtVec3 &normal,

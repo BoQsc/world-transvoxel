@@ -27,8 +27,9 @@ and retained mesh capacities.
 
 ## Transition ownership
 
-Schema-1 remains unchanged. Each active coarse transition face owns four
-canonical adjacent pages at LOD minus one. `WtChunkPageSampleSource` combines
+Chunk-page schema 1.1 adds `SHFT` records without changing dependency
+ownership. Each active coarse transition face owns four canonical adjacent
+pages at LOD minus one. `WtChunkPageSampleSource` combines
 the primary and support pages, rejects overlap disagreement, and supplies
 regular gradients at coarse spacing plus transition gradients at fine
 spacing. The ownership and seam proof is defined by

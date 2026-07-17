@@ -50,7 +50,9 @@ std::size_t decoded_resident_size(
 	const std::shared_ptr<const WtChunkPage> &page
 ) noexcept {
 	return page ? sizeof(WtChunkPage) +
-		page->samples.capacity() * sizeof(WtScalarSample) : 0;
+		page->samples.capacity() * sizeof(WtScalarSample) +
+		page->surface_shift_records.capacity() *
+			sizeof(WtChunkSurfaceShiftRecord) : 0;
 }
 
 } // namespace

@@ -38,6 +38,8 @@ or change harshly beyond the chosen profile's accepted tolerance.
    replaced from authoritative edited samples before they are treated as current.
    This includes same-LOD chunks, dependent coarser LOD support pages, and
    transition support where the profile uses them.
+   Coarse surface-shift records are derived data and must be invalidated and
+   rebuilt from the same edited unit-resolution truth before coarse meshing.
 3. Once initial terrain for a human-visible scene is ready, old visible render
    and collision state must remain until replacement state is ready. A profile
    must not expose empty rectangular sky patches during ordinary movement or
@@ -121,6 +123,16 @@ When the full retention plan is too expensive, runtime planning degrades by
 keeping newest/visible zones first and reducing retention refinement before
 dropping retention entirely. This avoids the known all-or-nothing retention
 collapse, but it is still a bounded behavior.
+
+Edit commands are evaluated pointwise in signed base-grid coordinates at every
+LOD; their radius is not enlarged by the coarse sample spacing. Procedural
+worlds rebuild invalid coarse `SHFT` records on the meshing worker by sampling
+the unit-resolution procedural source and replaying the authoritative journal
+at each queried point. Baked worlds have no implicit procedural source:
+compaction regenerates their edited higher-LOD records from edited LOD0 pages,
+and runtime meshing fails closed if such regenerated data is unavailable. It
+must never display a coarse vertex derived from stale or coarse-only endpoints
+as if it represented the current edit revision.
 
 ## Allowed release wording
 
