@@ -99,9 +99,16 @@ bool wt_is_zero_id(const WtId128 &id) noexcept {
 
 bool wt_edit_sphere_bounds(
 	const WtEditSphere &sphere,
-	WtEditBounds &output
+	WtEditBounds &output,
+	std::uint32_t smooth_radius_q16
 ) noexcept {
 	if (sphere.radius_q16 == 0) return false;
+	if (sphere.radius_q16 > std::numeric_limits<std::uint64_t>::max() -
+			smooth_radius_q16) {
+		return false;
+	}
+	const std::uint64_t affected_radius =
+		sphere.radius_q16 + smooth_radius_q16;
 	std::int64_t minimum[3]{};
 	std::int64_t maximum[3]{};
 	const std::int64_t centers[3] = {
@@ -110,8 +117,8 @@ bool wt_edit_sphere_bounds(
 		sphere.center_z_q16,
 	};
 	for (std::size_t axis = 0; axis < 3; ++axis) {
-		if (!subtract_radius(centers[axis], sphere.radius_q16, minimum[axis]) ||
-			!add_radius(centers[axis], sphere.radius_q16, maximum[axis])) {
+		if (!subtract_radius(centers[axis], affected_radius, minimum[axis]) ||
+			!add_radius(centers[axis], affected_radius, maximum[axis])) {
 			return false;
 		}
 	}
@@ -167,6 +174,9 @@ bool wt_is_valid_edit_command(const WtEditCommand &command) noexcept {
 			command.density_value <= 0.0F)) {
 		return false;
 	}
+	if (!sdf_operation(command.operation) && command.smooth_radius_q16 != 0) {
+		return false;
+	}
 	if ((command.operation == WtEditOperation::PaintMaterial ||
 			command.operation == WtEditOperation::PlaceMaterialVolume) &&
 		command.density_value != 0.0F) {
@@ -178,7 +188,9 @@ bool wt_is_valid_edit_command(const WtEditCommand &command) noexcept {
 	}
 	WtEditBounds expected;
 	const bool valid_bounds = command.shape == WtEditShape::Sphere ?
-		wt_edit_sphere_bounds(command.sphere, expected) :
+		wt_edit_sphere_bounds(
+			command.sphere, expected, command.smooth_radius_q16
+		) :
 		wt_edit_box_bounds(command.box, expected);
 	return valid_bounds && command.bounds == expected;
 }

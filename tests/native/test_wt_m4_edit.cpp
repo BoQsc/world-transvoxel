@@ -115,6 +115,24 @@ void test_bounds() {
 		},
 		"sphere conservative bounds mismatch"
 	);
+	wt::WtEditCommand smooth_sphere = sphere_command(
+		0, wt::WtEditOperation::SdfCarve, 1.0F
+	);
+	smooth_sphere.smooth_radius_q16 = static_cast<std::uint32_t>(
+		2 * wt::kWtEditCoordinateScale
+	);
+	check(
+		wt::wt_edit_sphere_bounds(
+			smooth_sphere.sphere,
+			smooth_sphere.bounds,
+			smooth_sphere.smooth_radius_q16
+		) &&
+			smooth_sphere.bounds == wt::WtEditBounds{
+				{ -4, -3, -2 },
+				{ 3, 4, 6 },
+			},
+		"smooth sphere conservative bounds mismatch"
+	);
 	const wt::WtEditCommand box = box_command(1);
 	check(
 		box.bounds == wt::WtEditBounds{
@@ -203,6 +221,17 @@ void test_sdf_operations() {
 		sphere_command(1, wt::WtEditOperation::SdfConstruct, 0.5F),
 	};
 	transaction.commands[1].material = 8;
+	transaction.commands[0].smooth_radius_q16 = static_cast<std::uint32_t>(
+		2 * wt::kWtEditCoordinateScale
+	);
+	check(
+		wt::wt_edit_sphere_bounds(
+			transaction.commands[0].sphere,
+			transaction.commands[0].bounds,
+			transaction.commands[0].smooth_radius_q16
+		),
+		"smooth SDF sphere bounds construction failed"
+	);
 	std::vector<std::uint8_t> bytes;
 	wt::WtEditTransactionDocument document;
 	check(
@@ -220,8 +249,10 @@ void test_sdf_operations() {
 				wt::WtEditOperation::SdfCarve &&
 			document.transaction.commands[1].operation ==
 				wt::WtEditOperation::SdfConstruct &&
+			document.transaction.commands[0].smooth_radius_q16 ==
+				2 * wt::kWtEditCoordinateScale &&
 			document.transaction.commands[1].material == 8,
-		"SDF sphere edit operation round trip mismatch"
+		"smooth SDF sphere edit operation round trip mismatch"
 	);
 }
 
@@ -258,6 +289,20 @@ void test_write_failures() {
 	transaction = make_transaction();
 	transaction.commands[1].bounds.maximum.x += 1;
 	expect_invalid(transaction, "incorrect conservative bounds accepted");
+
+	transaction = make_transaction();
+	transaction.commands[1].smooth_radius_q16 = static_cast<std::uint32_t>(
+		wt::kWtEditCoordinateScale
+	);
+	check(
+		wt::wt_edit_sphere_bounds(
+			transaction.commands[1].sphere,
+			transaction.commands[1].bounds,
+			transaction.commands[1].smooth_radius_q16
+		),
+		"invalid non-SDF smoothing fixture bounds failed"
+	);
+	expect_invalid(transaction, "non-SDF smoothing radius accepted");
 
 	transaction = make_transaction();
 	transaction.commands[1].density_value =
@@ -422,6 +467,6 @@ int main() {
 	}
 	std::printf("M4_EDIT_HASH ");
 	print_hash(wt::wt_sha256(bytes.data(), bytes.size()));
-	std::printf("M4_EDIT_PASS commands=3 sdf_commands=2 failure_cases=18\n");
+	std::printf("M4_EDIT_PASS commands=3 sdf_commands=2 smooth_sdf=1 failure_cases=19\n");
 	return 0;
 }

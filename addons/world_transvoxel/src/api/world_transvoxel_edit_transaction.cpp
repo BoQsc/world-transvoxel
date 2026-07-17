@@ -71,13 +71,35 @@ void WorldTransvoxelEditTransaction::_bind_methods() {
 	WT_BIND_EDIT_METHOD(add_density_sphere, "center", "radius", "value");
 	WT_BIND_EDIT_METHOD(set_density_sphere, "center", "radius", "value");
 	WT_BIND_EDIT_METHOD(carve_sdf_sphere, "center", "radius", "strength");
+	WT_BIND_EDIT_METHOD(
+		carve_smooth_sdf_sphere,
+		"center",
+		"radius",
+		"strength",
+		"smooth_radius"
+	);
 	WT_BIND_EDIT_METHOD(construct_sdf_sphere, "center", "radius", "strength");
+	WT_BIND_EDIT_METHOD(
+		construct_smooth_sdf_sphere,
+		"center",
+		"radius",
+		"strength",
+		"smooth_radius"
+	);
 	WT_BIND_EDIT_METHOD(
 		construct_material_sdf_sphere,
 		"center",
 		"radius",
 		"strength",
 		"material"
+	);
+	WT_BIND_EDIT_METHOD(
+		construct_material_smooth_sdf_sphere,
+		"center",
+		"radius",
+		"strength",
+		"material",
+		"smooth_radius"
 	);
 	WT_BIND_EDIT_METHOD(paint_material_sphere, "center", "radius", "material");
 	WT_BIND_EDIT_METHOD(place_material_volume_sphere, "center", "radius", "material");
@@ -157,7 +179,8 @@ bool WorldTransvoxelEditTransaction::append_sphere(
 	const godot::Vector3 &center,
 	double radius,
 	double density,
-	std::int64_t material
+	std::int64_t material,
+	double smooth_radius
 ) {
 	WtEditCommand command;
 	command.operation = operation;
@@ -165,17 +188,24 @@ bool WorldTransvoxelEditTransaction::append_sphere(
 	command.density_value = static_cast<float>(density);
 	command.material = static_cast<std::uint16_t>(material);
 	std::int64_t radius_q16 = 0;
+	std::int64_t smooth_radius_q16 = 0;
 	if (!valid_density(density) || radius <= 0.0 ||
 		!to_q16(center.x, command.sphere.center_x_q16) ||
 		!to_q16(center.y, command.sphere.center_y_q16) ||
 		!to_q16(center.z, command.sphere.center_z_q16) ||
 		!to_q16(radius, radius_q16) || radius_q16 <= 0 ||
+		!to_q16(smooth_radius, smooth_radius_q16) ||
+		smooth_radius_q16 < 0 ||
+		smooth_radius_q16 > std::numeric_limits<std::uint32_t>::max() ||
 		material < 0 || material > std::numeric_limits<std::uint16_t>::max()) {
 		error_ = "sphere edit parameters are invalid";
 		return false;
 	}
 	command.sphere.radius_q16 = static_cast<std::uint64_t>(radius_q16);
-	if (!wt_edit_sphere_bounds(command.sphere, command.bounds)) {
+	command.smooth_radius_q16 = static_cast<std::uint32_t>(smooth_radius_q16);
+	if (!wt_edit_sphere_bounds(
+			command.sphere, command.bounds, command.smooth_radius_q16
+		)) {
 		error_ = "sphere edit bounds are invalid";
 		return false;
 	}
@@ -233,11 +263,43 @@ bool WorldTransvoxelEditTransaction::carve_sdf_sphere(
 	);
 }
 
+bool WorldTransvoxelEditTransaction::carve_smooth_sdf_sphere(
+	const godot::Vector3 &center,
+	double radius,
+	double strength,
+	double smooth_radius
+) {
+	return append_sphere(
+		WtEditOperation::SdfCarve,
+		center,
+		radius,
+		strength,
+		0,
+		smooth_radius
+	);
+}
+
 bool WorldTransvoxelEditTransaction::construct_sdf_sphere(
 	const godot::Vector3 &center, double radius, double strength
 ) {
 	return append_sphere(
 		WtEditOperation::SdfConstruct, center, radius, strength, 0
+	);
+}
+
+bool WorldTransvoxelEditTransaction::construct_smooth_sdf_sphere(
+	const godot::Vector3 &center,
+	double radius,
+	double strength,
+	double smooth_radius
+) {
+	return append_sphere(
+		WtEditOperation::SdfConstruct,
+		center,
+		radius,
+		strength,
+		0,
+		smooth_radius
 	);
 }
 
@@ -253,6 +315,27 @@ bool WorldTransvoxelEditTransaction::construct_material_sdf_sphere(
 	}
 	return append_sphere(
 		WtEditOperation::SdfConstruct, center, radius, strength, material
+	);
+}
+
+bool WorldTransvoxelEditTransaction::construct_material_smooth_sdf_sphere(
+	const godot::Vector3 &center,
+	double radius,
+	double strength,
+	std::int64_t material,
+	double smooth_radius
+) {
+	if (material <= 0) {
+		error_ = "construct material must be greater than zero";
+		return false;
+	}
+	return append_sphere(
+		WtEditOperation::SdfConstruct,
+		center,
+		radius,
+		strength,
+		material,
+		smooth_radius
 	);
 }
 

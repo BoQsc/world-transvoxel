@@ -34,16 +34,35 @@ public:
 		double radius,
 		double strength
 	);
+	bool carve_smooth_sdf_sphere(
+		const godot::Vector3 &center,
+		double radius,
+		double strength,
+		double smooth_radius
+	);
 	bool construct_sdf_sphere(
 		const godot::Vector3 &center,
 		double radius,
 		double strength
+	);
+	bool construct_smooth_sdf_sphere(
+		const godot::Vector3 &center,
+		double radius,
+		double strength,
+		double smooth_radius
 	);
 	bool construct_material_sdf_sphere(
 		const godot::Vector3 &center,
 		double radius,
 		double strength,
 		std::int64_t material
+	);
+	bool construct_material_smooth_sdf_sphere(
+		const godot::Vector3 &center,
+		double radius,
+		double strength,
+		std::int64_t material,
+		double smooth_radius
 	);
 	bool paint_material_sphere(
 		const godot::Vector3 &center,
@@ -95,7 +114,8 @@ private:
 		const godot::Vector3 &center,
 		double radius,
 		double density,
-		std::int64_t material
+		std::int64_t material,
+		double smooth_radius = 0.0
 	);
 	bool append_box(
 		WtEditOperation operation,

@@ -90,7 +90,7 @@ WtEditTransactionStatus encode_command(
 		writer.write_i64(command.bounds.maximum.z) != WtBinaryStatus::Ok ||
 		writer.write_u32(static_cast<std::uint32_t>(shape_payload_size)) !=
 			WtBinaryStatus::Ok ||
-		writer.write_u32(0) != WtBinaryStatus::Ok) {
+		writer.write_u32(command.smooth_radius_q16) != WtBinaryStatus::Ok) {
 		return WtEditTransactionStatus::CapacityExceeded;
 	}
 	if (command.shape == WtEditShape::Sphere) {
@@ -236,7 +236,7 @@ bool decode_command(WtByteView bytes, WtEditCommand &command) {
 	std::uint16_t shape = 0;
 	std::uint16_t reserved_short = 0;
 	std::uint32_t shape_payload_size = 0;
-	std::uint32_t reserved = 0;
+	std::uint32_t smooth_radius_q16 = 0;
 	WtByteView id;
 	if (reader.read_u32(record_size) != WtBinaryStatus::Ok ||
 		reader.read_u16(major) != WtBinaryStatus::Ok ||
@@ -257,18 +257,19 @@ bool decode_command(WtByteView bytes, WtEditCommand &command) {
 		reader.read_i64(command.bounds.maximum.y) != WtBinaryStatus::Ok ||
 		reader.read_i64(command.bounds.maximum.z) != WtBinaryStatus::Ok ||
 		reader.read_u32(shape_payload_size) != WtBinaryStatus::Ok ||
-		reader.read_u32(reserved) != WtBinaryStatus::Ok) {
+		reader.read_u32(smooth_radius_q16) != WtBinaryStatus::Ok) {
 		return false;
 	}
 	std::copy(id.data, id.data + id.size, command.command_id.begin());
 	command.operation = static_cast<WtEditOperation>(operation);
 	command.shape = static_cast<WtEditShape>(shape);
+	command.smooth_radius_q16 = minor >= 2 ? smooth_radius_q16 : 0;
 	if (record_size != bytes.size ||
 		major != kWtEditSchemaMajor ||
 		minor > kWtEditSchemaMinor ||
 		(minor == 0 && command.operation == WtEditOperation::SdfConstruct &&
 			command.material != 0) ||
-		reserved_short != 0 || reserved != 0 ||
+		reserved_short != 0 || (minor < 2 && smooth_radius_q16 != 0) ||
 		shape_payload_size != payload_size(command.shape) ||
 		reader.remaining() != shape_payload_size) {
 		return false;

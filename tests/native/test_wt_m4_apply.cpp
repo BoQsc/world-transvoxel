@@ -501,6 +501,77 @@ void test_sdf_sphere_edits(std::vector<std::uint8_t> &evidence) {
 	evidence.insert(evidence.end(), bytes.begin(), bytes.end());
 }
 
+void test_smooth_sdf_sphere_edits() {
+	wt::WtEditCommand carve = sphere(
+		95,
+		0,
+		1,
+		wt::WtEditOperation::SdfCarve,
+		0,
+		2 * wt::kWtEditCoordinateScale,
+		1.0F
+	);
+	carve.smooth_radius_q16 = static_cast<std::uint32_t>(
+		2 * wt::kWtEditCoordinateScale
+	);
+	check(
+		wt::wt_edit_sphere_bounds(
+			carve.sphere, carve.bounds, carve.smooth_radius_q16
+		),
+		"smooth carve bounds construction failed"
+	);
+	wt::WtScalarSample carve_sample = { 0.0F, 1 };
+	bool changed = false;
+	check(
+		wt::wt_apply_edit_command_to_sample(
+			carve, { 2, 0, 0 }, carve_sample, changed
+		) && changed && carve_sample.density > 0.5F &&
+			carve_sample.density < 0.51F &&
+			carve_sample.material == 1,
+		"smooth carve did not round the hard SDF intersection"
+	);
+
+	wt::WtEditCommand construct = sphere(
+		96,
+		0,
+		1,
+		wt::WtEditOperation::SdfConstruct,
+		0,
+		2 * wt::kWtEditCoordinateScale,
+		1.0F
+	);
+	construct.material = 8;
+	construct.smooth_radius_q16 = carve.smooth_radius_q16;
+	check(
+		wt::wt_edit_sphere_bounds(
+			construct.sphere,
+			construct.bounds,
+			construct.smooth_radius_q16
+		),
+		"smooth construct bounds construction failed"
+	);
+	wt::WtScalarSample construct_sample = { 0.0F, 1 };
+	changed = false;
+	check(
+		wt::wt_apply_edit_command_to_sample(
+			construct, { 2, 0, 0 }, construct_sample, changed
+		) && changed && construct_sample.density < -0.5F &&
+			construct_sample.density > -0.51F &&
+			construct_sample.material == 8,
+		"smooth construct did not round or materialize the SDF intersection"
+	);
+
+	wt::WtScalarSample outside_sample = { -7.0F, 3 };
+	changed = true;
+	check(
+		wt::wt_apply_edit_command_to_sample(
+			carve, { 6, 0, 0 }, outside_sample, changed
+		) && !changed && outside_sample.density == -7.0F &&
+			outside_sample.material == 3,
+		"smooth SDF command changed a sample outside bounded support"
+	);
+}
+
 void test_material_volume_placement() {
 	wt::WtChunkPage page = bake_page({ 0, 0, 0, 0 });
 	const std::size_t solid_index = sample_index(page, { 0, 0, 0 });
@@ -620,6 +691,7 @@ int main() {
 	test_replay_and_overlap(evidence);
 	test_cross_lod_pointwise_edit_consistency(evidence);
 	test_sdf_sphere_edits(evidence);
+	test_smooth_sdf_sphere_edits();
 	test_material_volume_placement();
 	test_failures();
 	if (failure_count != 0) {
@@ -629,7 +701,7 @@ int main() {
 	std::printf("M4_APPLY_HASH ");
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
-		"M4_APPLY_PASS pages=5 overlap_samples=1083 cross_lod_pointwise=1 sdf_sphere_edits=3 failure_cases=7\n"
+		"M4_APPLY_PASS pages=5 overlap_samples=1083 cross_lod_pointwise=1 sdf_sphere_edits=3 smooth_sdf=1 failure_cases=7\n"
 	);
 	return 0;
 }

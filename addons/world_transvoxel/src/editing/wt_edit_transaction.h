@@ -11,7 +11,7 @@
 namespace world_transvoxel {
 
 constexpr std::uint16_t kWtEditSchemaMajor = 1;
-constexpr std::uint16_t kWtEditSchemaMinor = 1;
+constexpr std::uint16_t kWtEditSchemaMinor = 2;
 constexpr std::size_t kWtEditHeaderSize = 64;
 constexpr std::size_t kWtEditCommitSize = 68;
 constexpr std::size_t kWtEditCommandSectionHeaderSize = 8;
@@ -73,6 +73,7 @@ struct WtEditCommand {
 	WtEditShape shape = WtEditShape::Sphere;
 	std::uint32_t flags = 0;
 	float density_value = 0.0F;
+	std::uint32_t smooth_radius_q16 = 0;
 	std::uint16_t material = 0;
 	WtEditBounds bounds;
 	WtEditSphere sphere;
@@ -106,7 +107,8 @@ bool wt_is_zero_id(const WtId128 &id) noexcept;
 
 bool wt_edit_sphere_bounds(
 	const WtEditSphere &sphere,
-	WtEditBounds &output
+	WtEditBounds &output,
+	std::uint32_t smooth_radius_q16 = 0
 ) noexcept;
 
 bool wt_edit_box_bounds(

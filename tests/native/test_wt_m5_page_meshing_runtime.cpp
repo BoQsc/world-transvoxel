@@ -73,9 +73,11 @@ public:
 	SphereDifferenceSource(
 		double outer_radius,
 		double cavity_offset,
-		double cavity_radius
+		double cavity_radius,
+		double smooth_radius = 0.0
 	) noexcept : outer_radius_(outer_radius),
-		cavity_offset_(cavity_offset), cavity_radius_(cavity_radius) {
+		cavity_offset_(cavity_offset), cavity_radius_(cavity_radius),
+		smooth_radius_(smooth_radius) {
 	}
 
 	bool sample(
@@ -100,7 +102,20 @@ public:
 			carve_brush = carve_brush < 0.0 ?
 				-boundary_epsilon : boundary_epsilon;
 		}
-		output.density = static_cast<float>(std::max(-construct_brush, carve_brush));
+		const double constructed_density = -construct_brush;
+		double density = std::max(constructed_density, carve_brush);
+		if (smooth_radius_ > 0.0) {
+			const double h = std::clamp(
+				0.5 + 0.5 * (constructed_density - carve_brush) /
+					smooth_radius_,
+				0.0,
+				1.0
+			);
+			density = carve_brush +
+				(constructed_density - carve_brush) * h +
+				smooth_radius_ * h * (1.0 - h);
+		}
+		output.density = static_cast<float>(density);
 		output.material = 1;
 		return true;
 	}
@@ -109,6 +124,7 @@ private:
 	double outer_radius_ = 0.0;
 	double cavity_offset_ = 0.0;
 	double cavity_radius_ = 0.0;
+	double smooth_radius_ = 0.0;
 };
 
 class MaterialVolumeDistanceSource final : public wt::WtChunkSampleSource {
@@ -308,12 +324,18 @@ void test_representable_sphere_difference_topology(
 	check(near_tangent_components > 1,
 		"sphere difference topology control did not reproduce detached components");
 	const SphereDifferenceSource representable(28.0, 19.0, 22.0);
+	const SphereDifferenceSource smooth_representable(28.0, 19.0, 22.0, 3.0);
 	for (std::uint8_t lod = 0; lod <= 2; ++lod) {
 		const std::size_t components =
 			sphere_difference_component_count(representable, lod);
 		check(components == 1,
 			"representable sphere difference produced detached components");
 		append_u64(evidence, components);
+		const std::size_t smooth_components =
+			sphere_difference_component_count(smooth_representable, lod);
+		check(smooth_components == 1,
+			"smooth sphere difference produced detached components");
+		append_u64(evidence, smooth_components);
 	}
 	append_u64(evidence, near_tangent_components);
 }
@@ -1457,7 +1479,7 @@ int main() {
 		"M5_PAGE_MESHING_RUNTIME_PASS dependencies=13 cache_entries=2 "
 		"backpressure=1 cancellations=1 invalidations=1 missing_support=1 "
 		"human_boundary_repro=1 edited_coarse_rebuild=1 "
-		"sphere_difference_topology=1 material_volume_distance=1\n"
+		"sphere_difference_topology=1 smooth_sphere_difference=1 material_volume_distance=1\n"
 	);
 	return 0;
 }

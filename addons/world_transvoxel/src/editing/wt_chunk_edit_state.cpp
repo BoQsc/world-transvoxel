@@ -87,7 +87,7 @@ bool point_in_box(
 bool sphere_intersects_sdf_support(
 	const WtGridPoint &point,
 	const WtEditSphere &sphere,
-	std::int64_t
+	std::uint32_t smooth_radius_q16
 ) noexcept {
 	const WideSigned support =
 		static_cast<WideSigned>(kWtEditCoordinateScale);
@@ -102,7 +102,8 @@ bool sphere_intersects_sdf_support(
 		sphere.center_z_q16,
 	};
 	const WideSigned radius =
-		static_cast<WideSigned>(sphere.radius_q16) + support;
+		static_cast<WideSigned>(sphere.radius_q16) + support +
+		static_cast<WideSigned>(smooth_radius_q16);
 	WideUnsigned squared_distance = 0;
 	for (std::size_t axis = 0; axis < 3; ++axis) {
 		const WideSigned delta = coordinates[axis] - centers[axis];
@@ -116,6 +117,22 @@ bool sphere_intersects_sdf_support(
 	}
 	const WideUnsigned unsigned_radius = static_cast<WideUnsigned>(radius);
 	return squared_distance <= unsigned_radius * unsigned_radius;
+}
+
+float smooth_maximum(float a, float b, float radius) noexcept {
+	if (!(std::isfinite(radius) && radius > 0.0F)) {
+		return std::max(a, b);
+	}
+	const float h = std::clamp(
+		0.5F + 0.5F * (a - b) / radius,
+		0.0F,
+		1.0F
+	);
+	return b + (a - b) * h + radius * h * (1.0F - h);
+}
+
+float smooth_minimum(float a, float b, float radius) noexcept {
+	return -smooth_maximum(-a, -b, radius);
 }
 
 bool sphere_sdf_brush_density(
@@ -174,7 +191,9 @@ bool contains(
 	if ((command.operation == WtEditOperation::SdfCarve ||
 			command.operation == WtEditOperation::SdfConstruct) &&
 			command.shape == WtEditShape::Sphere) {
-		return sphere_intersects_sdf_support(point, command.sphere, 1);
+		return sphere_intersects_sdf_support(
+			point, command.sphere, command.smooth_radius_q16
+		);
 	}
 	if (!point_in_bounds(point, command.bounds)) {
 		return false;
@@ -217,14 +236,26 @@ bool apply_valid_command_to_sample(
 			return false;
 		}
 		if (command.operation == WtEditOperation::SdfCarve) {
-			if (sample.density < brush_density) {
-				sample.density = brush_density;
+			const float smooth_radius = static_cast<float>(
+				command.smooth_radius_q16
+			) / static_cast<float>(kWtEditCoordinateScale);
+			const float result = smooth_maximum(
+				sample.density, brush_density, smooth_radius
+			);
+			if (sample.density < result) {
+				sample.density = result;
 			}
 		} else {
 			const float solid_density = -brush_density;
-			if (sample.density > solid_density) {
-				sample.density = solid_density;
-				if (command.material != 0 && solid_density <= 0.0F) {
+			const float smooth_radius = static_cast<float>(
+				command.smooth_radius_q16
+			) / static_cast<float>(kWtEditCoordinateScale);
+			const float result = smooth_minimum(
+				sample.density, solid_density, smooth_radius
+			);
+			if (sample.density > result) {
+				sample.density = result;
+				if (command.material != 0 && result <= 0.0F) {
 					sample.material = command.material;
 				}
 			}
