@@ -31,6 +31,7 @@ enum class WtProceduralWorldMode : std::uint8_t {
 	Flat = 1,
 	RollingHillsCave = 2,
 	RollingHillsCaveRoads = 3,
+	FourBiomesLakesCavesRoads = 4,
 };
 
 struct WtProceduralWorldDescriptor {

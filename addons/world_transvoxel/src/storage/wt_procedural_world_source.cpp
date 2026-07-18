@@ -88,6 +88,77 @@ bool underground_ore_patch(
 	return vein > 0.48 && pocket > 0.08;
 }
 
+double smoothstep(double edge_a, double edge_b, double value) noexcept {
+	if (!(edge_b > edge_a)) return value >= edge_b ? 1.0 : 0.0;
+	const double t = std::clamp(
+		(value - edge_a) / (edge_b - edge_a), 0.0, 1.0
+	);
+	return t * t * (3.0 - 2.0 * t);
+}
+
+double gaussian_feature(
+	double x,
+	double z,
+	double center_x,
+	double center_z,
+	double radius_x,
+	double radius_z,
+	double amplitude
+) noexcept {
+	const double dx = (x - center_x) / radius_x;
+	const double dz = (z - center_z) / radius_z;
+	const double distance_squared = dx * dx + dz * dz;
+	if (distance_squared >= 16.0) return 0.0;
+	return amplitude * std::exp(-distance_squared);
+}
+
+struct WtProceduralLake {
+	double center_x = 0.0;
+	double center_z = 0.0;
+	double radius_x = 1.0;
+	double radius_z = 1.0;
+	double water_level = 0.0;
+	double depression_depth = 0.0;
+};
+
+constexpr std::array<WtProceduralLake, 3> kFourBiomeLakes = {{
+	{ 650.0, 700.0, 230.0, 170.0, 23.0, 34.0 },
+	{ 1400.0, 700.0, 240.0, 170.0, 21.0, 36.0 },
+	{ 650.0, 1370.0, 220.0, 160.0, 27.0, 38.0 },
+}};
+
+double four_biome_lake_depression(double x, double z) noexcept {
+	double depression = 0.0;
+	for (const WtProceduralLake &lake : kFourBiomeLakes) {
+		const double dx = (x - lake.center_x) / lake.radius_x;
+		const double dz = (z - lake.center_z) / lake.radius_z;
+		const double q_squared = dx * dx + dz * dz;
+		if (q_squared >= 1.0) continue;
+		const double q = std::sqrt(q_squared);
+		const double falloff = 1.0 - smoothstep(0.15, 1.0, q);
+		depression = std::max(
+			depression,
+			lake.depression_depth * falloff
+		);
+	}
+	return depression;
+}
+
+bool four_biome_lake_contains_water(
+	double x,
+	double y,
+	double z
+) noexcept {
+	for (const WtProceduralLake &lake : kFourBiomeLakes) {
+		const double dx = (x - lake.center_x) / lake.radius_x;
+		const double dz = (z - lake.center_z) / lake.radius_z;
+		if (dx * dx + dz * dz < 1.0 && y <= lake.water_level) {
+			return true;
+		}
+	}
+	return false;
+}
+
 class WtProceduralTerrainVolumeSource final : public WtChunkSampleSource {
 public:
 	explicit WtProceduralTerrainVolumeSource(
@@ -106,6 +177,23 @@ public:
 				);
 			}
 		}
+		if (has_expansive_roads()) {
+			const auto &segments = wt_expansive_road_segments();
+			for (std::size_t index = 0; index < segments.size(); ++index) {
+				const WtReferenceRoadSegment &segment = segments[index];
+				expansive_road_height_a_[index] = four_biome_height(
+					static_cast<std::int64_t>(segment.ax),
+					static_cast<std::int64_t>(segment.az)
+				);
+				expansive_road_height_b_[index] = four_biome_height(
+					static_cast<std::int64_t>(segment.bx),
+					static_cast<std::int64_t>(segment.bz)
+				);
+			}
+			four_biome_cave_portal_surface_y_[0] = four_biome_height(360, 520);
+			four_biome_cave_portal_surface_y_[1] = four_biome_height(1570, 520);
+			four_biome_cave_portal_surface_y_[2] = four_biome_height(430, 1540);
+		}
 	}
 
 	bool sample(
@@ -113,17 +201,26 @@ public:
 		WtScalarSample &output
 	) const noexcept override {
 		const double base_surface = height(point.x, point.z);
-		const WtProceduralRoadField road = has_reference_roads() ?
-			wt_sample_reference_road_field(
+		WtProceduralRoadField road{
+			base_surface, std::numeric_limits<double>::infinity()
+		};
+		if (has_reference_roads()) {
+			road = wt_sample_reference_road_field(
 				base_surface,
 				static_cast<double>(point.x),
 				static_cast<double>(point.z),
 				road_height_a_,
 				road_height_b_
-			) :
-			WtProceduralRoadField{
-				base_surface, std::numeric_limits<double>::infinity()
-			};
+			);
+		} else if (has_expansive_roads()) {
+			road = wt_sample_expansive_road_field(
+				base_surface,
+				static_cast<double>(point.x),
+				static_cast<double>(point.z),
+				expansive_road_height_a_,
+				expansive_road_height_b_
+			);
+		}
 		const double surface = road.surface;
 		double density = static_cast<double>(point.y) - surface;
 		if (has_rolling_hills_cave()) {
@@ -133,15 +230,32 @@ public:
 				static_cast<double>(point.y),
 				static_cast<double>(point.z)
 			);
+		} else if (is_four_biome_world()) {
+			density = wt_apply_four_biome_cave_density(
+				density,
+				static_cast<double>(point.x),
+				static_cast<double>(point.y),
+				static_cast<double>(point.z),
+				four_biome_cave_portal_surface_y_
+			);
 		}
 		output.density = regularized_density(density);
-		output.material = material(
-			surface,
-			road.distance,
-			point.x,
-			point.y,
-			point.z
-		);
+		output.material = is_four_biome_world() && density >= 0.0 ? 1 :
+			material(
+				surface,
+				road.distance,
+				point.x,
+				point.y,
+				point.z
+			);
+		if (is_four_biome_world() && density >= 0.0 &&
+			four_biome_lake_contains_water(
+				static_cast<double>(point.x),
+				static_cast<double>(point.y),
+				static_cast<double>(point.z)
+			)) {
+			output.material = 9;
+		}
 		output.material_authored = false;
 		return std::isfinite(output.density);
 	}
@@ -156,12 +270,24 @@ private:
 		return descriptor_.mode == WtProceduralWorldMode::RollingHillsCaveRoads;
 	}
 
+	bool is_four_biome_world() const noexcept {
+		return descriptor_.mode ==
+			WtProceduralWorldMode::FourBiomesLakesCavesRoads;
+	}
+
+	bool has_expansive_roads() const noexcept {
+		return is_four_biome_world();
+	}
+
 	double height(std::int64_t x, std::int64_t z) const noexcept {
 		if (descriptor_.mode == WtProceduralWorldMode::Flat) {
 			return 8.0;
 		}
 		if (has_rolling_hills_cave()) {
 			return rolling_hills_height(x, z);
+		}
+		if (is_four_biome_world()) {
+			return four_biome_height(x, z);
 		}
 		const double width = std::max(
 			16.0,
@@ -251,6 +377,41 @@ private:
 			hills + crags + long_wave + local;
 	}
 
+	double four_biome_height(
+		std::int64_t x,
+		std::int64_t z
+	) const noexcept {
+		const double px = static_cast<double>(x);
+		const double pz = static_cast<double>(z);
+		const double phase =
+			static_cast<double>(descriptor_.seed % 100000U) * 0.0001;
+		const double broad =
+			8.0 * std::sin(px * 0.0031 + phase * 1.4) +
+			6.5 * std::cos(pz * 0.0027 - phase * 0.9) +
+			4.5 * std::sin((px + pz) * 0.0017 + phase * 0.6);
+		const double rolling =
+			5.0 * std::sin((px - pz) * 0.0073 + phase) *
+				std::cos((px + pz) * 0.0058 - phase * 0.4);
+		const double detail =
+			2.2 * std::sin(px * 0.021 + phase * 0.7) *
+				std::cos(pz * 0.019 - phase) +
+			1.4 * std::sin((px + 2.0 * pz) * 0.034 + phase * 0.2) +
+			0.8 * std::cos((2.0 * px - pz) * 0.047);
+		const double snow_mountains =
+			gaussian_feature(px, pz, 1540.0, 1500.0, 230.0, 210.0, 38.0) +
+			gaussian_feature(px, pz, 1760.0, 1320.0, 170.0, 200.0, 28.0) +
+			gaussian_feature(px, pz, 1280.0, 1730.0, 190.0, 150.0, 26.0);
+		const double gravel_highlands =
+			gaussian_feature(px, pz, 470.0, 1510.0, 250.0, 230.0, 22.0) +
+			gaussian_feature(px, pz, 700.0, 1700.0, 210.0, 180.0, 12.0);
+		const double grass_hills =
+			gaussian_feature(px, pz, 350.0, 360.0, 280.0, 230.0, 8.0) +
+			gaussian_feature(px, pz, 800.0, 300.0, 240.0, 200.0, 5.0);
+		return 34.0 + broad + rolling + detail + snow_mountains +
+			gravel_highlands + grass_hills -
+			four_biome_lake_depression(px, pz);
+	}
+
 	double rolling_hills_height(
 		std::int64_t x,
 		std::int64_t z
@@ -312,10 +473,43 @@ private:
 			wt_reference_road_has_asphalt(road_distance, depth)) {
 			return 10;
 		}
+		if (has_expansive_roads() &&
+			wt_expansive_road_has_asphalt(road_distance, depth)) {
+			return 10;
+		}
 		if (depth >= 12.0 && underground_ore_patch(x, y, z, seed_phase)) {
 			return 8;
 		}
 		if (depth >= 8.0) return 1;
+
+		if (is_four_biome_world()) {
+			const double width = std::max(
+				16.0,
+				static_cast<double>(descriptor_.chunk_count_x) *
+					static_cast<double>(kWtChunkCellsPerAxis)
+			);
+			const double world_depth = std::max(
+				16.0,
+				static_cast<double>(descriptor_.chunk_count_z) *
+					static_cast<double>(kWtChunkCellsPerAxis)
+			);
+			const double center_x = width * 0.5 - 0.5;
+			const double center_z = world_depth * 0.5 - 0.5;
+			const double vertical_boundary = center_x + 110.0 * std::sin(
+				(static_cast<double>(z) - center_z) * 0.0024 +
+				seed_phase * 0.8
+			);
+			const double horizontal_boundary = center_z + 90.0 * std::cos(
+				(static_cast<double>(x) - center_x) * 0.0022 -
+				seed_phase * 0.7
+			);
+			const bool west = static_cast<double>(x) < vertical_boundary;
+			const bool south = static_cast<double>(z) < horizontal_boundary;
+			if (west && south) return 2;
+			if (!west && south) return 4;
+			if (west && !south) return 3;
+			return 5;
+		}
 
 		const double macro_biome =
 			std::sin(static_cast<double>(x) * 0.0042 + seed_phase * 1.5) +
@@ -338,6 +532,10 @@ private:
 
 	WtProceduralWorldDescriptor descriptor_;
 	std::array<double, kWtReferenceRoadSegmentCount> road_height_a_{}, road_height_b_{};
+	std::array<double, kWtExpansiveRoadSegmentCount>
+		expansive_road_height_a_{}, expansive_road_height_b_{};
+	std::array<double, kWtFourBiomeCaveCount>
+		four_biome_cave_portal_surface_y_{};
 };
 
 } // namespace

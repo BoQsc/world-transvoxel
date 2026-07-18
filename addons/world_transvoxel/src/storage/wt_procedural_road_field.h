@@ -6,6 +6,7 @@
 namespace world_transvoxel {
 
 constexpr std::size_t kWtReferenceRoadSegmentCount = 6;
+constexpr std::size_t kWtExpansiveRoadSegmentCount = 18;
 
 struct WtReferenceRoadSegment {
 	double ax = 0.0;
@@ -24,6 +25,11 @@ const std::array<
 	kWtReferenceRoadSegmentCount
 > &wt_reference_road_segments() noexcept;
 
+const std::array<
+	WtReferenceRoadSegment,
+	kWtExpansiveRoadSegmentCount
+> &wt_expansive_road_segments() noexcept;
+
 WtProceduralRoadField wt_sample_reference_road_field(
 	double base_surface,
 	double x,
@@ -33,6 +39,19 @@ WtProceduralRoadField wt_sample_reference_road_field(
 ) noexcept;
 
 bool wt_reference_road_has_asphalt(
+	double distance,
+	double depth
+) noexcept;
+
+WtProceduralRoadField wt_sample_expansive_road_field(
+	double base_surface,
+	double x,
+	double z,
+	const std::array<double, kWtExpansiveRoadSegmentCount> &height_a,
+	const std::array<double, kWtExpansiveRoadSegmentCount> &height_b
+) noexcept;
+
+bool wt_expansive_road_has_asphalt(
 	double distance,
 	double depth
 ) noexcept;

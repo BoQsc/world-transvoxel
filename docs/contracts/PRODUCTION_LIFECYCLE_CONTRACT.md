@@ -64,6 +64,15 @@ shoulders, and a shallow material-ID `10` layer identifies asphalt. This keeps
 the reference road independent of chunk boundaries and avoids encoding a
 network as thousands of unrelated sphere edits.
 
+The named `four_biomes_lakes_caves_roads` preset exercises a larger authored
+world composition through the same lifecycle. Four categorical biome regions,
+three lake volumes, three compact caves, mountains, rolling detail, and an
+18-segment connected road graph all remain deterministic world-space source
+fields. Material ID `9` marks occupied air samples below each lake level for
+the secondary Transvoxel water surface; material ID `10` remains a shallow
+solid asphalt layer. These fields are independent of chunk decomposition and
+viewer LOD.
+
 The control thread:
 
 1. reads and validates the manifest;

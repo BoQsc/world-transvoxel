@@ -981,6 +981,92 @@ void test_procedural_road_network() {
 	);
 }
 
+void test_four_biome_lake_world() {
+	wt::WtProceduralWorldDescriptor descriptor;
+	descriptor.chunk_count_x = 128;
+	descriptor.chunk_count_y = 16;
+	descriptor.chunk_count_z = 128;
+	descriptor.chunk_y = -8;
+	descriptor.source_revision = 190325;
+	descriptor.seed = 19023;
+	descriptor.mode = wt::WtProceduralWorldMode::FourBiomesLakesCavesRoads;
+
+	struct BiomeProbe {
+		wt::WtGridPoint point;
+		std::uint16_t material;
+	};
+	const std::array<BiomeProbe, 4> biome_probes = {{
+		{ { 300, 38, 300 }, 2 },
+		{ { 1500, 43, 300 }, 4 },
+		{ { 300, 28, 1700 }, 3 },
+		{ { 1500, 57, 1700 }, 5 },
+	}};
+	for (const BiomeProbe &probe : biome_probes) {
+		wt::WtScalarSample sample;
+		check(
+			wt::wt_sample_procedural_world(descriptor, probe.point, sample) &&
+				sample.density < 0.0F && sample.material == probe.material,
+			"four-biome categorical surface material mismatch"
+		);
+	}
+
+	for (const wt::WtGridPoint &point : std::array<wt::WtGridPoint, 3>{{
+		{ 650, 20, 700 }, { 1400, 20, 700 }, { 650, 20, 1370 }
+	}}) {
+		wt::WtScalarSample water;
+		check(
+			wt::wt_sample_procedural_world(descriptor, point, water) &&
+				water.density > 0.0F && water.material == 9,
+			"four-biome lake is not authoritative material-volume water"
+		);
+	}
+	wt::WtScalarSample lake_floor;
+	check(
+		wt::wt_sample_procedural_world(
+			descriptor, { 650, 0, 700 }, lake_floor
+		) && lake_floor.density < 0.0F && lake_floor.material != 9,
+		"four-biome lake replaced its solid basin floor"
+	);
+
+	wt::WtScalarSample road_surface;
+	wt::WtScalarSample below_asphalt;
+	check(
+		wt::wt_sample_procedural_world(
+			descriptor, { 590, 35, 390 }, road_surface
+		) && road_surface.density < 0.0F && road_surface.material == 10,
+		"four-biome connected road is not shallow asphalt"
+	);
+	check(
+		wt::wt_sample_procedural_world(
+			descriptor, { 590, 31, 390 }, below_asphalt
+		) && below_asphalt.density < 0.0F && below_asphalt.material != 10,
+		"four-biome asphalt exceeded its declared shallow depth"
+	);
+
+	wt::WtScalarSample cave_center;
+	wt::WtScalarSample cave_exterior;
+	check(
+		wt::wt_sample_procedural_world(
+			descriptor, { 445, 14, 570 }, cave_center
+		) && cave_center.density > 0.0F,
+		"four-biome grass cave chamber was not carved"
+	);
+	check(
+		wt::wt_sample_procedural_world(
+			descriptor, { 445, 14, 630 }, cave_exterior
+		) && cave_exterior.density < 0.0F,
+		"four-biome compact cave changed distant terrain"
+	);
+
+	wt::WtScalarSample mountain;
+	check(
+		wt::wt_sample_procedural_world(
+			descriptor, { 1540, 70, 1400 }, mountain
+		) && mountain.density < 0.0F && mountain.material == 5,
+		"four-biome snow mountain did not reach its authored elevation"
+	);
+}
+
 } // namespace
 
 int main() {
@@ -997,6 +1083,7 @@ int main() {
 	test_procedural_service(evidence);
 	test_procedural_cave_portal();
 	test_procedural_road_network();
+	test_four_biome_lake_world();
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M5_ASYNC_STORAGE_FAIL failures=%d\n", failure_count);
 		return 1;
@@ -1006,7 +1093,8 @@ int main() {
 	std::printf(
 		"M5_ASYNC_STORAGE_PASS requests=5 successes=1 failures=4 "
 		"queue_rejections=1 procedural_strata=1 procedural_lod3=1 "
-		"procedural_cave_portal=1 procedural_roads=1\n"
+		"procedural_cave_portal=1 procedural_roads=1 "
+		"four_biome_lake_world=1\n"
 	);
 	return 0;
 }

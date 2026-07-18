@@ -56,6 +56,13 @@ bool procedural_mode_from_preset_id(
 		mode = WtProceduralWorldMode::RollingHillsCaveRoads;
 		return true;
 	}
+	if (
+		normalized == "four_biomes_lakes_caves_roads" ||
+		normalized == "g23_four_biomes_lakes_mountains_roads"
+	) {
+		mode = WtProceduralWorldMode::FourBiomesLakesCavesRoads;
+		return true;
+	}
 	return false;
 }
 

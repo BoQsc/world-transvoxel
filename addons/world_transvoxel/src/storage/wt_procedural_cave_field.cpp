@@ -161,4 +161,84 @@ double wt_apply_reference_cave_density(
 	);
 }
 
+WtProceduralCaveField wt_sample_four_biome_cave_field(
+	double x,
+	double y,
+	double z,
+	const std::array<double, kWtFourBiomeCaveCount> &portal_surface_y
+) noexcept {
+	if (x >= 330.0 && x <= 495.0 && z >= 495.0 && z <= 615.0 &&
+		y >= portal_surface_y[0] - 60.0 && y <= portal_surface_y[0] + 20.0) {
+		const double portal = capsule_distance(
+			x, y, z,
+			360.0, portal_surface_y[0] + 2.0, 520.0,
+			430.0, portal_surface_y[0] - 22.0, 560.0,
+			12.0
+		);
+		const double chamber = ellipsoid_distance(
+			x, y, z,
+			445.0, portal_surface_y[0] - 25.0, 570.0,
+			38.0, 20.0, 32.0
+		);
+		const double distance = smooth_min(
+			portal, chamber, kCavePrimitiveBlendRadius
+		);
+		return { distance, -distance };
+	}
+	if (x >= 1540.0 && x <= 1665.0 && z >= 495.0 && z <= 670.0 &&
+		y >= portal_surface_y[1] - 65.0 && y <= portal_surface_y[1] + 20.0) {
+		const double portal = capsule_distance(
+			x, y, z,
+			1570.0, portal_surface_y[1] + 2.0, 520.0,
+			1600.0, portal_surface_y[1] - 25.0, 600.0,
+			13.0
+		);
+		const double chamber = ellipsoid_distance(
+			x, y, z,
+			1605.0, portal_surface_y[1] - 28.0, 615.0,
+			42.0, 21.0, 36.0
+		);
+		const double distance = smooth_min(
+			portal, chamber, kCavePrimitiveBlendRadius
+		);
+		return { distance, -distance };
+	}
+	if (x >= 400.0 && x <= 590.0 && z >= 1435.0 && z <= 1570.0 &&
+		y >= portal_surface_y[2] - 65.0 && y <= portal_surface_y[2] + 20.0) {
+		const double portal = capsule_distance(
+			x, y, z,
+			430.0, portal_surface_y[2] + 2.0, 1540.0,
+			515.0, portal_surface_y[2] - 27.0, 1500.0,
+			12.0
+		);
+		const double chamber = ellipsoid_distance(
+			x, y, z,
+			530.0, portal_surface_y[2] - 30.0, 1490.0,
+			40.0, 20.0, 34.0
+		);
+		const double distance = smooth_min(
+			portal, chamber, kCavePrimitiveBlendRadius
+		);
+		return { distance, -distance };
+	}
+	return { 1000000.0, -1000000.0 };
+}
+
+double wt_apply_four_biome_cave_density(
+	double terrain_density,
+	double x,
+	double y,
+	double z,
+	const std::array<double, kWtFourBiomeCaveCount> &portal_surface_y
+) noexcept {
+	const WtProceduralCaveField cave = wt_sample_four_biome_cave_field(
+		x, y, z, portal_surface_y
+	);
+	return smooth_max(
+		terrain_density,
+		cave.air_density,
+		kCaveTerrainBlendRadius
+	);
+}
+
 } // namespace world_transvoxel

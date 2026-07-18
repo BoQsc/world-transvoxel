@@ -64,7 +64,14 @@ preset. Supported preset IDs are:
   through blended shoulders and assigns material ID `10` to the top three
   world units inside each six-unit road corridor. It is a reference source for
   testing road intersections, chunk boundaries, collision, and mixed LODs;
-  it is not a chain of runtime paint stamps.
+  it is not a chain of runtime paint stamps;
+- `four_biomes_lakes_caves_roads` / `g23_four_biomes_lakes_mountains_roads`:
+  a 2048-by-2048 reference world with four categorical, non-mixing surface
+  regions (grass, sand, gravel, and snow), three material-ID `9` lake volumes,
+  three compact surface-connected caves, detailed rolling terrain and snow
+  mountains, and one connected 18-segment material-ID `10` road graph. Lake,
+  cave, terrain, and road fields are evaluated from world coordinates by the
+  native source, so chunk and LOD boundaries do not redefine them.
 
 `start_flat_world()` starts the same native procedural/storage/streaming path
 with a flat surface at y=8. It is intended for baseline playtests and games
@@ -76,20 +83,22 @@ native render sink to every existing and newly created render chunk. Higher-leve
 addons should prefer this over frame-by-frame recursive material scans so newly
 streamed chunks do not flash with the engine default material.
 
-Render meshes expose material data for that override:
+Render meshes expose separate generated and authored material weights for that
+override:
 
 - `UV2.x` is the primary authoritative material ID for the rendered vertex.
 - `UV2.y` is `1` when that material was explicitly authored by an edit and `0`
   when it still comes from the base source.
-- vertex color stores derived surface-biome blend weights
-  (`R=grass/material 2`, `G=gravel/material 3`, `B=sand/material 4`,
-  `A=snow/material 5`).
+- `CUSTOM0` and `CUSTOM1` store generated-source weights for material IDs
+  `1,2,3,4` and `5,7,8,10` respectively.
+- `CUSTOM2` and `CUSTOM3` store explicitly authored edit weights for the same
+  two material groups.
 
 The authored flag is persisted with samples and follows the same solid
 isosurface endpoint as the material ID. It lets a higher-level material keep
 edited material categorical while applying an LOD-stable presentation derived
 from a known procedural source only to unedited source material. The
-vertex-color weights are deterministic render derivatives of material IDs.
+custom weights are deterministic render derivatives of material IDs.
 Neither render channel is a second terrain authority, and neither may replace
 stored material samples, edit journals, or authoritative sample queries.
 Legacy pages without provenance are conservatively exposed as `UV2.y = 1`;
