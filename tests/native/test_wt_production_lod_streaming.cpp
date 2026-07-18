@@ -207,7 +207,7 @@ bool run_g21_near_field_capacity_regression(
 	descriptor.chunk_count_y = 16;
 	descriptor.chunk_count_z = 128;
 	descriptor.chunk_y = -8;
-	descriptor.source_revision = 190321;
+	descriptor.source_revision = 190323;
 	descriptor.seed = 19021;
 	descriptor.mode = wt::WtProceduralWorldMode::RollingHillsCave;
 	std::vector<wt::WtChunkKey> keys = wt::wt_procedural_keys(descriptor);

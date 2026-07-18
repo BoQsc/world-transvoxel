@@ -55,9 +55,10 @@ preset. Supported preset IDs are:
 
 - `mountain_reference` / `deterministic_reference`: the default deterministic
   mountain stress terrain;
-- `rolling_hills_cave`: a bounded rolling-hills inspection terrain with a real
-  carved density-volume cave/chamber, intended for terrain-shape inspection
-  profiles;
+- `rolling_hills_cave`: a bounded rolling-hills inspection terrain with a
+  world-distance cave field, a road-aligned descending surface portal, compact
+  smooth density subtraction, and connected underground chambers. It is
+  intended for terrain-shape and mixed-LOD cave inspection profiles;
 - `rolling_hills_cave_roads`: the same cave terrain plus a deterministic,
   volumetric road-network field. The field grades the solid density volume
   through blended shoulders and assigns material ID `10` to the top three

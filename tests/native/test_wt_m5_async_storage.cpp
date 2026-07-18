@@ -2,9 +2,11 @@
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_chunk_page.h"
 #include "storage/wt_hash256.h"
+#include "storage/wt_procedural_cave_field.h"
 #include "storage/wt_procedural_world_source.h"
 
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
@@ -889,13 +891,45 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 	);
 }
 
+void test_procedural_cave_portal() {
+	const wt::WtProceduralCaveField center =
+		wt::wt_sample_reference_cave_field(900.0, 24.0, 1000.0);
+	check(
+		std::isfinite(center.distance) && center.distance < -25.0 &&
+			center.air_density > 25.0,
+		"procedural cave portal center is not world-distance air"
+	);
+	const wt::WtProceduralCaveField rim =
+		wt::wt_sample_reference_cave_field(926.0, 24.0, 1000.0);
+	const wt::WtProceduralCaveField one_unit_outside =
+		wt::wt_sample_reference_cave_field(927.0, 24.0, 1000.0);
+	check(
+		std::abs(rim.distance) < 0.1 &&
+			one_unit_outside.distance > 0.5 &&
+			one_unit_outside.distance < 1.5,
+		"procedural cave portal is not scaled in world-distance units"
+	);
+	check(
+		wt::wt_apply_reference_cave_density(
+			0.0, 926.0, 24.0, 1000.0
+		) > 0.5,
+		"procedural cave portal rim is not smoothly subtracted"
+	);
+	check(
+		wt::wt_apply_reference_cave_density(
+			-8.0, 700.0, 20.0, 700.0
+		) == -8.0,
+		"procedural cave smoothing changed terrain outside compact support"
+	);
+}
+
 void test_procedural_road_network() {
 	wt::WtProceduralWorldDescriptor descriptor;
 	descriptor.chunk_count_x = 128;
 	descriptor.chunk_count_y = 16;
 	descriptor.chunk_count_z = 128;
 	descriptor.chunk_y = -8;
-	descriptor.source_revision = 190322;
+	descriptor.source_revision = 190324;
 	descriptor.seed = 19021;
 	descriptor.mode = wt::WtProceduralWorldMode::RollingHillsCaveRoads;
 
@@ -961,6 +995,7 @@ int main() {
 	test_async_service(fixture, evidence);
 	test_shutdown_accounting(fixture);
 	test_procedural_service(evidence);
+	test_procedural_cave_portal();
 	test_procedural_road_network();
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M5_ASYNC_STORAGE_FAIL failures=%d\n", failure_count);
@@ -971,7 +1006,7 @@ int main() {
 	std::printf(
 		"M5_ASYNC_STORAGE_PASS requests=5 successes=1 failures=4 "
 		"queue_rejections=1 procedural_strata=1 procedural_lod3=1 "
-		"procedural_roads=1\n"
+		"procedural_cave_portal=1 procedural_roads=1\n"
 	);
 	return 0;
 }
