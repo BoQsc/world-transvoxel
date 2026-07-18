@@ -6,6 +6,7 @@
 #include <godot_cpp/core/memory.hpp>
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/color.hpp>
+#include <godot_cpp/variant/packed_byte_array.hpp>
 #include <godot_cpp/variant/packed_int32_array.hpp>
 #include <godot_cpp/variant/packed_color_array.hpp>
 #include <godot_cpp/variant/packed_vector2_array.hpp>
@@ -78,6 +79,51 @@ godot::Color surface_material_blend_weights(std::uint16_t material) {
 	}
 }
 
+int material_weight_slot(std::uint16_t material) noexcept {
+	switch (material) {
+		case 1:
+			return 0;
+		case 2:
+			return 1;
+		case 3:
+			return 2;
+		case 4:
+			return 3;
+		case 5:
+			return 4;
+		case 7:
+			return 5;
+		case 8:
+			return 6;
+		case 10:
+			return 7;
+		case 9:
+			return -1;
+		default:
+			return 0;
+	}
+}
+
+void set_material_weight(
+	godot::PackedByteArray &low_weights,
+	godot::PackedByteArray &high_weights,
+	std::size_t vertex_index,
+	std::uint16_t material
+) {
+	const int slot = material_weight_slot(material);
+	if (slot < 0) {
+		return;
+	}
+	const std::int64_t component = static_cast<std::int64_t>(
+		vertex_index * 4U + static_cast<std::size_t>(slot % 4)
+	);
+	if (slot < 4) {
+		low_weights.set(component, 255U);
+	} else {
+		high_weights.set(component, 255U);
+	}
+}
+
 bool add_render_surface(
 	godot::ArrayMesh &mesh,
 	const std::vector<WtRenderVertex> &vertices,
@@ -95,11 +141,21 @@ bool add_render_surface(
 	godot::PackedVector3Array normals;
 	godot::PackedVector2Array materials;
 	godot::PackedColorArray surface_material_blends;
+	godot::PackedByteArray generated_material_weights_low;
+	godot::PackedByteArray generated_material_weights_high;
+	godot::PackedByteArray authored_material_weights_low;
+	godot::PackedByteArray authored_material_weights_high;
 	godot::PackedInt32Array indices;
 	positions.resize(static_cast<std::int64_t>(vertices.size()));
 	normals.resize(static_cast<std::int64_t>(vertices.size()));
 	materials.resize(static_cast<std::int64_t>(vertices.size()));
 	surface_material_blends.resize(static_cast<std::int64_t>(vertices.size()));
+	const std::int64_t material_weight_component_count =
+		static_cast<std::int64_t>(vertices.size() * 4U);
+	generated_material_weights_low.resize(material_weight_component_count);
+	generated_material_weights_high.resize(material_weight_component_count);
+	authored_material_weights_low.resize(material_weight_component_count);
+	authored_material_weights_high.resize(material_weight_component_count);
 	const godot::Vector3 world_origin = to_godot(origin);
 	for (std::size_t index = 0; index < vertices.size(); ++index) {
 		const WtRenderVertex &vertex = vertices[index];
@@ -118,6 +174,21 @@ bool add_render_surface(
 			static_cast<std::int64_t>(index),
 			surface_material_blend_weights(vertex.material)
 		);
+		if (vertex.material_authored) {
+			set_material_weight(
+				authored_material_weights_low,
+				authored_material_weights_high,
+				index,
+				vertex.material
+			);
+		} else {
+			set_material_weight(
+				generated_material_weights_low,
+				generated_material_weights_high,
+				index,
+				vertex.material
+			);
+		}
 	}
 	std::vector<std::int32_t> godot_indices;
 	godot_indices.reserve(source_indices.size());
@@ -142,6 +213,10 @@ bool add_render_surface(
 	arrays[godot::Mesh::ARRAY_NORMAL] = normals;
 	arrays[godot::Mesh::ARRAY_COLOR] = surface_material_blends;
 	arrays[godot::Mesh::ARRAY_TEX_UV2] = materials;
+	arrays[godot::Mesh::ARRAY_CUSTOM0] = generated_material_weights_low;
+	arrays[godot::Mesh::ARRAY_CUSTOM1] = generated_material_weights_high;
+	arrays[godot::Mesh::ARRAY_CUSTOM2] = authored_material_weights_low;
+	arrays[godot::Mesh::ARRAY_CUSTOM3] = authored_material_weights_high;
 	arrays[godot::Mesh::ARRAY_INDEX] = indices;
 	mesh.add_surface_from_arrays(godot::Mesh::PRIMITIVE_TRIANGLES, arrays);
 	mesh.surface_set_name(mesh.get_surface_count() - 1, name);
