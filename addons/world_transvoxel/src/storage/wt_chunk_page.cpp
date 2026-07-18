@@ -10,8 +10,10 @@ namespace world_transvoxel {
 namespace {
 
 std::size_t sample_bytes(std::uint16_t schema_minor) noexcept {
+	if (schema_minor >= 3) return kWtChunkPageCurrentSampleBytes;
 	return schema_minor >= 2 ?
-		kWtChunkPageCurrentSampleBytes : kWtChunkPageSampleBytes;
+		kWtChunkPageSampleBytes + kWtChunkPageMaterialProvenanceBytes :
+		kWtChunkPageSampleBytes;
 }
 
 std::size_t surface_shift_record_bytes(std::uint16_t schema_minor) noexcept {
@@ -292,12 +294,15 @@ WtChunkPageStatus wt_write_chunk_page(
 		kWtChunkPageSampleCount * kWtChunkPageCurrentSampleBytes
 	);
 	for (const WtScalarSample &sample : page.samples) {
-		if (!std::isfinite(sample.density)) {
+		if (!std::isfinite(sample.density) ||
+			!std::isfinite(sample.static_water_density)) {
 			return WtChunkPageStatus::InvalidSample;
 		}
 		if (sample_writer.write_f32(sample.density) != WtBinaryStatus::Ok ||
 			sample_writer.write_u16(sample.material) != WtBinaryStatus::Ok ||
 			sample_writer.write_u8(sample.material_authored ? 1U : 0U) !=
+				WtBinaryStatus::Ok ||
+			sample_writer.write_f32(sample.static_water_density) !=
 				WtBinaryStatus::Ok) {
 			return WtChunkPageStatus::CapacityExceeded;
 		}
@@ -393,7 +398,11 @@ WtChunkPageStatus wt_decode_chunk_page(
 			(view.metadata.schema_minor >= 2 &&
 				(reader.read_u8(material_authored) != WtBinaryStatus::Ok ||
 					material_authored > 1U)) ||
-			!std::isfinite(sample.density)) {
+			(view.metadata.schema_minor >= 3 &&
+				reader.read_f32(sample.static_water_density) !=
+					WtBinaryStatus::Ok) ||
+			!std::isfinite(sample.density) ||
+			!std::isfinite(sample.static_water_density)) {
 			output = {};
 			return WtChunkPageStatus::InvalidSample;
 		}

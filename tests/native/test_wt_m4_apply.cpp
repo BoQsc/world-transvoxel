@@ -285,7 +285,9 @@ void test_replay_and_overlap(std::vector<std::uint8_t> &evidence) {
 					left_sample.density == right_sample.density &&
 						left_sample.material == right_sample.material &&
 						left_sample.material_authored ==
-							right_sample.material_authored,
+							right_sample.material_authored &&
+						left_sample.static_water_density ==
+							right_sample.static_water_density,
 					"neighbor page overlap diverged after replay"
 				);
 			}

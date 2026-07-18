@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <unordered_map>
 #include <utility>
 
@@ -177,20 +178,105 @@ WtRenderBuildStatus append_combined_buffer(
 	return WtRenderBuildStatus::Ok;
 }
 
+double projected_triangle_area_twice(
+	const WtVec3 &a,
+	const WtVec3 &b,
+	const WtVec3 &c
+) noexcept {
+	return std::abs(
+		(static_cast<double>(b.x) - a.x) *
+			(static_cast<double>(c.z) - a.z) -
+		(static_cast<double>(b.z) - a.z) *
+			(static_cast<double>(c.x) - a.x)
+	);
+}
+
 void keep_static_water_heightfield(WtRenderPayload &water) {
-	constexpr float minimum_upward_normal = 0.01F;
-	std::vector<std::uint32_t> free_surface;
-	free_surface.reserve(water.indices.size());
-	for (std::size_t triangle = 0; triangle < water.indices.size(); triangle += 3) {
-		const std::uint32_t a = water.indices[triangle];
-		const std::uint32_t b = water.indices[triangle + 1];
-		const std::uint32_t c = water.indices[triangle + 2];
+	constexpr float kMinimumAverageUpNormal = 0.01F;
+	const std::size_t triangle_count = water.indices.size() / 3U;
+	std::vector<bool> upward_coverage(triangle_count, false);
+	std::vector<std::size_t> parent(water.vertices.size());
+	for (std::size_t index = 0; index < parent.size(); ++index) {
+		parent[index] = index;
+	}
+	auto find_root = [&parent](std::size_t index) {
+		std::size_t root = index;
+		while (parent[root] != root) {
+			root = parent[root];
+		}
+		while (parent[index] != index) {
+			const std::size_t next = parent[index];
+			parent[index] = root;
+			index = next;
+		}
+		return root;
+	};
+	auto join = [&parent, &find_root](std::size_t a, std::size_t b) {
+		a = find_root(a);
+		b = find_root(b);
+		if (a != b) {
+			parent[b] = a;
+		}
+	};
+	for (std::size_t triangle = 0; triangle < triangle_count; ++triangle) {
+		const std::size_t first = triangle * 3U;
+		const std::uint32_t a = water.indices[first];
+		const std::uint32_t b = water.indices[first + 1U];
+		const std::uint32_t c = water.indices[first + 2U];
 		const float average_up = (
 			water.vertices[a].normal.y +
 			water.vertices[b].normal.y +
 			water.vertices[c].normal.y
 		) / 3.0F;
-		if (average_up > minimum_upward_normal) {
+		if (average_up > kMinimumAverageUpNormal) {
+			upward_coverage[triangle] = true;
+			join(a, b);
+			join(a, c);
+		}
+	}
+	std::vector<float> surface_level(
+		water.vertices.size(), -std::numeric_limits<float>::infinity()
+	);
+	for (std::size_t triangle = 0; triangle < triangle_count; ++triangle) {
+		if (!upward_coverage[triangle]) {
+			continue;
+		}
+		const std::size_t first = triangle * 3U;
+		const std::size_t root = find_root(water.indices[first]);
+		for (unsigned int corner = 0; corner < 3; ++corner) {
+			const std::uint32_t vertex = water.indices[first + corner];
+			surface_level[root] = std::max(
+				surface_level[root], water.vertices[vertex].position.y
+			);
+		}
+	}
+	for (std::size_t triangle = 0; triangle < triangle_count; ++triangle) {
+		if (!upward_coverage[triangle]) {
+			continue;
+		}
+		const std::size_t first = triangle * 3U;
+		for (unsigned int corner = 0; corner < 3; ++corner) {
+			const std::uint32_t vertex = water.indices[first + corner];
+			water.vertices[vertex].position.y =
+				surface_level[find_root(vertex)];
+			water.vertices[vertex].normal = { 0.0F, 1.0F, 0.0F };
+		}
+	}
+	std::vector<std::uint32_t> free_surface;
+	free_surface.reserve(water.indices.size());
+	for (std::size_t triangle = 0; triangle < triangle_count; ++triangle) {
+		if (!upward_coverage[triangle]) {
+			continue;
+		}
+		const std::size_t first = triangle * 3U;
+		const std::uint32_t a = water.indices[first];
+		const std::uint32_t b = water.indices[first + 1U];
+		const std::uint32_t c = water.indices[first + 2U];
+		if (projected_triangle_area_twice(
+				water.vertices[a].position,
+				water.vertices[b].position,
+				water.vertices[c].position
+			) > 1.0e-8) {
 			free_surface.push_back(a);
 			free_surface.push_back(b);
 			free_surface.push_back(c);

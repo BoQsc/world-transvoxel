@@ -437,12 +437,19 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 	auto water_mesh = std::make_shared<WtChunkMeshResult>();
 	bool water_present = false;
 	if (mesh_ok) {
+		bool explicit_water_inside = false;
+		bool explicit_water_outside = false;
 		for (const Dependency &dependency : record->dependencies) {
 			if (!dependency.page) {
 				continue;
 			}
 			for (const WtScalarSample &sample : dependency.page->samples) {
-				if (WtMaterialVolumeSampleSource::is_occupied(
+				if (sample.static_water_density != kWtNoStaticWaterDensity) {
+					explicit_water_inside = explicit_water_inside ||
+						sample.static_water_density < 0.0F;
+					explicit_water_outside = explicit_water_outside ||
+						sample.static_water_density >= 0.0F;
+				} else if (WtMaterialVolumeSampleSource::is_occupied(
 						sample,
 						kWtStaticWaterMaterialId
 					)) {
@@ -450,6 +457,8 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 					break;
 				}
 			}
+			water_present = water_present ||
+				(explicit_water_inside && explicit_water_outside);
 			if (water_present) {
 				break;
 			}

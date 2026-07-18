@@ -34,7 +34,7 @@ public:
 	) noexcept;
 
 private:
-	bool is_surface_interior(
+	float free_surface_density(
 		const WtGridPoint &point,
 		const WtScalarSample &sample
 	) const noexcept;

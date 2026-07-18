@@ -68,10 +68,15 @@ The named `four_biomes_lakes_caves_roads` preset exercises a larger authored
 world composition through the same lifecycle. Four categorical biome regions,
 three lake volumes, three compact caves, mountains, rolling detail, and an
 18-segment connected road graph all remain deterministic world-space source
-fields. Material ID `9` marks occupied air samples below each lake level for
-the secondary Transvoxel water surface; material ID `10` remains a shallow
-solid asphalt layer. These fields are independent of chunk decomposition and
-viewer LOD.
+fields. Each lake owns an explicit secondary signed-density field whose zero
+crossing is its gravity-aligned free surface and whose horizontal domain bounds
+the intended catchment. The water field is meshed independently of terrain LOD;
+the terrain surface depth-occludes portions beneath solid ground, while material
+ID `9` labels occupied terrain-air samples for queries and presentation. This
+separation prevents categorical material sampling or a terrain-LOD boolean
+intersection from moving the lake surface or shoreline. Material ID `10`
+remains a shallow solid asphalt layer. These fields are independent of chunk
+decomposition and viewer LOD.
 
 The control thread:
 

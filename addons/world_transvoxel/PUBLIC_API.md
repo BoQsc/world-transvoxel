@@ -69,9 +69,13 @@ preset. Supported preset IDs are:
   a 2048-by-2048 reference world with four categorical, non-mixing surface
   regions (grass, sand, gravel, and snow), three material-ID `9` lake volumes,
   three compact surface-connected caves, detailed rolling terrain and snow
-  mountains, and one connected 18-segment material-ID `10` road graph. Lake,
-  cave, terrain, and road fields are evaluated from world coordinates by the
-  native source, so chunk and LOD boundaries do not redefine them.
+  mountains, and one connected 18-segment material-ID `10` road graph. Each
+  lake has an explicit gravity-aligned secondary signed-density field that is
+  meshed independently of terrain LOD; terrain depth-occludes water beneath
+  solid ground. Material ID `9` labels occupied terrain-air samples but is not
+  used as the lake's geometry. Lake, cave, terrain, and road fields are evaluated
+  from world coordinates by the native source, so chunk and LOD boundaries do
+  not redefine them.
 
 `start_flat_world()` starts the same native procedural/storage/streaming path
 with a flat surface at y=8. It is intended for baseline playtests and games
@@ -103,7 +107,9 @@ Neither render channel is a second terrain authority, and neither may replace
 stored material samples, edit journals, or authoritative sample queries.
 Legacy pages without provenance are conservatively exposed as `UV2.y = 1`;
 rebake the base and replay edits to recover source/edit provenance in schema
-1.2.
+1.2 or newer. Schema 1.3 additionally persists the optional secondary
+static-water scalar needed for an LOD-invariant free surface; older pages retain
+the legacy material-derived fallback until rebaked.
 
 Streaming and readiness:
 

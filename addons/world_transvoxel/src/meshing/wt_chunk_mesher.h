@@ -6,10 +6,14 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <unordered_map>
 #include <vector>
 
 namespace world_transvoxel {
+
+constexpr float kWtNoStaticWaterDensity =
+	std::numeric_limits<float>::max();
 
 constexpr std::size_t kWtMaximumRegularChunkVertices = 49152;
 constexpr std::size_t kWtMaximumRegularChunkIndices = 61440;
@@ -23,6 +27,7 @@ struct WtScalarSample {
 	float density = 0.0F;
 	std::uint16_t material = 0;
 	bool material_authored = false;
+	float static_water_density = kWtNoStaticWaterDensity;
 };
 
 struct WtResolvedMultiresolutionEdge;

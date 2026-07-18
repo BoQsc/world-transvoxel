@@ -113,17 +113,34 @@ void test_render_builder(wt::WtRenderPayload &render) {
 	);
 	add_triangle(
 		water.regular,
-		{ { 6.0F, 0.0F, 4.0F }, { 1.0F, 0.0F, 0.0F }, 9, 0, 0 },
-		{ { 6.0F, 1.0F, 4.0F }, { 1.0F, 0.0F, 0.0F }, 9, 0, 0 },
-		{ { 6.0F, 0.0F, 5.0F }, { 1.0F, 0.0F, 0.0F }, 9, 0, 0 }
+		{ { 6.0F, 0.0F, 4.0F }, { 0.0F, 1.0F, 0.0F }, 9, 0, 0 },
+		{ { 6.0F, 1.0F, 4.0F }, { 0.0F, 1.0F, 0.0F }, 9, 0, 0 },
+		{ { 6.0F, 0.0F, 5.0F }, { 0.0F, 1.0F, 0.0F }, 9, 0, 0 }
+	);
+	add_triangle(
+		water.regular,
+		{ { 8.0F, 1.0F, 4.0F }, { 0.0F, 1.0F, 0.0F }, 9, 0, 0 },
+		{ { 9.0F, 0.0F, 4.0F }, { 0.0F, 1.0F, 0.0F }, 9, 0, 0 },
+		{ { 8.0F, 1.0F, 5.0F }, { 0.0F, 1.0F, 0.0F }, 9, 0, 0 }
+	);
+	add_triangle(
+		water.regular,
+		{ { 10.0F, 4.0F, 4.0F }, { 0.0F, 1.0F, 0.0F }, 9, 0, 0 },
+		{ { 11.0F, 0.0F, 4.0F }, { 0.0F, 1.0F, 0.0F }, 9, 0, 0 },
+		{ { 10.0F, 4.0F, 5.0F }, { 0.0F, 1.0F, 0.0F }, 9, 0, 0 }
 	);
 	check(wt::wt_build_render_payload(mesh, water, { 7 }, render) ==
 		wt::WtRenderBuildStatus::Ok, "water render payload failed");
 	check(render.vertices.size() == 6 && render.indices.size() == 6 &&
-		render.water_vertices.size() == 6 && render.water_indices.size() == 3,
+		render.water_vertices.size() == 12 && render.water_indices.size() == 9,
 		"water heightfield did not reject vertical closure geometry");
 	check(render.water_vertices[0].material == 9,
 		"water render surface lost its material identity");
+	check(render.water_vertices[0].normal.y == 1.0F,
+		"water free surface did not receive the authoritative gravity normal");
+	check(render.water_vertices[7].position.y == 1.0F &&
+		render.water_vertices[10].position.y == 4.0F,
+		"water shoreline coverage was not flattened to its gravity level");
 }
 
 void test_collision_builder() {

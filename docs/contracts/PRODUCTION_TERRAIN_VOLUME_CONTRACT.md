@@ -27,6 +27,8 @@ source of truth:
 
 - authoritative density samples;
 - authoritative material samples;
+- authoritative secondary static-water density samples when static water is
+  present;
 - 3D chunk/page identity including X, Y, Z, and LOD;
 - edit journals or snapshots that replay into those samples;
 - render, collision, and transition meshes derived from the samples.
@@ -68,11 +70,16 @@ This contract does not require:
 - natural cave generation;
 - ore veins;
 - collapse simulation;
-- water or lava simulation;
+- dynamic water or lava simulation;
 - vegetation;
 - block buildings;
 - planet-scale coordinate transforms;
 - exact full-resolution visibility of every edit from every distance.
 
-Those systems must be implemented on top of the same density/material volume
-contract if and when they become part of a later milestone.
+Static water may use a separate signed scalar field that is sampled, paged, and
+meshed under the same spatial/LOD contract independently of the terrain scalar.
+Terrain depth-occludes water beneath solid ground; it must not be boolean-
+intersected into the water geometry because doing so makes the shoreline depend
+on terrain LOD. A categorical material ID alone is not sufficient geometry for
+a stable free surface. Dynamic fluid simulation remains a later system layered
+on the same volume authority.

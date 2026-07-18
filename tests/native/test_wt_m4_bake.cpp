@@ -83,7 +83,8 @@ bool same_sample(
 ) {
 	return left.density == right.density &&
 		left.material == right.material &&
-		left.material_authored == right.material_authored;
+		left.material_authored == right.material_authored &&
+		left.static_water_density == right.static_water_density;
 }
 
 void print_hash(const wt::WtHash256 &hash) {

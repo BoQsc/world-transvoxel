@@ -2,6 +2,7 @@
 #include "bake/wt_chunk_baker.h"
 #include "editing/wt_chunk_edit_state.h"
 #include "meshing/wt_material_volume_sample_source.h"
+#include "render/wt_render_payload.h"
 #include "services/wt_page_meshing_runtime.h"
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_chunk_page_sample_source.h"
@@ -129,10 +130,18 @@ private:
 
 class MaterialVolumeDistanceSource final : public wt::WtChunkSampleSource {
 public:
+	explicit MaterialVolumeDistanceSource(std::int64_t spacing = 1) noexcept :
+		spacing_(spacing) {
+	}
+
 	bool sample(
 		const wt::WtGridPoint &point,
 		wt::WtScalarSample &output
 	) const noexcept override {
+		if (spacing_ <= 0 || point.x % spacing_ != 0 ||
+			point.y % spacing_ != 0 || point.z % spacing_ != 0) {
+			return false;
+		}
 		if (point.x == 0 && point.y <= 0) {
 			output = { 3.0F, wt::kWtStaticWaterMaterialId };
 		} else if (point.x == -1) {
@@ -144,6 +153,32 @@ public:
 		}
 		return true;
 	}
+
+private:
+	std::int64_t spacing_ = 1;
+};
+
+class FourBiomeProceduralSource final : public wt::WtChunkSampleSource {
+public:
+	FourBiomeProceduralSource() noexcept {
+		descriptor_.chunk_count_x = 128;
+		descriptor_.chunk_count_y = 16;
+		descriptor_.chunk_count_z = 128;
+		descriptor_.chunk_y = -8;
+		descriptor_.source_revision = 190325;
+		descriptor_.seed = 19023;
+		descriptor_.mode = wt::WtProceduralWorldMode::FourBiomesLakesCavesRoads;
+	}
+
+	bool sample(
+		const wt::WtGridPoint &point,
+		wt::WtScalarSample &output
+	) const noexcept override {
+		return wt::wt_sample_procedural_world(descriptor_, point, output);
+	}
+
+private:
+	wt::WtProceduralWorldDescriptor descriptor_;
 };
 
 struct ReproSphereEdit {
@@ -348,15 +383,141 @@ void test_material_volume_continuous_distance(
 		terrain, wt::kWtStaticWaterMaterialId
 	);
 	wt::WtScalarSample sample;
-	check(water.sample({ 0, 0, 0 }, sample) && sample.density == -1.0F,
-		"material volume did not classify occupied water as interior");
+	check(water.sample({ 0, 0, 0 }, sample) && sample.density == -0.5F,
+		"material volume did not preserve the free-surface distance below water");
+	check(water.sample({ 0, -3, 0 }, sample) && sample.density == -3.5F,
+		"material volume lost continuous depth below the free surface");
 	check(water.sample({ -1, 0, 0 }, sample) && sample.density == -0.25F,
 		"material volume lost continuous solid terrain distance");
 	check(water.sample({ 0, 1, 0 }, sample) && sample.density == 0.5F,
 		"material volume lost continuous air distance above water");
 	check(water.sample({ 10, 1, 0 }, sample) && sample.density == -0.75F,
 		"material volume did not suppress unrelated air");
+	for (const std::int64_t spacing : { 2, 4, 8 }) {
+		const MaterialVolumeDistanceSource spaced_terrain(spacing);
+		const wt::WtMaterialVolumeSampleSource spaced_water(
+			spaced_terrain, wt::kWtStaticWaterMaterialId
+		);
+		check(spaced_water.sample({ 0, 0, 0 }, sample) &&
+			sample.density == -0.5F * static_cast<float>(spacing),
+			"material volume lost the free surface below a coarse page sample");
+		check(spaced_water.sample({ 0, spacing, 0 }, sample) &&
+			sample.density == 0.5F * static_cast<float>(spacing),
+			"material volume lost the free surface above a coarse page sample");
+	}
 	append_u64(evidence, 1);
+}
+
+void test_four_biome_water_free_surface(
+	std::vector<std::uint8_t> &evidence
+) {
+	const FourBiomeProceduralSource terrain;
+	const wt::WtMaterialVolumeSampleSource water(
+		terrain, wt::kWtStaticWaterMaterialId
+	);
+	const wt::WtChunkMesher mesher(wt::wt_get_transvoxel_mit_backend());
+	wt::WtChunkMeshingScratch terrain_scratch;
+	wt::WtChunkMeshingScratch water_scratch;
+	for (std::uint8_t lod = 0; lod <= 3; ++lod) {
+		const std::int64_t extent = wt::wt_chunk_extent(lod);
+		const wt::WtChunkKey key = {
+			static_cast<std::int32_t>(650 / extent),
+			static_cast<std::int32_t>(23 / extent),
+			static_cast<std::int32_t>(700 / extent),
+			lod,
+		};
+		wt::WtChunkMeshResult terrain_mesh;
+		wt::WtChunkMeshResult water_mesh;
+		check(mesher.mesh(
+				{ key, 0, 0.0F, 0.25F }, terrain, terrain_mesh, terrain_scratch
+			) == wt::WtChunkMeshingStatus::Ok,
+			"four-biome lake terrain mesh failed");
+		check(mesher.mesh(
+				{ key, 0, 0.0F, 0.25F }, water, water_mesh, water_scratch
+			) == wt::WtChunkMeshingStatus::Ok,
+			"four-biome lake water mesh failed");
+		wt::WtRenderPayload render;
+		check(wt::wt_build_render_payload(
+				terrain_mesh, water_mesh, { 1 }, render
+			) == wt::WtRenderBuildStatus::Ok,
+			"four-biome lake render payload failed");
+		check(!render.water_indices.empty(),
+			"four-biome lake free surface was filtered out");
+		const float expected_local_level = 23.5F -
+			static_cast<float>(wt::wt_chunk_bounds(key).minimum.y);
+		for (const std::uint32_t index : render.water_indices) {
+			check(std::abs(
+					render.water_vertices[index].position.y -
+					expected_local_level
+				) <= 0.011F,
+				"four-biome lake free surface moved between LODs");
+		}
+		append_u64(evidence, render.water_indices.size());
+	}
+	std::array<double, 4> shoreline_area{};
+	for (std::uint8_t lod = 0; lod <= 3; ++lod) {
+		const std::int64_t extent = wt::wt_chunk_extent(lod);
+		const std::int32_t chunk_min_x = static_cast<std::int32_t>(768 / extent);
+		const std::int32_t chunk_min_z = static_cast<std::int32_t>(640 / extent);
+		const std::int32_t chunk_count = static_cast<std::int32_t>(128 / extent);
+		for (std::int32_t z = 0; z < chunk_count; ++z) {
+			for (std::int32_t x = 0; x < chunk_count; ++x) {
+				const wt::WtChunkKey key = {
+					chunk_min_x + x,
+					static_cast<std::int32_t>(23 / extent),
+					chunk_min_z + z,
+					lod,
+				};
+				wt::WtChunkMeshResult terrain_mesh;
+				wt::WtChunkMeshResult water_mesh;
+				check(mesher.mesh(
+						{ key, 0, 0.0F, 0.25F }, terrain,
+						terrain_mesh, terrain_scratch
+					) == wt::WtChunkMeshingStatus::Ok,
+					"four-biome shoreline terrain mesh failed");
+				check(mesher.mesh(
+						{ key, 0, 0.0F, 0.25F }, water,
+						water_mesh, water_scratch
+					) == wt::WtChunkMeshingStatus::Ok,
+					"four-biome shoreline water mesh failed");
+				wt::WtRenderPayload render;
+				check(wt::wt_build_render_payload(
+						terrain_mesh, water_mesh, { 1 }, render
+					) == wt::WtRenderBuildStatus::Ok,
+					"four-biome shoreline render payload failed");
+				for (std::size_t triangle = 0;
+					triangle < render.water_indices.size(); triangle += 3U) {
+					const wt::WtVec3 &a = render.water_vertices[
+						render.water_indices[triangle]
+					].position;
+					const wt::WtVec3 &b = render.water_vertices[
+						render.water_indices[triangle + 1U]
+					].position;
+					const wt::WtVec3 &c = render.water_vertices[
+						render.water_indices[triangle + 2U]
+					].position;
+					shoreline_area[lod] += 0.5 * std::abs(
+						static_cast<double>(b.x - a.x) * (c.z - a.z) -
+						static_cast<double>(b.z - a.z) * (c.x - a.x)
+					);
+				}
+			}
+		}
+	}
+	std::printf(
+		"M5_WATER_SHORELINE_AREA %.3f %.3f %.3f %.3f\n",
+		shoreline_area[0], shoreline_area[1],
+		shoreline_area[2], shoreline_area[3]
+	);
+	const auto footprint_range = std::minmax_element(
+		shoreline_area.begin(), shoreline_area.end()
+	);
+	check(
+		*footprint_range.first > 0.0 &&
+		(*footprint_range.second - *footprint_range.first) <=
+			*footprint_range.second * 0.002,
+		"four-biome lake shoreline footprint moved between LODs"
+	);
 }
 
 Edge make_test_edge(QuantizedPoint a, QuantizedPoint b) {
@@ -1462,6 +1623,7 @@ int main() {
 	std::vector<std::uint8_t> evidence;
 	test_representable_sphere_difference_topology(evidence);
 	test_material_volume_continuous_distance(evidence);
+	test_four_biome_water_free_surface(evidence);
 	test_human_boundary_edit_repro(evidence);
 	test_streaming_pixel_transition_repro(evidence);
 	test_runtime_lifecycle(fixture, evidence);
@@ -1479,7 +1641,8 @@ int main() {
 		"M5_PAGE_MESHING_RUNTIME_PASS dependencies=13 cache_entries=2 "
 		"backpressure=1 cancellations=1 invalidations=1 missing_support=1 "
 		"human_boundary_repro=1 edited_coarse_rebuild=1 "
-		"sphere_difference_topology=1 smooth_sphere_difference=1 material_volume_distance=1\n"
+		"sphere_difference_topology=1 smooth_sphere_difference=1 "
+		"material_volume_distance=1 water_lod_footprint=1\n"
 	);
 	return 0;
 }

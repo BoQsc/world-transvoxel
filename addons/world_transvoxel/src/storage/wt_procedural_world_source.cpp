@@ -122,9 +122,9 @@ struct WtProceduralLake {
 };
 
 constexpr std::array<WtProceduralLake, 3> kFourBiomeLakes = {{
-	{ 650.0, 700.0, 230.0, 170.0, 23.0, 34.0 },
-	{ 1400.0, 700.0, 240.0, 170.0, 21.0, 36.0 },
-	{ 650.0, 1370.0, 220.0, 160.0, 27.0, 38.0 },
+	{ 650.0, 700.0, 230.0, 170.0, 23.5, 34.0 },
+	{ 1400.0, 700.0, 240.0, 170.0, 21.5, 36.0 },
+	{ 650.0, 1370.0, 220.0, 160.0, 27.5, 38.0 },
 }};
 
 double four_biome_lake_depression(double x, double z) noexcept {
@@ -144,19 +144,24 @@ double four_biome_lake_depression(double x, double z) noexcept {
 	return depression;
 }
 
-bool four_biome_lake_contains_water(
+double four_biome_static_water_density(
 	double x,
 	double y,
 	double z
 ) noexcept {
+	double density = std::numeric_limits<double>::infinity();
 	for (const WtProceduralLake &lake : kFourBiomeLakes) {
 		const double dx = (x - lake.center_x) / lake.radius_x;
 		const double dz = (z - lake.center_z) / lake.radius_z;
-		if (dx * dx + dz * dz < 1.0 && y <= lake.water_level) {
-			return true;
-		}
+		const double radial_distance =
+			(std::sqrt(dx * dx + dz * dz) - 1.0) *
+			std::min(lake.radius_x, lake.radius_z);
+		density = std::min(
+			density,
+			std::max(y - lake.water_level, radial_distance)
+		);
 	}
-	return false;
+	return density;
 }
 
 class WtProceduralTerrainVolumeSource final : public WtChunkSampleSource {
@@ -240,6 +245,12 @@ public:
 			);
 		}
 		output.density = regularized_density(density);
+		output.static_water_density = is_four_biome_world() ?
+			regularized_density(four_biome_static_water_density(
+				static_cast<double>(point.x),
+				static_cast<double>(point.y),
+				static_cast<double>(point.z)
+			)) : kWtNoStaticWaterDensity;
 		output.material = is_four_biome_world() && density >= 0.0 ? 1 :
 			material(
 				surface,
@@ -249,11 +260,7 @@ public:
 				point.z
 			);
 		if (is_four_biome_world() && density >= 0.0 &&
-			four_biome_lake_contains_water(
-				static_cast<double>(point.x),
-				static_cast<double>(point.y),
-				static_cast<double>(point.z)
-			)) {
+			output.static_water_density < 0.0F) {
 			output.material = 9;
 		}
 		output.material_authored = false;

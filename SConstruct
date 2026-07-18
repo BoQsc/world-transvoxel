@@ -653,6 +653,7 @@ m5_page_meshing_runtime_test = native_test_env.Program(
         "addons/world_transvoxel/src/meshing/wt_transition_face_constraints.cpp",
         "addons/world_transvoxel/src/services/wt_page_meshing_runtime.cpp",
 		"addons/world_transvoxel/src/meshing/wt_material_volume_sample_source.cpp",
+		"addons/world_transvoxel/src/render/wt_render_payload.cpp",
         "addons/world_transvoxel/src/services/wt_page_meshing_runtime_control.cpp",
         "addons/world_transvoxel/src/storage/wt_async_storage_service.cpp",
         "addons/world_transvoxel/src/storage/wt_binary_io.cpp",

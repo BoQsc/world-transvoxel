@@ -10,9 +10,9 @@ and zero-copy section views.
 
 ## Page role
 
-One `wtchunk` file contains the complete padded scalar, material, and
-material-authoring provenance sample grid for one chunk key and one source
-revision. Pages are standalone,
+One `wtchunk` file contains the complete padded terrain scalar, material,
+material-authoring provenance, and optional static-water scalar sample grid
+for one chunk key and one source revision. Pages are standalone,
 content-addressable units. The `wtworld` index maps chunk keys to complete
 page hashes and byte sizes without requiring a monolithic world decode.
 
@@ -23,10 +23,10 @@ resources, collision resources, or backend-specific data.
 
 ## Sections
 
-The container magic is `WTCHUNK`. Feature flags are zero for schema 1.2. The
+The container magic is `WTCHUNK`. Feature flags are zero for schema 1.3. The
 container source revision must equal the revision in `CHDR`.
 
-Schema 1.2 requires exactly three sections:
+Schema 1.3 requires exactly three sections:
 
 | FourCC | Flags | Codec | Purpose |
 | --- | ---: | --- | --- |
@@ -35,16 +35,20 @@ Schema 1.2 requires exactly three sections:
 | `SHFT` | 0 | `none` | sparse finest-resolution edge constraints |
 
 Unknown, missing, duplicate, or extra sections fail the schema reader.
-Legacy schemas 1.0 and 1.1 remain readable. Schema 1.0 has exactly `CHDR` and
+Legacy schemas 1.0, 1.1, and 1.2 remain readable. Schema 1.0 has exactly `CHDR` and
 `DATA`; because it contains no `SHFT` data, a decoded 1.0 page above LOD0 is not
 eligible for multiresolution meshing until its surface-shift records are
 regenerated. Schema 1.1 has all three sections but no material-authoring
 provenance. Readers conservatively initialize missing provenance to `true` so
 an unknown legacy material is rendered categorically and is never silently
 overridden by a procedural presentation. Recovering base-source provenance
-requires rebaking the base and replaying its edits into schema 1.2.
+requires rebaking the base and replaying its edits into schema 1.2 or newer.
+Schema 1.2 has provenance but no explicit static-water scalar. Readers assign
+the no-water sentinel, preserving terrain exactly while allowing the legacy
+material-derived water fallback. Recovering an LOD-invariant secondary water
+surface requires rebaking into schema 1.3.
 
-## `CHDR` schema 1.2
+## `CHDR` schema 1.3
 
 All integers and floating-point bit patterns are little-endian. `CHDR` is
 exactly 48 bytes:
@@ -52,7 +56,7 @@ exactly 48 bytes:
 | Offset | Type | Meaning |
 | ---: | --- | --- |
 | 0 | `u16` | schema major, `1` |
-| 2 | `u16` | schema minor, `2` |
+| 2 | `u16` | schema minor, `3` |
 | 4 | `i32` | chunk X |
 | 8 | `i32` | chunk Y |
 | 12 | `i32` | chunk Z |
@@ -76,13 +80,24 @@ disagreement with the common container.
 
 ## `DATA` encoding
 
-`DATA` is exactly 48,013 bytes: 7 bytes for each of 6,859 samples.
+`DATA` is exactly 75,449 bytes: 11 bytes for each of 6,859 samples.
 
 Each record contains:
 
 1. density as finite IEEE-754 binary32;
 2. categorical material as `uint16_t`;
-3. material-authoring provenance as `uint8_t`, exactly `0` or `1`.
+3. material-authoring provenance as `uint8_t`, exactly `0` or `1`;
+4. static-water density as finite IEEE-754 binary32.
+
+Static-water density is a separate secondary signed field: negative is inside
+the candidate water volume, positive is outside, and zero is its free surface.
+`FLT_MAX` is the canonical finite no-water sentinel. The water mesher uses an
+explicit field directly, so its free surface and horizontal domain do not
+inherit terrain-LOD approximation changes. Terrain remains a separate render
+and depth-occlusion authority: portions of the lake field below solid ground
+are hidden by terrain instead of being boolean-intersected into a different
+shoreline at each LOD. Material ID `9` labels occupied terrain-air samples for
+queries and presentation; it is not the lake geometry.
 
 Samples are ordered with X changing fastest, then Y, then Z. Every axis covers
 local sample coordinates `-1..17` inclusive. For chunk minimum `M` and cell
@@ -109,8 +124,12 @@ a `u32` record count. Each following 44-byte record contains:
 1. the `u16` canonical regular-grid edge index;
 2. the `u32` offset of the selected unit edge from the coarse edge's lower
    endpoint;
-3. density, XYZ gradient, material, and material-authoring provenance for both
+3. terrain density, XYZ gradient, material, and material-authoring provenance for both
    unit-edge endpoints.
+
+`SHFT` continues to constrain the primary terrain surface. It does not copy the
+secondary static-water scalar; the secondary source resolves its own
+multiresolution edges directly from schema-1.3 page samples.
 
 Records are strictly ordered by edge index and exist exactly for regular
 coarse edges whose coarse endpoints straddle the stored isovalue. An LOD0
@@ -152,10 +171,10 @@ Input key order does not affect output order, bytes, or hashes.
 
 - unsorted and reversed inputs produce identical sorted page bytes;
 - debug and release builds produce the locked aggregate page hash
-  `85b71cb2803a1d7c405f20bc287c17c9384487e63f1ed6b61d5c179111756fb3`;
+  `8945e3394a7ee1bcf4f7eec0a07da792ad8296ab35ef8f3413e11cc1b1fcf5bf`;
 - page metadata, padding coordinates, LOD spacing, sample order, source
-  revision, representative sample values, and material-authoring provenance
-  round-trip exactly;
+  revision, representative sample values, material-authoring provenance, and
+  static-water density round-trip exactly;
 - decoded pages re-encode byte-for-byte;
 - the opened `DATA` section remains a zero-copy view into page bytes;
 - corruption, nonzero section flags, revision disagreement, missing or extra
