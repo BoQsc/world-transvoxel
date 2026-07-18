@@ -49,6 +49,13 @@ bool procedural_mode_from_preset_id(
 		mode = WtProceduralWorldMode::RollingHillsCave;
 		return true;
 	}
+	if (
+		normalized == "rolling_hills_cave_roads" ||
+		normalized == "g22_rolling_hills_cave_roads"
+	) {
+		mode = WtProceduralWorldMode::RollingHillsCaveRoads;
+		return true;
+	}
 	return false;
 }
 

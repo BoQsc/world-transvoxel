@@ -57,6 +57,13 @@ follows the same lifecycle and bounded storage ownership with the procedural
 descriptor set to flat mode. It produces a flat y=8 surface while retaining the
 same page format, cache, meshing, editing, collision, and LOD streaming path.
 
+The named `rolling_hills_cave_roads` preset exercises a volumetric
+infrastructure source through that same lifecycle. Its road network is a
+continuous world-space field: centerline grades modify density through smooth
+shoulders, and a shallow material-ID `10` layer identifies asphalt. This keeps
+the reference road independent of chunk boundaries and avoids encoding a
+network as thousands of unrelated sphere edits.
+
 The control thread:
 
 1. reads and validates the manifest;

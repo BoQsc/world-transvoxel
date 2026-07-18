@@ -57,7 +57,13 @@ preset. Supported preset IDs are:
   mountain stress terrain;
 - `rolling_hills_cave`: a bounded rolling-hills inspection terrain with a real
   carved density-volume cave/chamber, intended for terrain-shape inspection
-  profiles.
+  profiles;
+- `rolling_hills_cave_roads`: the same cave terrain plus a deterministic,
+  volumetric road-network field. The field grades the solid density volume
+  through blended shoulders and assigns material ID `10` to the top three
+  world units inside each six-unit road corridor. It is a reference source for
+  testing road intersections, chunk boundaries, collision, and mixed LODs;
+  it is not a chain of runtime paint stamps.
 
 `start_flat_world()` starts the same native procedural/storage/streaming path
 with a flat surface at y=8. It is intended for baseline playtests and games

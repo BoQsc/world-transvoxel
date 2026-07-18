@@ -889,6 +889,64 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 	);
 }
 
+void test_procedural_road_network() {
+	wt::WtProceduralWorldDescriptor descriptor;
+	descriptor.chunk_count_x = 128;
+	descriptor.chunk_count_y = 16;
+	descriptor.chunk_count_z = 128;
+	descriptor.chunk_y = -8;
+	descriptor.source_revision = 190322;
+	descriptor.seed = 19021;
+	descriptor.mode = wt::WtProceduralWorldMode::RollingHillsCaveRoads;
+
+	wt::WtScalarSample road_surface;
+	wt::WtScalarSample below_asphalt;
+	wt::WtScalarSample off_road;
+	check(
+		wt::wt_sample_procedural_world(
+			descriptor, { 810, 36, 820 }, road_surface
+		) &&
+			road_surface.density < 0.0F &&
+			road_surface.material == 10 &&
+			!road_surface.material_authored,
+		"procedural road surface is not shallow authoritative asphalt"
+	);
+	check(
+		wt::wt_sample_procedural_world(
+			descriptor, { 810, 33, 820 }, below_asphalt
+		) &&
+			below_asphalt.density < 0.0F &&
+			below_asphalt.material != 10,
+		"procedural asphalt exceeded its declared shallow depth"
+	);
+	check(
+		wt::wt_sample_procedural_world(
+			descriptor, { 810, 36, 840 }, off_road
+		),
+		"procedural off-road reference sample failed"
+	);
+
+	wt::WtProceduralWorldDescriptor base_descriptor = descriptor;
+	base_descriptor.mode = wt::WtProceduralWorldMode::RollingHillsCave;
+	wt::WtScalarSample base_center;
+	wt::WtScalarSample base_off_road;
+	check(
+		wt::wt_sample_procedural_world(
+			base_descriptor, { 810, 36, 820 }, base_center
+		) &&
+			road_surface.density > base_center.density + 0.5F,
+		"procedural road grade did not author terrain density"
+	);
+	check(
+		wt::wt_sample_procedural_world(
+			base_descriptor, { 810, 36, 840 }, base_off_road
+		) &&
+			off_road.density == base_off_road.density &&
+			off_road.material == base_off_road.material,
+		"procedural road field changed terrain outside its shoulder"
+	);
+}
+
 } // namespace
 
 int main() {
@@ -903,6 +961,7 @@ int main() {
 	test_async_service(fixture, evidence);
 	test_shutdown_accounting(fixture);
 	test_procedural_service(evidence);
+	test_procedural_road_network();
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M5_ASYNC_STORAGE_FAIL failures=%d\n", failure_count);
 		return 1;
@@ -911,7 +970,8 @@ int main() {
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
 		"M5_ASYNC_STORAGE_PASS requests=5 successes=1 failures=4 "
-		"queue_rejections=1 procedural_strata=1 procedural_lod3=1\n"
+		"queue_rejections=1 procedural_strata=1 procedural_lod3=1 "
+		"procedural_roads=1\n"
 	);
 	return 0;
 }

@@ -1,6 +1,7 @@
 #include "storage/wt_procedural_world_source.h"
 
 #include "bake/wt_chunk_baker.h"
+#include "storage/wt_procedural_road_field.h"
 
 #include <algorithm>
 #include <cmath>
@@ -92,15 +93,39 @@ public:
 		WtProceduralWorldDescriptor descriptor
 	) noexcept :
 			descriptor_(descriptor) {
+		if (has_reference_roads()) {
+			const auto &segments = wt_reference_road_segments();
+			for (std::size_t index = 0; index < segments.size(); ++index) {
+				const WtReferenceRoadSegment &segment = segments[index];
+				road_height_a_[index] = rolling_hills_height(
+					static_cast<std::int64_t>(segment.ax), static_cast<std::int64_t>(segment.az)
+				);
+				road_height_b_[index] = rolling_hills_height(
+					static_cast<std::int64_t>(segment.bx), static_cast<std::int64_t>(segment.bz)
+				);
+			}
+		}
 	}
 
 	bool sample(
 		const WtGridPoint &point,
 		WtScalarSample &output
 	) const noexcept override {
-		const double surface = height(point.x, point.z);
+		const double base_surface = height(point.x, point.z);
+		const WtProceduralRoadField road = has_reference_roads() ?
+			wt_sample_reference_road_field(
+				base_surface,
+				static_cast<double>(point.x),
+				static_cast<double>(point.z),
+				road_height_a_,
+				road_height_b_
+			) :
+			WtProceduralRoadField{
+				base_surface, std::numeric_limits<double>::infinity()
+			};
+		const double surface = road.surface;
 		double density = static_cast<double>(point.y) - surface;
-		if (descriptor_.mode == WtProceduralWorldMode::RollingHillsCave) {
+		if (has_rolling_hills_cave()) {
 			density = rolling_hills_cave_density(
 				density,
 				point.x,
@@ -109,16 +134,32 @@ public:
 			);
 		}
 		output.density = regularized_density(density);
-		output.material = material(surface, point.x, point.y, point.z);
+		output.material = material(
+			surface,
+			road.distance,
+			point.x,
+			point.y,
+			point.z
+		);
+		output.material_authored = false;
 		return std::isfinite(output.density);
 	}
 
 private:
+	bool has_rolling_hills_cave() const noexcept {
+		return descriptor_.mode == WtProceduralWorldMode::RollingHillsCave ||
+			descriptor_.mode == WtProceduralWorldMode::RollingHillsCaveRoads;
+	}
+
+	bool has_reference_roads() const noexcept {
+		return descriptor_.mode == WtProceduralWorldMode::RollingHillsCaveRoads;
+	}
+
 	double height(std::int64_t x, std::int64_t z) const noexcept {
 		if (descriptor_.mode == WtProceduralWorldMode::Flat) {
 			return 8.0;
 		}
-		if (descriptor_.mode == WtProceduralWorldMode::RollingHillsCave) {
+		if (has_rolling_hills_cave()) {
 			return rolling_hills_height(x, z);
 		}
 		const double width = std::max(
@@ -374,6 +415,7 @@ private:
 
 	std::uint16_t material(
 		double surface,
+		double road_distance,
 		std::int64_t x,
 		std::int64_t y,
 		std::int64_t z
@@ -381,6 +423,10 @@ private:
 		const double seed_phase =
 			static_cast<double>(descriptor_.seed % 100000U) * 0.0001;
 		const double depth = surface - static_cast<double>(y);
+		if (has_reference_roads() &&
+			wt_reference_road_has_asphalt(road_distance, depth)) {
+			return 10;
+		}
 		if (depth >= 12.0 && underground_ore_patch(x, y, z, seed_phase)) {
 			return 8;
 		}
@@ -406,6 +452,7 @@ private:
 	}
 
 	WtProceduralWorldDescriptor descriptor_;
+	std::array<double, kWtReferenceRoadSegmentCount> road_height_a_{}, road_height_b_{};
 };
 
 } // namespace
