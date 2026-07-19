@@ -361,6 +361,7 @@ void test_end_to_end(std::vector<std::uint8_t> &evidence) {
 			record->generation != replacement.previous_generation &&
 			record->source_revision == source_revision &&
 			record->world_revision == 8 &&
+			record->priority == wt::kWtInteractiveEditPriority &&
 			record->lifecycle == wt::WtChunkLifecycle::Sampling,
 			"edit replacement scheduler state mismatch");
 		check(application_record != nullptr &&
@@ -408,7 +409,8 @@ void test_end_to_end(std::vector<std::uint8_t> &evidence) {
 	std::size_t mesh_jobs = 0;
 	wt::WtChunkJob job;
 	while (scheduler.pop_job(job)) {
-		check(job.source_revision == source_revision && job.world_revision == 8,
+		check(job.source_revision == source_revision && job.world_revision == 8 &&
+			job.priority == wt::kWtInteractiveEditPriority,
 			"replacement job lost source or world revision");
 		if (job.stage == wt::WtChunkJobStage::Sample) ++sample_jobs;
 		else ++mesh_jobs;
@@ -566,7 +568,8 @@ void test_repeated_bounded_replacement(std::vector<std::uint8_t> &evidence) {
 			spatial, scheduler, page_cache, resource_cache, application, nullptr
 		) == wt::WtEditRuntimeReplacementStatus::Ok,
 			"bounded repeated edit replacement failed");
-		check(scheduler.pop_job(job) && job.world_revision == base + 1,
+		check(scheduler.pop_job(job) && job.world_revision == base + 1 &&
+			job.priority == wt::kWtInteractiveEditPriority,
 			"bounded repeated replacement job missing");
 	}
 	const wt::WtChunkRecord *record = scheduler.find_record(key);

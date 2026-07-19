@@ -241,6 +241,7 @@ private:
 	bool enqueue_viewer_event(const ViewerEvent &event);
 	bool process_viewer_event();
 	bool enqueue_world_operation(WorldOperation &operation);
+	bool has_pending_edit_operation();
 	bool process_world_operation_event();
 	bool process_edit_operation(const WtEditTransaction &transaction);
 	bool process_sample_query_operation(const WorldOperation &operation);

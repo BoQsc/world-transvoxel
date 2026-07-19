@@ -82,7 +82,6 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 			record->generation,
 			record->source_revision,
 			record->world_revision,
-			record->priority,
 			application_record->collision_required,
 		});
 	}
@@ -138,7 +137,7 @@ WtEditRuntimeReplacementService::apply_prepared(
 				replacement.key,
 				replacement.source_revision,
 				transaction.committed_revision,
-				replacement.priority
+				kWtInteractiveEditPriority
 			);
 		if (scheduler_status != WtSchedulerStatus::Ok) {
 			++metrics_.scheduler_failures;

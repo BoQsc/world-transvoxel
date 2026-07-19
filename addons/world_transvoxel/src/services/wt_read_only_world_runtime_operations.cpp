@@ -40,6 +40,17 @@ bool WtReadOnlyWorldRuntime::enqueue_world_operation(
 	return true;
 }
 
+bool WtReadOnlyWorldRuntime::has_pending_edit_operation() {
+	std::lock_guard<std::mutex> lock(input_mutex_);
+	return std::any_of(
+		world_operations_.begin(),
+		world_operations_.end(),
+		[](const WorldOperation &operation) {
+			return operation.kind == WorldOperationKind::Edit;
+		}
+	);
+}
+
 WtReadOnlyRuntimeStatus
 WtReadOnlyWorldRuntime::request_authoritative_sample(
 	const WtGridPoint &point,

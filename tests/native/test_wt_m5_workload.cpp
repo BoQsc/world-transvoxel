@@ -280,6 +280,72 @@ void test_runtime_delta_contract(std::vector<std::uint8_t> &evidence) {
 	append_u64(evidence, scheduler.get_metrics().discarded_completions);
 }
 
+void test_interactive_edit_priority_contract() {
+	const wt::WtChunkKey key = { 4, 0, 0, 0 };
+	wt::WtStreamScheduler scheduler(1, 2, 2, 0);
+	wt::WtChunkApplicationService application(1, 2, 2);
+	wt::WtStoragePageCache page_cache({
+		1, wt::kWtMaximumContainerSize,
+		1, wt::kWtMaximumContainerSize,
+	});
+	wt::WtChunkResourceCache resource_cache({
+		1, wt::kWtMaximumResourceCacheBytes,
+		1, wt::kWtMaximumResourceCacheBytes,
+		1, wt::kWtMaximumResourceCacheBytes,
+	});
+	wt::WtDesiredSetRuntimeService runtime(1);
+	RecordingPageMeshingOwner page_meshing_owner;
+
+	check(scheduler.request_chunk_version(
+		key, 7, 4, wt::kWtInteractiveEditPriority, true
+	) == wt::WtSchedulerStatus::Ok,
+		"interactive edit priority fixture request failed");
+	const wt::WtChunkRecord *record = scheduler.find_record(key);
+	check(record != nullptr && application.expect_chunk(
+		key, record->generation, false
+	) == wt::WtApplicationStatus::Ok,
+		"interactive edit priority fixture application failed");
+
+	wt::WtDesiredSetDelta delta;
+	delta.updated = { { key, 12, 1, true } };
+	check(runtime.apply_delta(
+		delta, 7, 4, scheduler, page_cache, resource_cache, application,
+		&page_meshing_owner
+	) == wt::WtDesiredSetRuntimeStatus::Ok,
+		"viewer update over an interactive edit failed");
+	record = scheduler.find_record(key);
+	wt::WtChunkJob sample_job;
+	check(record != nullptr &&
+		record->priority == wt::kWtInteractiveEditPriority &&
+		scheduler.pop_job(sample_job) &&
+		sample_job.priority == wt::kWtInteractiveEditPriority,
+		"viewer update demoted an in-flight interactive edit");
+
+	check(scheduler.submit_completion({
+		key, sample_job.generation, wt::WtChunkJobStage::Sample, true,
+	}) == wt::WtSchedulerStatus::Ok &&
+		scheduler.apply_completions(1) == 1,
+		"interactive edit sample completion failed");
+	wt::WtChunkJob mesh_job;
+	check(scheduler.pop_job(mesh_job) &&
+		mesh_job.priority == wt::kWtInteractiveEditPriority &&
+		scheduler.submit_completion({
+			key, mesh_job.generation, wt::WtChunkJobStage::Mesh, true,
+		}) == wt::WtSchedulerStatus::Ok &&
+		scheduler.apply_completions(1) == 1,
+		"interactive edit mesh completion failed");
+
+	check(runtime.apply_delta(
+		delta, 7, 4, scheduler, page_cache, resource_cache, application,
+		&page_meshing_owner
+	) == wt::WtDesiredSetRuntimeStatus::Ok,
+		"viewer update after interactive edit readiness failed");
+	record = scheduler.find_record(key);
+	check(record != nullptr && record->lifecycle == wt::WtChunkLifecycle::Ready &&
+		record->priority == 12,
+		"ready interactive edit did not return to viewer priority");
+}
+
 void test_representative_workload(
 	std::vector<std::uint8_t> &evidence,
 	bool print_metrics
@@ -549,6 +615,7 @@ int main(int argc, char **argv) {
 	}
 	std::vector<std::uint8_t> evidence;
 	test_runtime_delta_contract(evidence);
+	test_interactive_edit_priority_contract();
 	test_representative_workload(evidence, true);
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M5_WORKLOAD_FAIL failures=%d\n", failure_count);

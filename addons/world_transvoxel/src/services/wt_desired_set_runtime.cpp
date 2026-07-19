@@ -191,12 +191,20 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 	}
 	for (const WtDesiredChunk &item : delta.updated) {
 		const WtChunkRecord *record = scheduler.find_record(item.key);
+		const bool interactive_edit_in_flight =
+			record != nullptr &&
+			record->priority == kWtInteractiveEditPriority &&
+			(record->lifecycle == WtChunkLifecycle::Sampling ||
+				record->lifecycle == WtChunkLifecycle::Meshing);
+		const std::int32_t effective_priority =
+			interactive_edit_in_flight ?
+				kWtInteractiveEditPriority : item.priority;
 		if (page_meshing_runtime != nullptr && record != nullptr) {
 			const WtPageMeshingRuntimeOwnerStatus status =
 				page_meshing_runtime->reprioritize_owned_chunk(
 					item.key,
 					record->generation,
-					item.priority
+					effective_priority
 				);
 			if (status == WtPageMeshingRuntimeOwnerStatus::Ok) {
 				++metrics_.reprioritized_page_meshing_records;
@@ -207,7 +215,7 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 			}
 		}
 		const WtSchedulerStatus scheduler_status =
-			scheduler.reprioritize_chunk(item.key, item.priority);
+			scheduler.reprioritize_chunk(item.key, effective_priority);
 		if (scheduler_status != WtSchedulerStatus::Ok &&
 			scheduler_status != WtSchedulerStatus::AlreadyCurrent) {
 			++metrics_.scheduler_failures;

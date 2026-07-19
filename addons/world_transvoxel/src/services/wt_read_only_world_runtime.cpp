@@ -1027,6 +1027,9 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
 			break;
 		}
+		if (has_pending_edit_operation()) {
+			break;
+		}
 	}
 	return progressed;
 }

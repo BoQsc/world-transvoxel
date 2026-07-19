@@ -155,6 +155,9 @@ This section records the practical runtime limits that implement it.
 - Edit operations are foreground operations in the world-operation queue. They
   preserve relative edit order but are processed ahead of non-edit
   sample/snapshot requests already waiting in the queue.
+- Accepted edit replacement sampling and meshing use the highest scheduler
+  priority. A running chunk job is allowed to finish, then the runtime yields
+  the remaining streaming batch when another edit is waiting.
 - Projects must not depend on collision-only player targeting. Collision can lag
   visible terrain during fast viewer movement; gameplay layers need a bounded
   fallback target path or an explicit rejection reason before reporting an edit

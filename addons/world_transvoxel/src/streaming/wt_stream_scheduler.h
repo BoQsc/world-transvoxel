@@ -5,10 +5,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <atomic>
+#include <limits>
 #include <mutex>
 #include <vector>
 
 namespace world_transvoxel {
+
+constexpr std::int32_t kWtInteractiveEditPriority =
+	std::numeric_limits<std::int32_t>::max();
 
 enum class WtChunkJobStage : std::uint8_t {
 	Sample,
