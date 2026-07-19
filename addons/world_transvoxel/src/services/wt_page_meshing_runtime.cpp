@@ -298,7 +298,8 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 	WtStreamScheduler &scheduler,
 	const WtEditJournal *edit_journal,
 	std::uint64_t initial_world_revision,
-	WtAsyncStorageService *authoritative_storage
+	WtAsyncStorageService *authoritative_storage,
+	const WtTerrainMeshReadyCallback &terrain_mesh_ready
 ) {
 	if (!valid_) {
 		return WtPageMeshingRuntimeStatus::InvalidConfiguration;
@@ -434,6 +435,10 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 			*mesh,
 			scratch
 		) == WtChunkMeshingStatus::Ok;
+	if (mesh_ok && terrain_mesh_ready &&
+		!terrain_mesh_ready({ record->key, record->generation, mesh })) {
+		return WtPageMeshingRuntimeStatus::TerrainMeshReadyCallbackFailure;
+	}
 	auto water_mesh = std::make_shared<WtChunkMeshResult>();
 	bool water_present = false;
 	if (mesh_ok) {

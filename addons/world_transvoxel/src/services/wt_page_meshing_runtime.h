@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -48,6 +49,7 @@ enum class WtPageMeshingRuntimeStatus : std::uint8_t {
 	EditReplayFailure,
 	SurfaceShiftFailure,
 	NotFound,
+	TerrainMeshReadyCallbackFailure,
 };
 
 struct WtPageMeshingRuntimeRecordSnapshot {
@@ -73,6 +75,15 @@ struct WtPageMeshCompletion {
 	std::shared_ptr<const WtChunkMeshResult> mesh;
 	std::shared_ptr<const WtChunkMeshResult> water_mesh;
 };
+
+struct WtTerrainMeshCompletion {
+	WtChunkKey key;
+	WtGenerationToken generation;
+	std::shared_ptr<const WtChunkMeshResult> mesh;
+};
+
+using WtTerrainMeshReadyCallback =
+	std::function<bool(const WtTerrainMeshCompletion &)>;
 
 struct WtPageMeshingRuntimeMetrics {
 	std::uint64_t sample_jobs = 0;
@@ -127,7 +138,8 @@ public:
 		WtStreamScheduler &scheduler,
 		const WtEditJournal *edit_journal = nullptr,
 		std::uint64_t initial_world_revision = 0,
-		WtAsyncStorageService *authoritative_storage = nullptr
+		WtAsyncStorageService *authoritative_storage = nullptr,
+		const WtTerrainMeshReadyCallback &terrain_mesh_ready = {}
 	);
 
 	std::size_t flush_scheduler_results(

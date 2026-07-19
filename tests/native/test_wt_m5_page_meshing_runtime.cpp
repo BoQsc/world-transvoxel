@@ -1212,14 +1212,34 @@ void test_runtime_lifecycle(
 	);
 	const wt::WtChunkMesher mesher(wt::wt_get_transvoxel_mit_backend());
 	wt::WtChunkMeshingScratch scratch;
+	bool terrain_ready_before_water = false;
 	check(
-		runtime.execute_mesh_job(mesh_job, mesher, scratch, scheduler) ==
+		runtime.execute_mesh_job(
+			mesh_job,
+			mesher,
+			scratch,
+			scheduler,
+			nullptr,
+			0,
+			nullptr,
+			[&](const wt::WtTerrainMeshCompletion &completion) {
+				const auto records = runtime.get_records();
+				terrain_ready_before_water =
+					completion.key == fixture.coarse_key &&
+					completion.generation == sample.generation &&
+					completion.mesh != nullptr && records.size() == 1 &&
+					records[0].phase ==
+						wt::WtPageMeshingRuntimePhase::AwaitingMesh &&
+					records[0].pinned_page_count == kDependencyCount;
+				return terrain_ready_before_water;
+			}
+		) ==
 			wt::WtPageMeshingRuntimeStatus::Ok,
 		"page-backed runtime meshing failed"
 	);
 	const auto meshed = runtime.get_records();
 	check(
-		meshed.size() == 1 &&
+		terrain_ready_before_water && meshed.size() == 1 &&
 		meshed[0].phase == wt::WtPageMeshingRuntimePhase::Ready &&
 		meshed[0].pinned_page_count == 0 &&
 		runtime.pinned_page_count() == 0,

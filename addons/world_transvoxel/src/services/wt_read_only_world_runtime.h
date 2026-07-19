@@ -31,6 +31,7 @@ class WtEditRuntimeReplacementService;
 class WtEditSpatialIndex;
 class WtChunkMesher;
 struct WtChunkMeshingScratch;
+struct WtTerrainMeshCompletion;
 class WtPageMeshingRuntimeService;
 class WtStoragePageCache;
 class WtStreamScheduler;
@@ -248,6 +249,9 @@ private:
 	bool process_storage_completions();
 	bool process_pending_transition_remeshes();
 	bool process_scheduler_jobs();
+	bool process_terrain_mesh_completion(
+		const WtTerrainMeshCompletion &completion
+	);
 	bool process_mesh_completions();
 	bool process_visual_readiness_repairs();
 	bool publish_delta(const WtDesiredSetDelta &delta);

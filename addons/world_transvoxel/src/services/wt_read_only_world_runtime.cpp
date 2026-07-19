@@ -1005,10 +1005,17 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 				edit_journal_store_ != nullptr ?
 					&edit_journal_store_->journal() : nullptr,
 				initial_world_revision_,
-				&storage_
+				&storage_,
+				[this](const WtTerrainMeshCompletion &completion) {
+					return process_terrain_mesh_completion(completion);
+				}
 			);
 			std::lock_guard<std::mutex> lock(metrics_mutex_);
 			++metrics_.mesh_jobs;
+		}
+		if (status ==
+				WtPageMeshingRuntimeStatus::TerrainMeshReadyCallbackFailure) {
+			break;
 		}
 		if (status != WtPageMeshingRuntimeStatus::Ok &&
 			status != WtPageMeshingRuntimeStatus::SchedulerBackpressure &&
@@ -1024,6 +1031,59 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 	return progressed;
 }
 
+bool WtReadOnlyWorldRuntime::process_terrain_mesh_completion(
+	const WtTerrainMeshCompletion &completion
+) {
+	const WtChunkRecord *record = scheduler_->find_record(completion.key);
+	if (record == nullptr || record->generation != completion.generation ||
+		!completion.mesh) {
+		return true;
+	}
+	auto terrain_render = std::make_shared<WtRenderPayload>();
+	auto collision = std::make_shared<WtCollisionPayload>();
+	const WtCollisionPolicy collision_policy {
+		kWtDefaultCollisionThinRatioSquared,
+		config_.collision_activation_distance,
+		config_.collision_deactivation_distance,
+	};
+	if (resource_cache_->insert_mesh(
+			completion.mesh,
+			completion.generation,
+			record->generation
+		) != WtChunkResourceCacheStatus::Ok ||
+		wt_build_render_payload(
+			*completion.mesh,
+			completion.generation,
+			*terrain_render
+		) != WtRenderBuildStatus::Ok ||
+		wt_build_collision_payload(
+			*terrain_render,
+			collision_policy,
+			*collision
+		) != WtCollisionBuildStatus::Ok ||
+		resource_cache_->insert_collision(collision, record->generation) !=
+			WtChunkResourceCacheStatus::Ok) {
+		set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
+		return false;
+	}
+	const WtDesiredChunk *desired = desired_->find_desired(completion.key);
+	if (desired != nullptr && desired->collision_required &&
+		!push_publication({
+			WtReadOnlyPublicationKind::CollisionPayload,
+			collision->key,
+			collision->generation,
+			true,
+			{},
+			collision,
+		})) {
+		if (!stop_requested_.load()) {
+			set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
+		}
+		return false;
+	}
+	return true;
+}
+
 bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 	bool progressed = false;
 	WtPageMeshCompletion completion;
@@ -1035,12 +1095,6 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			continue;
 		}
 		auto render = std::make_shared<WtRenderPayload>();
-		auto collision = std::make_shared<WtCollisionPayload>();
-		const WtCollisionPolicy collision_policy {
-			kWtDefaultCollisionThinRatioSquared,
-			config_.collision_activation_distance,
-			config_.collision_deactivation_distance,
-		};
 		if (resource_cache_->insert_mesh(
 				completion.mesh,
 				completion.generation,
@@ -1052,14 +1106,7 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 				completion.generation,
 				*render
 			) != WtRenderBuildStatus::Ok ||
-			wt_build_collision_payload(
-				*render,
-				collision_policy,
-				*collision
-			) != WtCollisionBuildStatus::Ok ||
 			resource_cache_->insert_render(render, record->generation) !=
-				WtChunkResourceCacheStatus::Ok ||
-			resource_cache_->insert_collision(collision, record->generation) !=
 				WtChunkResourceCacheStatus::Ok) {
 			set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
 			break;
@@ -1071,21 +1118,6 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 				false,
 				render,
 				{},
-			})) {
-			if (!stop_requested_.load()) {
-				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
-			}
-			break;
-		}
-		const WtDesiredChunk *desired = desired_->find_desired(completion.key);
-		if (desired != nullptr && desired->collision_required &&
-			!push_publication({
-				WtReadOnlyPublicationKind::CollisionPayload,
-				collision->key,
-				collision->generation,
-				true,
-				{},
-				collision,
 			})) {
 			if (!stop_requested_.load()) {
 				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);

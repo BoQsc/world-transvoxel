@@ -63,6 +63,7 @@ struct PublicationCounts {
 	std::size_t collisions = 0;
 	std::size_t render_vertices = 0;
 	std::size_t render_indices = 0;
+	bool collision_before_first_render = false;
 };
 
 bool collect_until(
@@ -98,6 +99,8 @@ bool collect_until(
 					}
 					break;
 				case wt::WtReadOnlyPublicationKind::CollisionPayload:
+					counts.collision_before_first_render =
+						counts.collision_before_first_render || counts.renders == 0;
 					++counts.collisions;
 					break;
 				case wt::WtReadOnlyPublicationKind::SetCollisionRequired:
@@ -243,7 +246,8 @@ int main() {
 	std::vector<std::uint8_t> evidence;
 	check(collect_until(runtime, counts, 1, 1, evidence),
 		"initial page did not publish render and collision");
-	check(counts.expects == 1 && counts.render_vertices != 0 &&
+	check(counts.expects == 1 && counts.collision_before_first_render &&
+		counts.render_vertices != 0 &&
 		counts.render_indices != 0,
 		"initial page publication mismatch");
 
