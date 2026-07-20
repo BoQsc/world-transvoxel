@@ -736,10 +736,37 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		if (!item.collision_required) continue;
 		const WtChunkRecord *record = scheduler_->find_record(item.key);
 		if (record == nullptr) continue;
-		const auto collision = resource_cache_->find_collision(
+		auto collision = resource_cache_->find_collision(
 			item.key,
 			record->generation
 		);
+		if (!collision) {
+			const auto render = resource_cache_->find_render(
+				item.key,
+				record->generation
+			);
+			if (render) {
+				auto rebuilt_collision = std::make_shared<WtCollisionPayload>();
+				const WtCollisionPolicy collision_policy {
+					kWtDefaultCollisionThinRatioSquared,
+					config_.collision_activation_distance,
+					config_.collision_deactivation_distance,
+				};
+				if (wt_build_collision_payload(
+						*render,
+						collision_policy,
+						*rebuilt_collision
+					) != WtCollisionBuildStatus::Ok ||
+					resource_cache_->insert_collision(
+						rebuilt_collision,
+						record->generation
+					) != WtChunkResourceCacheStatus::Ok) {
+					set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
+					return true;
+				}
+				collision = std::move(rebuilt_collision);
+			}
+		}
 		if (collision && !push_publication({
 				WtReadOnlyPublicationKind::CollisionPayload,
 				collision->key,

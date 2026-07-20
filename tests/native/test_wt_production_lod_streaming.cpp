@@ -337,6 +337,29 @@ bool wait_for_runtime(
 	return predicate();
 }
 
+template <typename Collector, typename Predicate>
+bool collect_runtime_until(
+	wt::WtReadOnlyWorldRuntime &runtime,
+	Collector collector,
+	Predicate predicate
+) {
+	const auto deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(8);
+	while (std::chrono::steady_clock::now() < deadline) {
+		wt::WtReadOnlyPublication publication;
+		bool consumed = false;
+		while (runtime.pop_publication(publication)) {
+			consumed = true;
+			collector(publication);
+		}
+		if (predicate()) return true;
+		if (!consumed) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	wt::WtReadOnlyPublication publication;
+	while (runtime.pop_publication(publication)) collector(publication);
+	return predicate();
+}
+
 bool wait_for_viewer_update_idle(
 	wt::WtReadOnlyWorldRuntime &runtime,
 	std::uint64_t expected_viewer_updates
@@ -416,6 +439,114 @@ bool collect_until(
 		if (!consumed) std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 	return false;
+}
+
+bool run_collision_reactivation_eviction_regression(
+	wt::WtAsyncStorageService &storage
+) {
+	const wt::WtChunkKey target { 0, 0, 0, 0 };
+	wt::WtRuntimeConfig config;
+	config.active_chunk_capacity = 40;
+	config.viewer_capacity = 1;
+	config.demand_capacity_per_viewer = 125;
+	config.storage_request_capacity = 64;
+	config.storage_completion_capacity = 64;
+	config.encoded_page_entry_capacity = 40;
+	config.decoded_page_entry_capacity = 40;
+	config.mesh_entry_capacity = 40;
+	config.render_entry_capacity = 40;
+	config.collision_entry_capacity = 1;
+	config.collision_activation_distance = 0.0;
+	config.collision_deactivation_distance = 0.0;
+	wt::WtReadOnlyWorldRuntime runtime(config, storage);
+	check(runtime.valid(),
+		"collision reactivation runtime configuration rejected");
+	if (!runtime.valid()) return false;
+
+	std::atomic<wt::WtReadOnlyRuntimeStatus> run_status {
+		wt::WtReadOnlyRuntimeStatus::Ok
+	};
+	std::thread worker([&]() { run_status.store(runtime.run()); });
+	bool initial_render = false;
+	bool initial_collision = false;
+	bool collision_deactivated = false;
+	bool collision_reactivated = false;
+
+	check(runtime.update_viewer({ 1, 8.0, 8.0, 8.0, 1 }, 2, 0) ==
+		wt::WtReadOnlyRuntimeStatus::Ok,
+		"collision reactivation initial viewer was rejected");
+	const bool initial_ready = collect_runtime_until(
+		runtime,
+		[&](const wt::WtReadOnlyPublication &publication) {
+			if (publication.key != target) return;
+			initial_render = initial_render ||
+				publication.kind == wt::WtReadOnlyPublicationKind::RenderPayload;
+			initial_collision = initial_collision ||
+				publication.kind == wt::WtReadOnlyPublicationKind::CollisionPayload;
+		},
+		[&]() {
+		return initial_render && initial_collision &&
+			runtime.get_metrics().viewer_updates >= 1 &&
+			runtime_idle(runtime.get_metrics());
+		}
+	);
+	check(initial_ready,
+		"collision reactivation target did not initially become ready");
+
+	if (initial_ready) {
+		check(runtime.update_viewer({ 1, 40.0, 8.0, 8.0, 2 }, 2, 0) ==
+			wt::WtReadOnlyRuntimeStatus::Ok,
+			"collision reactivation eviction viewer was rejected");
+		const bool deactivated = collect_runtime_until(
+			runtime,
+			[&](const wt::WtReadOnlyPublication &publication) {
+				if (publication.key == target && publication.kind ==
+						wt::WtReadOnlyPublicationKind::SetCollisionRequired &&
+					!publication.collision_required) {
+					collision_deactivated = true;
+				}
+			},
+			[&]() {
+			return collision_deactivated &&
+				runtime.get_metrics().viewer_updates >= 2 &&
+				runtime_idle(runtime.get_metrics());
+			}
+		);
+		check(deactivated,
+			"collision reactivation target did not remain desired and deactivate");
+
+		if (deactivated) {
+			check(runtime.update_viewer({ 1, 8.0, 8.0, 8.0, 3 }, 2, 0) ==
+				wt::WtReadOnlyRuntimeStatus::Ok,
+				"collision reactivation return viewer was rejected");
+			const bool reactivated = collect_runtime_until(
+				runtime,
+				[&](const wt::WtReadOnlyPublication &publication) {
+					if (publication.key == target && publication.kind ==
+							wt::WtReadOnlyPublicationKind::CollisionPayload) {
+						collision_reactivated = true;
+					}
+				},
+				[&]() {
+				return collision_reactivated &&
+					runtime.get_metrics().viewer_updates >= 3 &&
+					runtime_idle(runtime.get_metrics());
+				}
+			);
+			check(reactivated,
+				"collision cache miss did not recover required collision");
+		}
+	}
+
+	runtime.request_stop();
+	worker.join();
+	check(run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok,
+		"collision reactivation runtime did not stop cleanly");
+	return initial_render && initial_collision && collision_deactivated &&
+		collision_reactivated &&
+		run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok;
 }
 
 std::size_t edit_retention_fallback_capacity(
@@ -876,6 +1007,8 @@ int main() {
 		run_edit_retention_fallback_regression(storage, fixture.path);
 	const bool many_zone_retention_ok =
 		run_edit_retention_many_zone_regression(storage, fixture.path);
+	const bool collision_reactivation_ok =
+		run_collision_reactivation_eviction_regression(storage);
 	storage.close();
 
 	std::vector<std::uint8_t> evidence;
@@ -899,6 +1032,7 @@ int main() {
 	append_u64(evidence, lod_hysteresis_ok ? 1U : 0U);
 	append_u64(evidence, g21_near_field_ok ? 1U : 0U);
 	append_u64(evidence, g21_entry_count);
+	append_u64(evidence, collision_reactivation_ok ? 1U : 0U);
 	append_u64(
 		evidence,
 		static_cast<std::uint64_t>(g21_nearest_coarse_distance)
@@ -914,7 +1048,8 @@ int main() {
 		"retained_entries=%zu retained_edit_key=%d "
 		"fallback_retention=%d bridge0=%llu/%llu bridge1=%llu/%llu "
 		"global_coarse=%d many_zone_retention=%d lod_hysteresis=%d "
-		"g21_entries=%zu g21_nearest_coarse=%.1f transition_completions=%llu\n",
+		"collision_reactivation=%d g21_entries=%zu "
+		"g21_nearest_coarse=%.1f transition_completions=%llu\n",
 		plan.entries.size(),
 		bridge == nullptr ? 0U : static_cast<unsigned int>(bridge->transition_mask),
 		retained_plan.entries.size(),
@@ -927,6 +1062,7 @@ int main() {
 		global_coarse_ok ? 1 : 0,
 		many_zone_retention_ok ? 1 : 0,
 		lod_hysteresis_ok ? 1 : 0,
+		collision_reactivation_ok ? 1 : 0,
 		g21_entry_count,
 		g21_nearest_coarse_distance,
 		static_cast<unsigned long long>(metrics.transition_mesh_completions)
@@ -935,7 +1071,8 @@ int main() {
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
 		"PRODUCTION_LOD_STREAMING_PASS pages=28 viewers=2 transitions=3 "
-		"lod_hysteresis=1 g21_near_field=1 backend=MIT\n"
+		"lod_hysteresis=1 collision_reactivation=1 "
+		"g21_near_field=1 backend=MIT\n"
 	);
 	return 0;
 }
