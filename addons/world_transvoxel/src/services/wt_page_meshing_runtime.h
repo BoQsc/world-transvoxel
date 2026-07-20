@@ -89,6 +89,7 @@ struct WtPageMeshingRuntimeMetrics {
 	std::uint64_t sample_jobs = 0;
 	std::uint64_t mesh_jobs = 0;
 	std::uint64_t dependency_requests = 0;
+	std::uint64_t dependency_reprioritizations = 0;
 	std::uint64_t dependency_cache_hits = 0;
 	std::uint64_t dependency_cache_misses = 0;
 	std::uint64_t accepted_storage_completions = 0;
@@ -192,6 +193,7 @@ private:
 		WtChunkKey key;
 		std::shared_ptr<const WtChunkPage> page;
 		bool request_pending = false;
+		std::int32_t requested_priority = 0;
 	};
 
 	struct Record {

@@ -376,9 +376,9 @@ void test_async_service(
 		"higher-priority queued request was rejected"
 	);
 	check(
-		service.request_page(fixture.pages[2].key, { 13 }, 3) ==
+		service.request_page(fixture.pages[2].key, { 13 }, 20) ==
 			wt::WtAsyncStorageStatus::AlreadyPending,
-		"duplicate pending request was accepted"
+		"queued request repriority was not acknowledged"
 	);
 	check(
 		service.request_page(fixture.pages[4].key, { 15 }, 4) ==
@@ -402,17 +402,17 @@ void test_async_service(
 		12,
 		wt::WtPageLoadStatus::SizeMismatch
 	);
-	const wt::WtPageLoadCompletion metadata = wait_completion(
-		service,
-		fixture.pages[3].key,
-		14,
-		wt::WtPageLoadStatus::MetadataMismatch
-	);
 	const wt::WtPageLoadCompletion corrupt_page = wait_completion(
 		service,
 		fixture.pages[2].key,
 		13,
 		wt::WtPageLoadStatus::HashMismatch
+	);
+	const wt::WtPageLoadCompletion metadata = wait_completion(
+		service,
+		fixture.pages[3].key,
+		14,
+		wt::WtPageLoadStatus::MetadataMismatch
 	);
 	check(
 		service.request_page(fixture.pages[4].key, { 15 }, 5) ==

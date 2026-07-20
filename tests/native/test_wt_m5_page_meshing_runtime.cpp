@@ -1148,6 +1148,16 @@ void test_runtime_lifecycle(
 		"runtime loading record mismatch"
 	);
 	check(
+		runtime.reprioritize_owned_chunk(
+			fixture.coarse_key,
+			sample.generation,
+			11
+		) == wt::WtPageMeshingRuntimeOwnerStatus::Ok &&
+		runtime.resume_loading_records(storage, cache, scheduler, 1) == 1 &&
+		storage.get_metrics().duplicate_requests == kDependencyCount,
+		"loading dependency repriority did not reach queued storage requests"
+	);
+	check(
 		scheduler.submit_completion({
 			{ 99, 99, 99, 0 },
 			{ 999 },
@@ -1184,11 +1194,6 @@ void test_runtime_lifecycle(
 		"runtime pin/backpressure contract mismatch"
 	);
 	check(
-		runtime.reprioritize_owned_chunk(
-			fixture.coarse_key,
-			sample.generation,
-			11
-		) == wt::WtPageMeshingRuntimeOwnerStatus::Ok &&
 		runtime.reprioritize_owned_chunk(
 			fixture.coarse_key,
 			{ sample.generation.value + 1 },

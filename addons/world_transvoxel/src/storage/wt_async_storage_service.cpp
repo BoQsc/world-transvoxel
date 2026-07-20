@@ -259,6 +259,26 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 		}
 	);
 	if (active != active_requests_.end()) {
+		const auto queued = std::find_if(
+			requests_.begin(),
+			requests_.end(),
+			[&](const Request &request) {
+				return request.key == key && request.generation == generation;
+			}
+		);
+		if (queued != requests_.end() && queued->priority != priority) {
+			queued->priority = priority;
+			std::stable_sort(
+				requests_.begin(),
+				requests_.end(),
+				[](const Request &left, const Request &right) {
+					if (left.priority != right.priority) {
+						return left.priority > right.priority;
+					}
+					return left.sequence < right.sequence;
+				}
+			);
+		}
 		++metrics_.duplicate_requests;
 		return WtAsyncStorageStatus::AlreadyPending;
 	}

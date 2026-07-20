@@ -675,9 +675,11 @@ WtPageMeshingRuntimeService::resolve_dependency(
 		mark_sample_failure(record_index, scheduler);
 		return WtPageMeshingRuntimeStatus::CacheFailure;
 	}
-	if (dependency.request_pending) {
+	if (dependency.request_pending &&
+		dependency.requested_priority == record.priority) {
 		return WtPageMeshingRuntimeStatus::Ok;
 	}
+	const bool reprioritizing_request = dependency.request_pending;
 	++metrics_.dependency_cache_misses;
 	const WtAsyncStorageStatus storage_status = storage.request_page(
 		dependency.key,
@@ -686,6 +688,7 @@ WtPageMeshingRuntimeService::resolve_dependency(
 	);
 	if (storage_status == WtAsyncStorageStatus::Ok) {
 		dependency.request_pending = true;
+		dependency.requested_priority = record.priority;
 		++metrics_.dependency_requests;
 		made_progress = true;
 		return WtPageMeshingRuntimeStatus::Ok;
@@ -695,6 +698,11 @@ WtPageMeshingRuntimeService::resolve_dependency(
 	}
 	if (storage_status == WtAsyncStorageStatus::AlreadyPending) {
 		dependency.request_pending = true;
+		dependency.requested_priority = record.priority;
+		if (reprioritizing_request) {
+			++metrics_.dependency_reprioritizations;
+			made_progress = true;
+		}
 		return WtPageMeshingRuntimeStatus::Ok;
 	}
 	++metrics_.storage_failures;
