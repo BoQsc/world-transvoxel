@@ -5,7 +5,8 @@
 namespace world_transvoxel {
 
 bool WtChunkApplicationRecord::fully_ready() const noexcept {
-	return visual_ready && (!collision_required || collision_ready);
+	return (!visual_required || visual_ready) &&
+		(!collision_required || collision_ready);
 }
 
 WtChunkApplicationService::WtChunkApplicationService(
@@ -22,9 +23,11 @@ WtChunkApplicationService::WtChunkApplicationService(
 WtApplicationStatus WtChunkApplicationService::expect_chunk(
 	const WtChunkKey &key,
 	WtGenerationToken generation,
-	bool collision_required
+	bool collision_required,
+	bool visual_required
 ) {
-	if (!wt_is_valid_chunk_key(key) || generation.value == 0) {
+	if (!wt_is_valid_chunk_key(key) || generation.value == 0 ||
+		(!visual_required && !collision_required)) {
 		return WtApplicationStatus::InvalidInput;
 	}
 	WtChunkApplicationRecord *record = find_record_mutable(key);
@@ -35,16 +38,51 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 		if (generation == record->generation) {
 			return WtApplicationStatus::AlreadyCurrent;
 		}
-		*record = { key, generation, collision_required, false, false };
+		*record = {
+			key,
+			generation,
+			collision_required,
+			visual_required,
+			false,
+			false,
+		};
 		return WtApplicationStatus::Ok;
 	}
 	if (records_.size() >= record_capacity_) {
 		return WtApplicationStatus::RecordCapacityExceeded;
 	}
-	records_.push_back({ key, generation, collision_required, false, false });
+	records_.push_back({
+		key,
+		generation,
+		collision_required,
+		visual_required,
+		false,
+		false,
+	});
 	std::sort(records_.begin(), records_.end(), [](const auto &a, const auto &b) {
 		return a.key < b.key;
 	});
+	return WtApplicationStatus::Ok;
+}
+
+WtApplicationStatus WtChunkApplicationService::set_visual_required(
+	const WtChunkKey &key,
+	bool required
+) {
+	WtChunkApplicationRecord *record = find_record_mutable(key);
+	if (record == nullptr) {
+		return WtApplicationStatus::NotFound;
+	}
+	if (!required && !record->collision_required) {
+		return WtApplicationStatus::InvalidInput;
+	}
+	if (record->visual_required == required) {
+		return WtApplicationStatus::AlreadyCurrent;
+	}
+	record->visual_required = required;
+	if (required) {
+		record->visual_ready = false;
+	}
 	return WtApplicationStatus::Ok;
 }
 
@@ -58,6 +96,9 @@ WtApplicationStatus WtChunkApplicationService::set_collision_required(
 	}
 	if (record->collision_required == required) {
 		return WtApplicationStatus::AlreadyCurrent;
+	}
+	if (!required && !record->visual_required) {
+		return WtApplicationStatus::InvalidInput;
 	}
 	record->collision_required = required;
 	if (required) {
@@ -139,6 +180,10 @@ std::size_t WtChunkApplicationService::apply_render(
 		);
 		WtChunkApplicationRecord *record = find_record_mutable(payload->key);
 		if (record == nullptr || record->generation != payload->generation) {
+			++metrics_.stale_render;
+			continue;
+		}
+		if (!record->visual_required) {
 			++metrics_.stale_render;
 			continue;
 		}

@@ -106,6 +106,10 @@ WtPageMeshingRuntimeService::WtPageMeshingRuntimeService(
 			record_capacity <= kWtMaximumPageMeshingRuntimeRecords) {
 	if (valid_) {
 		records_.reserve(record_capacity_);
+		loading_retry_candidates_.reserve(std::min(
+			record_capacity_,
+			std::size_t { 4 }
+		));
 	}
 }
 
@@ -299,7 +303,8 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 	const WtEditJournal *edit_journal,
 	std::uint64_t initial_world_revision,
 	WtAsyncStorageService *authoritative_storage,
-	const WtTerrainMeshReadyCallback &terrain_mesh_ready
+	const WtTerrainMeshReadyCallback &terrain_mesh_ready,
+	bool visual_required
 ) {
 	if (!valid_) {
 		return WtPageMeshingRuntimeStatus::InvalidConfiguration;
@@ -441,7 +446,7 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 	}
 	auto water_mesh = std::make_shared<WtChunkMeshResult>();
 	bool water_present = false;
-	if (mesh_ok) {
+	if (mesh_ok && visual_required) {
 		bool explicit_water_inside = false;
 		bool explicit_water_outside = false;
 		for (const Dependency &dependency : record->dependencies) {
@@ -470,7 +475,7 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 		}
 	}
 	bool water_mesh_ok = mesh_ok;
-	if (mesh_ok && water_present) {
+	if (mesh_ok && visual_required && water_present) {
 		const WtMaterialVolumeSampleSource water_source(
 			*source,
 			kWtStaticWaterMaterialId
@@ -534,19 +539,58 @@ std::size_t WtPageMeshingRuntimeService::resume_loading_records(
 		maximum_records == 0) {
 		return 0;
 	}
-	std::size_t progressed = 0;
-	std::size_t visited = 0;
-	for (std::size_t index = 0;
-		index < records_.size() && visited < maximum_records;) {
-		if (records_[index].phase != WtPageMeshingRuntimePhase::Loading) {
-			++index;
+	const std::size_t candidate_limit = std::min(
+		maximum_records,
+		records_.size()
+	);
+	if (loading_retry_candidates_.capacity() < candidate_limit) {
+		loading_retry_candidates_.reserve(candidate_limit);
+	}
+	loading_retry_candidates_.clear();
+	for (const Record &record : records_) {
+		if (record.phase != WtPageMeshingRuntimePhase::Loading) {
 			continue;
 		}
-		++visited;
-		const WtChunkKey key = records_[index].key;
+		const LoadingRetryCandidate candidate {
+			record.key,
+			record.priority,
+		};
+		const auto position = std::lower_bound(
+			loading_retry_candidates_.begin(),
+			loading_retry_candidates_.end(),
+			candidate,
+			[](const LoadingRetryCandidate &left,
+				const LoadingRetryCandidate &right) {
+				if (left.priority != right.priority) {
+					return left.priority > right.priority;
+				}
+				return left.key < right.key;
+			}
+		);
+		if (position == loading_retry_candidates_.end() &&
+			loading_retry_candidates_.size() >= candidate_limit) {
+			continue;
+		}
+		loading_retry_candidates_.insert(position, candidate);
+		if (loading_retry_candidates_.size() > candidate_limit) {
+			loading_retry_candidates_.pop_back();
+		}
+	}
+
+	std::size_t progressed = 0;
+	for (const LoadingRetryCandidate &candidate :
+		loading_retry_candidates_) {
+		auto record = find_record(candidate.key);
+		if (record == records_.end() ||
+			record->phase != WtPageMeshingRuntimePhase::Loading) {
+			continue;
+		}
+		const std::size_t record_index = static_cast<std::size_t>(
+			record - records_.begin()
+		);
 		bool made_progress = false;
 		const WtPageMeshingRuntimeStatus status = resolve_loading_record(
-			index,
+			record_index,
 			storage,
 			cache,
 			scheduler,
@@ -557,9 +601,6 @@ std::size_t WtPageMeshingRuntimeService::resume_loading_records(
 		}
 		if (status == WtPageMeshingRuntimeStatus::SchedulerBackpressure) {
 			break;
-		}
-		if (index < records_.size() && records_[index].key == key) {
-			++index;
 		}
 	}
 	return progressed;

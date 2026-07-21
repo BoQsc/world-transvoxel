@@ -1,6 +1,7 @@
 #pragma once
 
 #include "render/wt_render_payload.h"
+#include "meshing/wt_chunk_mesher.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -59,6 +60,16 @@ enum class WtCollisionBuildStatus : std::uint8_t {
 
 WtCollisionBuildStatus wt_build_collision_payload(
 	const WtRenderPayload &render,
+	const WtCollisionPolicy &policy,
+	WtCollisionPayload &output
+);
+
+// Builds physics from the regular cell mesh only. Transvoxel transition
+// triangles are render-side seam geometry and are intentionally excluded from
+// the authoritative collision surface.
+WtCollisionBuildStatus wt_build_regular_collision_payload(
+	const WtChunkMeshResult &mesh,
+	WtGenerationToken generation,
 	const WtCollisionPolicy &policy,
 	WtCollisionPayload &output
 );

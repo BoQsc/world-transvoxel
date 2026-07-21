@@ -12,6 +12,21 @@
 namespace world_transvoxel {
 namespace {
 
+constexpr std::int32_t kWtLodPriorityBand = 100000000;
+constexpr std::int32_t kWtDistancePriorityMaximum =
+	kWtLodPriorityBand - 1;
+constexpr std::int32_t kWtCollisionPriorityMaximum =
+	std::numeric_limits<std::int32_t>::max() - 1;
+constexpr std::int32_t kWtCollisionPriorityDistanceLimit = 1000000;
+constexpr std::int32_t kWtMaximumVisualPriority =
+	static_cast<std::int32_t>(kWtMaximumLod) * kWtLodPriorityBand +
+	kWtDistancePriorityMaximum;
+static_assert(
+	kWtCollisionPriorityMaximum - kWtCollisionPriorityDistanceLimit >
+		kWtMaximumVisualPriority,
+	"collision priority band must outrank every visual LOD priority"
+);
+
 bool intervals_overlap(
 	std::int64_t a_minimum,
 	std::int64_t a_maximum,
@@ -415,15 +430,21 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 		}
 		const double bounded = std::min(
 			nearest,
-			static_cast<double>(99999999)
+			static_cast<double>(kWtDistancePriorityMaximum)
 		);
 		const std::int32_t lod_priority =
-			static_cast<std::int32_t>(entry.key.lod) * 100000000;
+			static_cast<std::int32_t>(entry.key.lod) * kWtLodPriorityBand;
 		const std::int32_t distance_priority =
-			99999999 - static_cast<std::int32_t>(bounded);
+			kWtDistancePriorityMaximum - static_cast<std::int32_t>(bounded);
+		const std::int32_t priority = collision_required ?
+			kWtCollisionPriorityMaximum - static_cast<std::int32_t>(std::min(
+				nearest,
+				static_cast<double>(kWtCollisionPriorityDistanceLimit)
+			)) :
+			lod_priority + distance_priority;
 		output.demands.push_back({
 			entry.key,
-			lod_priority + distance_priority,
+			priority,
 			collision_required,
 		});
 	}

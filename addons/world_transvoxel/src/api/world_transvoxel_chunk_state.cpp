@@ -28,6 +28,10 @@ void WorldTransvoxelChunkState::_bind_methods() {
 		&WorldTransvoxelChunkState::is_visual_ready
 	);
 	godot::ClassDB::bind_method(
+		godot::D_METHOD("is_visual_required"),
+		&WorldTransvoxelChunkState::is_visual_required
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD("is_collision_required"),
 		&WorldTransvoxelChunkState::is_collision_required
 	);
@@ -62,6 +66,10 @@ bool WorldTransvoxelChunkState::is_visual_ready() const noexcept {
 	return visual_ready_;
 }
 
+bool WorldTransvoxelChunkState::is_visual_required() const noexcept {
+	return visual_required_;
+}
+
 bool WorldTransvoxelChunkState::is_collision_required() const noexcept {
 	return collision_required_;
 }
@@ -71,7 +79,8 @@ bool WorldTransvoxelChunkState::is_collision_ready() const noexcept {
 }
 
 bool WorldTransvoxelChunkState::is_fully_ready() const noexcept {
-	return visual_ready_ && (!collision_required_ || collision_ready_);
+	return (!visual_required_ || visual_ready_) &&
+		(!collision_required_ || collision_ready_);
 }
 
 void WorldTransvoxelChunkState::set_snapshot(
@@ -82,6 +91,7 @@ void WorldTransvoxelChunkState::set_snapshot(
 	present_ = record != nullptr;
 	generation_ = record != nullptr ? record->generation : WtGenerationToken{};
 	visual_ready_ = record != nullptr && record->visual_ready;
+	visual_required_ = record != nullptr && record->visual_required;
 	collision_required_ = record != nullptr && record->collision_required;
 	collision_ready_ = record != nullptr && record->collision_ready;
 }

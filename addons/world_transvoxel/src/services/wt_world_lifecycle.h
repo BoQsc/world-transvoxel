@@ -60,6 +60,14 @@ public:
 		std::uint64_t viewer_id,
 		std::uint64_t revision
 	);
+	WtReadOnlyRuntimeStatus update_collision_viewer(
+		const WtViewerSnapshot &snapshot,
+		std::uint32_t radius_chunks
+	);
+	WtReadOnlyRuntimeStatus remove_collision_viewer(
+		std::uint64_t viewer_id,
+		std::uint64_t revision
+	);
 	WtReadOnlyRuntimeStatus submit_edit(
 		const WtEditTransaction &transaction
 	);

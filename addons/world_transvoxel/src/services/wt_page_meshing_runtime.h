@@ -140,7 +140,8 @@ public:
 		const WtEditJournal *edit_journal = nullptr,
 		std::uint64_t initial_world_revision = 0,
 		WtAsyncStorageService *authoritative_storage = nullptr,
-		const WtTerrainMeshReadyCallback &terrain_mesh_ready = {}
+		const WtTerrainMeshReadyCallback &terrain_mesh_ready = {},
+		bool visual_required = true
 	);
 
 	std::size_t flush_scheduler_results(
@@ -209,6 +210,10 @@ private:
 		std::shared_ptr<const WtChunkMeshResult> mesh;
 		std::shared_ptr<const WtChunkMeshResult> water_mesh;
 	};
+	struct LoadingRetryCandidate {
+		WtChunkKey key;
+		std::int32_t priority = 0;
+	};
 
 	std::vector<Record>::iterator find_record(
 		const WtChunkKey &key
@@ -247,6 +252,7 @@ private:
 	std::size_t record_capacity_ = 0;
 	bool valid_ = false;
 	std::vector<Record> records_;
+	std::vector<LoadingRetryCandidate> loading_retry_candidates_;
 	WtPageMeshingRuntimeMetrics metrics_;
 };
 

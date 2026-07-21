@@ -32,9 +32,10 @@ wt::WtViewerSnapshot viewer(
 wt::WtViewerChunkDemand demand(
 	const wt::WtChunkKey &key,
 	std::int32_t priority,
-	bool collision_required = false
+	bool collision_required = false,
+	bool visual_required = true
 ) {
-	return { key, priority, collision_required };
+	return { key, priority, collision_required, visual_required };
 }
 
 void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
@@ -108,6 +109,28 @@ void test_union_and_deltas(std::vector<std::uint8_t> &evidence) {
 			shared->supporter_count == 2 && shared->collision_required,
 		"multi-viewer priority union mismatch"
 	);
+	wt::WtMultiViewerDesiredSet role_union({ 2, 2, 4, 2 });
+	check(role_union.update_viewer(
+			viewer(10, 1),
+			{ demand(a, 5, true, false) },
+			delta
+		) == wt::WtMultiViewerDesiredSetStatus::Ok &&
+		role_union.update_viewer(
+			viewer(11, 1),
+			{ demand(a, 4, false, true) },
+			delta
+		) == wt::WtMultiViewerDesiredSetStatus::Ok,
+		"collision/visual role union update failed");
+	const wt::WtDesiredChunk *role_shared = role_union.find_desired(a);
+	check(role_shared != nullptr && role_shared->collision_required &&
+		role_shared->visual_required && role_shared->supporter_count == 2,
+		"collision/visual requirements were not unioned independently");
+	check(role_union.update_viewer(
+			viewer(10, 2),
+			{ demand(a, 5, false, false) },
+			delta
+		) == wt::WtMultiViewerDesiredSetStatus::InvalidDemand,
+		"demand with no required role was accepted");
 	check(
 		desired.update_viewer(
 			viewer(2, 2, 80.0),

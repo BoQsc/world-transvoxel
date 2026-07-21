@@ -190,6 +190,17 @@ void test_collision_builder() {
 	check(wt::wt_evaluate_collision_requirement(
 		policy, false, std::numeric_limits<double>::quiet_NaN()) ==
 		wt::WtCollisionRequirement::Invalid, "non-finite collision distance accepted");
+
+	const wt::WtChunkMeshResult transition_mesh = make_chunk_mesh();
+	wt::WtCollisionPayload regular_collision;
+	check(wt::wt_build_regular_collision_payload(
+			transition_mesh, { 12 }, policy, regular_collision
+		) == wt::WtCollisionBuildStatus::Ok,
+		"regular-only collision build failed");
+	check(regular_collision.metrics.input_triangles == 1 &&
+		regular_collision.metrics.output_triangles == 1 &&
+		regular_collision.faces.size() == 3,
+		"transition seam geometry leaked into regular collision");
 }
 
 struct RenderSink final : wt::WtRenderSink {
@@ -293,6 +304,32 @@ void test_application_service(
 	check(metrics.collision_latency_frames_total == 2 &&
 		metrics.collision_latency_frames_maximum == 1,
 		"collision application latency metrics mismatch");
+
+	wt::WtChunkApplicationService collision_only(1, 1, 1);
+	RenderSink hidden_render_sink;
+	CollisionSink collision_only_sink;
+	check(collision_only.expect_chunk(key, { 1 }, true, false) ==
+		wt::WtApplicationStatus::Ok,
+		"collision-only expectation failed");
+	auto collision_only_payload = std::make_shared<wt::WtCollisionPayload>();
+	check(wt::wt_build_collision_payload(
+			*render1, {}, *collision_only_payload
+		) == wt::WtCollisionBuildStatus::Ok &&
+		collision_only.submit_collision(collision_only_payload) ==
+			wt::WtApplicationStatus::Ok,
+		"collision-only payload submission failed");
+	collision_only.apply(0, 1, hidden_render_sink, collision_only_sink);
+	const wt::WtChunkApplicationRecord *collision_only_record =
+		collision_only.find_record(key);
+	check(collision_only_record != nullptr &&
+		!collision_only_record->visual_required &&
+		collision_only_record->collision_ready &&
+		collision_only_record->fully_ready(),
+		"collision-only readiness incorrectly waited for render");
+	check(collision_only.set_visual_required(key, true) ==
+		wt::WtApplicationStatus::Ok &&
+		!collision_only.find_record(key)->fully_ready(),
+		"collision-only visual promotion did not reset visual readiness");
 }
 
 } // namespace

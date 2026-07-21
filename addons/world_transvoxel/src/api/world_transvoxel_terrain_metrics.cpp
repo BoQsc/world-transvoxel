@@ -33,6 +33,7 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		lifecycle_->runtime_metrics() : WtReadOnlyRuntimeMetrics{};
 	const WtApplicationMetrics application = application_->get_metrics();
 	std::uint64_t visual_ready_records = 0;
+	std::uint64_t visual_required_records = 0;
 	std::uint64_t fully_ready_records = 0;
 	std::uint64_t non_retiring_records = 0;
 	std::uint64_t non_retiring_visual_ready_records = 0;
@@ -40,6 +41,7 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	std::uint64_t pending_retirement_records = 0;
 	for (const WtChunkApplicationRecord &record : application_->get_records()) {
 		visual_ready_records += record.visual_ready ? 1U : 0U;
+		visual_required_records += record.visual_required ? 1U : 0U;
 		fully_ready_records += record.fully_ready() ? 1U : 0U;
 		const bool pending_retirement = std::binary_search(
 			pending_chunk_retirements_.begin(),
@@ -50,7 +52,8 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 			++pending_retirement_records;
 		} else {
 			++non_retiring_records;
-			non_retiring_visual_ready_records += record.visual_ready ? 1U : 0U;
+			non_retiring_visual_ready_records +=
+				(!record.visual_required || record.visual_ready) ? 1U : 0U;
 			non_retiring_fully_ready_records += record.fully_ready() ? 1U : 0U;
 		}
 	}
@@ -63,6 +66,16 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	output["world_running"] = is_world_running();
 	set_metric(output, "viewer_updates", runtime.viewer_updates);
 	set_metric(output, "viewer_removals", runtime.viewer_removals);
+	set_metric(
+		output,
+		"collision_viewer_updates",
+		runtime.collision_viewer_updates
+	);
+	set_metric(
+		output,
+		"collision_viewer_removals",
+		runtime.collision_viewer_removals
+	);
 	set_metric(
 		output, "coalesced_viewer_events", runtime.coalesced_viewer_events
 	);
@@ -207,6 +220,7 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		application_->get_records().size()
 	);
 	set_metric(output, "visual_ready_chunk_records", visual_ready_records);
+	set_metric(output, "visual_required_chunk_records", visual_required_records);
 	set_metric(output, "fully_ready_chunk_records", fully_ready_records);
 	set_metric(output, "non_retiring_chunk_records", non_retiring_records);
 	set_metric(
@@ -230,6 +244,9 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	);
 	output["pending_chunk_replacements"] = static_cast<std::int64_t>(
 		pending_chunk_replacements_.size()
+	);
+	output["pending_render_retirements"] = static_cast<std::int64_t>(
+		pending_render_retirements_.size()
 	);
 	output["queued_render"] = get_queued_render_count();
 	output["queued_collision"] = get_queued_collision_count();

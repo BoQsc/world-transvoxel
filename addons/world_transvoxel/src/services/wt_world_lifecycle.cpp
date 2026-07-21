@@ -278,6 +278,28 @@ WtReadOnlyRuntimeStatus WtWorldLifecycleService::remove_viewer(
 	return runtime_->remove_viewer(viewer_id, revision);
 }
 
+WtReadOnlyRuntimeStatus WtWorldLifecycleService::update_collision_viewer(
+	const WtViewerSnapshot &snapshot,
+	std::uint32_t radius_chunks
+) {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	if (state_ != WtWorldLifecycleState::Running || !runtime_) {
+		return WtReadOnlyRuntimeStatus::NotRunning;
+	}
+	return runtime_->update_collision_viewer(snapshot, radius_chunks);
+}
+
+WtReadOnlyRuntimeStatus WtWorldLifecycleService::remove_collision_viewer(
+	std::uint64_t viewer_id,
+	std::uint64_t revision
+) {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	if (state_ != WtWorldLifecycleState::Running || !runtime_) {
+		return WtReadOnlyRuntimeStatus::NotRunning;
+	}
+	return runtime_->remove_collision_viewer(viewer_id, revision);
+}
+
 WtReadOnlyRuntimeStatus WtWorldLifecycleService::submit_edit(
 	const WtEditTransaction &transaction
 ) {

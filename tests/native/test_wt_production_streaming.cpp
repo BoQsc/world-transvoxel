@@ -63,6 +63,7 @@ struct PublicationCounts {
 	std::size_t collisions = 0;
 	std::size_t render_vertices = 0;
 	std::size_t render_indices = 0;
+	std::size_t collision_only_expects = 0;
 	bool collision_before_first_render = false;
 };
 
@@ -83,6 +84,10 @@ bool collect_until(
 			switch (publication.kind) {
 				case wt::WtReadOnlyPublicationKind::ExpectChunk:
 					++counts.expects;
+					if (!publication.visual_required &&
+						publication.collision_required) {
+						++counts.collision_only_expects;
+					}
 					break;
 				case wt::WtReadOnlyPublicationKind::RemoveChunk:
 					++counts.removals;
@@ -104,10 +109,13 @@ bool collect_until(
 					++counts.collisions;
 					break;
 				case wt::WtReadOnlyPublicationKind::SetCollisionRequired:
+				case wt::WtReadOnlyPublicationKind::SetVisualRequired:
 				case wt::WtReadOnlyPublicationKind::EditCommitted:
 				case wt::WtReadOnlyPublicationKind::EditRejected:
 				case wt::WtReadOnlyPublicationKind::AuthoritativeSampleReady:
 				case wt::WtReadOnlyPublicationKind::AuthoritativeSampleRejected:
+				case wt::WtReadOnlyPublicationKind::AuthoritativeSampleBatchReady:
+				case wt::WtReadOnlyPublicationKind::AuthoritativeSampleBatchRejected:
 				case wt::WtReadOnlyPublicationKind::WorldSnapshotReady:
 				case wt::WtReadOnlyPublicationKind::WorldSnapshotRejected:
 					break;
@@ -251,6 +259,27 @@ int main() {
 		counts.render_indices != 0,
 		"initial page publication mismatch");
 
+	const std::size_t renders_before_collision_invoker = counts.renders;
+	const std::size_t collisions_before_collision_invoker = counts.collisions;
+	check(runtime.update_collision_viewer(
+			viewer(1, 2, 40.0, 8.0), 0
+		) == wt::WtReadOnlyRuntimeStatus::Ok,
+		"collision-only viewer update rejected");
+	check(collect_until(
+			runtime,
+			counts,
+			renders_before_collision_invoker,
+			collisions_before_collision_invoker + 1,
+			evidence
+		),
+		"collision-only viewer did not publish collision");
+	check(counts.renders == renders_before_collision_invoker &&
+		counts.collision_only_expects >= 1,
+		"collision-only viewer published hidden render work");
+	check(runtime.remove_collision_viewer(1, 3) ==
+		wt::WtReadOnlyRuntimeStatus::Ok,
+		"collision-only viewer removal rejected");
+
 	check(runtime.update_viewer(viewer(1, 2, 24.0, 8.0), 0) ==
 		wt::WtReadOnlyRuntimeStatus::Ok,
 		"moving viewer update rejected");
@@ -293,6 +322,8 @@ int main() {
 		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok,
 		"read-only runtime did not stop cleanly");
 	check(metrics.viewer_updates >= 4 && metrics.viewer_removals == 2 &&
+		metrics.collision_viewer_updates == 1 &&
+		metrics.collision_viewer_removals == 1 &&
 		metrics.sample_jobs >= 4 && metrics.mesh_jobs >= 4 &&
 		metrics.storage_completions >= 4 && metrics.mesh_completions >= 4,
 		"read-only runtime metrics mismatch");

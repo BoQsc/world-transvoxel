@@ -15,6 +15,7 @@ struct WtChunkApplicationRecord {
 	WtChunkKey key;
 	WtGenerationToken generation;
 	bool collision_required = false;
+	bool visual_required = true;
 	bool visual_ready = false;
 	bool collision_ready = false;
 
@@ -53,7 +54,12 @@ public:
 	WtApplicationStatus expect_chunk(
 		const WtChunkKey &key,
 		WtGenerationToken generation,
-		bool collision_required
+		bool collision_required,
+		bool visual_required = true
+	);
+	WtApplicationStatus set_visual_required(
+		const WtChunkKey &key,
+		bool required
 	);
 	WtApplicationStatus set_collision_required(
 		const WtChunkKey &key,

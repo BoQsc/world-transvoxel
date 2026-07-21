@@ -64,6 +64,7 @@ enum class WtReadOnlyRuntimeStatus : std::uint8_t {
 enum class WtReadOnlyPublicationKind : std::uint8_t {
 	ExpectChunk,
 	SetCollisionRequired,
+	SetVisualRequired,
 	RemoveChunk,
 	RenderPayload,
 	CollisionPayload,
@@ -97,6 +98,7 @@ struct WtReadOnlyPublication {
 	std::uint64_t world_revision = 0;
 	WtReadOnlyEditStatus edit_status = WtReadOnlyEditStatus::Ok;
 	bool staged_replacement = false;
+	bool visual_required = true;
 	std::uint64_t request_id = 0;
 	WtAuthoritativeSampleQueryStatus sample_status =
 		WtAuthoritativeSampleQueryStatus::Ok;
@@ -112,6 +114,8 @@ struct WtReadOnlyPublication {
 struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t viewer_updates = 0;
 	std::uint64_t viewer_removals = 0;
+	std::uint64_t collision_viewer_updates = 0;
+	std::uint64_t collision_viewer_removals = 0;
 	std::uint64_t coalesced_viewer_events = 0;
 	std::uint64_t planned_demands = 0;
 	std::uint64_t sample_jobs = 0;
@@ -175,6 +179,14 @@ public:
 		std::uint64_t viewer_id,
 		std::uint64_t revision
 	);
+	WtReadOnlyRuntimeStatus update_collision_viewer(
+		const WtViewerSnapshot &snapshot,
+		std::uint32_t radius_chunks
+	);
+	WtReadOnlyRuntimeStatus remove_collision_viewer(
+		std::uint64_t viewer_id,
+		std::uint64_t revision
+	);
 	WtReadOnlyRuntimeStatus submit_edit(
 		const WtEditTransaction &transaction
 	);
@@ -203,7 +215,12 @@ public:
 	std::uint64_t world_revision() const noexcept;
 
 private:
-	enum class ViewerEventKind : std::uint8_t { Update, Remove };
+	enum class ViewerEventKind : std::uint8_t {
+		Update,
+		Remove,
+		UpdateCollision,
+		RemoveCollision,
+	};
 	struct ViewerEvent {
 		ViewerEventKind kind = ViewerEventKind::Update;
 		WtViewerSnapshot snapshot;
@@ -237,6 +254,10 @@ private:
 		std::uint64_t revision = 0;
 		std::uint64_t viewer_id = 0;
 	};
+	struct CollisionViewer {
+		WtViewerSnapshot snapshot;
+		std::uint32_t radius_chunks = 0;
+	};
 
 	bool enqueue_viewer_event(const ViewerEvent &event);
 	bool process_viewer_event();
@@ -257,6 +278,9 @@ private:
 	bool process_visual_readiness_repairs();
 	bool publish_delta(const WtDesiredSetDelta &delta);
 	bool push_publication(WtReadOnlyPublication publication);
+	static bool is_priority_publication(
+		WtReadOnlyPublicationKind kind
+	) noexcept;
 	void queue_transition_remeshes(
 		const std::vector<WtDesiredChunk> &chunks
 	);
@@ -292,6 +316,9 @@ private:
 
 	mutable std::mutex publication_mutex_;
 	std::condition_variable publication_space_available_;
+	std::vector<WtReadOnlyPublication> priority_publication_slots_;
+	std::size_t priority_publication_head_ = 0;
+	std::size_t priority_publication_count_ = 0;
 	std::vector<WtReadOnlyPublication> publication_slots_;
 	std::size_t publication_head_ = 0;
 	std::size_t publication_count_ = 0;
@@ -303,6 +330,8 @@ private:
 	std::unique_ptr<WtMultiViewerDesiredSet> desired_;
 	std::unique_ptr<WtBalancedLodPlanner> lod_planner_;
 	std::vector<WtLodPlannerViewer> planner_viewers_;
+	std::vector<CollisionViewer> collision_viewers_;
+	std::vector<WtChunkKey> page_keys_;
 	std::vector<EditLodRetentionZone> edit_lod_retention_zones_;
 	std::vector<WtDesiredChunk> pending_transition_remeshes_;
 	std::uint64_t next_edit_lod_retention_revision_ = 1;

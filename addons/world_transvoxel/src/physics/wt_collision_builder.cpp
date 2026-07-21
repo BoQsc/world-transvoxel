@@ -129,4 +129,73 @@ WtCollisionBuildStatus wt_build_collision_payload(
 	return WtCollisionBuildStatus::Ok;
 }
 
+WtCollisionBuildStatus wt_build_regular_collision_payload(
+	const WtChunkMeshResult &mesh,
+	WtGenerationToken generation,
+	const WtCollisionPolicy &policy,
+	WtCollisionPayload &output
+) {
+	output.clear();
+	if (!wt_is_valid_collision_policy(policy)) {
+		return WtCollisionBuildStatus::InvalidPolicy;
+	}
+	if (!wt_is_valid_chunk_key(mesh.key) || generation.value == 0 ||
+		mesh.world_origin != wt_chunk_bounds(mesh.key).minimum ||
+		(mesh.regular.indices.size() % 3U) != 0) {
+		return WtCollisionBuildStatus::InvalidInput;
+	}
+	if (mesh.regular.vertices.size() > kWtMaximumRegularChunkVertices ||
+		mesh.regular.indices.size() > kWtMaximumRegularChunkIndices) {
+		return WtCollisionBuildStatus::CapacityExceeded;
+	}
+	output.key = mesh.key;
+	output.generation = generation;
+	output.world_origin = mesh.world_origin;
+	output.metrics.input_triangles = mesh.regular.indices.size() / 3U;
+	output.faces.reserve(mesh.regular.indices.size());
+	for (std::size_t triangle = 0;
+			triangle < mesh.regular.indices.size(); triangle += 3U) {
+		const std::uint32_t ia = mesh.regular.indices[triangle];
+		const std::uint32_t ib = mesh.regular.indices[triangle + 1U];
+		const std::uint32_t ic = mesh.regular.indices[triangle + 2U];
+		if (ia >= mesh.regular.vertices.size() ||
+			ib >= mesh.regular.vertices.size() ||
+			ic >= mesh.regular.vertices.size()) {
+			output.clear();
+			return WtCollisionBuildStatus::InvalidMesh;
+		}
+		const WtVec3 &a = mesh.regular.vertices[ia].position;
+		const WtVec3 &b = mesh.regular.vertices[ib].position;
+		const WtVec3 &c = mesh.regular.vertices[ic].position;
+		if (!is_finite(a) || !is_finite(b) || !is_finite(c)) {
+			output.clear();
+			return WtCollisionBuildStatus::InvalidMesh;
+		}
+		const double maximum_edge_squared = std::max({
+			distance_squared(a, b),
+			distance_squared(b, c),
+			distance_squared(c, a),
+		});
+		const double area_squared = cross_squared(a, b, c);
+		if (maximum_edge_squared == 0.0 || area_squared == 0.0) {
+			++output.metrics.degenerate_triangles;
+			continue;
+		}
+		if (area_squared <= maximum_edge_squared * maximum_edge_squared *
+			policy.thin_ratio_squared) {
+			++output.metrics.thin_triangles;
+			continue;
+		}
+		if (output.faces.size() + 3U > kWtMaximumRegularChunkIndices) {
+			output.clear();
+			return WtCollisionBuildStatus::CapacityExceeded;
+		}
+		output.faces.push_back(a);
+		output.faces.push_back(b);
+		output.faces.push_back(c);
+		++output.metrics.output_triangles;
+	}
+	return WtCollisionBuildStatus::Ok;
+}
+
 } // namespace world_transvoxel

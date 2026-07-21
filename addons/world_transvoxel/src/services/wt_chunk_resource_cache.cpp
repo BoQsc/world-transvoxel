@@ -306,6 +306,70 @@ WtChunkResourceCache::find_collision(
 	return entry->payload;
 }
 
+WtChunkResourceCacheStatus
+WtChunkResourceCache::find_or_rebuild_collision(
+	const WtChunkKey &key,
+	WtGenerationToken generation,
+	const WtCollisionPolicy &policy,
+	std::shared_ptr<const WtCollisionPayload> &collision,
+	bool regular_only
+) {
+	collision = find_collision(key, generation);
+	if (collision && !regular_only) return WtChunkResourceCacheStatus::Ok;
+	if (regular_only) collision.reset();
+
+	std::shared_ptr<const WtRenderPayload> collision_source = regular_only ?
+		std::shared_ptr<const WtRenderPayload>{} :
+		find_render(key, generation);
+	if (!collision_source) {
+		const auto mesh = find_mesh(key, generation);
+		if (!mesh) return WtChunkResourceCacheStatus::NotFound;
+		if (regular_only) {
+			auto rebuilt_collision = std::make_shared<WtCollisionPayload>();
+			if (wt_build_regular_collision_payload(
+					*mesh,
+					generation,
+					policy,
+					*rebuilt_collision
+				) != WtCollisionBuildStatus::Ok) {
+				return WtChunkResourceCacheStatus::InvalidPayload;
+			}
+			const WtChunkResourceCacheStatus status = insert_collision(
+				rebuilt_collision,
+				generation
+			);
+			if (status != WtChunkResourceCacheStatus::Ok) return status;
+			collision = std::move(rebuilt_collision);
+			return WtChunkResourceCacheStatus::Ok;
+		}
+		auto terrain_render = std::make_shared<WtRenderPayload>();
+		if (wt_build_render_payload(
+				*mesh,
+				generation,
+				*terrain_render
+			) != WtRenderBuildStatus::Ok) {
+			return WtChunkResourceCacheStatus::InvalidPayload;
+		}
+		collision_source = std::move(terrain_render);
+	}
+
+	auto rebuilt_collision = std::make_shared<WtCollisionPayload>();
+	if (wt_build_collision_payload(
+			*collision_source,
+			policy,
+			*rebuilt_collision
+		) != WtCollisionBuildStatus::Ok) {
+		return WtChunkResourceCacheStatus::InvalidPayload;
+	}
+	const WtChunkResourceCacheStatus status = insert_collision(
+		rebuilt_collision,
+		generation
+	);
+	if (status != WtChunkResourceCacheStatus::Ok) return status;
+	collision = std::move(rebuilt_collision);
+	return WtChunkResourceCacheStatus::Ok;
+}
+
 std::size_t WtChunkResourceCache::erase_key(const WtChunkKey &key) {
 	std::size_t erased = 0;
 	for (auto iterator = meshes_.begin(); iterator != meshes_.end();) {

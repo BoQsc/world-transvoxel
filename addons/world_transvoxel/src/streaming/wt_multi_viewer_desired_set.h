@@ -15,6 +15,7 @@ struct WtViewerChunkDemand {
 	WtChunkKey key;
 	std::int32_t priority = 0;
 	bool collision_required = false;
+	bool visual_required = true;
 };
 
 struct WtDesiredChunk {
@@ -22,6 +23,7 @@ struct WtDesiredChunk {
 	std::int32_t priority = 0;
 	std::uint32_t supporter_count = 0;
 	bool collision_required = false;
+	bool visual_required = true;
 
 	bool operator==(const WtDesiredChunk &other) const noexcept;
 };

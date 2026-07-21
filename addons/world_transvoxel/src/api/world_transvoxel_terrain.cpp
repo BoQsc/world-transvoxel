@@ -250,6 +250,19 @@ void WorldTransvoxelTerrain::_bind_methods() {
 		&WorldTransvoxelTerrain::remove_viewer
 	);
 	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"update_collision_viewer", "viewer_id", "revision", "position",
+			"radius_chunks"
+		),
+		&WorldTransvoxelTerrain::update_collision_viewer
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"remove_collision_viewer", "viewer_id", "revision"
+		),
+		&WorldTransvoxelTerrain::remove_collision_viewer
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD("query_chunk_state", "chunk_coordinate", "lod"),
 		&WorldTransvoxelTerrain::query_chunk_state
 	);

@@ -59,15 +59,21 @@ bool WtReadOnlyWorldRuntime::push_publication(
 	WtReadOnlyPublication publication
 ) {
 	std::unique_lock<std::mutex> lock(publication_mutex_);
+	const bool priority = is_priority_publication(publication.kind);
+	std::vector<WtReadOnlyPublication> &slots = priority ?
+		priority_publication_slots_ : publication_slots_;
+	std::size_t &head = priority ?
+		priority_publication_head_ : publication_head_;
+	std::size_t &count = priority ?
+		priority_publication_count_ : publication_count_;
 	publication_space_available_.wait(lock, [&]() {
 		return stop_requested_.load() ||
-			publication_count_ < publication_slots_.size();
+			count < slots.size();
 	});
 	if (stop_requested_.load()) return false;
-	const std::size_t tail =
-		(publication_head_ + publication_count_) % publication_slots_.size();
-	publication_slots_[tail] = std::move(publication);
-	++publication_count_;
+	const std::size_t tail = (head + count) % slots.size();
+	slots[tail] = std::move(publication);
+	++count;
 	{
 		std::lock_guard<std::mutex> metrics_lock(metrics_mutex_);
 		++metrics_.published_events;
@@ -79,13 +85,46 @@ bool WtReadOnlyWorldRuntime::pop_publication(
 	WtReadOnlyPublication &publication
 ) {
 	std::lock_guard<std::mutex> lock(publication_mutex_);
-	if (publication_count_ == 0) return false;
-	publication = std::move(publication_slots_[publication_head_]);
-	publication_slots_[publication_head_] = {};
-	publication_head_ = (publication_head_ + 1U) % publication_slots_.size();
-	--publication_count_;
+	std::vector<WtReadOnlyPublication> *slots =
+		&priority_publication_slots_;
+	std::size_t *head = &priority_publication_head_;
+	std::size_t *count = &priority_publication_count_;
+	if (*count == 0) {
+		slots = &publication_slots_;
+		head = &publication_head_;
+		count = &publication_count_;
+	}
+	if (*count == 0) return false;
+	publication = std::move((*slots)[*head]);
+	(*slots)[*head] = {};
+	*head = (*head + 1U) % slots->size();
+	--*count;
 	publication_space_available_.notify_one();
 	return true;
+}
+
+bool WtReadOnlyWorldRuntime::is_priority_publication(
+	WtReadOnlyPublicationKind kind
+) noexcept {
+	switch (kind) {
+		case WtReadOnlyPublicationKind::ExpectChunk:
+		case WtReadOnlyPublicationKind::SetCollisionRequired:
+		case WtReadOnlyPublicationKind::SetVisualRequired:
+		case WtReadOnlyPublicationKind::RemoveChunk:
+		case WtReadOnlyPublicationKind::CollisionPayload:
+			return true;
+		case WtReadOnlyPublicationKind::RenderPayload:
+		case WtReadOnlyPublicationKind::EditCommitted:
+		case WtReadOnlyPublicationKind::EditRejected:
+		case WtReadOnlyPublicationKind::AuthoritativeSampleReady:
+		case WtReadOnlyPublicationKind::AuthoritativeSampleRejected:
+		case WtReadOnlyPublicationKind::AuthoritativeSampleBatchReady:
+		case WtReadOnlyPublicationKind::AuthoritativeSampleBatchRejected:
+		case WtReadOnlyPublicationKind::WorldSnapshotReady:
+		case WtReadOnlyPublicationKind::WorldSnapshotRejected:
+			return false;
+	}
+	return false;
 }
 
 void WtReadOnlyWorldRuntime::notify_work() noexcept {

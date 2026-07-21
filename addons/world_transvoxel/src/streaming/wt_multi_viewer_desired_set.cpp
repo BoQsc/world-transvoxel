@@ -29,7 +29,8 @@ bool WtDesiredChunk::operator==(const WtDesiredChunk &other) const noexcept {
 	return key == other.key &&
 		priority == other.priority &&
 		supporter_count == other.supporter_count &&
-		collision_required == other.collision_required;
+		collision_required == other.collision_required &&
+		visual_required == other.visual_required;
 }
 
 void WtDesiredSetDelta::clear() noexcept {
@@ -72,7 +73,9 @@ WtMultiViewerDesiredSetStatus WtMultiViewerDesiredSet::validate_demands(
 	ordered = demands;
 	std::sort(ordered.begin(), ordered.end(), demand_less);
 	for (std::size_t index = 0; index < ordered.size(); ++index) {
-		if (!wt_is_valid_chunk_key(ordered[index].key)) {
+		if (!wt_is_valid_chunk_key(ordered[index].key) ||
+			(!ordered[index].visual_required &&
+				!ordered[index].collision_required)) {
 			ordered.clear();
 			return WtMultiViewerDesiredSetStatus::InvalidDemand;
 		}
@@ -111,10 +114,13 @@ WtMultiViewerDesiredSetStatus WtMultiViewerDesiredSet::build_union(
 		std::int32_t priority = combined[index].priority;
 		std::uint32_t supporters = 0;
 		bool collision_required = false;
+		bool visual_required = false;
 		do {
 			priority = std::max(priority, combined[index].priority);
 			collision_required =
 				collision_required || combined[index].collision_required;
+			visual_required =
+				visual_required || combined[index].visual_required;
 			if (supporters == std::numeric_limits<std::uint32_t>::max()) {
 				return WtMultiViewerDesiredSetStatus::DesiredChunkCapacityExceeded;
 			}
@@ -125,7 +131,13 @@ WtMultiViewerDesiredSetStatus WtMultiViewerDesiredSet::build_union(
 			desired.clear();
 			return WtMultiViewerDesiredSetStatus::DesiredChunkCapacityExceeded;
 		}
-		desired.push_back({ key, priority, supporters, collision_required });
+		desired.push_back({
+			key,
+			priority,
+			supporters,
+			collision_required,
+			visual_required,
+		});
 	}
 	return WtMultiViewerDesiredSetStatus::Ok;
 }

@@ -85,6 +85,13 @@ public:
 		const WtChunkKey &key,
 		WtGenerationToken generation
 	);
+	WtChunkResourceCacheStatus find_or_rebuild_collision(
+		const WtChunkKey &key,
+		WtGenerationToken generation,
+		const WtCollisionPolicy &policy,
+		std::shared_ptr<const WtCollisionPayload> &collision,
+		bool regular_only = false
+	);
 
 	std::size_t erase_key(const WtChunkKey &key);
 	void clear() noexcept;

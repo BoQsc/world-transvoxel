@@ -317,6 +317,36 @@ void test_collision_tier(
 	);
 }
 
+void test_collision_recovery_from_terrain_mesh(
+	const std::shared_ptr<const wt::WtChunkMeshResult> &mesh
+) {
+	wt::WtChunkResourceCache cache({
+		1, wt::kWtMaximumResourceCacheBytes,
+		1, wt::kWtMaximumResourceCacheBytes,
+		1, wt::kWtMaximumResourceCacheBytes,
+	});
+	const wt::WtGenerationToken generation { 70 };
+	check(
+		cache.insert_mesh(mesh, generation, generation) ==
+			wt::WtChunkResourceCacheStatus::Ok,
+		"terrain mesh recovery fixture insertion failed"
+	);
+	std::shared_ptr<const wt::WtCollisionPayload> collision;
+	check(
+		cache.find_or_rebuild_collision(
+			mesh->key,
+			generation,
+			{},
+			collision
+		) == wt::WtChunkResourceCacheStatus::Ok &&
+		collision && collision->key == mesh->key &&
+		collision->generation == generation &&
+		cache.find_render(mesh->key, generation) == nullptr &&
+		cache.find_collision(mesh->key, generation) == collision,
+		"same-generation terrain mesh collision recovery failed"
+	);
+}
+
 } // namespace
 
 int main() {
@@ -358,6 +388,7 @@ int main() {
 	test_mesh_tier(cache, meshes);
 	test_render_tier(cache, renders);
 	test_collision_tier(cache, collisions);
+	test_collision_recovery_from_terrain_mesh(meshes[0]);
 
 	check(
 		cache.erase_key(keys[0]) == 3 &&

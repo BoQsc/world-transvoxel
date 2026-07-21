@@ -1581,6 +1581,113 @@ void test_storage_backpressure_retry(const RuntimeFixture &fixture) {
 	storage.close();
 }
 
+void test_priority_ordered_loading_retry(const RuntimeFixture &fixture) {
+	check(!fixture.support_keys.empty(),
+		"priority retry fixture has no fine dependency key");
+	if (fixture.support_keys.empty()) {
+		return;
+	}
+	const wt::WtChunkKey low_priority_key = fixture.support_keys.front();
+	const wt::WtChunkKey high_priority_key = fixture.coarse_key;
+	check(low_priority_key < high_priority_key,
+		"priority retry fixture does not oppose key and priority order");
+
+	wt::WtAsyncStorageService storage({
+		4, 4, wt::kWtMaximumContainerSize
+	});
+	check(
+		storage.open(fixture.world_path, fixture.root) ==
+			wt::WtAsyncStorageStatus::Ok,
+		"priority retry storage open failed"
+	);
+	wt::WtStoragePageCache cache({
+		4,
+		wt::kWtMaximumContainerSize,
+		4,
+		wt::kWtMaximumContainerSize,
+	});
+	wt::WtStreamScheduler scheduler(4, 4, 4, 1);
+	wt::WtPageMeshingRuntimeService runtime(4);
+	const wt::WtChunkJob low_priority_job = request_sample_job(
+		scheduler,
+		low_priority_key,
+		kWorldRevision,
+		1
+	);
+	check(
+		runtime.begin_sample_job(
+			low_priority_job,
+			0,
+			storage,
+			cache,
+			scheduler
+		) == wt::WtPageMeshingRuntimeStatus::Ok,
+		"low-priority loading retry fixture failed"
+	);
+	const wt::WtChunkJob high_priority_job = request_sample_job(
+		scheduler,
+		high_priority_key,
+		kWorldRevision,
+		wt::kWtInteractiveEditPriority
+	);
+	check(
+		runtime.begin_sample_job(
+			high_priority_job,
+			0,
+			storage,
+			cache,
+			scheduler
+		) == wt::WtPageMeshingRuntimeStatus::Ok,
+		"high-priority loading retry fixture failed"
+	);
+
+	for (const wt::WtChunkJob *job : {
+			&low_priority_job, &high_priority_job }) {
+		wt::WtPageLoadCompletion completion;
+		completion.key = job->key;
+		completion.generation = job->generation;
+		completion.status = storage.load_page_now(
+			job->key,
+			completion.page_bytes
+		);
+		check(
+			completion.status == wt::WtPageLoadStatus::Ok &&
+			cache.accept_completion(completion, job->generation) ==
+				wt::WtStoragePageCacheStatus::Ok,
+			"priority retry cache seeding failed"
+		);
+	}
+
+	check(
+		runtime.resume_loading_records(storage, cache, scheduler, 1) == 1,
+		"priority retry budget made no progress"
+	);
+	const std::vector<wt::WtPageMeshingRuntimeRecordSnapshot> records =
+		runtime.get_records();
+	const auto low_record = std::find_if(
+		records.begin(),
+		records.end(),
+		[&](const wt::WtPageMeshingRuntimeRecordSnapshot &record) {
+			return record.key == low_priority_key;
+		}
+	);
+	const auto high_record = std::find_if(
+		records.begin(),
+		records.end(),
+		[&](const wt::WtPageMeshingRuntimeRecordSnapshot &record) {
+			return record.key == high_priority_key;
+		}
+	);
+	check(
+		low_record != records.end() && high_record != records.end() &&
+		low_record->phase == wt::WtPageMeshingRuntimePhase::Loading &&
+		high_record->phase ==
+			wt::WtPageMeshingRuntimePhase::AwaitingMesh,
+		"bounded loading retry did not advance highest priority first"
+	);
+	storage.close();
+}
+
 void test_missing_support(const RuntimeFixture &fixture) {
 	wt::WtAsyncStorageService storage({ 32, 32, wt::kWtMaximumContainerSize });
 	check(
@@ -1654,6 +1761,7 @@ int main() {
 	test_runtime_lifecycle(fixture, evidence);
 	test_edited_coarse_procedural_rebuild(evidence);
 	test_storage_backpressure_retry(fixture);
+	test_priority_ordered_loading_retry(fixture);
 	test_missing_support(fixture);
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M5_PAGE_MESHING_RUNTIME_FAIL failures=%d\n",
@@ -1665,6 +1773,7 @@ int main() {
 	std::printf(
 		"M5_PAGE_MESHING_RUNTIME_PASS dependencies=13 cache_entries=2 "
 		"backpressure=1 cancellations=1 invalidations=1 missing_support=1 "
+		"priority_ordered_loading_retry=1 "
 		"human_boundary_repro=1 edited_coarse_rebuild=1 "
 		"sphere_difference_topology=1 smooth_sphere_difference=1 "
 		"material_volume_distance=1 water_lod_footprint=1\n"

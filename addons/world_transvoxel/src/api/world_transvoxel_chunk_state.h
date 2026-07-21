@@ -24,6 +24,7 @@ public:
 	std::int64_t get_lod() const noexcept;
 	std::int64_t get_generation() const noexcept;
 	bool is_visual_ready() const noexcept;
+	bool is_visual_required() const noexcept;
 	bool is_collision_required() const noexcept;
 	bool is_collision_ready() const noexcept;
 	bool is_fully_ready() const noexcept;
@@ -40,6 +41,7 @@ private:
 	WtGenerationToken generation_;
 	bool present_ = false;
 	bool visual_ready_ = false;
+	bool visual_required_ = false;
 	bool collision_required_ = false;
 	bool collision_ready_ = false;
 };

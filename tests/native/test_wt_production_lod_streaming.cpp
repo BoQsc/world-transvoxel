@@ -237,6 +237,27 @@ bool run_g21_near_field_capacity_regression(
 	}
 	entry_count = plan.entries.size();
 	nearest_coarse_distance = std::numeric_limits<double>::infinity();
+	std::int32_t minimum_collision_priority =
+		std::numeric_limits<std::int32_t>::max();
+	std::int32_t maximum_visual_only_priority =
+		std::numeric_limits<std::int32_t>::min();
+	bool saw_collision_demand = false;
+	bool saw_visual_only_demand = false;
+	for (const wt::WtViewerChunkDemand &demand : plan.demands) {
+		if (demand.collision_required) {
+			saw_collision_demand = true;
+			minimum_collision_priority = std::min(
+				minimum_collision_priority,
+				demand.priority
+			);
+		} else {
+			saw_visual_only_demand = true;
+			maximum_visual_only_priority = std::max(
+				maximum_visual_only_priority,
+				demand.priority
+			);
+		}
+	}
 	for (const wt::WtLodMapEntry &entry : plan.entries) {
 		if (entry.key.lod == 0) {
 			continue;
@@ -254,6 +275,11 @@ bool run_g21_near_field_capacity_regression(
 	check(
 		entry_count <= 8192 && nearest_coarse_distance >= 48.0,
 		"g21 near-field plan placed coarse terrain inside its safety radius"
+	);
+	check(
+		saw_collision_demand && saw_visual_only_demand &&
+		minimum_collision_priority > maximum_visual_only_priority,
+		"player collision demand does not outrank visual-only streaming"
 	);
 	return entry_count <= 8192 && nearest_coarse_distance >= 48.0;
 }
@@ -425,6 +451,7 @@ bool collect_until(
 					++counts.collisions;
 					break;
 				case wt::WtReadOnlyPublicationKind::SetCollisionRequired:
+				case wt::WtReadOnlyPublicationKind::SetVisualRequired:
 				case wt::WtReadOnlyPublicationKind::EditCommitted:
 				case wt::WtReadOnlyPublicationKind::EditRejected:
 				case wt::WtReadOnlyPublicationKind::AuthoritativeSampleReady:
@@ -545,6 +572,386 @@ bool run_collision_reactivation_eviction_regression(
 		"collision reactivation runtime did not stop cleanly");
 	return initial_render && initial_collision && collision_deactivated &&
 		collision_reactivated &&
+		run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok;
+}
+
+bool run_replacement_collision_continuity_regression(
+	wt::WtAsyncStorageService &storage
+) {
+	wt::WtRuntimeConfig config;
+	config.active_chunk_capacity = 40;
+	config.viewer_capacity = 1;
+	config.demand_capacity_per_viewer = 125;
+	config.storage_request_capacity = 64;
+	config.storage_completion_capacity = 64;
+	config.encoded_page_entry_capacity = 40;
+	config.decoded_page_entry_capacity = 40;
+	config.mesh_entry_capacity = 40;
+	config.render_entry_capacity = 40;
+	config.collision_entry_capacity = 40;
+	config.collision_activation_distance = 0.0;
+	config.collision_deactivation_distance = 0.0;
+	wt::WtReadOnlyWorldRuntime runtime(config, storage);
+	check(runtime.valid(),
+		"replacement collision-continuity runtime configuration rejected");
+	if (!runtime.valid()) return false;
+
+	std::atomic<wt::WtReadOnlyRuntimeStatus> run_status {
+		wt::WtReadOnlyRuntimeStatus::Ok
+	};
+	std::thread worker([&]() { run_status.store(runtime.run()); });
+	std::vector<wt::WtChunkKey> initial_visual_only;
+	std::vector<wt::WtReadOnlyPublication> replacement_publications;
+
+	check(runtime.update_viewer({ 1, 8.0, 8.0, 8.0, 1 }, 1, 1) ==
+		wt::WtReadOnlyRuntimeStatus::Ok,
+		"replacement collision-continuity initial viewer was rejected");
+	const bool initial_ready = collect_runtime_until(
+		runtime,
+		[&](const wt::WtReadOnlyPublication &publication) {
+			if (publication.kind == wt::WtReadOnlyPublicationKind::ExpectChunk &&
+				!publication.collision_required) {
+				initial_visual_only.push_back(publication.key);
+			}
+		},
+		[&]() {
+			const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+			return metrics.viewer_updates >= 1 && runtime_idle(metrics);
+		}
+	);
+	check(initial_ready && !initial_visual_only.empty(),
+		"replacement collision-continuity fixture had no visual-only chunks");
+
+	bool replacement_ready = false;
+	if (initial_ready && !initial_visual_only.empty()) {
+		check(runtime.update_viewer({ 1, 40.0, 8.0, 8.0, 2 }, 1, 1) ==
+			wt::WtReadOnlyRuntimeStatus::Ok,
+			"replacement collision-continuity moving viewer was rejected");
+		replacement_ready = collect_runtime_until(
+			runtime,
+			[&](const wt::WtReadOnlyPublication &publication) {
+				replacement_publications.push_back(publication);
+			},
+			[&]() {
+				const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+				return metrics.viewer_updates >= 2 && runtime_idle(metrics);
+			}
+		);
+		check(replacement_ready,
+			"replacement collision-continuity move did not become idle");
+	}
+
+	bool saw_visual_only_removal = false;
+	bool every_removal_had_collision_handoff = true;
+	for (std::size_t removal_index = 0;
+		removal_index < replacement_publications.size();
+		++removal_index) {
+		const wt::WtReadOnlyPublication &removal =
+			replacement_publications[removal_index];
+		if (removal.kind != wt::WtReadOnlyPublicationKind::RemoveChunk ||
+			std::find(
+				initial_visual_only.begin(),
+				initial_visual_only.end(),
+				removal.key
+			) == initial_visual_only.end()) continue;
+		saw_visual_only_removal = true;
+		bool requirement_before_removal = false;
+		bool payload_before_removal = false;
+		for (std::size_t index = 0; index < removal_index; ++index) {
+			const wt::WtReadOnlyPublication &publication =
+				replacement_publications[index];
+			if (publication.key != removal.key) continue;
+			requirement_before_removal = requirement_before_removal ||
+				(publication.kind ==
+					wt::WtReadOnlyPublicationKind::SetCollisionRequired &&
+					publication.collision_required);
+			payload_before_removal = payload_before_removal ||
+				(publication.kind ==
+					wt::WtReadOnlyPublicationKind::CollisionPayload &&
+					publication.collision != nullptr);
+		}
+		every_removal_had_collision_handoff =
+			every_removal_had_collision_handoff &&
+			requirement_before_removal && payload_before_removal;
+	}
+	check(saw_visual_only_removal,
+		"replacement collision-continuity move removed no visual-only chunk");
+	check(every_removal_had_collision_handoff,
+		"outgoing visual-only chunk lacked collision before staged removal");
+
+	std::vector<wt::WtChunkKey> current_visual_only = initial_visual_only;
+	const auto erase_visual_only = [&](const wt::WtChunkKey &key) {
+		current_visual_only.erase(
+			std::remove(
+				current_visual_only.begin(),
+				current_visual_only.end(),
+				key
+			),
+			current_visual_only.end()
+		);
+	};
+	const auto add_visual_only = [&](const wt::WtChunkKey &key) {
+		if (std::find(
+				current_visual_only.begin(),
+				current_visual_only.end(),
+				key
+			) == current_visual_only.end()) {
+			current_visual_only.push_back(key);
+		}
+	};
+	for (const wt::WtReadOnlyPublication &publication :
+		replacement_publications) {
+		switch (publication.kind) {
+			case wt::WtReadOnlyPublicationKind::ExpectChunk:
+				if (publication.collision_required) {
+					erase_visual_only(publication.key);
+				} else {
+					add_visual_only(publication.key);
+				}
+				break;
+			case wt::WtReadOnlyPublicationKind::SetCollisionRequired:
+				if (publication.collision_required) {
+					erase_visual_only(publication.key);
+				} else {
+					add_visual_only(publication.key);
+				}
+				break;
+			case wt::WtReadOnlyPublicationKind::SetVisualRequired:
+				break;
+			case wt::WtReadOnlyPublicationKind::RemoveChunk:
+				erase_visual_only(publication.key);
+				break;
+			case wt::WtReadOnlyPublicationKind::RenderPayload:
+			case wt::WtReadOnlyPublicationKind::CollisionPayload:
+			case wt::WtReadOnlyPublicationKind::EditCommitted:
+			case wt::WtReadOnlyPublicationKind::EditRejected:
+			case wt::WtReadOnlyPublicationKind::AuthoritativeSampleReady:
+			case wt::WtReadOnlyPublicationKind::AuthoritativeSampleRejected:
+			case wt::WtReadOnlyPublicationKind::AuthoritativeSampleBatchReady:
+			case wt::WtReadOnlyPublicationKind::AuthoritativeSampleBatchRejected:
+			case wt::WtReadOnlyPublicationKind::WorldSnapshotReady:
+			case wt::WtReadOnlyPublicationKind::WorldSnapshotRejected:
+				break;
+		}
+	}
+	check(!current_visual_only.empty(),
+		"replacement collision-continuity move left no visual-only chunks");
+
+	std::vector<wt::WtReadOnlyPublication> removal_only_publications;
+	bool removal_only_ready = false;
+	if (!current_visual_only.empty()) {
+		check(runtime.remove_viewer(1, 3) == wt::WtReadOnlyRuntimeStatus::Ok,
+			"replacement collision-continuity viewer removal was rejected");
+		removal_only_ready = collect_runtime_until(
+			runtime,
+			[&](const wt::WtReadOnlyPublication &publication) {
+				removal_only_publications.push_back(publication);
+			},
+			[&]() {
+				const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+				return metrics.viewer_removals >= 1 && runtime_idle(metrics);
+			}
+		);
+		check(removal_only_ready,
+			"replacement collision-continuity removal did not become idle");
+	}
+	bool saw_removal_only_visual_chunk = false;
+	bool removal_only_handoff_ok = true;
+	for (std::size_t removal_index = 0;
+		removal_index < removal_only_publications.size();
+		++removal_index) {
+		const wt::WtReadOnlyPublication &removal =
+			removal_only_publications[removal_index];
+		if (removal.kind != wt::WtReadOnlyPublicationKind::RemoveChunk ||
+			std::find(
+				current_visual_only.begin(),
+				current_visual_only.end(),
+				removal.key
+			) == current_visual_only.end()) continue;
+		saw_removal_only_visual_chunk = true;
+		bool requirement_before_removal = false;
+		bool payload_before_removal = false;
+		for (std::size_t index = 0; index < removal_index; ++index) {
+			const wt::WtReadOnlyPublication &publication =
+				removal_only_publications[index];
+			if (publication.key != removal.key) continue;
+			requirement_before_removal = requirement_before_removal ||
+				(publication.kind ==
+					wt::WtReadOnlyPublicationKind::SetCollisionRequired &&
+					publication.collision_required);
+			payload_before_removal = payload_before_removal ||
+				(publication.kind ==
+					wt::WtReadOnlyPublicationKind::CollisionPayload &&
+					publication.collision != nullptr);
+		}
+		removal_only_handoff_ok = removal_only_handoff_ok &&
+			requirement_before_removal && payload_before_removal;
+	}
+	check(saw_removal_only_visual_chunk && removal_only_handoff_ok,
+		"removal-only visual chunk lacked collision before staged retirement");
+
+	runtime.request_stop();
+	worker.join();
+	check(run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok,
+		"replacement collision-continuity runtime did not stop cleanly");
+	return initial_ready && replacement_ready && removal_only_ready &&
+		saw_visual_only_removal && every_removal_had_collision_handoff &&
+		saw_removal_only_visual_chunk && removal_only_handoff_ok &&
+		run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok;
+}
+
+bool run_collision_publication_priority_regression(
+	wt::WtAsyncStorageService &storage
+) {
+	wt::WtRuntimeConfig config;
+	config.active_chunk_capacity = 40;
+	config.viewer_capacity = 1;
+	config.demand_capacity_per_viewer = 125;
+	config.storage_request_capacity = 64;
+	config.storage_completion_capacity = 64;
+	config.encoded_page_entry_capacity = 40;
+	config.decoded_page_entry_capacity = 40;
+	config.mesh_entry_capacity = 40;
+	config.render_entry_capacity = 40;
+	config.collision_entry_capacity = 40;
+	config.collision_activation_distance = 0.0;
+	config.collision_deactivation_distance = 0.0;
+	wt::WtReadOnlyWorldRuntime runtime(config, storage);
+	check(runtime.valid(),
+		"collision-publication priority runtime configuration rejected");
+	if (!runtime.valid()) return false;
+
+	std::atomic<wt::WtReadOnlyRuntimeStatus> run_status {
+		wt::WtReadOnlyRuntimeStatus::Ok
+	};
+	std::thread worker([&]() { run_status.store(runtime.run()); });
+	check(runtime.update_viewer({ 1, 8.0, 8.0, 8.0, 1 }, 1, 1) ==
+		wt::WtReadOnlyRuntimeStatus::Ok,
+		"collision-publication priority initial viewer was rejected");
+	const auto initial_deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(8);
+	while (std::chrono::steady_clock::now() < initial_deadline) {
+		const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+		if (metrics.viewer_updates >= 1 && runtime_idle(metrics)) break;
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	const wt::WtReadOnlyRuntimeMetrics initial_metrics = runtime.get_metrics();
+	check(initial_metrics.viewer_updates >= 1 && runtime_idle(initial_metrics),
+		"collision-publication priority initial stream did not become idle");
+
+	bool left_render_backlog = false;
+	wt::WtReadOnlyPublication publication;
+	while (runtime.pop_publication(publication)) {
+		if (publication.kind == wt::WtReadOnlyPublicationKind::RenderPayload) {
+			left_render_backlog = true;
+			break;
+		}
+	}
+	check(left_render_backlog,
+		"collision-publication priority fixture had no render backlog");
+
+	check(runtime.update_viewer({ 1, 40.0, 8.0, 8.0, 2 }, 1, 1) ==
+		wt::WtReadOnlyRuntimeStatus::Ok,
+		"collision-publication priority moving viewer was rejected");
+	const auto movement_deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(8);
+	while (std::chrono::steady_clock::now() < movement_deadline) {
+		const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+		if (metrics.viewer_updates >= 2 && runtime_idle(metrics)) break;
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	const wt::WtReadOnlyRuntimeMetrics movement_metrics = runtime.get_metrics();
+	check(movement_metrics.viewer_updates >= 2 && runtime_idle(movement_metrics),
+		"collision-publication priority movement did not become idle");
+
+	const bool popped_after_move = runtime.pop_publication(publication);
+	const bool control_overtook_render = popped_after_move &&
+		publication.kind != wt::WtReadOnlyPublicationKind::RenderPayload;
+	check(control_overtook_render,
+		"collision/control publication remained behind render backlog");
+	drain_publications(runtime);
+	runtime.request_stop();
+	worker.join();
+	check(run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok,
+		"collision-publication priority runtime did not stop cleanly");
+	return left_render_backlog && control_overtook_render &&
+		run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok;
+}
+
+bool run_collision_publication_coalescing_regression(
+	wt::WtAsyncStorageService &storage
+) {
+	wt::WtRuntimeConfig config;
+	config.active_chunk_capacity = 40;
+	config.viewer_capacity = 1;
+	config.demand_capacity_per_viewer = 125;
+	config.storage_request_capacity = 64;
+	config.storage_completion_capacity = 64;
+	config.encoded_page_entry_capacity = 40;
+	config.decoded_page_entry_capacity = 40;
+	config.mesh_entry_capacity = 40;
+	config.render_entry_capacity = 40;
+	config.collision_entry_capacity = 40;
+	config.collision_activation_distance = 0.0;
+	config.collision_deactivation_distance = 0.0;
+	wt::WtReadOnlyWorldRuntime runtime(config, storage);
+	check(runtime.valid(),
+		"collision-publication coalescing runtime configuration rejected");
+	if (!runtime.valid()) return false;
+
+	std::atomic<wt::WtReadOnlyRuntimeStatus> run_status {
+		wt::WtReadOnlyRuntimeStatus::Ok
+	};
+	std::thread worker([&]() { run_status.store(runtime.run()); });
+	check(runtime.update_viewer({ 1, 8.0, 8.0, 8.0, 1 }, 1, 1) ==
+		wt::WtReadOnlyRuntimeStatus::Ok,
+		"collision-publication coalescing initial viewer was rejected");
+	const bool initial_ready = collect_runtime_until(
+		runtime,
+		[](const wt::WtReadOnlyPublication &) {},
+		[&]() {
+			const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+			return metrics.viewer_updates >= 1 && runtime_idle(metrics);
+		}
+	);
+	check(initial_ready,
+		"collision-publication coalescing initial stream did not become idle");
+	drain_publications(runtime);
+
+	std::size_t collision_state_publications = 0;
+	check(runtime.update_viewer({ 1, 9.0, 8.0, 8.0, 2 }, 1, 1) ==
+		wt::WtReadOnlyRuntimeStatus::Ok,
+		"collision-publication coalescing movement was rejected");
+	const bool movement_ready = collect_runtime_until(
+		runtime,
+		[&](const wt::WtReadOnlyPublication &publication) {
+			if (publication.kind ==
+					wt::WtReadOnlyPublicationKind::SetCollisionRequired) {
+				++collision_state_publications;
+			}
+		},
+		[&]() {
+			const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+			return metrics.viewer_updates >= 2 && runtime_idle(metrics);
+		}
+	);
+	check(movement_ready,
+		"collision-publication coalescing movement did not become idle");
+	check(collision_state_publications == 0,
+		"priority-only viewer movement flooded collision-state publications");
+
+	runtime.request_stop();
+	worker.join();
+	check(run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok,
+		"collision-publication coalescing runtime did not stop cleanly");
+	return initial_ready && movement_ready &&
+		collision_state_publications == 0 &&
 		run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
 		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok;
 }
@@ -1009,6 +1416,12 @@ int main() {
 		run_edit_retention_many_zone_regression(storage, fixture.path);
 	const bool collision_reactivation_ok =
 		run_collision_reactivation_eviction_regression(storage);
+	const bool replacement_collision_continuity_ok =
+		run_replacement_collision_continuity_regression(storage);
+	const bool collision_publication_priority_ok =
+		run_collision_publication_priority_regression(storage);
+	const bool collision_publication_coalescing_ok =
+		run_collision_publication_coalescing_regression(storage);
 	storage.close();
 
 	std::vector<std::uint8_t> evidence;
@@ -1033,6 +1446,9 @@ int main() {
 	append_u64(evidence, g21_near_field_ok ? 1U : 0U);
 	append_u64(evidence, g21_entry_count);
 	append_u64(evidence, collision_reactivation_ok ? 1U : 0U);
+	append_u64(evidence, replacement_collision_continuity_ok ? 1U : 0U);
+	append_u64(evidence, collision_publication_priority_ok ? 1U : 0U);
+	append_u64(evidence, collision_publication_coalescing_ok ? 1U : 0U);
 	append_u64(
 		evidence,
 		static_cast<std::uint64_t>(g21_nearest_coarse_distance)
@@ -1048,7 +1464,9 @@ int main() {
 		"retained_entries=%zu retained_edit_key=%d "
 		"fallback_retention=%d bridge0=%llu/%llu bridge1=%llu/%llu "
 		"global_coarse=%d many_zone_retention=%d lod_hysteresis=%d "
-		"collision_reactivation=%d g21_entries=%zu "
+		"collision_reactivation=%d replacement_collision_continuity=%d "
+		"collision_publication_priority=%d collision_publication_coalescing=%d "
+		"g21_entries=%zu "
 		"g21_nearest_coarse=%.1f transition_completions=%llu\n",
 		plan.entries.size(),
 		bridge == nullptr ? 0U : static_cast<unsigned int>(bridge->transition_mask),
@@ -1063,6 +1481,9 @@ int main() {
 		many_zone_retention_ok ? 1 : 0,
 		lod_hysteresis_ok ? 1 : 0,
 		collision_reactivation_ok ? 1 : 0,
+		replacement_collision_continuity_ok ? 1 : 0,
+		collision_publication_priority_ok ? 1 : 0,
+		collision_publication_coalescing_ok ? 1 : 0,
 		g21_entry_count,
 		g21_nearest_coarse_distance,
 		static_cast<unsigned long long>(metrics.transition_mesh_completions)
@@ -1072,6 +1493,8 @@ int main() {
 	std::printf(
 		"PRODUCTION_LOD_STREAMING_PASS pages=28 viewers=2 transitions=3 "
 		"lod_hysteresis=1 collision_reactivation=1 "
+		"replacement_collision_continuity=1 collision_publication_priority=1 "
+		"collision_publication_coalescing=1 "
 		"g21_near_field=1 backend=MIT\n"
 	);
 	return 0;

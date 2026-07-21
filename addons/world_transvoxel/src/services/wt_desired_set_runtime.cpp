@@ -81,6 +81,7 @@ bool WtDesiredSetRuntimeService::validate_delta(
 	}
 	for (const WtDesiredChunk &item : delta.added) {
 		if (item.supporter_count == 0 ||
+			(!item.visual_required && !item.collision_required) ||
 			contains_key(delta.removed, item.key) ||
 			contains_desired(delta.updated, item.key)) {
 			return false;
@@ -88,6 +89,7 @@ bool WtDesiredSetRuntimeService::validate_delta(
 	}
 	for (const WtDesiredChunk &item : delta.updated) {
 		if (item.supporter_count == 0 ||
+			(!item.visual_required && !item.collision_required) ||
 			contains_key(delta.removed, item.key)) {
 			return false;
 		}
@@ -161,7 +163,19 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 		++metrics_.capacity_rejections;
 		return WtDesiredSetRuntimeStatus::RecordCapacityExceeded;
 	}
-	if (scheduler.available_job_capacity() < delta.added.size()) {
+	std::size_t visual_promotions_requiring_remesh = 0;
+	for (const WtDesiredChunk &item : delta.updated) {
+		const WtChunkRecord *record = scheduler.find_record(item.key);
+		const WtChunkApplicationRecord *application_record =
+			application.find_record(item.key);
+		if (record != nullptr && application_record != nullptr &&
+			!application_record->visual_required && item.visual_required &&
+			record->lifecycle == WtChunkLifecycle::Ready) {
+			++visual_promotions_requiring_remesh;
+		}
+	}
+	if (scheduler.available_job_capacity() <
+			delta.added.size() + visual_promotions_requiring_remesh) {
 		++metrics_.capacity_rejections;
 		return WtDesiredSetRuntimeStatus::JobQueueCapacityExceeded;
 	}
@@ -190,6 +204,10 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 		metrics_.evicted_resource_entries += resource_cache.erase_key(key);
 	}
 	for (const WtDesiredChunk &item : delta.updated) {
+		const WtChunkApplicationRecord *application_record =
+			application.find_record(item.key);
+		const bool promote_visual = application_record != nullptr &&
+			!application_record->visual_required && item.visual_required;
 		const WtChunkRecord *record = scheduler.find_record(item.key);
 		const bool interactive_edit_in_flight =
 			record != nullptr &&
@@ -199,6 +217,43 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 		const std::int32_t effective_priority =
 			interactive_edit_in_flight ?
 				kWtInteractiveEditPriority : item.priority;
+		if (promote_visual && record != nullptr &&
+			record->lifecycle == WtChunkLifecycle::Ready) {
+			if (page_meshing_runtime != nullptr) {
+				const WtPageMeshingRuntimeOwnerStatus release_status =
+					page_meshing_runtime->release_owned_chunk(item.key);
+				if (release_status != WtPageMeshingRuntimeOwnerStatus::Ok &&
+					release_status != WtPageMeshingRuntimeOwnerStatus::NotFound &&
+					release_status !=
+						WtPageMeshingRuntimeOwnerStatus::StaleGeneration) {
+					++metrics_.page_meshing_runtime_failures;
+					return WtDesiredSetRuntimeStatus::PageMeshingRuntimeFailure;
+				}
+			}
+			const WtSchedulerStatus remesh_status =
+				scheduler.request_chunk_version(
+					item.key,
+					source_revision,
+					world_revision,
+					effective_priority,
+					true
+				);
+			if (remesh_status != WtSchedulerStatus::Ok) {
+				++metrics_.scheduler_failures;
+				return WtDesiredSetRuntimeStatus::SchedulerFailure;
+			}
+			record = scheduler.find_record(item.key);
+			if (record == nullptr || application.expect_chunk(
+					item.key,
+					record->generation,
+					item.collision_required,
+					item.visual_required
+				) != WtApplicationStatus::Ok) {
+				++metrics_.application_failures;
+				return WtDesiredSetRuntimeStatus::ApplicationFailure;
+			}
+			continue;
+		}
 		if (page_meshing_runtime != nullptr && record != nullptr) {
 			const WtPageMeshingRuntimeOwnerStatus status =
 				page_meshing_runtime->reprioritize_owned_chunk(
@@ -221,11 +276,44 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 			++metrics_.scheduler_failures;
 			return WtDesiredSetRuntimeStatus::SchedulerFailure;
 		}
-		const WtApplicationStatus application_status =
-			application.set_collision_required(
-				item.key,
-				item.collision_required
+		// Enable a newly required role before disabling the old one so a chunk
+		// never passes through an invalid no-visual/no-collision state.
+		WtApplicationStatus application_status = WtApplicationStatus::Ok;
+		if (item.visual_required) {
+			application_status = application.set_visual_required(
+				item.key, true
 			);
+		}
+		if (application_status != WtApplicationStatus::Ok &&
+			application_status != WtApplicationStatus::AlreadyCurrent) {
+			++metrics_.application_failures;
+			return WtDesiredSetRuntimeStatus::ApplicationFailure;
+		}
+		if (item.collision_required) {
+			application_status = application.set_collision_required(
+				item.key, true
+			);
+		}
+		if (application_status != WtApplicationStatus::Ok &&
+			application_status != WtApplicationStatus::AlreadyCurrent) {
+			++metrics_.application_failures;
+			return WtDesiredSetRuntimeStatus::ApplicationFailure;
+		}
+		if (!item.visual_required) {
+			application_status = application.set_visual_required(
+				item.key, false
+			);
+		}
+		if (application_status != WtApplicationStatus::Ok &&
+			application_status != WtApplicationStatus::AlreadyCurrent) {
+			++metrics_.application_failures;
+			return WtDesiredSetRuntimeStatus::ApplicationFailure;
+		}
+		if (!item.collision_required) {
+			application_status = application.set_collision_required(
+				item.key, false
+			);
+		}
 		if (application_status != WtApplicationStatus::Ok &&
 			application_status != WtApplicationStatus::AlreadyCurrent) {
 			++metrics_.application_failures;
@@ -247,7 +335,8 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 			application.expect_chunk(
 				item.key,
 				record->generation,
-				item.collision_required
+				item.collision_required,
+				item.visual_required
 			) != WtApplicationStatus::Ok) {
 			++metrics_.application_failures;
 			return WtDesiredSetRuntimeStatus::ApplicationFailure;

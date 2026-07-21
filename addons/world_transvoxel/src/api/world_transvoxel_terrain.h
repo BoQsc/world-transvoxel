@@ -140,6 +140,16 @@ public:
 		std::int64_t maximum_lod = 0
 	);
 	bool remove_viewer(std::int64_t viewer_id, std::int64_t revision);
+	bool update_collision_viewer(
+		std::int64_t viewer_id,
+		std::int64_t revision,
+		const godot::Vector3 &position,
+		std::int64_t radius_chunks
+	);
+	bool remove_collision_viewer(
+		std::int64_t viewer_id,
+		std::int64_t revision
+	);
 	godot::Ref<WorldTransvoxelChunkState> query_chunk_state(
 		const godot::Vector3i &chunk_coordinate,
 		std::int64_t lod
@@ -197,8 +207,11 @@ private:
 	void cancel_chunk_retirement(const WtChunkKey &key);
 	void stage_chunk_replacement(const WtChunkKey &key);
 	void cancel_chunk_replacement(const WtChunkKey &key);
+	void stage_render_retirement(const WtChunkKey &key);
+	void cancel_render_retirement(const WtChunkKey &key);
 	void flush_ready_chunk_retirements();
 	void flush_ready_chunk_replacements();
+	void flush_ready_render_retirements();
 	void update_visibility_staging_state();
 	void publish_staged_records_if_ready();
 	void reset_world_application(std::size_t capacity);
@@ -212,6 +225,7 @@ private:
 	bool has_deferred_publication_ = false;
 	std::vector<WtChunkKey> pending_chunk_retirements_;
 	std::vector<WtChunkKey> pending_chunk_replacements_;
+	std::vector<WtChunkKey> pending_render_retirements_;
 	std::unique_ptr<WtChunkApplicationService> application_;
 	std::unique_ptr<WtGodotRenderSink> render_sink_;
 	std::unique_ptr<WtGodotCollisionSink> collision_sink_;
