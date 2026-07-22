@@ -87,6 +87,7 @@ public:
 		bool compact,
 		std::uint64_t &request_id
 	);
+	void notify_application_progress() noexcept;
 	bool pop_publication(WtReadOnlyPublication &publication);
 
 	WtWorldLifecycleState state() const noexcept;

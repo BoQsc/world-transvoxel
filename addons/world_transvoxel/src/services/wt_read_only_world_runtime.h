@@ -210,6 +210,7 @@ public:
 	WtReadOnlyRuntimeStatus run();
 	void request_stop() noexcept;
 	bool pop_publication(WtReadOnlyPublication &publication);
+	void notify_application_progress() noexcept;
 
 	WtReadOnlyRuntimeStatus last_status() const noexcept;
 	WtReadOnlyRuntimeMetrics get_metrics() const noexcept;
@@ -263,6 +264,11 @@ private:
 		WtChunkKey key;
 		WtGenerationToken generation;
 		bool render_republished = false;
+		std::uint64_t render_republish_application_sequence = 0;
+	};
+	struct ReadinessRepairRemeshAttempt {
+		WtChunkKey key;
+		WtGenerationToken generation;
 	};
 
 	bool enqueue_viewer_event(const ViewerEvent &event);
@@ -284,12 +290,14 @@ private:
 	bool process_visual_readiness_repairs();
 	bool publish_delta(const WtDesiredSetDelta &delta);
 	bool push_publication(WtReadOnlyPublication publication);
+	bool has_publication_backlog();
 	static bool is_priority_publication(
 		const WtReadOnlyPublication &publication
 	) noexcept;
 	void queue_transition_remeshes(
 		const std::vector<WtDesiredChunk> &chunks
 	);
+	void queue_readiness_repair_candidate(const WtChunkKey &key);
 	void remember_edit_lod_retention_zones(
 		const WtEditTransaction &transaction
 	);
@@ -312,6 +320,7 @@ private:
 	std::atomic<WtReadOnlyRuntimeStatus> last_status_{
 		WtReadOnlyRuntimeStatus::Ok
 	};
+	std::atomic<std::uint64_t> application_progress_sequence_{ 0 };
 
 	mutable std::mutex input_mutex_;
 	std::vector<ViewerEvent> viewer_events_;
@@ -341,8 +350,11 @@ private:
 	std::vector<WtChunkKey> page_keys_;
 	std::vector<EditLodRetentionZone> edit_lod_retention_zones_;
 	std::vector<WtDesiredChunk> pending_transition_remeshes_;
+	std::vector<WtChunkKey> readiness_repair_candidate_keys_;
 	std::vector<ReadinessRepairAttempt> readiness_repair_attempts_;
-	std::vector<WtChunkKey> readiness_repair_remesh_keys_;
+	std::vector<ReadinessRepairRemeshAttempt> readiness_repair_remesh_attempts_;
+	std::uint64_t readiness_repair_application_sequence_ = 0;
+	std::size_t readiness_render_repairs_this_sequence_ = 0;
 	std::uint64_t next_edit_lod_retention_revision_ = 1;
 	std::uint64_t next_edit_lod_retention_viewer_id_ = 1;
 	WtBalancedLodPlan current_plan_;

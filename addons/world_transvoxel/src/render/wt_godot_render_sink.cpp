@@ -527,6 +527,17 @@ std::size_t WtGodotRenderSink::staged_count() const noexcept {
 	return count;
 }
 
+bool WtGodotRenderSink::has_record(const WtChunkKey &key) const noexcept {
+	return records_.find(key) != records_.end();
+}
+
+bool WtGodotRenderSink::has_staged_record(
+	const WtChunkKey &key
+) const noexcept {
+	const auto iterator = records_.find(key);
+	return iterator != records_.end() && iterator->second.staged;
+}
+
 void WtGodotRenderSink::set_new_record_visibility_staging_enabled(
 	bool enabled
 ) noexcept {
@@ -594,6 +605,14 @@ WtGenerationToken WtGodotRenderSink::applied_generation(
 ) const noexcept {
 	const auto iterator = records_.find(key);
 	return iterator == records_.end() ? WtGenerationToken{} : iterator->second.generation;
+}
+
+WtGenerationToken WtGodotRenderSink::staged_generation(
+	const WtChunkKey &key
+) const noexcept {
+	const auto iterator = records_.find(key);
+	return iterator == records_.end() ? WtGenerationToken{} :
+		iterator->second.staged_generation;
 }
 
 void WtGodotRenderSink::set_shader_fade_parameter_enabled(

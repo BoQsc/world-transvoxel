@@ -114,6 +114,11 @@ bool WtReadOnlyWorldRuntime::pop_publication(
 	return true;
 }
 
+bool WtReadOnlyWorldRuntime::has_publication_backlog() {
+	std::lock_guard<std::mutex> lock(publication_mutex_);
+	return publication_count_ != 0 || priority_publication_count_ != 0;
+}
+
 bool WtReadOnlyWorldRuntime::is_priority_publication(
 	const WtReadOnlyPublication &publication
 ) noexcept {
@@ -137,6 +142,11 @@ bool WtReadOnlyWorldRuntime::is_priority_publication(
 			return false;
 	}
 	return false;
+}
+
+void WtReadOnlyWorldRuntime::notify_application_progress() noexcept {
+	application_progress_sequence_.fetch_add(1, std::memory_order_relaxed);
+	notify_work();
 }
 
 void WtReadOnlyWorldRuntime::notify_work() noexcept {

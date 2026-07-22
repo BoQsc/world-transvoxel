@@ -209,7 +209,7 @@ public:
 private:
 	void emit_lifecycle_state(WtWorldLifecycleState state);
 	void notify_lifecycle_state();
-	void drain_world_publications();
+	bool drain_world_publications();
 	void stage_chunk_retirement(const WtChunkKey &key);
 	void cancel_chunk_retirement(const WtChunkKey &key);
 	void stage_chunk_replacement(const WtChunkKey &key);

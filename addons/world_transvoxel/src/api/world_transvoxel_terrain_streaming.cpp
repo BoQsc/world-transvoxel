@@ -12,14 +12,17 @@
 namespace world_transvoxel {
 void WorldTransvoxelTerrain::_process(double delta) {
 	(void)delta;
-	drain_world_publications();
+	const bool drained_publications = drain_world_publications();
 	update_visibility_staging_state();
-	application_->apply(
+	const WtApplicationBatchResult applied = application_->apply(
 		render_apply_budget_,
 		collision_apply_budget_,
 		*render_sink_,
 		*collision_sink_
 	);
+	if (lifecycle_ && (drained_publications || applied.render_processed != 0)) {
+		lifecycle_->notify_application_progress();
+	}
 	flush_ready_chunk_retirements();
 	flush_ready_chunk_replacements();
 	flush_ready_render_retirements();
@@ -133,10 +136,11 @@ WorldTransvoxelTerrain::get_collision_chunk_count() const noexcept {
 	return static_cast<std::int64_t>(collision_sink_->resource_count());
 }
 
-void WorldTransvoxelTerrain::drain_world_publications() {
-	if (!lifecycle_) return;
+bool WorldTransvoxelTerrain::drain_world_publications() {
+	if (!lifecycle_) return false;
 	std::size_t render_count = 0;
 	std::size_t collision_count = 0;
+	bool drained = false;
 	for (std::size_t count = 0; count < 256U; ++count) {
 		WtReadOnlyPublication publication;
 		if (has_deferred_publication_) {
@@ -153,6 +157,7 @@ void WorldTransvoxelTerrain::drain_world_publications() {
 			has_deferred_publication_ = true;
 			break;
 		}
+		drained = true;
 		WtApplicationStatus status = WtApplicationStatus::Ok;
 		switch (publication.kind) {
 			case WtReadOnlyPublicationKind::ExpectChunk:
@@ -346,6 +351,7 @@ void WorldTransvoxelTerrain::drain_world_publications() {
 				"world publication application failed";
 		}
 	}
+	return drained;
 }
 
 void WorldTransvoxelTerrain::stage_chunk_retirement(

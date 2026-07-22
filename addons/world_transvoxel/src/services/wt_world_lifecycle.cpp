@@ -357,6 +357,13 @@ WtReadOnlyRuntimeStatus WtWorldLifecycleService::request_world_snapshot(
 	);
 }
 
+void WtWorldLifecycleService::notify_application_progress() noexcept {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	if (state_ == WtWorldLifecycleState::Running && runtime_) {
+		runtime_->notify_application_progress();
+	}
+}
+
 bool WtWorldLifecycleService::pop_publication(
 	WtReadOnlyPublication &publication
 ) {

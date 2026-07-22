@@ -131,6 +131,7 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 			}
 			return true;
 		}
+		queue_readiness_repair_candidate(replacement.key);
 	}
 	if (!push_publication({
 			WtReadOnlyPublicationKind::EditCommitted,

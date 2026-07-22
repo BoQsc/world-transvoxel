@@ -29,6 +29,8 @@ public:
 	std::size_t resource_count() const noexcept;
 	std::size_t fading_count() const noexcept;
 	std::size_t staged_count() const noexcept;
+	bool has_record(const WtChunkKey &key) const noexcept;
+	bool has_staged_record(const WtChunkKey &key) const noexcept;
 	void set_new_record_visibility_staging_enabled(bool enabled) noexcept;
 	void set_visibility_staging_reference_chunks(
 		const std::vector<WtChunkKey> &keys
@@ -36,6 +38,7 @@ public:
 	bool has_staged_records() const noexcept;
 	void publish_staged_records() noexcept;
 	WtGenerationToken applied_generation(const WtChunkKey &key) const noexcept;
+	WtGenerationToken staged_generation(const WtChunkKey &key) const noexcept;
 	void set_shader_fade_parameter_enabled(bool enabled) noexcept;
 	bool is_shader_fade_parameter_enabled() const noexcept;
 	void set_transition_frames(std::uint32_t frames) noexcept;

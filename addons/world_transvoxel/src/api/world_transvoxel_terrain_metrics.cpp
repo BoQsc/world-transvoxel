@@ -47,8 +47,11 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	bool first_blocked_replacement_collision_required = false;
 	bool first_blocked_replacement_collision_ready = false;
 	bool first_blocked_replacement_staged = false;
+	bool first_blocked_replacement_render_record_present = false;
+	bool first_blocked_replacement_render_staged = false;
 	std::uint64_t first_blocked_replacement_generation = 0;
 	std::uint64_t first_blocked_replacement_render_generation = 0;
+	std::uint64_t first_blocked_replacement_staged_render_generation = 0;
 	for (const WtChunkApplicationRecord &record : application_->get_records()) {
 		visual_ready_records += record.visual_ready ? 1U : 0U;
 		visual_required_records += record.visual_required ? 1U : 0U;
@@ -86,6 +89,12 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 					record->generation.value;
 				first_blocked_replacement_render_generation =
 					render_sink_->applied_generation(key).value;
+				first_blocked_replacement_render_record_present =
+					render_sink_->has_record(key);
+				first_blocked_replacement_render_staged =
+					render_sink_->has_staged_record(key);
+				first_blocked_replacement_staged_render_generation =
+					render_sink_->staged_generation(key).value;
 			}
 		}
 		++blocked_pending_replacements;
@@ -321,6 +330,10 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		first_blocked_replacement_collision_ready;
 	output["first_blocked_replacement_staged"] =
 		first_blocked_replacement_staged;
+	output["first_blocked_replacement_render_record_present"] =
+		first_blocked_replacement_render_record_present;
+	output["first_blocked_replacement_render_staged"] =
+		first_blocked_replacement_render_staged;
 	set_metric(
 		output,
 		"first_blocked_replacement_generation",
@@ -330,6 +343,11 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		output,
 		"first_blocked_replacement_render_generation",
 		first_blocked_replacement_render_generation
+	);
+	set_metric(
+		output,
+		"first_blocked_replacement_staged_render_generation",
+		first_blocked_replacement_staged_render_generation
 	);
 	output["pending_render_retirements"] = static_cast<std::int64_t>(
 		pending_render_retirements_.size()

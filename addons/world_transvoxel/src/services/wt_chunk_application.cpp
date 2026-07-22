@@ -39,7 +39,25 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 			return WtApplicationStatus::StaleGeneration;
 		}
 		if (generation == record->generation) {
-			return WtApplicationStatus::AlreadyCurrent;
+			bool changed = false;
+			if (visual_required && !record->visual_required) {
+				record->visual_required = true;
+				record->visual_ready = false;
+				changed = true;
+			}
+			if (collision_required && !record->collision_required) {
+				record->collision_required = true;
+				if (!(preserve_collision_ready && record->collision_ready)) {
+					record->collision_ready = false;
+				}
+				changed = true;
+			}
+			if (staged_replacement && !record->staged_replacement) {
+				record->staged_replacement = true;
+				changed = true;
+			}
+			return changed ? WtApplicationStatus::Ok :
+				WtApplicationStatus::AlreadyCurrent;
 		}
 		const bool carried_collision_ready =
 			preserve_collision_ready && collision_required &&
