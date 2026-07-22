@@ -100,6 +100,22 @@ func _run_test() -> void:
 			terrain.call("_m3_test_stale_collision_count") != 2:
 		return _fail("in-flight teardown did not reject stale results")
 
+	var far_chunk := Vector3i(1048576, -1048576, 1048576)
+	if not terrain.call(
+			"_m3_test_submit_chunk_generation",
+			far_chunk.x,
+			far_chunk.y,
+			far_chunk.z,
+			6,
+			false
+	):
+		return _fail("far-coordinate generation failed")
+	await process_frame
+	var far_geometry_error := _validate_far_coordinate_render(terrain, far_chunk)
+	if not far_geometry_error.is_empty():
+		return _fail(far_geometry_error)
+	terrain.call("_m3_test_forget_chunk")
+
 	terrain.set_render_apply_budget(0)
 	terrain.set_collision_apply_budget(0)
 	if not terrain.call("_m3_test_submit_generation", 5, true):
@@ -147,6 +163,24 @@ func _validate_godot_geometry(terrain: Node) -> String:
 		return "Godot collision unexpectedly accepts back faces"
 	if shape.get_faces().is_empty():
 		return "Godot collision shape has no faces"
+	return ""
+
+
+func _validate_far_coordinate_render(terrain: Node, chunk: Vector3i) -> String:
+	var render_name := "WT_Render_%d_%d_%d_L0" % [chunk.x, chunk.y, chunk.z]
+	var render := terrain.get_node_or_null(render_name) as MeshInstance3D
+	if render == null or render.mesh == null or render.mesh.get_surface_count() != 1:
+		return "far-coordinate Godot render mesh is missing"
+	var expected_origin := Vector3(chunk.x * 16, chunk.y * 16, chunk.z * 16)
+	if render.position.distance_squared_to(expected_origin) > 0.001:
+		return "far-coordinate render instance did not carry the chunk origin"
+	var arrays := render.mesh.surface_get_arrays(0)
+	var positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	if positions.is_empty():
+		return "far-coordinate render mesh has no vertices"
+	for position in positions:
+		if abs(position.x) > 32.0 or abs(position.y) > 32.0 or abs(position.z) > 32.0:
+			return "far-coordinate render vertices were uploaded in world space"
 	return ""
 
 

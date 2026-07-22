@@ -36,12 +36,11 @@ Godot render sink swaps the second and third index of every triangle. This is
 an engine-boundary conversion; native topology, transition ownership, and
 payload hashes retain the authoritative counterclockwise convention.
 
-The Godot render sink submits visual vertices in a common world-space frame and
-keeps render `MeshInstance3D` transforms at identity. The payload itself remains
-chunk-local, but adjacent chunk draw calls must receive identical seam vertex
-positions after the engine-boundary conversion. This prevents raster seams where
-two chunks would otherwise compute the same world edge through different model
-transforms.
+The Godot render sink submits chunk-local visual vertices to `ArrayMesh` and
+sets the render `MeshInstance3D` position to the payload's signed world origin.
+Large integer origins therefore do not enter per-vertex float arrays at the
+engine boundary. Adjacent chunks still share deterministic local seam positions
+from M2; the Godot transform supplies the only visual translation.
 
 ## Collision sanitation
 
@@ -119,13 +118,14 @@ distance hysteresis, bounded queues and records, independent readiness,
 pre-sink stale rejection, frame budgets, and 1,000 supersession cycles with
 bounded state in debug and optimized builds.
 
-`tests/godot/m3_integration_test.gd` applies an actual M2-generated sphere to
+`tests/godot/m3_integration_test.gd` applies actual M2-generated spheres to
 Godot `ArrayMesh` and `ConcavePolygonShape3D` resources. It covers zero and
 one-item frame budgets, generation replacement, stale rejection before Godot,
-clockwise Godot front faces aligned with outward vertex normals, an outside
-ray hitting one-sided sphere collision, 16 collision activation/deactivation
-movement cycles, resource bounds, in-flight eviction, and shutdown with
-queued work.
+clockwise Godot front faces aligned with outward vertex normals, render-local
+vertices plus instance-carried origin at a far signed chunk coordinate, an
+outside ray hitting one-sided sphere collision, 16 collision
+activation/deactivation movement cycles, resource bounds, in-flight eviction,
+and shutdown with queued work.
 
 The integration runner executes this contract against debug and optimized
 addon builds on both supported Godot versions. No GPU readback or frame-thread

@@ -184,6 +184,13 @@ public:
 	godot::Dictionary get_runtime_metrics() const;
 
 	bool _m3_test_submit_generation(std::int64_t generation, bool collision_required);
+	bool _m3_test_submit_chunk_generation(
+		std::int64_t chunk_x,
+		std::int64_t chunk_y,
+		std::int64_t chunk_z,
+		std::int64_t generation,
+		bool collision_required
+	);
 	bool _m3_test_set_collision_distance(double distance);
 	bool _m3_test_fully_ready() const noexcept;
 	std::int64_t _m3_test_render_generation() const noexcept;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/wt_chunk_key.h"
+
 #include <cstdint>
 #include <memory>
 
@@ -13,6 +15,14 @@ struct WtRenderPayload;
 class WtM3IntegrationFixture {
 public:
 	bool submit_generation(
+		std::int64_t generation,
+		bool collision_required,
+		WtChunkApplicationService &application
+	);
+	bool submit_chunk_generation(
+		std::int64_t chunk_x,
+		std::int64_t chunk_y,
+		std::int64_t chunk_z,
 		std::int64_t generation,
 		bool collision_required,
 		WtChunkApplicationService &application
@@ -38,6 +48,13 @@ public:
 	);
 
 private:
+	bool submit_generation_for_key(
+		const WtChunkKey &key,
+		std::int64_t generation,
+		bool collision_required,
+		WtChunkApplicationService &application
+	);
+	WtChunkKey active_key_;
 	std::shared_ptr<const WtRenderPayload> render_payload_;
 };
 

@@ -328,6 +328,17 @@ void WorldTransvoxelTerrain::_bind_methods() {
 		&WorldTransvoxelTerrain::_m3_test_submit_generation
 	);
 	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"_m3_test_submit_chunk_generation",
+			"chunk_x",
+			"chunk_y",
+			"chunk_z",
+			"generation",
+			"collision_required"
+		),
+		&WorldTransvoxelTerrain::_m3_test_submit_chunk_generation
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD("_m3_test_set_collision_distance", "distance"),
 		&WorldTransvoxelTerrain::_m3_test_set_collision_distance
 	);
@@ -601,6 +612,18 @@ bool WorldTransvoxelTerrain::_m3_test_submit_generation(
 ) {
 	return integration_fixture_->submit_generation(
 		generation, collision_required, *application_
+	);
+}
+
+bool WorldTransvoxelTerrain::_m3_test_submit_chunk_generation(
+	std::int64_t chunk_x,
+	std::int64_t chunk_y,
+	std::int64_t chunk_z,
+	std::int64_t generation,
+	bool collision_required
+) {
+	return integration_fixture_->submit_chunk_generation(
+		chunk_x, chunk_y, chunk_z, generation, collision_required, *application_
 	);
 }
 

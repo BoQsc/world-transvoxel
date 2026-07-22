@@ -128,7 +128,6 @@ bool add_render_surface(
 	godot::ArrayMesh &mesh,
 	const std::vector<WtRenderVertex> &vertices,
 	const std::vector<std::uint32_t> &source_indices,
-	const WtGridPoint &origin,
 	const godot::String &name
 ) {
 	if (source_indices.empty()) {
@@ -156,12 +155,11 @@ bool add_render_surface(
 	generated_material_weights_high.resize(material_weight_component_count);
 	authored_material_weights_low.resize(material_weight_component_count);
 	authored_material_weights_high.resize(material_weight_component_count);
-	const godot::Vector3 world_origin = to_godot(origin);
 	for (std::size_t index = 0; index < vertices.size(); ++index) {
 		const WtRenderVertex &vertex = vertices[index];
 		positions.set(
 			static_cast<std::int64_t>(index),
-			to_godot(vertex.position) + world_origin
+			to_godot(vertex.position)
 		);
 		normals.set(static_cast<std::int64_t>(index), to_godot(vertex.normal));
 		materials.set(static_cast<std::int64_t>(index), {
@@ -297,24 +295,17 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 		remove_render(payload.key);
 		return true;
 	}
-	// Render chunks share seam vertices across separate MeshInstance3D draw
-	// calls. Store render positions in a common world-space frame and keep the
-	// instance transform identity so the GPU receives identical seam positions
-	// instead of recomputing equivalent world positions from different chunk
-	// origins.
 	godot::Ref<godot::ArrayMesh> mesh;
 	mesh.instantiate();
 	if (!add_render_surface(
 			**mesh,
 			payload.vertices,
 			payload.indices,
-			payload.world_origin,
 			"terrain"
 		) || !add_render_surface(
 			**mesh,
 			payload.water_vertices,
 			payload.water_indices,
-			payload.world_origin,
 			"water"
 		)) {
 		return false;
@@ -370,7 +361,7 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	record.staged_mesh.unref();
 	record.staged_generation = {};
 	record.staged_empty = false;
-	record.instance->set_position(godot::Vector3{});
+	record.instance->set_position(to_godot(payload.world_origin));
 	record.instance->set_mesh(mesh);
 	record.instance->set_visible(!record.staged);
 	apply_record_material_override(record);
