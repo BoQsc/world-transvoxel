@@ -82,6 +82,11 @@ Viewer capacity multiplied by demand capacity per viewer may not exceed
 exceed demand capacity per viewer. Deactivation distance must be at least
 activation distance.
 
+The native terrain `_process` path treats `collision_apply_budget` as the total
+per-frame collision application budget. Immediate safety applications performed
+while draining collision publications consume that same budget instead of
+creating an extra collision-shape replacement pass later in the frame.
+
 ## Streaming and edited-LOD continuity
 
 The authoritative contract is

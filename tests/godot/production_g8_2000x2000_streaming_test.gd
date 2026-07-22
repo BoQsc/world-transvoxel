@@ -2,6 +2,7 @@ extends SceneTree
 
 
 const ACTIVE_CHUNK_BUDGET := 256
+const COLLISION_APPLY_BUDGET := 1
 const EXPECTED_PAGE_COUNT := 93
 const PATH_SAMPLES := [
 	{
@@ -58,7 +59,7 @@ func _run_test() -> void:
 	config.set("render_entry_capacity", ACTIVE_CHUNK_BUDGET)
 	config.set("collision_entry_capacity", ACTIVE_CHUNK_BUDGET)
 	config.set("render_apply_budget", 128)
-	config.set("collision_apply_budget", 128)
+	config.set("collision_apply_budget", COLLISION_APPLY_BUDGET)
 	config.set("render_transition_frames", 0)
 	if not config.call("is_valid"):
 		_fail("g8 runtime configuration invalid: %s" % config.call("get_validation_error"))
@@ -133,12 +134,13 @@ func _run_test() -> void:
 			not await _wait_for_state(terrain, "stopped"):
 		_fail("g8 sparse world did not stop cleanly")
 		return
-	print("PRODUCTION_GODOT_G8_2000X2000_STREAMING_PASS pages=%d samples=%d max_render_resources=%d max_collision_resources=%d active_budget=%d" % [
+	print("PRODUCTION_GODOT_G8_2000X2000_STREAMING_PASS pages=%d samples=%d max_render_resources=%d max_collision_resources=%d active_budget=%d collision_apply_budget=%d" % [
 		EXPECTED_PAGE_COUNT,
 		PATH_SAMPLES.size(),
 		max_render_resources,
 		max_collision_resources,
 		ACTIVE_CHUNK_BUDGET,
+		COLLISION_APPLY_BUDGET,
 	])
 	terrain.queue_free()
 	await process_frame

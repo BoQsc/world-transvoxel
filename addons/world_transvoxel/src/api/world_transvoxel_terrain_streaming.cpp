@@ -12,11 +12,16 @@
 namespace world_transvoxel {
 void WorldTransvoxelTerrain::_process(double delta) {
 	(void)delta;
-	drain_world_publications();
+	const std::size_t immediate_collision_applications =
+		drain_world_publications();
+	const std::size_t remaining_collision_budget =
+		immediate_collision_applications >= collision_apply_budget_ ?
+			0U :
+			collision_apply_budget_ - immediate_collision_applications;
 	update_visibility_staging_state();
 	application_->apply(
 		render_apply_budget_,
-		collision_apply_budget_,
+		remaining_collision_budget,
 		*render_sink_,
 		*collision_sink_
 	);
@@ -133,10 +138,11 @@ WorldTransvoxelTerrain::get_collision_chunk_count() const noexcept {
 	return static_cast<std::int64_t>(collision_sink_->resource_count());
 }
 
-void WorldTransvoxelTerrain::drain_world_publications() {
-	if (!lifecycle_) return;
+std::size_t WorldTransvoxelTerrain::drain_world_publications() {
+	if (!lifecycle_) return 0U;
 	std::size_t render_count = 0;
 	std::size_t collision_count = 0;
+	std::size_t immediate_collision_applications = 0;
 	for (std::size_t count = 0; count < 256U; ++count) {
 		WtReadOnlyPublication publication;
 		if (has_deferred_publication_) {
@@ -229,15 +235,27 @@ void WorldTransvoxelTerrain::drain_world_publications() {
 				// collision_apply_budget_. Apply each accepted payload before
 				// consuming a later same-key ExpectChunk publication so a
 				// transition remesh cannot make the safety collision stale before
-				// it reaches the physics server. The previous shape remains active
-				// there until the replacement generation is ready.
+				// it reaches the physics server. Count only real collision sink
+				// applications against the same frame budget consumed by the
+				// normal end-of-process application pass; stale/unrequired queue
+				// bookkeeping must not starve the current replacement. The previous
+				// shape remains active there until the replacement generation is
+				// ready.
 				if (status == WtApplicationStatus::Ok) {
+					const WtApplicationMetrics before =
+						application_->get_metrics();
 					application_->apply(
 						0U,
 						1U,
 						*render_sink_,
 						*collision_sink_
 					);
+					const WtApplicationMetrics after =
+						application_->get_metrics();
+					immediate_collision_applications +=
+						static_cast<std::size_t>(
+							after.applied_collision - before.applied_collision
+						);
 				}
 				break;
 			case WtReadOnlyPublicationKind::EditCommitted:
@@ -345,6 +363,7 @@ void WorldTransvoxelTerrain::drain_world_publications() {
 				"world publication application failed";
 		}
 	}
+	return immediate_collision_applications;
 }
 
 void WorldTransvoxelTerrain::stage_chunk_retirement(

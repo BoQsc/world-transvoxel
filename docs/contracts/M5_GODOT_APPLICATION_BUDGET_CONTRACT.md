@@ -34,7 +34,10 @@ collision applications   2
 ```
 
 The queues therefore drain in exactly eight application frames. Every frame
-must process no more than its configured budget. At the eighth frame:
+must process no more than its configured budget. In the automatic
+`WorldTransvoxelTerrain::_process` path, immediate same-key safety collision
+applications during publication drain consume this same per-frame collision
+budget; they are not an additional hidden apply pass. At the eighth frame:
 
 - both queues are empty;
 - all 32 expected generations are fully ready;
