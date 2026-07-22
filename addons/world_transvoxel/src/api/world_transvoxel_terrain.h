@@ -14,7 +14,6 @@
 #include <godot_cpp/variant/vector3i.hpp>
 #include <godot_cpp/variant/string.hpp>
 
-#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -210,7 +209,7 @@ public:
 private:
 	void emit_lifecycle_state(WtWorldLifecycleState state);
 	void notify_lifecycle_state();
-	std::size_t drain_world_publications();
+	void drain_world_publications();
 	void stage_chunk_retirement(const WtChunkKey &key);
 	void cancel_chunk_retirement(const WtChunkKey &key);
 	void stage_chunk_replacement(const WtChunkKey &key);
