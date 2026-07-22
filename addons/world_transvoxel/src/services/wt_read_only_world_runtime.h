@@ -322,6 +322,7 @@ private:
 	std::vector<WtReadOnlyPublication> publication_slots_;
 	std::size_t publication_head_ = 0;
 	std::size_t publication_count_ = 0;
+	std::size_t priority_publication_burst_ = 0;
 
 	mutable std::mutex wake_mutex_;
 	std::condition_variable wake_condition_;

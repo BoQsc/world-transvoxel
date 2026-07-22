@@ -337,6 +337,28 @@ void drain_publications(wt::WtReadOnlyWorldRuntime &runtime) {
 	while (runtime.pop_publication(publication)) {}
 }
 
+bool is_control_publication(wt::WtReadOnlyPublicationKind kind) noexcept {
+	switch (kind) {
+		case wt::WtReadOnlyPublicationKind::ExpectChunk:
+		case wt::WtReadOnlyPublicationKind::SetCollisionRequired:
+		case wt::WtReadOnlyPublicationKind::SetVisualRequired:
+		case wt::WtReadOnlyPublicationKind::RemoveChunk:
+		case wt::WtReadOnlyPublicationKind::CollisionPayload:
+			return true;
+		case wt::WtReadOnlyPublicationKind::RenderPayload:
+		case wt::WtReadOnlyPublicationKind::EditCommitted:
+		case wt::WtReadOnlyPublicationKind::EditRejected:
+		case wt::WtReadOnlyPublicationKind::AuthoritativeSampleReady:
+		case wt::WtReadOnlyPublicationKind::AuthoritativeSampleRejected:
+		case wt::WtReadOnlyPublicationKind::AuthoritativeSampleBatchReady:
+		case wt::WtReadOnlyPublicationKind::AuthoritativeSampleBatchRejected:
+		case wt::WtReadOnlyPublicationKind::WorldSnapshotReady:
+		case wt::WtReadOnlyPublicationKind::WorldSnapshotRejected:
+			return false;
+	}
+	return false;
+}
+
 bool runtime_idle(const wt::WtReadOnlyRuntimeMetrics &metrics) noexcept {
 	return metrics.scheduler_queued_jobs == 0 &&
 		metrics.scheduler_queued_completions == 0 &&
@@ -872,6 +894,25 @@ bool run_collision_publication_priority_regression(
 		publication.kind != wt::WtReadOnlyPublicationKind::RenderPayload;
 	check(control_overtook_render,
 		"collision/control publication remained behind render backlog");
+	bool render_broke_through_priority_pressure = false;
+	bool still_had_control_pressure = false;
+	for (std::size_t index = 0; index < 24U &&
+			runtime.pop_publication(publication); ++index) {
+		still_had_control_pressure = still_had_control_pressure ||
+			is_control_publication(publication.kind);
+		if (publication.kind == wt::WtReadOnlyPublicationKind::RenderPayload) {
+			render_broke_through_priority_pressure = true;
+			break;
+		}
+	}
+	check(
+		render_broke_through_priority_pressure,
+		"render publication starved behind collision/control backlog"
+	);
+	check(
+		still_had_control_pressure,
+		"collision-publication priority fixture had no remaining priority pressure"
+	);
 	drain_publications(runtime);
 	runtime.request_stop();
 	worker.join();
@@ -879,6 +920,8 @@ bool run_collision_publication_priority_regression(
 		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok,
 		"collision-publication priority runtime did not stop cleanly");
 	return left_render_backlog && control_overtook_render &&
+		still_had_control_pressure &&
+		render_broke_through_priority_pressure &&
 		run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
 		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok;
 }

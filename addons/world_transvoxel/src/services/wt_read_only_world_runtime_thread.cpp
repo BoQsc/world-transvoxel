@@ -7,6 +7,11 @@
 #include <utility>
 
 namespace world_transvoxel {
+namespace {
+
+constexpr std::size_t kWtPublicationPriorityBurstLimit = 16;
+
+} // namespace
 
 WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 	if (!valid_) return WtReadOnlyRuntimeStatus::InvalidConfiguration;
@@ -85,20 +90,26 @@ bool WtReadOnlyWorldRuntime::pop_publication(
 	WtReadOnlyPublication &publication
 ) {
 	std::lock_guard<std::mutex> lock(publication_mutex_);
-	std::vector<WtReadOnlyPublication> *slots =
-		&priority_publication_slots_;
-	std::size_t *head = &priority_publication_head_;
-	std::size_t *count = &priority_publication_count_;
-	if (*count == 0) {
-		slots = &publication_slots_;
-		head = &publication_head_;
-		count = &publication_count_;
-	}
+	const bool pop_normal =
+		publication_count_ != 0 &&
+		(priority_publication_count_ == 0 ||
+			priority_publication_burst_ >= kWtPublicationPriorityBurstLimit);
+	std::vector<WtReadOnlyPublication> *slots = pop_normal ?
+		&publication_slots_ : &priority_publication_slots_;
+	std::size_t *head = pop_normal ? &publication_head_ :
+		&priority_publication_head_;
+	std::size_t *count = pop_normal ? &publication_count_ :
+		&priority_publication_count_;
 	if (*count == 0) return false;
 	publication = std::move((*slots)[*head]);
 	(*slots)[*head] = {};
 	*head = (*head + 1U) % slots->size();
 	--*count;
+	if (pop_normal) {
+		priority_publication_burst_ = 0;
+	} else {
+		++priority_publication_burst_;
+	}
 	publication_space_available_.notify_one();
 	return true;
 }
