@@ -18,13 +18,15 @@ WtChunkApplicationService::WtChunkApplicationService(
 		render_queue_(render_queue_capacity),
 		collision_queue_(collision_queue_capacity) {
 	records_.reserve(record_capacity);
+	deferred_collisions_.reserve(collision_queue_capacity);
 }
 
 WtApplicationStatus WtChunkApplicationService::expect_chunk(
 	const WtChunkKey &key,
 	WtGenerationToken generation,
 	bool collision_required,
-	bool visual_required
+	bool visual_required,
+	bool staged_replacement
 ) {
 	if (!wt_is_valid_chunk_key(key) || generation.value == 0 ||
 		(!visual_required && !collision_required)) {
@@ -45,6 +47,7 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 			visual_required,
 			false,
 			false,
+			staged_replacement,
 		};
 		return WtApplicationStatus::Ok;
 	}
@@ -58,6 +61,7 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 		visual_required,
 		false,
 		false,
+		staged_replacement,
 	});
 	std::sort(records_.begin(), records_.end(), [](const auto &a, const auto &b) {
 		return a.key < b.key;
@@ -192,7 +196,70 @@ std::size_t WtChunkApplicationService::apply_render(
 			continue;
 		}
 		record->visual_ready = true;
+		if (record->fully_ready()) {
+			record->staged_replacement = false;
+		}
 		++metrics_.applied_render;
+	}
+	return processed;
+}
+
+std::size_t WtChunkApplicationService::apply_deferred_collisions(
+	std::size_t budget,
+	WtCollisionSink &sink,
+	std::uint64_t application_tick
+) {
+	std::size_t processed = 0;
+	for (auto iterator = deferred_collisions_.begin();
+			iterator != deferred_collisions_.end() && processed < budget;) {
+		const WtCollisionApplyEntry entry = *iterator;
+		const WtCollisionPayloadPtr &payload = entry.payload;
+		WtChunkApplicationRecord *record = find_record_mutable(payload->key);
+		if (record == nullptr || record->generation != payload->generation) {
+			++processed;
+			const std::uint64_t latency =
+				application_tick - entry.submission_tick;
+			metrics_.collision_latency_frames_total += latency;
+			metrics_.collision_latency_frames_maximum = std::max(
+				metrics_.collision_latency_frames_maximum, latency
+			);
+			++metrics_.stale_collision;
+			iterator = deferred_collisions_.erase(iterator);
+			continue;
+		}
+		if (!record->collision_required) {
+			++processed;
+			const std::uint64_t latency =
+				application_tick - entry.submission_tick;
+			metrics_.collision_latency_frames_total += latency;
+			metrics_.collision_latency_frames_maximum = std::max(
+				metrics_.collision_latency_frames_maximum, latency
+			);
+			++metrics_.unrequired_collision;
+			iterator = deferred_collisions_.erase(iterator);
+			continue;
+		}
+		if (should_defer_collision(*record)) {
+			++iterator;
+			continue;
+		}
+		++processed;
+		const std::uint64_t latency = application_tick - entry.submission_tick;
+		metrics_.collision_latency_frames_total += latency;
+		metrics_.collision_latency_frames_maximum = std::max(
+			metrics_.collision_latency_frames_maximum, latency
+		);
+		if (!sink.apply_collision(*payload)) {
+			++metrics_.sink_failures;
+			iterator = deferred_collisions_.erase(iterator);
+			continue;
+		}
+		record->collision_ready = true;
+		if (record->fully_ready()) {
+			record->staged_replacement = false;
+		}
+		++metrics_.applied_collision;
+		iterator = deferred_collisions_.erase(iterator);
 	}
 	return processed;
 }
@@ -202,33 +269,78 @@ std::size_t WtChunkApplicationService::apply_collision(
 	WtCollisionSink &sink,
 	std::uint64_t application_tick
 ) {
-	std::size_t processed = 0;
+	std::size_t processed =
+		apply_deferred_collisions(budget, sink, application_tick);
 	WtCollisionApplyEntry entry;
 	while (processed < budget && collision_queue_.pop(entry)) {
 		++processed;
 		const WtCollisionPayloadPtr &payload = entry.payload;
 		const std::uint64_t latency = application_tick - entry.submission_tick;
-		metrics_.collision_latency_frames_total += latency;
-		metrics_.collision_latency_frames_maximum = std::max(
-			metrics_.collision_latency_frames_maximum, latency
-		);
 		WtChunkApplicationRecord *record = find_record_mutable(payload->key);
 		if (record == nullptr || record->generation != payload->generation) {
+			metrics_.collision_latency_frames_total += latency;
+			metrics_.collision_latency_frames_maximum = std::max(
+				metrics_.collision_latency_frames_maximum, latency
+			);
 			++metrics_.stale_collision;
 			continue;
 		}
 		if (!record->collision_required) {
+			metrics_.collision_latency_frames_total += latency;
+			metrics_.collision_latency_frames_maximum = std::max(
+				metrics_.collision_latency_frames_maximum, latency
+			);
 			++metrics_.unrequired_collision;
 			continue;
 		}
+		if (should_defer_collision(*record)) {
+			if (!defer_collision(entry)) {
+				++metrics_.queue_rejections;
+			}
+			continue;
+		}
+		metrics_.collision_latency_frames_total += latency;
+		metrics_.collision_latency_frames_maximum = std::max(
+			metrics_.collision_latency_frames_maximum, latency
+		);
 		if (!sink.apply_collision(*payload)) {
 			++metrics_.sink_failures;
 			continue;
 		}
 		record->collision_ready = true;
+		if (record->fully_ready()) {
+			record->staged_replacement = false;
+		}
 		++metrics_.applied_collision;
 	}
 	return processed;
+}
+
+bool WtChunkApplicationService::should_defer_collision(
+	const WtChunkApplicationRecord &record
+) const noexcept {
+	return record.staged_replacement && record.visual_required &&
+		!record.visual_ready;
+}
+
+bool WtChunkApplicationService::defer_collision(
+	const WtCollisionApplyEntry &entry
+) {
+	if (!entry.payload) return false;
+	for (WtCollisionApplyEntry &deferred : deferred_collisions_) {
+		if (deferred.payload && deferred.payload->key == entry.payload->key) {
+			if (deferred.payload->generation.value <=
+				entry.payload->generation.value) {
+				deferred = entry;
+			}
+			return true;
+		}
+	}
+	if (deferred_collisions_.size() >= collision_queue_.capacity()) {
+		return false;
+	}
+	deferred_collisions_.push_back(entry);
+	return true;
 }
 
 const WtChunkApplicationRecord *WtChunkApplicationService::find_record(

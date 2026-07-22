@@ -160,7 +160,8 @@ void WorldTransvoxelTerrain::drain_world_publications() {
 					publication.key,
 					publication.generation,
 					publication.collision_required,
-					publication.visual_required
+					publication.visual_required,
+					publication.staged_replacement
 				);
 				if (status == WtApplicationStatus::Ok ||
 					status == WtApplicationStatus::AlreadyCurrent) {

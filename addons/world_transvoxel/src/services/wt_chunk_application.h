@@ -18,6 +18,7 @@ struct WtChunkApplicationRecord {
 	bool visual_required = true;
 	bool visual_ready = false;
 	bool collision_ready = false;
+	bool staged_replacement = false;
 
 	bool fully_ready() const noexcept;
 };
@@ -55,7 +56,8 @@ public:
 		const WtChunkKey &key,
 		WtGenerationToken generation,
 		bool collision_required,
-		bool visual_required = true
+		bool visual_required = true,
+		bool staged_replacement = false
 	);
 	WtApplicationStatus set_visual_required(
 		const WtChunkKey &key,
@@ -90,14 +92,24 @@ private:
 		WtRenderSink &sink,
 		std::uint64_t application_tick
 	);
+	std::size_t apply_deferred_collisions(
+		std::size_t budget,
+		WtCollisionSink &sink,
+		std::uint64_t application_tick
+	);
 	std::size_t apply_collision(
 		std::size_t budget,
 		WtCollisionSink &sink,
 		std::uint64_t application_tick
 	);
+	bool should_defer_collision(
+		const WtChunkApplicationRecord &record
+	) const noexcept;
+	bool defer_collision(const WtCollisionApplyEntry &entry);
 
 	std::size_t record_capacity_ = 0;
 	std::vector<WtChunkApplicationRecord> records_;
+	std::vector<WtCollisionApplyEntry> deferred_collisions_;
 	WtRenderApplyQueue render_queue_;
 	WtCollisionApplyQueue collision_queue_;
 	WtApplicationMetrics metrics_;

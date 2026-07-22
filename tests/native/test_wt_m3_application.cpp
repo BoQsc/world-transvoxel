@@ -332,6 +332,64 @@ void test_application_service(
 		"collision-only visual promotion did not reset visual readiness");
 }
 
+void test_staged_replacement_collision_waits_for_render(
+	const wt::WtRenderPayload &render_source
+) {
+	wt::WtChunkApplicationService service(1, 2, 2);
+	RenderSink render_sink;
+	CollisionSink collision_sink;
+	const wt::WtChunkKey key = render_source.key;
+
+	auto render1 = std::make_shared<wt::WtRenderPayload>(render_source);
+	render1->generation = { 1 };
+	auto collision1 = std::make_shared<wt::WtCollisionPayload>();
+	check(wt::wt_build_collision_payload(*render1, {}, *collision1) ==
+		wt::WtCollisionBuildStatus::Ok,
+		"staged replacement initial collision payload failed");
+	check(service.expect_chunk(key, { 1 }, true) == wt::WtApplicationStatus::Ok,
+		"staged replacement initial expectation failed");
+	check(service.submit_render(render1) == wt::WtApplicationStatus::Ok &&
+		service.submit_collision(collision1) == wt::WtApplicationStatus::Ok,
+		"staged replacement initial submission failed");
+	service.apply(2, 2, render_sink, collision_sink);
+	const wt::WtChunkApplicationRecord *initial_record =
+		service.find_record(key);
+	check(render_sink.calls == 1 && collision_sink.calls == 1 &&
+		initial_record != nullptr && initial_record->fully_ready(),
+		"staged replacement initial resources did not become ready");
+
+	auto render2 = std::make_shared<wt::WtRenderPayload>(render_source);
+	render2->generation = { 2 };
+	auto collision2 = std::make_shared<wt::WtCollisionPayload>();
+	check(wt::wt_build_collision_payload(*render2, {}, *collision2) ==
+		wt::WtCollisionBuildStatus::Ok,
+		"staged replacement current collision payload failed");
+	check(service.expect_chunk(key, { 2 }, true, true, true) ==
+		wt::WtApplicationStatus::Ok,
+		"staged replacement expectation failed");
+	check(service.submit_collision(collision2) == wt::WtApplicationStatus::Ok,
+		"staged replacement early collision submission failed");
+	const wt::WtApplicationBatchResult deferred =
+		service.apply(0, 1, render_sink, collision_sink);
+	const wt::WtChunkApplicationRecord *record = service.find_record(key);
+	check(deferred.collision_processed == 1 && collision_sink.calls == 1 &&
+		record != nullptr && !record->visual_ready &&
+		!record->collision_ready && !record->fully_ready(),
+		"staged replacement collision applied before render readiness");
+
+	check(service.submit_render(render2) == wt::WtApplicationStatus::Ok,
+		"staged replacement render submission failed");
+	const wt::WtApplicationBatchResult synchronized =
+		service.apply(1, 1, render_sink, collision_sink);
+	record = service.find_record(key);
+	check(synchronized.render_processed == 1 &&
+		synchronized.collision_processed == 1 &&
+		render_sink.calls == 2 && collision_sink.calls == 2 &&
+		record != nullptr && record->fully_ready() &&
+		!record->staged_replacement,
+		"staged replacement did not synchronize render and collision");
+}
+
 } // namespace
 
 int main() {
@@ -340,6 +398,7 @@ int main() {
 	test_collision_builder();
 	constexpr std::size_t stale_cycles = 1000;
 	test_application_service(render, stale_cycles);
+	test_staged_replacement_collision_waits_for_render(render);
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M3_APPLICATION_FAIL failures=%d\n", failure_count);
 		return 1;
