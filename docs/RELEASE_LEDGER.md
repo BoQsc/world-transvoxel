@@ -1,0 +1,165 @@
+# Release ledger
+
+Status date: 2026-07-22.
+
+This ledger separates the ordered roadmap releases from stabilization commits
+made during human testing. Commit messages alone are not sufficient release
+evidence. A roadmap release is complete only when its listed exit evidence
+exists after the relevant code changes.
+
+## Roadmap release order
+
+### Release 1 - Coordinate correctness
+
+Status: evidence audit required before closure.
+
+Scope:
+
+- retain authoritative integer world coordinates;
+- render chunk-local or camera-relative vertices;
+- add a large-coordinate Godot integration fixture;
+- reconcile the M3 render/collision contract and status documentation.
+
+Human result:
+
+- the same terrain can be visited at deliberately extreme coordinates without
+  collapsing, vibrating, or cracking.
+
+Exit evidence:
+
+- ordinary-world images remain equivalent;
+- large-coordinate fixture passes;
+- human route passes once.
+
+### Release 2 - Frame-stable collisions
+
+Status: not complete.
+
+Scope:
+
+- replace item-count collision bursts with millisecond/deadline budgeting;
+- coalesce superseded collision work;
+- introduce collision-specific LOD or decimation if profiling proves it is
+  needed;
+- prevent collision shape application from consuming an unrestricted frame;
+- expose collision backlog and collision application timing in diagnostics.
+
+Human result:
+
+- movement and edits no longer produce the documented 30-135 ms collision
+  spikes.
+
+Exit evidence on the reference machine:
+
+- overall frame p95 is at most 16.67 ms for the 60 FPS target;
+- overall frame p99 is at most 33.3 ms;
+- terrain collision application stays inside its assigned per-frame deadline;
+- any simplified collision path is accepted physically and visually here, not
+  deferred into later releases.
+
+### Release 3 - Canonical mesh and transition representation
+
+Status: not complete.
+
+Scope:
+
+- establish strict canonical and production-robust profiles;
+- add an independent full-pipeline oracle;
+- use official vertex-reuse metadata;
+- store regular primary and secondary boundary positions;
+- cache six reusable transition faces;
+- ensure a transition-mask-only change performs zero density sampling and zero
+  remeshing.
+
+Human result:
+
+- repeated flight across LOD boundaries shows no new seam, winding, transition,
+  or streaming-stutter regression.
+
+Exit evidence:
+
+- official oracle passes;
+- no new seam or winding failures;
+- mask-only updates do not enqueue mesh jobs;
+- the old mask-baked path is removed after acceptance instead of maintained as
+  a second production path.
+
+### Release 4 - Parallel meshing and cancellation
+
+Status: blocked until Release 3 is complete.
+
+Scope:
+
+- bounded CPU-dependent worker count;
+- immutable jobs and generation tokens;
+- reusable scratch per worker;
+- cooperative cancellation checkpoints;
+- bounded completion/publication queues;
+- priority inversion and starvation tests.
+
+Exit evidence:
+
+- output hashes remain identical to the canonical single-thread path;
+- obsolete jobs are cancelled before publication;
+- throughput improves measurably on the reference machine;
+- frame spikes and memory remain within the agreed ceiling.
+
+### Release 5 - Empty-space and page acceleration
+
+Status: blocked until Release 4 is complete.
+
+Scope:
+
+- page density min/max;
+- uniform density/material metadata;
+- surface-present flag;
+- water-present flag;
+- direct transition-support lookup;
+- early rejection before constructing meshing state.
+
+Exit evidence:
+
+- uniform air/solid pages create no mesh job;
+- water-absent pages require no water sample scan or second mesh;
+- visible output is identical;
+- CPU, I/O, and memory are reduced on the locked route.
+
+### Release 6 - Profile-guided rendering cleanup
+
+Status: conditional.
+
+This release exists only if profiling after Release 2 still identifies GPU time,
+render submission, draw-call count, or render memory as a bottleneck.
+
+Potential scope:
+
+- bake road/biome classification;
+- skip zero-weight authored paths;
+- remove unused UV2/color/normal data;
+- compact material weights;
+- group render meshes;
+- consider direct `RenderingServer` RIDs.
+
+Exit evidence:
+
+- every accepted change shows a GPU-time, draw-call, memory, or frame-time
+  improvement. If the GPU already meets its budget, close this audit without
+  code changes.
+
+## Stabilization commits are not roadmap releases
+
+The following pushed commits were necessary stabilization work discovered during
+human testing. They must not be counted as completion of roadmap Release 2 or
+Release 3.
+
+| Commit | Label used at the time | Correct classification |
+| --- | --- | --- |
+| `c6aa2a0` | `Release 2: stabilize staged edit replacement streaming` | Stabilization A: staged edit/replacement streaming safety |
+| `5dfa9fa` | `Release 3: repair visual readiness after staged swaps` | Stabilization B: visual readiness after staged swaps |
+
+## Rule for continuing
+
+Before beginning new implementation work, confirm whether Release 1 evidence is
+complete. Then finish roadmap Release 2 before starting roadmap Release 3.
+Parallel meshing, page acceleration, and render cleanup stay blocked until their
+predecessor release gates pass.

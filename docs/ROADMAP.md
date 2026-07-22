@@ -3,6 +3,10 @@
 Each milestone has an exit condition. Passing a milestone does not
 automatically create another one.
 
+Roadmap release accounting is tracked in `docs/RELEASE_LEDGER.md`. That ledger
+separates ordered roadmap releases from stabilization commits made during human
+testing; commit names alone are not release evidence.
+
 ## R0 - Research lock
 
 Status: complete.
