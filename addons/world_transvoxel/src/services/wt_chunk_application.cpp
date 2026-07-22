@@ -26,7 +26,8 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 	WtGenerationToken generation,
 	bool collision_required,
 	bool visual_required,
-	bool staged_replacement
+	bool staged_replacement,
+	bool preserve_collision_ready
 ) {
 	if (!wt_is_valid_chunk_key(key) || generation.value == 0 ||
 		(!visual_required && !collision_required)) {
@@ -40,13 +41,16 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 		if (generation == record->generation) {
 			return WtApplicationStatus::AlreadyCurrent;
 		}
+		const bool carried_collision_ready =
+			preserve_collision_ready && collision_required &&
+			record->collision_required && record->collision_ready;
 		*record = {
 			key,
 			generation,
 			collision_required,
 			visual_required,
 			false,
-			false,
+			carried_collision_ready,
 			staged_replacement,
 		};
 		return WtApplicationStatus::Ok;

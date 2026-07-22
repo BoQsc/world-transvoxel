@@ -98,6 +98,7 @@ struct WtReadOnlyPublication {
 	std::uint64_t world_revision = 0;
 	WtReadOnlyEditStatus edit_status = WtReadOnlyEditStatus::Ok;
 	bool staged_replacement = false;
+	bool preserve_collision_ready = false;
 	bool visual_required = true;
 	std::uint64_t request_id = 0;
 	WtAuthoritativeSampleQueryStatus sample_status =

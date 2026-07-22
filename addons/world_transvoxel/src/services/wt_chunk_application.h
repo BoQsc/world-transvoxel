@@ -57,7 +57,8 @@ public:
 		WtGenerationToken generation,
 		bool collision_required,
 		bool visual_required = true,
-		bool staged_replacement = false
+		bool staged_replacement = false,
+		bool preserve_collision_ready = false
 	);
 	WtApplicationStatus set_visual_required(
 		const WtChunkKey &key,

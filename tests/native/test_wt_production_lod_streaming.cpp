@@ -326,7 +326,11 @@ struct PublicationEvidence {
 	std::size_t removals = 0;
 	std::size_t renders = 0;
 	std::size_t collisions = 0;
+	std::size_t staged_expects = 0;
+	std::size_t staged_collision_preserve_expects = 0;
 	std::vector<std::uint8_t> expect_remove_order;
+	std::vector<std::uint64_t> bridge_staged_expect_generations;
+	std::vector<std::uint64_t> bridge_preserved_collision_generations;
 	std::vector<std::uint64_t> bridge_generations;
 	std::vector<std::uint64_t> bridge_vertices;
 	std::vector<std::uint64_t> bridge_indices;
@@ -450,6 +454,24 @@ bool collect_until(
 				case wt::WtReadOnlyPublicationKind::ExpectChunk:
 					++counts.expects;
 					counts.expect_remove_order.push_back(1);
+					if (publication.staged_replacement) {
+						++counts.staged_expects;
+						if (publication.collision_required &&
+								publication.preserve_collision_ready) {
+							++counts.staged_collision_preserve_expects;
+						}
+						if (publication.key == bridge) {
+							counts.bridge_staged_expect_generations.push_back(
+								publication.generation.value
+							);
+							if (publication.collision_required &&
+									publication.preserve_collision_ready) {
+								counts.bridge_preserved_collision_generations.push_back(
+									publication.generation.value
+								);
+							}
+						}
+					}
 					break;
 				case wt::WtReadOnlyPublicationKind::RemoveChunk:
 					++counts.removals;
@@ -1401,8 +1423,15 @@ int main() {
 		publications.bridge_generations[0] !=
 			publications.bridge_generations[1] &&
 		publications.removals == removals_before_second_viewer &&
+		!publications.bridge_staged_expect_generations.empty() &&
+		publications.bridge_staged_expect_generations.back() ==
+			publications.bridge_generations[1] &&
+		!publications.bridge_preserved_collision_generations.empty() &&
+		publications.bridge_preserved_collision_generations.back() ==
+			publications.bridge_generations[1] &&
 		publications.expects >= 19,
-		"transition-mask change did not remesh bridge without removal");
+		"transition-mask change did not stage a visual-only bridge remesh "
+		"with preserved collision readiness");
 
 	const std::size_t order_before_moving_viewer =
 		publications.expect_remove_order.size();
@@ -1478,6 +1507,14 @@ int main() {
 	for (std::uint64_t value : publications.bridge_indices) {
 		append_u64(evidence, value);
 	}
+	append_u64(evidence, publications.staged_expects);
+	append_u64(evidence, publications.staged_collision_preserve_expects);
+	for (std::uint64_t value : publications.bridge_staged_expect_generations) {
+		append_u64(evidence, value);
+	}
+	for (std::uint64_t value : publications.bridge_preserved_collision_generations) {
+		append_u64(evidence, value);
+	}
 	append_u64(evidence, metrics.viewer_updates);
 	append_u64(evidence, metrics.viewer_removals);
 	append_u64(evidence, metrics.transition_mesh_completions);
@@ -1506,6 +1543,8 @@ int main() {
 		"PRODUCTION_LOD_STREAMING_EVIDENCE entries=%zu mask=%u "
 		"retained_entries=%zu retained_edit_key=%d "
 		"fallback_retention=%d bridge0=%llu/%llu bridge1=%llu/%llu "
+		"staged_expects=%zu staged_collision_preserve_expects=%zu "
+		"transition_stage_generations=%zu transition_preserve_generations=%zu "
 		"global_coarse=%d many_zone_retention=%d lod_hysteresis=%d "
 		"collision_reactivation=%d replacement_collision_continuity=%d "
 		"collision_publication_priority=%d collision_publication_coalescing=%d "
@@ -1520,6 +1559,10 @@ int main() {
 		static_cast<unsigned long long>(publications.bridge_indices[0]),
 		static_cast<unsigned long long>(publications.bridge_vertices[1]),
 		static_cast<unsigned long long>(publications.bridge_indices[1]),
+		publications.staged_expects,
+		publications.staged_collision_preserve_expects,
+		publications.bridge_staged_expect_generations.size(),
+		publications.bridge_preserved_collision_generations.size(),
 		global_coarse_ok ? 1 : 0,
 		many_zone_retention_ok ? 1 : 0,
 		lod_hysteresis_ok ? 1 : 0,

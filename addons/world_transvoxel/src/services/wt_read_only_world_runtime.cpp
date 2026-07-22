@@ -1261,7 +1261,9 @@ bool WtReadOnlyWorldRuntime::process_pending_transition_remeshes() {
 				item.key,
 				record->generation,
 				desired->collision_required,
-				desired->visual_required
+				desired->visual_required,
+				true,
+				desired->collision_required
 			);
 		if (application_status != WtApplicationStatus::Ok &&
 			application_status != WtApplicationStatus::AlreadyCurrent) {
@@ -1274,6 +1276,8 @@ bool WtReadOnlyWorldRuntime::process_pending_transition_remeshes() {
 		expectation.generation = record->generation;
 		expectation.collision_required = desired->collision_required;
 		expectation.visual_required = desired->visual_required;
+		expectation.staged_replacement = true;
+		expectation.preserve_collision_ready = desired->collision_required;
 		if (!push_publication(std::move(expectation))) {
 			if (!stop_requested_.load()) {
 				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
