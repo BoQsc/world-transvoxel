@@ -64,7 +64,7 @@ bool WtReadOnlyWorldRuntime::push_publication(
 	WtReadOnlyPublication publication
 ) {
 	std::unique_lock<std::mutex> lock(publication_mutex_);
-	const bool priority = is_priority_publication(publication.kind);
+	const bool priority = is_priority_publication(publication);
 	std::vector<WtReadOnlyPublication> &slots = priority ?
 		priority_publication_slots_ : publication_slots_;
 	std::size_t &head = priority ?
@@ -115,9 +115,9 @@ bool WtReadOnlyWorldRuntime::pop_publication(
 }
 
 bool WtReadOnlyWorldRuntime::is_priority_publication(
-	WtReadOnlyPublicationKind kind
+	const WtReadOnlyPublication &publication
 ) noexcept {
-	switch (kind) {
+	switch (publication.kind) {
 		case WtReadOnlyPublicationKind::ExpectChunk:
 		case WtReadOnlyPublicationKind::SetCollisionRequired:
 		case WtReadOnlyPublicationKind::SetVisualRequired:
@@ -125,6 +125,7 @@ bool WtReadOnlyWorldRuntime::is_priority_publication(
 		case WtReadOnlyPublicationKind::CollisionPayload:
 			return true;
 		case WtReadOnlyPublicationKind::RenderPayload:
+			return publication.staged_replacement;
 		case WtReadOnlyPublicationKind::EditCommitted:
 		case WtReadOnlyPublicationKind::EditRejected:
 		case WtReadOnlyPublicationKind::AuthoritativeSampleReady:

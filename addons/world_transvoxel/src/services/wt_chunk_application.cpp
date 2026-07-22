@@ -188,6 +188,14 @@ std::size_t WtChunkApplicationService::apply_render(
 		);
 		WtChunkApplicationRecord *record = find_record_mutable(payload->key);
 		if (record == nullptr || record->generation != payload->generation) {
+			metrics_.last_stale_render_key_x = payload->key.x;
+			metrics_.last_stale_render_key_y = payload->key.y;
+			metrics_.last_stale_render_key_z = payload->key.z;
+			metrics_.last_stale_render_key_lod = payload->key.lod;
+			metrics_.last_stale_render_generation =
+				payload->generation.value;
+			metrics_.last_stale_render_record_generation =
+				record == nullptr ? 0U : record->generation.value;
 			++metrics_.stale_render;
 			continue;
 		}

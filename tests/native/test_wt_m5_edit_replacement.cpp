@@ -8,8 +8,10 @@
 #include "services/wt_page_meshing_runtime_owner.h"
 #include "storage/wt_hash256.h"
 #include "storage/wt_storage_page_cache.h"
+#include "streaming/wt_multi_viewer_desired_set.h"
 #include "streaming/wt_stream_scheduler.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -284,7 +286,30 @@ void test_end_to_end(std::vector<std::uint8_t> &evidence) {
 	std::vector<std::shared_ptr<const wt::WtCollisionPayload>> collisions;
 	const std::vector<wt::WtBakedChunkPage> pages =
 		bake_pages(keys, source_revision);
+	const std::array<bool, 3> application_collision_required = {
+		true, true, true
+	};
+	const std::array<bool, 3> application_visual_required = {
+		true, true, true
+	};
+	const std::array<bool, 3> desired_collision_required = {
+		true, true, true
+	};
+	const std::array<bool, 3> desired_visual_required = {
+		true, false, true
+	};
 	check(pages.size() == keys.size(), "edit replacement page count mismatch");
+	std::vector<wt::WtDesiredChunk> desired_chunks;
+	desired_chunks.reserve(keys.size());
+	for (std::size_t index = 0; index < keys.size(); ++index) {
+		desired_chunks.push_back({
+			keys[index],
+			static_cast<std::int32_t>(30 - index * 10),
+			1U,
+			desired_collision_required[index],
+			desired_visual_required[index],
+		});
+	}
 
 	for (std::size_t index = 0; index < keys.size(); ++index) {
 		const wt::WtBakedChunkPage *page = find_page(pages, keys[index]);
@@ -298,15 +323,19 @@ void test_end_to_end(std::vector<std::uint8_t> &evidence) {
 			static_cast<std::uint16_t>(index + 1)));
 		renders.push_back(make_render(*meshes.back(), generation));
 		collisions.push_back(make_collision(*renders.back()));
-		const bool collision_required = index != 1;
 		check(application.expect_chunk(
-			keys[index], generation, collision_required
+			keys[index],
+			generation,
+			application_collision_required[index],
+			application_visual_required[index]
 		) == wt::WtApplicationStatus::Ok,
 			"initial edit application expectation failed");
-		check(application.submit_render(renders.back()) ==
-			wt::WtApplicationStatus::Ok,
-			"initial edit render submission failed");
-		if (collision_required) {
+		if (application_visual_required[index]) {
+			check(application.submit_render(renders.back()) ==
+				wt::WtApplicationStatus::Ok,
+				"initial edit render submission failed");
+		}
+		if (application_collision_required[index]) {
 			check(application.submit_collision(collisions.back()) ==
 				wt::WtApplicationStatus::Ok,
 				"initial edit collision submission failed");
@@ -344,7 +373,8 @@ void test_end_to_end(std::vector<std::uint8_t> &evidence) {
 	RecordingPageMeshingOwner page_meshing_owner;
 	check(service.replace_loaded_chunks(
 		transaction(source_revision, 7, 8, 1), spatial, scheduler,
-		page_cache, resource_cache, application, &page_meshing_owner
+		page_cache, resource_cache, application, &page_meshing_owner,
+		&desired_chunks
 	) == wt::WtEditRuntimeReplacementStatus::Ok,
 		"loaded edit replacement failed");
 	const auto &replacements = service.get_last_replacements();
@@ -367,8 +397,12 @@ void test_end_to_end(std::vector<std::uint8_t> &evidence) {
 		check(application_record != nullptr &&
 			application_record->generation == record->generation &&
 			!application_record->visual_ready &&
-			!application_record->collision_ready &&
-			application_record->collision_required == (index == 0),
+			application_record->collision_ready ==
+				replacement.collision_required &&
+			application_record->collision_required ==
+				replacement.collision_required &&
+			application_record->visual_required == replacement.visual_required &&
+			application_record->staged_replacement,
 			"edit replacement readiness was not reset or preserved");
 		check(replacement.evicted_page_entries == 2 &&
 			replacement.evicted_resource_entries == 3,
@@ -377,6 +411,8 @@ void test_end_to_end(std::vector<std::uint8_t> &evidence) {
 		append_u64(evidence, replacement.previous_generation.value);
 		append_u64(evidence, replacement.replacement_generation.value);
 		append_u64(evidence, replacement.replacement_world_revision);
+		append_u64(evidence, replacement.collision_required ? 1 : 0);
+		append_u64(evidence, replacement.visual_required ? 1 : 0);
 	}
 	check(page_cache.encoded_entry_count() == 1 &&
 		page_cache.decoded_entry_count() == 1 &&
@@ -444,9 +480,12 @@ void test_end_to_end(std::vector<std::uint8_t> &evidence) {
 			resource_cache.insert_collision(collision, record->generation) ==
 				wt::WtChunkResourceCacheStatus::Ok,
 			"replacement resources were not cached");
-		check(application.submit_render(render) == wt::WtApplicationStatus::Ok,
-			"replacement render submission failed");
-		if (index == 0) {
+		if (replacements[index].visual_required) {
+			check(application.submit_render(render) ==
+				wt::WtApplicationStatus::Ok,
+				"replacement render submission failed");
+		}
+		if (replacements[index].collision_required) {
 			check(application.submit_collision(collision) ==
 				wt::WtApplicationStatus::Ok,
 				"replacement collision submission failed");

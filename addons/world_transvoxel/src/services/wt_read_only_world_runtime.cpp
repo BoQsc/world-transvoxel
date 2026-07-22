@@ -1115,13 +1115,14 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 	for (const WtDesiredChunk &item : delta.added) {
 		const WtChunkRecord *record = scheduler_->find_record(item.key);
 		if (record == nullptr) return false;
+		const bool addition_staged_replacement = contains_replacement;
 		WtReadOnlyPublication publication;
 		publication.kind = WtReadOnlyPublicationKind::ExpectChunk;
 		publication.key = item.key;
 		publication.generation = record->generation;
 		publication.collision_required = item.collision_required;
 		publication.visual_required = item.visual_required;
-		publication.staged_replacement = contains_replacement;
+		publication.staged_replacement = addition_staged_replacement;
 		if (!push_publication(std::move(publication))) return false;
 		const auto render = item.visual_required ?
 			resource_cache_->find_render(item.key, record->generation) :
@@ -1132,6 +1133,8 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 			render_publication.key = render->key;
 			render_publication.generation = render->generation;
 			render_publication.render = render;
+			render_publication.staged_replacement =
+				addition_staged_replacement;
 			if (!push_publication(std::move(render_publication))) return false;
 		}
 		if (item.collision_required) {
@@ -1337,8 +1340,10 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			std::lock_guard<std::mutex> lock(metrics_mutex_);
 			++metrics_.sample_jobs;
 		} else {
-			const WtDesiredChunk *desired = desired_->find_desired(job.key);
-			if (desired == nullptr) {
+			const WtChunkApplicationRecord *application_record =
+				application_->find_record(job.key);
+			if (application_record == nullptr ||
+				application_record->generation != job.generation) {
 				continue;
 			}
 			status = page_runtime_->execute_mesh_job(
@@ -1353,7 +1358,7 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 				[this](const WtTerrainMeshCompletion &completion) {
 					return process_terrain_mesh_completion(completion);
 				},
-				desired->visual_required
+				application_record->visual_required
 			);
 			std::lock_guard<std::mutex> lock(metrics_mutex_);
 			++metrics_.mesh_jobs;
@@ -1394,9 +1399,14 @@ bool WtReadOnlyWorldRuntime::process_terrain_mesh_completion(
 		config_.collision_activation_distance,
 		config_.collision_deactivation_distance,
 	};
-	const WtDesiredChunk *desired = desired_->find_desired(completion.key);
-	const bool regular_collision = desired != nullptr &&
-		(!desired->visual_required || !collision_viewers_.empty());
+	const WtChunkApplicationRecord *application_record =
+		application_->find_record(completion.key);
+	if (application_record == nullptr ||
+		application_record->generation != completion.generation) {
+		return true;
+	}
+	const bool regular_collision =
+		!application_record->visual_required || !collision_viewers_.empty();
 	if (resource_cache_->insert_mesh(
 			completion.mesh,
 			completion.generation,
@@ -1425,7 +1435,7 @@ bool WtReadOnlyWorldRuntime::process_terrain_mesh_completion(
 		set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
 		return false;
 	}
-	if (desired != nullptr && desired->collision_required &&
+	if (application_record->collision_required &&
 		!push_publication({
 			WtReadOnlyPublicationKind::CollisionPayload,
 			collision->key,
@@ -1452,8 +1462,11 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			!completion.mesh || !completion.water_mesh) {
 			continue;
 		}
-		const WtDesiredChunk *desired = desired_->find_desired(completion.key);
-		if (desired == nullptr || !desired->visual_required) {
+		const WtChunkApplicationRecord *application_record =
+			application_->find_record(completion.key);
+		if (application_record == nullptr ||
+			application_record->generation != completion.generation ||
+			!application_record->visual_required) {
 			continue;
 		}
 		auto render = std::make_shared<WtRenderPayload>();
@@ -1473,14 +1486,13 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
 			break;
 		}
-		if (!push_publication({
-				WtReadOnlyPublicationKind::RenderPayload,
-				render->key,
-				render->generation,
-				false,
-				render,
-				{},
-			})) {
+		WtReadOnlyPublication publication;
+		publication.kind = WtReadOnlyPublicationKind::RenderPayload;
+		publication.key = render->key;
+		publication.generation = render->generation;
+		publication.render = render;
+		publication.staged_replacement = application_record->staged_replacement;
+		if (!push_publication(std::move(publication))) {
 			if (!stop_requested_.load()) {
 				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
 			}
@@ -1506,6 +1518,63 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 	}
 	bool progressed = false;
 	std::size_t repairs = 0;
+	readiness_repair_attempts_.erase(
+		std::remove_if(
+			readiness_repair_attempts_.begin(),
+			readiness_repair_attempts_.end(),
+			[this](const ReadinessRepairAttempt &attempt) {
+				const WtChunkApplicationRecord *record =
+					application_->find_record(attempt.key);
+				return record == nullptr ||
+					record->generation != attempt.generation ||
+					!record->staged_replacement;
+			}
+		),
+		readiness_repair_attempts_.end()
+	);
+	readiness_repair_remesh_keys_.erase(
+		std::remove_if(
+			readiness_repair_remesh_keys_.begin(),
+			readiness_repair_remesh_keys_.end(),
+			[this](const WtChunkKey &key) {
+				const WtChunkApplicationRecord *record =
+					application_->find_record(key);
+				return record == nullptr || !record->staged_replacement;
+			}
+		),
+		readiness_repair_remesh_keys_.end()
+	);
+	const auto find_attempt = [this](
+		const WtChunkKey &key,
+		WtGenerationToken generation
+	) -> ReadinessRepairAttempt * {
+		for (ReadinessRepairAttempt &attempt :
+				readiness_repair_attempts_) {
+			if (attempt.key == key && attempt.generation == generation) {
+				return &attempt;
+			}
+		}
+		return nullptr;
+	};
+	const auto ensure_attempt = [&](
+		const WtChunkKey &key,
+		WtGenerationToken generation
+	) -> ReadinessRepairAttempt & {
+		if (ReadinessRepairAttempt *attempt = find_attempt(key, generation)) {
+			return *attempt;
+		}
+		readiness_repair_attempts_.push_back({ key, generation });
+		return readiness_repair_attempts_.back();
+	};
+	const auto remesh_already_requested = [this](
+		const WtChunkKey &key
+	) {
+		return std::find(
+			readiness_repair_remesh_keys_.begin(),
+			readiness_repair_remesh_keys_.end(),
+			key
+		) != readiness_repair_remesh_keys_.end();
+	};
 	for (const WtDesiredChunk &item : desired_->get_desired_chunks()) {
 		if (repairs >= 64U || scheduler_->available_job_capacity() == 0) {
 			break;
@@ -1513,6 +1582,87 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 		if (!item.visual_required) continue;
 		const WtChunkRecord *record = scheduler_->find_record(item.key);
 		if (record == nullptr || record->lifecycle != WtChunkLifecycle::Ready) {
+			continue;
+		}
+		const WtChunkApplicationRecord *application_record =
+			application_->find_record(item.key);
+		const bool staged_replacement =
+			application_record != nullptr &&
+			application_record->generation == record->generation &&
+			application_record->staged_replacement;
+		if (staged_replacement) {
+			const auto render =
+				resource_cache_->find_render(item.key, record->generation);
+			if (!render) {
+				if (remesh_already_requested(item.key)) continue;
+				const WtSchedulerStatus scheduler_status =
+					scheduler_->request_chunk_version(
+						item.key,
+						storage_.source_revision(),
+						world_revision_.load(),
+						item.priority,
+						true
+					);
+				if (scheduler_status == WtSchedulerStatus::JobQueueFull) {
+					break;
+				}
+				if (scheduler_status != WtSchedulerStatus::Ok) {
+					set_failure(WtReadOnlyRuntimeStatus::RuntimeDeltaFailure);
+					return progressed;
+				}
+				record = scheduler_->find_record(item.key);
+				const WtApplicationStatus application_status =
+					record == nullptr ? WtApplicationStatus::NotFound :
+					application_->expect_chunk(
+						item.key,
+						record->generation,
+						item.collision_required,
+						item.visual_required,
+						true,
+						item.collision_required
+					);
+				if (application_status != WtApplicationStatus::Ok &&
+					application_status != WtApplicationStatus::AlreadyCurrent) {
+					set_failure(WtReadOnlyRuntimeStatus::RuntimeDeltaFailure);
+					return progressed;
+				}
+				WtReadOnlyPublication publication;
+				publication.kind = WtReadOnlyPublicationKind::ExpectChunk;
+				publication.key = item.key;
+				publication.generation = record->generation;
+				publication.collision_required = item.collision_required;
+				publication.visual_required = item.visual_required;
+				publication.staged_replacement = true;
+				publication.preserve_collision_ready = item.collision_required;
+				if (!push_publication(std::move(publication))) {
+					if (!stop_requested_.load()) {
+						set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
+					}
+					return progressed;
+				}
+				readiness_repair_remesh_keys_.push_back(item.key);
+				++repairs;
+				progressed = true;
+				continue;
+			}
+			ReadinessRepairAttempt &attempt =
+				ensure_attempt(item.key, record->generation);
+			if (attempt.render_republished) continue;
+			WtReadOnlyPublication publication;
+			publication.kind = WtReadOnlyPublicationKind::RenderPayload;
+			publication.key = render->key;
+			publication.generation = render->generation;
+			publication.render = render;
+			publication.staged_replacement = true;
+			if (!push_publication(std::move(publication))) {
+				if (!stop_requested_.load()) {
+					set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
+				}
+				return progressed;
+			}
+			attempt.render_republished = true;
+			++repairs;
+			progressed = true;
 			continue;
 		}
 		if (resource_cache_->find_render(item.key, record->generation)) {
@@ -1553,6 +1703,7 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 		publication.collision_required = item.collision_required;
 		publication.visual_required = item.visual_required;
 		publication.staged_replacement = true;
+		publication.preserve_collision_ready = item.collision_required;
 		if (!push_publication(std::move(publication))) {
 			if (!stop_requested_.load()) {
 				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);

@@ -39,6 +39,16 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	std::uint64_t non_retiring_visual_ready_records = 0;
 	std::uint64_t non_retiring_fully_ready_records = 0;
 	std::uint64_t pending_retirement_records = 0;
+	std::uint64_t blocked_pending_replacements = 0;
+	WtChunkKey first_blocked_replacement_key{};
+	bool first_blocked_replacement_missing = false;
+	bool first_blocked_replacement_visual_required = false;
+	bool first_blocked_replacement_visual_ready = false;
+	bool first_blocked_replacement_collision_required = false;
+	bool first_blocked_replacement_collision_ready = false;
+	bool first_blocked_replacement_staged = false;
+	std::uint64_t first_blocked_replacement_generation = 0;
+	std::uint64_t first_blocked_replacement_render_generation = 0;
 	for (const WtChunkApplicationRecord &record : application_->get_records()) {
 		visual_ready_records += record.visual_ready ? 1U : 0U;
 		visual_required_records += record.visual_required ? 1U : 0U;
@@ -56,6 +66,29 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 				(!record.visual_required || record.visual_ready) ? 1U : 0U;
 			non_retiring_fully_ready_records += record.fully_ready() ? 1U : 0U;
 		}
+	}
+	for (const WtChunkKey &key : pending_chunk_replacements_) {
+		const WtChunkApplicationRecord *record = application_->find_record(key);
+		if (record != nullptr && record->fully_ready()) continue;
+		if (blocked_pending_replacements == 0) {
+			first_blocked_replacement_key = key;
+			first_blocked_replacement_missing = record == nullptr;
+			if (record != nullptr) {
+				first_blocked_replacement_visual_required =
+					record->visual_required;
+				first_blocked_replacement_visual_ready = record->visual_ready;
+				first_blocked_replacement_collision_required =
+					record->collision_required;
+				first_blocked_replacement_collision_ready =
+					record->collision_ready;
+				first_blocked_replacement_staged = record->staged_replacement;
+				first_blocked_replacement_generation =
+					record->generation.value;
+				first_blocked_replacement_render_generation =
+					render_sink_->applied_generation(key).value;
+			}
+		}
+		++blocked_pending_replacements;
 	}
 	const std::uint64_t pending_retirement_records_missing =
 		pending_chunk_retirements_.size() > pending_retirement_records ?
@@ -192,6 +225,24 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		application.applied_collision
 	);
 	set_metric(output, "application_stale_render", application.stale_render);
+	output["application_last_stale_render_key_x"] =
+		application.last_stale_render_key_x;
+	output["application_last_stale_render_key_y"] =
+		application.last_stale_render_key_y;
+	output["application_last_stale_render_key_z"] =
+		application.last_stale_render_key_z;
+	output["application_last_stale_render_key_lod"] =
+		static_cast<std::int64_t>(application.last_stale_render_key_lod);
+	set_metric(
+		output,
+		"application_last_stale_render_generation",
+		application.last_stale_render_generation
+	);
+	set_metric(
+		output,
+		"application_last_stale_render_record_generation",
+		application.last_stale_render_record_generation
+	);
 	set_metric(
 		output, "application_stale_collision", application.stale_collision
 	);
@@ -244,6 +295,41 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	);
 	output["pending_chunk_replacements"] = static_cast<std::int64_t>(
 		pending_chunk_replacements_.size()
+	);
+	set_metric(
+		output,
+		"blocked_pending_chunk_replacements",
+		blocked_pending_replacements
+	);
+	output["first_blocked_replacement_key_x"] =
+		static_cast<std::int64_t>(first_blocked_replacement_key.x);
+	output["first_blocked_replacement_key_y"] =
+		static_cast<std::int64_t>(first_blocked_replacement_key.y);
+	output["first_blocked_replacement_key_z"] =
+		static_cast<std::int64_t>(first_blocked_replacement_key.z);
+	output["first_blocked_replacement_key_lod"] =
+		static_cast<std::int64_t>(first_blocked_replacement_key.lod);
+	output["first_blocked_replacement_missing"] =
+		first_blocked_replacement_missing;
+	output["first_blocked_replacement_visual_required"] =
+		first_blocked_replacement_visual_required;
+	output["first_blocked_replacement_visual_ready"] =
+		first_blocked_replacement_visual_ready;
+	output["first_blocked_replacement_collision_required"] =
+		first_blocked_replacement_collision_required;
+	output["first_blocked_replacement_collision_ready"] =
+		first_blocked_replacement_collision_ready;
+	output["first_blocked_replacement_staged"] =
+		first_blocked_replacement_staged;
+	set_metric(
+		output,
+		"first_blocked_replacement_generation",
+		first_blocked_replacement_generation
+	);
+	set_metric(
+		output,
+		"first_blocked_replacement_render_generation",
+		first_blocked_replacement_render_generation
 	);
 	output["pending_render_retirements"] = static_cast<std::int64_t>(
 		pending_render_retirements_.size()

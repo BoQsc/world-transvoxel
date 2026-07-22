@@ -259,6 +259,11 @@ private:
 		WtViewerSnapshot snapshot;
 		std::uint32_t radius_chunks = 0;
 	};
+	struct ReadinessRepairAttempt {
+		WtChunkKey key;
+		WtGenerationToken generation;
+		bool render_republished = false;
+	};
 
 	bool enqueue_viewer_event(const ViewerEvent &event);
 	bool process_viewer_event();
@@ -280,7 +285,7 @@ private:
 	bool publish_delta(const WtDesiredSetDelta &delta);
 	bool push_publication(WtReadOnlyPublication publication);
 	static bool is_priority_publication(
-		WtReadOnlyPublicationKind kind
+		const WtReadOnlyPublication &publication
 	) noexcept;
 	void queue_transition_remeshes(
 		const std::vector<WtDesiredChunk> &chunks
@@ -336,6 +341,8 @@ private:
 	std::vector<WtChunkKey> page_keys_;
 	std::vector<EditLodRetentionZone> edit_lod_retention_zones_;
 	std::vector<WtDesiredChunk> pending_transition_remeshes_;
+	std::vector<ReadinessRepairAttempt> readiness_repair_attempts_;
+	std::vector<WtChunkKey> readiness_repair_remesh_keys_;
 	std::uint64_t next_edit_lod_retention_revision_ = 1;
 	std::uint64_t next_edit_lod_retention_viewer_id_ = 1;
 	WtBalancedLodPlan current_plan_;

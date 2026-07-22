@@ -77,12 +77,15 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 		}
 		return true;
 	}
+	const std::vector<WtDesiredChunk> *desired_chunks =
+		desired_ ? &desired_->get_desired_chunks() : nullptr;
 	const WtEditRuntimeReplacementStatus prepare =
 		edit_replacement_->prepare_loaded_chunks(
 			transaction,
 			*edit_spatial_index_,
 			*scheduler_,
-			*application_
+			*application_,
+			desired_chunks
 		);
 	if (prepare != WtEditRuntimeReplacementStatus::Ok) {
 		if (!reject(map_prepare_status(prepare)) &&
@@ -119,7 +122,9 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 		publication.key = replacement.key;
 		publication.generation = replacement.replacement_generation;
 		publication.collision_required = replacement.collision_required;
+		publication.visual_required = replacement.visual_required;
 		publication.staged_replacement = true;
+		publication.preserve_collision_ready = replacement.collision_required;
 		if (!push_publication(std::move(publication))) {
 			if (!stop_requested_.load()) {
 				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);

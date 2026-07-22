@@ -14,6 +14,7 @@ class WtChunkResourceCache;
 class WtPageMeshingRuntimeOwner;
 class WtStoragePageCache;
 class WtStreamScheduler;
+struct WtDesiredChunk;
 
 constexpr std::size_t kWtMaximumEditRuntimeReplacements = 65536;
 
@@ -41,6 +42,7 @@ struct WtEditRuntimeReplacementRecord {
 	std::size_t evicted_page_entries = 0;
 	std::size_t evicted_resource_entries = 0;
 	bool collision_required = false;
+	bool visual_required = true;
 };
 
 struct WtEditRuntimeReplacementMetrics {
@@ -69,7 +71,8 @@ public:
 		const WtEditTransaction &transaction,
 		const WtEditSpatialIndex &spatial_index,
 		const WtStreamScheduler &scheduler,
-		const WtChunkApplicationService &application
+		const WtChunkApplicationService &application,
+		const std::vector<WtDesiredChunk> *desired_chunks = nullptr
 	);
 	WtEditRuntimeReplacementStatus apply_prepared(
 		const WtEditTransaction &transaction,
@@ -86,7 +89,8 @@ public:
 		WtStoragePageCache &page_cache,
 		WtChunkResourceCache &resource_cache,
 		WtChunkApplicationService &application,
-		WtPageMeshingRuntimeOwner *page_meshing_runtime
+		WtPageMeshingRuntimeOwner *page_meshing_runtime,
+		const std::vector<WtDesiredChunk> *desired_chunks = nullptr
 	);
 
 	std::size_t replacement_capacity() const noexcept;
@@ -101,6 +105,7 @@ private:
 		std::uint64_t source_revision = 0;
 		std::uint64_t previous_world_revision = 0;
 		bool collision_required = false;
+		bool visual_required = true;
 	};
 
 	std::size_t replacement_capacity_ = 0;

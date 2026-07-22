@@ -4,6 +4,7 @@
 #include "services/wt_chunk_resource_cache.h"
 #include "services/wt_page_meshing_runtime_owner.h"
 #include "storage/wt_storage_page_cache.h"
+#include "streaming/wt_multi_viewer_desired_set.h"
 #include "streaming/wt_stream_scheduler.h"
 
 namespace world_transvoxel {
@@ -30,7 +31,8 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 	const WtEditTransaction &transaction,
 	const WtEditSpatialIndex &spatial_index,
 	const WtStreamScheduler &scheduler,
-	const WtChunkApplicationService &application
+	const WtChunkApplicationService &application,
+	const std::vector<WtDesiredChunk> *desired_chunks
 ) {
 	++metrics_.transaction_attempts;
 	affected_.clear();
@@ -77,12 +79,30 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 			++metrics_.state_rejections;
 			return WtEditRuntimeReplacementStatus::WorldRevisionMismatch;
 		}
+		bool collision_required = application_record->collision_required;
+		bool visual_required = application_record->visual_required;
+		if (desired_chunks != nullptr) {
+			const WtDesiredChunk *desired = nullptr;
+			for (const WtDesiredChunk &candidate : *desired_chunks) {
+				if (candidate.key == key) {
+					desired = &candidate;
+					break;
+				}
+			}
+			if (desired == nullptr) {
+				++metrics_.state_rejections;
+				return WtEditRuntimeReplacementStatus::RuntimeStateMismatch;
+			}
+			collision_required = desired->collision_required;
+			visual_required = desired->visual_required;
+		}
 		prepared_.push_back({
 			key,
 			record->generation,
 			record->source_revision,
 			record->world_revision,
-			application_record->collision_required,
+			collision_required,
+			visual_required,
 		});
 	}
 	if (scheduler.available_job_capacity() < prepared_.size()) {
@@ -151,6 +171,9 @@ WtEditRuntimeReplacementService::apply_prepared(
 		if (application.expect_chunk(
 				replacement.key,
 				current->generation,
+				replacement.collision_required,
+				replacement.visual_required,
+				true,
 				replacement.collision_required
 			) != WtApplicationStatus::Ok) {
 			++metrics_.application_failures;
@@ -170,6 +193,7 @@ WtEditRuntimeReplacementService::apply_prepared(
 			page_entries,
 			resource_entries,
 			replacement.collision_required,
+			replacement.visual_required,
 		});
 		metrics_.evicted_page_entries += page_entries;
 		metrics_.evicted_resource_entries += resource_entries;
@@ -188,10 +212,11 @@ WtEditRuntimeReplacementService::replace_loaded_chunks(
 	WtStoragePageCache &page_cache,
 	WtChunkResourceCache &resource_cache,
 	WtChunkApplicationService &application,
-	WtPageMeshingRuntimeOwner *page_meshing_runtime
+	WtPageMeshingRuntimeOwner *page_meshing_runtime,
+	const std::vector<WtDesiredChunk> *desired_chunks
 ) {
 	const WtEditRuntimeReplacementStatus prepare = prepare_loaded_chunks(
-		transaction, spatial_index, scheduler, application
+		transaction, spatial_index, scheduler, application, desired_chunks
 	);
 	if (prepare != WtEditRuntimeReplacementStatus::Ok) return prepare;
 	return apply_prepared(

@@ -37,6 +37,12 @@ struct WtApplicationMetrics {
 	std::uint64_t render_latency_frames_maximum = 0;
 	std::uint64_t collision_latency_frames_total = 0;
 	std::uint64_t collision_latency_frames_maximum = 0;
+	std::int64_t last_stale_render_key_x = 0;
+	std::int64_t last_stale_render_key_y = 0;
+	std::int64_t last_stale_render_key_z = 0;
+	std::uint64_t last_stale_render_key_lod = 0;
+	std::uint64_t last_stale_render_generation = 0;
+	std::uint64_t last_stale_render_record_generation = 0;
 };
 
 struct WtApplicationBatchResult {

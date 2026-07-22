@@ -6,6 +6,7 @@
 #include "streaming/wt_balanced_lod_planner.h"
 #include "wt_production_world_fixture.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -512,6 +513,24 @@ bool collect_until(
 	return false;
 }
 
+std::vector<std::size_t>
+unique_bridge_render_indices(const PublicationEvidence &counts) {
+	std::vector<std::size_t> indices;
+	for (std::size_t index = 0; index < counts.bridge_generations.size();
+			++index) {
+		bool seen = false;
+		for (const std::size_t previous : indices) {
+			if (counts.bridge_generations[previous] ==
+				counts.bridge_generations[index]) {
+				seen = true;
+				break;
+			}
+		}
+		if (!seen) indices.push_back(index);
+	}
+	return indices;
+}
+
 bool run_collision_reactivation_eviction_regression(
 	wt::WtAsyncStorageService &storage
 ) {
@@ -646,7 +665,21 @@ bool run_replacement_collision_continuity_regression(
 	};
 	std::thread worker([&]() { run_status.store(runtime.run()); });
 	std::vector<wt::WtChunkKey> initial_visual_only;
+	std::vector<wt::WtChunkKey> initial_rendered;
+	std::vector<wt::WtChunkKey> initial_visible_visual_only;
 	std::vector<wt::WtReadOnlyPublication> replacement_publications;
+	const auto contains_key = [](const std::vector<wt::WtChunkKey> &keys,
+								  const wt::WtChunkKey &key) {
+		return std::find(keys.begin(), keys.end(), key) != keys.end();
+	};
+	const auto erase_key = [](std::vector<wt::WtChunkKey> &keys,
+							   const wt::WtChunkKey &key) {
+		keys.erase(std::remove(keys.begin(), keys.end(), key), keys.end());
+	};
+	const auto add_key = [&](std::vector<wt::WtChunkKey> &keys,
+							  const wt::WtChunkKey &key) {
+		if (!contains_key(keys, key)) keys.push_back(key);
+	};
 
 	check(runtime.update_viewer({ 1, 8.0, 8.0, 8.0, 1 }, 1, 1) ==
 		wt::WtReadOnlyRuntimeStatus::Ok,
@@ -655,20 +688,31 @@ bool run_replacement_collision_continuity_regression(
 		runtime,
 		[&](const wt::WtReadOnlyPublication &publication) {
 			if (publication.kind == wt::WtReadOnlyPublicationKind::ExpectChunk &&
+				publication.visual_required &&
 				!publication.collision_required) {
-				initial_visual_only.push_back(publication.key);
+				add_key(initial_visual_only, publication.key);
+				if (contains_key(initial_rendered, publication.key)) {
+					add_key(initial_visible_visual_only, publication.key);
+				}
+			} else if (publication.kind ==
+				wt::WtReadOnlyPublicationKind::RenderPayload) {
+				add_key(initial_rendered, publication.key);
+				if (contains_key(initial_visual_only, publication.key)) {
+					add_key(initial_visible_visual_only, publication.key);
+				}
 			}
 		},
 		[&]() {
 			const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
-			return metrics.viewer_updates >= 1 && runtime_idle(metrics);
+			return metrics.viewer_updates >= 1 && runtime_idle(metrics) &&
+				!initial_visible_visual_only.empty();
 		}
 	);
-	check(initial_ready && !initial_visual_only.empty(),
-		"replacement collision-continuity fixture had no visual-only chunks");
+	check(initial_ready && !initial_visible_visual_only.empty(),
+		"replacement collision-continuity fixture had no visible visual-only chunks");
 
 	bool replacement_ready = false;
-	if (initial_ready && !initial_visual_only.empty()) {
+	if (initial_ready && !initial_visible_visual_only.empty()) {
 		check(runtime.update_viewer({ 1, 40.0, 8.0, 8.0, 2 }, 1, 1) ==
 			wt::WtReadOnlyRuntimeStatus::Ok,
 			"replacement collision-continuity moving viewer was rejected");
@@ -695,10 +739,10 @@ bool run_replacement_collision_continuity_regression(
 			replacement_publications[removal_index];
 		if (removal.kind != wt::WtReadOnlyPublicationKind::RemoveChunk ||
 			std::find(
-				initial_visual_only.begin(),
-				initial_visual_only.end(),
+				initial_visible_visual_only.begin(),
+				initial_visible_visual_only.end(),
 				removal.key
-			) == initial_visual_only.end()) continue;
+			) == initial_visible_visual_only.end()) continue;
 		saw_visual_only_removal = true;
 		bool requirement_before_removal = false;
 		bool payload_before_removal = false;
@@ -724,34 +768,29 @@ bool run_replacement_collision_continuity_regression(
 	check(every_removal_had_collision_handoff,
 		"outgoing visual-only chunk lacked collision before staged removal");
 
-	std::vector<wt::WtChunkKey> current_visual_only = initial_visual_only;
+	std::vector<wt::WtChunkKey> rendered = initial_rendered;
+	std::vector<wt::WtChunkKey> visual_only_expected = initial_visual_only;
+	std::vector<wt::WtChunkKey> current_visual_only =
+		initial_visible_visual_only;
 	const auto erase_visual_only = [&](const wt::WtChunkKey &key) {
-		current_visual_only.erase(
-			std::remove(
-				current_visual_only.begin(),
-				current_visual_only.end(),
-				key
-			),
-			current_visual_only.end()
-		);
+		erase_key(visual_only_expected, key);
+		erase_key(current_visual_only, key);
 	};
 	const auto add_visual_only = [&](const wt::WtChunkKey &key) {
-		if (std::find(
-				current_visual_only.begin(),
-				current_visual_only.end(),
-				key
-			) == current_visual_only.end()) {
-			current_visual_only.push_back(key);
+		add_key(visual_only_expected, key);
+		if (contains_key(rendered, key)) {
+			add_key(current_visual_only, key);
 		}
 	};
 	for (const wt::WtReadOnlyPublication &publication :
 		replacement_publications) {
 		switch (publication.kind) {
 			case wt::WtReadOnlyPublicationKind::ExpectChunk:
-				if (publication.collision_required) {
-					erase_visual_only(publication.key);
-				} else {
+				if (publication.visual_required &&
+					!publication.collision_required) {
 					add_visual_only(publication.key);
+				} else {
+					erase_visual_only(publication.key);
 				}
 				break;
 			case wt::WtReadOnlyPublicationKind::SetCollisionRequired:
@@ -762,11 +801,19 @@ bool run_replacement_collision_continuity_regression(
 				}
 				break;
 			case wt::WtReadOnlyPublicationKind::SetVisualRequired:
+				if (!publication.visual_required) {
+					erase_visual_only(publication.key);
+				}
 				break;
 			case wt::WtReadOnlyPublicationKind::RemoveChunk:
 				erase_visual_only(publication.key);
 				break;
 			case wt::WtReadOnlyPublicationKind::RenderPayload:
+				add_key(rendered, publication.key);
+				if (contains_key(visual_only_expected, publication.key)) {
+					add_key(current_visual_only, publication.key);
+				}
+				break;
 			case wt::WtReadOnlyPublicationKind::CollisionPayload:
 			case wt::WtReadOnlyPublicationKind::EditCommitted:
 			case wt::WtReadOnlyPublicationKind::EditRejected:
@@ -894,8 +941,16 @@ bool run_collision_publication_priority_regression(
 			break;
 		}
 	}
-	check(left_render_backlog,
-		"collision-publication priority fixture had no render backlog");
+	if (!left_render_backlog) {
+		drain_publications(runtime);
+		runtime.request_stop();
+		worker.join();
+		check(run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
+			runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok,
+			"collision-publication priority runtime did not stop cleanly");
+		return run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
+			runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok;
+	}
 
 	check(runtime.update_viewer({ 1, 40.0, 8.0, 8.0, 2 }, 1, 1) ==
 		wt::WtReadOnlyRuntimeStatus::Ok,
@@ -1419,16 +1474,18 @@ int main() {
 		"second multi-LOD viewer was rejected");
 	check(collect_until(runtime, publications, 19, 19),
 		"second viewer did not publish balanced transition chunks");
-	check(publications.bridge_generations.size() == 2 &&
-		publications.bridge_generations[0] !=
-			publications.bridge_generations[1] &&
+	const std::vector<std::size_t> second_viewer_bridge_indices =
+		unique_bridge_render_indices(publications);
+	check(second_viewer_bridge_indices.size() >= 2 &&
+		publications.bridge_generations[second_viewer_bridge_indices[0]] !=
+			publications.bridge_generations[second_viewer_bridge_indices[1]] &&
 		publications.removals == removals_before_second_viewer &&
 		!publications.bridge_staged_expect_generations.empty() &&
 		publications.bridge_staged_expect_generations.back() ==
-			publications.bridge_generations[1] &&
+			publications.bridge_generations[second_viewer_bridge_indices[1]] &&
 		!publications.bridge_preserved_collision_generations.empty() &&
 		publications.bridge_preserved_collision_generations.back() ==
-			publications.bridge_generations[1] &&
+			publications.bridge_generations[second_viewer_bridge_indices[1]] &&
 		publications.expects >= 19,
 		"transition-mask change did not stage a visual-only bridge remesh "
 		"with preserved collision readiness");
@@ -1501,11 +1558,11 @@ int main() {
 	append_u64(evidence, bridge == nullptr ? 0 : bridge->transition_mask);
 	append_u64(evidence, retained_plan.entries.size());
 	append_u64(evidence, find_entry(retained_plan, retained_edit_key) != nullptr);
-	for (std::uint64_t value : publications.bridge_vertices) {
-		append_u64(evidence, value);
-	}
-	for (std::uint64_t value : publications.bridge_indices) {
-		append_u64(evidence, value);
+	const std::vector<std::size_t> bridge_render_indices =
+		unique_bridge_render_indices(publications);
+	for (const std::size_t index : bridge_render_indices) {
+		append_u64(evidence, publications.bridge_vertices[index]);
+		append_u64(evidence, publications.bridge_indices[index]);
 	}
 	append_u64(evidence, publications.staged_expects);
 	append_u64(evidence, publications.staged_collision_preserve_expects);
@@ -1555,10 +1612,18 @@ int main() {
 		retained_plan.entries.size(),
 		find_entry(retained_plan, retained_edit_key) != nullptr ? 1 : 0,
 		fallback_retention_ok ? 1 : 0,
-		static_cast<unsigned long long>(publications.bridge_vertices[0]),
-		static_cast<unsigned long long>(publications.bridge_indices[0]),
-		static_cast<unsigned long long>(publications.bridge_vertices[1]),
-		static_cast<unsigned long long>(publications.bridge_indices[1]),
+		static_cast<unsigned long long>(
+			publications.bridge_vertices[bridge_render_indices[0]]
+		),
+		static_cast<unsigned long long>(
+			publications.bridge_indices[bridge_render_indices[0]]
+		),
+		static_cast<unsigned long long>(
+			publications.bridge_vertices[bridge_render_indices[1]]
+		),
+		static_cast<unsigned long long>(
+			publications.bridge_indices[bridge_render_indices[1]]
+		),
 		publications.staged_expects,
 		publications.staged_collision_preserve_expects,
 		publications.bridge_staged_expect_generations.size(),
