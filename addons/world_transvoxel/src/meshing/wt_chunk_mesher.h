@@ -87,6 +87,8 @@ struct WtChunkMeshResult {
 	WtChunkKey key;
 	WtGridPoint world_origin;
 	std::uint8_t transition_mask = 0;
+	std::uint8_t cached_transition_mask = 0;
+	float transition_width_ratio = 0.25F;
 	WtChunkMeshBuffer regular;
 	std::array<WtChunkMeshBuffer, 6> transitions;
 
@@ -124,6 +126,7 @@ struct WtChunkMeshingScratch {
 struct WtChunkMeshingInput {
 	WtChunkKey key;
 	std::uint8_t transition_mask = 0;
+	std::uint8_t cached_transition_mask = 0;
 	float isovalue = 0.0F;
 	float transition_width_ratio = 0.25F;
 };

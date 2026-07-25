@@ -64,6 +64,12 @@ public:
 		WtGenerationToken generation,
 		WtGenerationToken current_generation
 	);
+	WtChunkResourceCacheStatus insert_mesh(
+		std::shared_ptr<const WtChunkMeshResult> mesh,
+		std::shared_ptr<const WtChunkMeshResult> water_mesh,
+		WtGenerationToken generation,
+		WtGenerationToken current_generation
+	);
 	WtChunkResourceCacheStatus insert_render(
 		std::shared_ptr<const WtRenderPayload> render,
 		WtGenerationToken current_generation
@@ -74,6 +80,10 @@ public:
 	);
 
 	std::shared_ptr<const WtChunkMeshResult> find_mesh(
+		const WtChunkKey &key,
+		WtGenerationToken generation
+	);
+	std::shared_ptr<const WtChunkMeshResult> find_water_mesh(
 		const WtChunkKey &key,
 		WtGenerationToken generation
 	);
@@ -109,6 +119,7 @@ private:
 		WtChunkKey key;
 		WtGenerationToken generation;
 		std::shared_ptr<const WtChunkMeshResult> payload;
+		std::shared_ptr<const WtChunkMeshResult> water_payload;
 		std::size_t resident_bytes = 0;
 		std::uint64_t last_access = 0;
 	};

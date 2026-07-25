@@ -1,6 +1,6 @@
 # Release ledger
 
-Status date: 2026-07-25.
+Status date: 2026-07-26.
 
 This ledger separates the ordered roadmap releases from stabilization commits
 made during human testing. Commit messages alone are not sufficient release
@@ -33,7 +33,8 @@ Exit evidence:
 
 ### Release 2 - Frame-stable collisions
 
-Status: candidate implemented; not complete against the strict frame-time gate.
+Status: candidate accepted for progression; not complete against the strict
+frame-time gate.
 
 Scope:
 
@@ -71,6 +72,12 @@ Candidate evidence gathered on 2026-07-25:
   `spawn_floor_hit=1`, `collision_required_not_ready=0`, no visual gap failures,
   and `collision_apply_time_ns_maximum=26594700`.
 
+Human acceptance:
+
+- the Release 2 candidate was accepted for progression after human testing on
+  2026-07-25/2026-07-26. This means Release 3 may proceed; it does not erase
+  the remaining Godot collision publication debt below.
+
 Remaining blocker:
 
 - Godot `ConcavePolygonShape3D::set_faces` / collision shape publication can
@@ -83,7 +90,8 @@ Remaining blocker:
 
 ### Release 3 - Canonical mesh and transition representation
 
-Status: not complete.
+Status: candidate implemented; source gates pass; pending human LOD-boundary
+flight acceptance.
 
 Scope:
 
@@ -107,6 +115,47 @@ Exit evidence:
 - mask-only updates do not enqueue mesh jobs;
 - the old mask-baked path is removed after acceptance instead of maintained as
   a second production path.
+
+Candidate evidence gathered on 2026-07-26:
+
+- release build passed:
+  `scons platform=windows target=template_release arch=x86_64 -j4`;
+- focused Release 3 native gates passed:
+  `test_wt_m2_chunk_mesh`,
+  `test_wt_m5_page_transition`,
+  `test_wt_m5_page_meshing_runtime`,
+  `test_wt_m5_resource_cache`, and
+  `test_wt_production_lod_streaming`;
+- canonical M2 mesh hash:
+  `f3ebfec883e2de19`;
+- page transition hash:
+  `1761e09383752d56`;
+- page meshing runtime hash:
+  `ea428b532f85d6b1abb751856e27532c49acff9f2d320a5756a1723165908ad7`;
+- resource cache hash:
+  `ecf7cbc1ddb527fbcbde760e7c6bd7b016f44c10df1bc7fb51540c9012b1f7c3`;
+- production LOD streaming hash:
+  `c5d0fcada4007b6d13fa5665174abdc89e9923dced40e6c2f60e544c1e6ccc5a`;
+- production LOD evidence showed the bridge chunk retained generation while
+  the render transition mask changed (`bridge0=320/1674`,
+  `bridge1=320/1674`), no transition remesh generations were staged, and
+  transition completions remained bounded at `2`.
+
+Remaining before acceptance:
+
+- run the integration-game human test and fly repeatedly across LOD
+  boundaries on the g23 profile;
+- accept or reject the candidate based on seam, winding, transition, movement,
+  and streaming-stutter behavior;
+- after acceptance, remove the retained legacy pending transition-remesh path
+  instead of keeping two production architectures.
+
+Known excluded issue:
+
+- the pixel-sized pinhole artifacts seen during cave inspection are
+  long-standing and are explicitly deferred to a later diagnostics/test pass.
+  They must not be used to block Release 3 unless this candidate clearly makes
+  them worse.
 
 ### Release 4 - Parallel meshing and cancellation
 
@@ -183,7 +232,8 @@ Release 3.
 
 ## Rule for continuing
 
-Before beginning new implementation work, confirm whether Release 1 evidence is
-complete. Then finish roadmap Release 2 before starting roadmap Release 3.
-Parallel meshing, page acceleration, and render cleanup stay blocked until their
-predecessor release gates pass.
+Release 2 has been accepted for progression with collision publication debt
+tracked above. Do not begin Release 4 until the Release 3 human LOD-boundary
+test accepts the canonical transition candidate. Parallel meshing, page
+acceleration, and render cleanup stay blocked until their predecessor release
+gates pass.

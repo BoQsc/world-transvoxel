@@ -59,6 +59,7 @@ struct WtPageMeshingRuntimeRecordSnapshot {
 	std::uint64_t world_revision = 0;
 	std::int32_t priority = 0;
 	std::uint8_t transition_mask = 0;
+	std::uint8_t cached_transition_mask = 0;
 	WtPageMeshingRuntimePhase phase = WtPageMeshingRuntimePhase::Loading;
 	std::size_t dependency_count = 0;
 	std::size_t pinned_page_count = 0;
@@ -123,6 +124,14 @@ public:
 	WtPageMeshingRuntimeStatus begin_sample_job(
 		const WtChunkJob &job,
 		std::uint8_t transition_mask,
+		WtAsyncStorageService &storage,
+		WtStoragePageCache &cache,
+		WtStreamScheduler &scheduler
+	);
+	WtPageMeshingRuntimeStatus begin_sample_job(
+		const WtChunkJob &job,
+		std::uint8_t transition_mask,
+		std::uint8_t requested_cached_transition_mask,
 		WtAsyncStorageService &storage,
 		WtStoragePageCache &cache,
 		WtStreamScheduler &scheduler
@@ -204,6 +213,7 @@ private:
 		std::uint64_t world_revision = 0;
 		std::int32_t priority = 0;
 		std::uint8_t transition_mask = 0;
+		std::uint8_t cached_transition_mask = 0;
 		WtPageMeshingRuntimePhase phase =
 			WtPageMeshingRuntimePhase::Loading;
 		std::vector<Dependency> dependencies;

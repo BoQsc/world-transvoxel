@@ -74,10 +74,15 @@ void hash_buffer(std::uint64_t &hash, const wt::WtChunkMeshBuffer &mesh) {
 		hash_float(hash, vertex.position.x);
 		hash_float(hash, vertex.position.y);
 		hash_float(hash, vertex.position.z);
+		hash_float(hash, vertex.canonical_position.x);
+		hash_float(hash, vertex.canonical_position.y);
+		hash_float(hash, vertex.canonical_position.z);
 		hash_float(hash, vertex.normal.x);
 		hash_float(hash, vertex.normal.y);
 		hash_float(hash, vertex.normal.z);
 		hash_u32(hash, vertex.material);
+		hash_u32(hash, vertex.reuse_data);
+		hash_u32(hash, vertex.canonical_position_valid ? 1U : 0U);
 	}
 	for (std::uint32_t index : mesh.indices) {
 		hash_u32(hash, index);
@@ -324,6 +329,8 @@ void hash_result(std::uint64_t &hash, const wt::WtChunkMeshResult &result) {
 	hash_u64(hash, static_cast<std::uint64_t>(result.world_origin.y));
 	hash_u64(hash, static_cast<std::uint64_t>(result.world_origin.z));
 	hash_byte(hash, result.transition_mask);
+	hash_byte(hash, result.cached_transition_mask);
+	hash_float(hash, result.transition_width_ratio);
 	hash_buffer(hash, result.regular);
 	for (const wt::WtChunkMeshBuffer &transition : result.transitions) {
 		hash_buffer(hash, transition);

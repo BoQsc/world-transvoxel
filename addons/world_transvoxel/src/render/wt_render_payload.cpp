@@ -1,6 +1,7 @@
 #include "render/wt_render_payload.h"
 
 #include "meshing/wt_chunk_mesh_finalize.h"
+#include "meshing/wt_chunk_mesh_geometry.h"
 
 #include <cmath>
 #include <cstring>
@@ -94,6 +95,31 @@ RenderVertexKey make_vertex_key(const WtCellVertex &vertex) noexcept {
 	};
 }
 
+WtCellVertex make_render_variant_vertex(
+	const WtCellVertex &vertex,
+	const WtChunkMeshResult &mesh,
+	std::uint8_t transition_mask,
+	int primary_transition_face
+) noexcept {
+	if (!vertex.canonical_position_valid) {
+		return vertex;
+	}
+	WtCellVertex result = vertex;
+	const float cell_size = static_cast<float>(wt_lod_cell_size(mesh.key.lod));
+	const float extent = static_cast<float>(wt_chunk_extent(mesh.key.lod));
+	const float width = cell_size * mesh.transition_width_ratio;
+	result.position = wt_snap_chunk_position(wt_deform_chunk_position(
+		vertex.canonical_position,
+		vertex.normal,
+		transition_mask,
+		cell_size,
+		width,
+		extent,
+		primary_transition_face
+	));
+	return result;
+}
+
 WtRenderBuildStatus append_buffer(
 	const WtChunkMeshBuffer &source,
 	WtRenderPayload &output,
@@ -147,6 +173,42 @@ WtRenderBuildStatus append_buffer(
 		output.indices.push_back(remap[a]);
 		output.indices.push_back(remap[b]);
 		output.indices.push_back(remap[c]);
+	}
+	return WtRenderBuildStatus::Ok;
+}
+
+WtRenderBuildStatus append_buffer_variant(
+	const WtChunkMeshBuffer &source,
+	const WtChunkMeshResult &mesh,
+	std::uint8_t transition_mask,
+	int primary_transition_face,
+	WtChunkMeshBuffer &combined
+) {
+	if ((source.indices.size() % 3U) != 0) {
+		return WtRenderBuildStatus::InvalidMesh;
+	}
+	if (source.vertices.size() > combined.vertex_limit - combined.vertices.size() ||
+		source.indices.size() > combined.index_limit - combined.indices.size()) {
+		return WtRenderBuildStatus::CapacityExceeded;
+	}
+	const std::uint32_t base_index =
+		static_cast<std::uint32_t>(combined.vertices.size());
+	combined.vertices.reserve(combined.vertices.size() + source.vertices.size());
+	for (const WtCellVertex &vertex : source.vertices) {
+		combined.vertices.push_back(
+			make_render_variant_vertex(
+				vertex,
+				mesh,
+				transition_mask,
+				primary_transition_face
+			)
+		);
+	}
+	for (const std::uint32_t index : source.indices) {
+		if (index >= source.vertices.size()) {
+			return WtRenderBuildStatus::InvalidMesh;
+		}
+		combined.indices.push_back(base_index + index);
 	}
 	return WtRenderBuildStatus::Ok;
 }
@@ -309,21 +371,46 @@ WtRenderBuildStatus wt_build_render_payload(
 	WtGenerationToken generation,
 	WtRenderPayload &output
 ) {
+	return wt_build_render_payload(
+		mesh,
+		generation,
+		mesh.transition_mask,
+		output
+	);
+}
+
+WtRenderBuildStatus wt_build_render_payload(
+	const WtChunkMeshResult &mesh,
+	WtGenerationToken generation,
+	std::uint8_t transition_mask,
+	WtRenderPayload &output
+) {
 	output.clear();
+	const std::uint8_t cached_transition_mask =
+		mesh.cached_transition_mask == 0 ? mesh.transition_mask :
+			mesh.cached_transition_mask;
 	if (!wt_is_valid_chunk_key(mesh.key) || generation.value == 0 ||
 		mesh.world_origin != wt_chunk_bounds(mesh.key).minimum ||
 		(mesh.transition_mask & 0xC0U) != 0 ||
-		(mesh.transition_mask != 0 && mesh.key.lod == 0)) {
+		(cached_transition_mask & 0xC0U) != 0 ||
+		(transition_mask & 0xC0U) != 0 ||
+		(mesh.transition_mask & static_cast<std::uint8_t>(~cached_transition_mask)) != 0 ||
+		(transition_mask & static_cast<std::uint8_t>(~cached_transition_mask)) != 0 ||
+		!std::isfinite(mesh.transition_width_ratio) ||
+		mesh.transition_width_ratio <= 0.0F ||
+		mesh.transition_width_ratio >= 1.0F ||
+		((mesh.transition_mask != 0 || cached_transition_mask != 0 ||
+				transition_mask != 0) && mesh.key.lod == 0)) {
 		return WtRenderBuildStatus::InvalidInput;
 	}
 	output.key = mesh.key;
 	output.generation = generation;
 	output.world_origin = mesh.world_origin;
-	output.transition_mask = mesh.transition_mask;
+	output.transition_mask = transition_mask;
 	std::size_t expected_vertices = mesh.regular.vertices.size();
 	std::size_t expected_indices = mesh.regular.indices.size();
 	for (unsigned int face_index = 0; face_index < 6; ++face_index) {
-		if ((mesh.transition_mask & wt_face_bit(
+		if ((transition_mask & wt_face_bit(
 			static_cast<WtChunkFace>(face_index))) != 0) {
 			const WtChunkMeshBuffer &transition = mesh.transitions[face_index];
 			if (transition.vertices.size() > kWtMaximumRenderVertices - expected_vertices ||
@@ -345,16 +432,30 @@ WtRenderBuildStatus wt_build_render_payload(
 	combined.index_limit = expected_indices;
 	combined.vertices.reserve(expected_vertices);
 	combined.indices.reserve(expected_indices);
-	WtRenderBuildStatus status = append_combined_buffer(mesh.regular, combined);
+	WtRenderBuildStatus status = append_buffer_variant(
+		mesh.regular,
+		mesh,
+		transition_mask,
+		-1,
+		combined
+	);
 	for (unsigned int face_index = 0;
 		status == WtRenderBuildStatus::Ok && face_index < 6;
 		++face_index) {
-		const bool active = (mesh.transition_mask & wt_face_bit(
+		const bool active = (transition_mask & wt_face_bit(
 			static_cast<WtChunkFace>(face_index))) != 0;
 		if (active) {
-			status = append_combined_buffer(mesh.transitions[face_index], combined);
-		} else if (!mesh.transitions[face_index].vertices.empty() ||
-			!mesh.transitions[face_index].indices.empty()) {
+			status = append_buffer_variant(
+				mesh.transitions[face_index],
+				mesh,
+				transition_mask,
+				static_cast<int>(face_index),
+				combined
+			);
+		} else if ((cached_transition_mask & wt_face_bit(
+				static_cast<WtChunkFace>(face_index))) == 0 &&
+			(!mesh.transitions[face_index].vertices.empty() ||
+				!mesh.transitions[face_index].indices.empty())) {
 			status = WtRenderBuildStatus::InvalidMesh;
 		}
 	}
@@ -378,22 +479,41 @@ WtRenderBuildStatus wt_build_render_payload(
 	WtGenerationToken generation,
 	WtRenderPayload &output
 ) {
+	return wt_build_render_payload(
+		mesh,
+		water_mesh,
+		generation,
+		mesh.transition_mask,
+		output
+	);
+}
+
+WtRenderBuildStatus wt_build_render_payload(
+	const WtChunkMeshResult &mesh,
+	const WtChunkMeshResult &water_mesh,
+	WtGenerationToken generation,
+	std::uint8_t transition_mask,
+	WtRenderPayload &output
+) {
 	if (water_mesh.key != mesh.key ||
 		water_mesh.world_origin != mesh.world_origin ||
-		water_mesh.transition_mask != mesh.transition_mask) {
+		water_mesh.transition_mask != mesh.transition_mask ||
+		water_mesh.cached_transition_mask != mesh.cached_transition_mask ||
+		water_mesh.transition_width_ratio != mesh.transition_width_ratio) {
 		output.clear();
 		return WtRenderBuildStatus::InvalidInput;
 	}
 	WtRenderBuildStatus status = wt_build_render_payload(
 		mesh,
 		generation,
+		transition_mask,
 		output
 	);
 	if (status != WtRenderBuildStatus::Ok) {
 		return status;
 	}
 	WtRenderPayload water;
-	status = wt_build_render_payload(water_mesh, generation, water);
+	status = wt_build_render_payload(water_mesh, generation, transition_mask, water);
 	if (status != WtRenderBuildStatus::Ok) {
 		output.clear();
 		return status;

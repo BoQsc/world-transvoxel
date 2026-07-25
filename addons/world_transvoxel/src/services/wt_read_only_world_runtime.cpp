@@ -881,7 +881,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		return true;
 	}
 
-	std::vector<WtDesiredChunk> transition_remeshes;
+	std::vector<WtLodMapEntry> transition_mask_updates;
 	for (const WtLodMapEntry &current : current_plan_.entries) {
 		const WtLodMapEntry *next = find_plan_entry(
 			candidate_plan.entries, current.key
@@ -895,7 +895,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			set_failure(WtReadOnlyRuntimeStatus::DesiredSetFailure);
 			return true;
 		}
-		transition_remeshes.push_back(*desired);
+		transition_mask_updates.push_back(*next);
 	}
 
 	const auto apply_delta = [&](const WtDesiredSetDelta &change) {
@@ -997,7 +997,16 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	planner_viewers_ = std::move(candidate_viewers);
 	collision_viewers_ = std::move(candidate_collision_viewers);
 	current_plan_ = std::move(candidate_plan);
-	queue_transition_remeshes(transition_remeshes);
+	for (const WtLodMapEntry &entry : transition_mask_updates) {
+		const WtDesiredChunk *desired = desired_->find_desired(entry.key);
+		if (desired != nullptr &&
+			!publish_transition_mask_update(entry, *desired)) {
+			if (!stop_requested_.load()) {
+				set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
+			}
+			return true;
+		}
+	}
 	plan_revision_ = plan_snapshot.revision;
 	std::vector<WtChunkKey> active_keys;
 	active_keys.reserve(desired_->get_desired_chunks().size());
@@ -1258,6 +1267,75 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 	return true;
 }
 
+bool WtReadOnlyWorldRuntime::publish_transition_mask_update(
+	const WtLodMapEntry &entry,
+	const WtDesiredChunk &desired
+) {
+	if ((entry.transition_mask & 0xC0U) != 0 ||
+		(entry.key.lod == 0 && entry.transition_mask != 0)) {
+		return false;
+	}
+	const WtChunkRecord *record = scheduler_->find_record(entry.key);
+	if (record == nullptr || record->lifecycle != WtChunkLifecycle::Ready) {
+		return true;
+	}
+	const WtChunkApplicationRecord *application_record =
+		application_->find_record(entry.key);
+	if (application_record == nullptr ||
+		application_record->generation != record->generation ||
+		!application_record->visual_required ||
+		!desired.visual_required) {
+		return true;
+	}
+	const auto mesh = resource_cache_->find_mesh(entry.key, record->generation);
+	if (!mesh) {
+		return false;
+	}
+	const auto water_mesh = resource_cache_->find_water_mesh(
+		entry.key,
+		record->generation
+	);
+	auto render = std::make_shared<WtRenderPayload>();
+	const WtRenderBuildStatus render_status = water_mesh ?
+		wt_build_render_payload(
+			*mesh,
+			*water_mesh,
+			record->generation,
+			entry.transition_mask,
+			*render
+		) :
+		wt_build_render_payload(
+			*mesh,
+			record->generation,
+			entry.transition_mask,
+			*render
+		);
+	if (render_status != WtRenderBuildStatus::Ok) {
+		return false;
+	}
+	if (!water_mesh) {
+		const auto previous = resource_cache_->find_render(
+			entry.key,
+			record->generation
+		);
+		if (previous) {
+			render->water_vertices = previous->water_vertices;
+			render->water_indices = previous->water_indices;
+		}
+	}
+	if (resource_cache_->insert_render(render, record->generation) !=
+		WtChunkResourceCacheStatus::Ok) {
+		return false;
+	}
+	WtReadOnlyPublication publication;
+	publication.kind = WtReadOnlyPublicationKind::RenderPayload;
+	publication.key = render->key;
+	publication.generation = render->generation;
+	publication.render = std::move(render);
+	publication.staged_replacement = application_record->staged_replacement;
+	return push_publication(std::move(publication));
+}
+
 bool WtReadOnlyWorldRuntime::process_pending_transition_remeshes() {
 	bool progressed = false;
 	for (std::size_t index = 0; index < pending_transition_remeshes_.size();) {
@@ -1374,9 +1452,14 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			const WtLodMapEntry *entry = find_plan_entry(
 				current_plan_.entries, job.key
 			);
+			const std::uint8_t transition_mask =
+				entry != nullptr ? entry->transition_mask : 0;
+			const std::uint8_t cached_transition_mask =
+				job.key.lod == 0 ? 0 : 0x3FU;
 			status = page_runtime_->begin_sample_job(
 				job,
-				entry != nullptr ? entry->transition_mask : 0,
+				transition_mask,
+				cached_transition_mask,
 				storage_,
 				*page_cache_,
 				*scheduler_
@@ -1499,8 +1582,16 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			continue;
 		}
 		auto render = std::make_shared<WtRenderPayload>();
+		const WtLodMapEntry *entry = find_plan_entry(
+			current_plan_.entries,
+			completion.key
+		);
+		const std::uint8_t render_transition_mask =
+			entry != nullptr ? entry->transition_mask :
+				completion.mesh->transition_mask;
 		if (resource_cache_->insert_mesh(
 				completion.mesh,
+				completion.water_mesh,
 				completion.generation,
 				record->generation
 			) != WtChunkResourceCacheStatus::Ok ||
@@ -1508,6 +1599,7 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 				*completion.mesh,
 				*completion.water_mesh,
 				completion.generation,
+				render_transition_mask,
 				*render
 			) != WtRenderBuildStatus::Ok ||
 			resource_cache_->insert_render(render, record->generation) !=

@@ -322,6 +322,8 @@ WtCellStatus WtTransvoxelMitBackend::mesh_regular_cell(
 		if (status != WtCellStatus::Ok) {
 			return status;
 		}
+		scratch.vertices[index].reuse_data =
+			static_cast<std::uint8_t>((edge_code >> 8) & 0xFFU);
 	}
 	for (std::uint8_t index = 0; index < scratch.index_count; ++index) {
 		const std::uint8_t vertex_index = cell_data.vertexIndex[index];
@@ -438,6 +440,8 @@ WtCellStatus WtTransvoxelMitBackend::mesh_transition_cell(
 		if (status != WtCellStatus::Ok) {
 			return status;
 		}
+		scratch.vertices[index].reuse_data =
+			static_cast<std::uint8_t>((edge_code >> 8) & 0xFFU);
 	}
 	for (std::uint8_t index = 0; index < scratch.index_count; index += 3) {
 		const std::uint8_t first = cell_data.vertexIndex[index];

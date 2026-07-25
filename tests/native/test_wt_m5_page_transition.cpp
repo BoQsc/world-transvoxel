@@ -194,7 +194,7 @@ void run_face_gallery(
 	wt::WtChunkMeshResult coarse;
 	check(
 		mesher.mesh(
-			{ coarse_key, wt::wt_face_bit(face), 0.0F, 0.25F },
+			{ coarse_key, wt::wt_face_bit(face), wt::wt_face_bit(face), 0.0F, 0.25F },
 			coarse_source,
 			coarse,
 			scratch
@@ -257,7 +257,7 @@ void run_face_gallery(
 		wt::WtChunkMeshResult fine;
 		check(
 			mesher.mesh(
-				{ key, 0, 0.0F, 0.25F },
+				{ key, 0, 0, 0.0F, 0.25F },
 				fine_source,
 				fine,
 				scratch
@@ -388,7 +388,7 @@ void test_page_lod_corner(
 	wt::WtChunkMeshResult coarse;
 	check(
 		mesher.mesh(
-			{ coarse_key, mask, 0.0F, 0.25F },
+			{ coarse_key, mask, mask, 0.0F, 0.25F },
 			coarse_source,
 			coarse,
 			scratch
@@ -398,7 +398,7 @@ void test_page_lod_corner(
 	wt::WtChunkMeshResult direct_coarse;
 	check(
 		mesher.mesh(
-			{ coarse_key, mask, 0.0F, 0.25F },
+			{ coarse_key, mask, mask, 0.0F, 0.25F },
 			source,
 			direct_coarse,
 			scratch
@@ -424,7 +424,7 @@ void test_page_lod_corner(
 		wt::WtChunkMeshResult fine;
 		check(
 			mesher.mesh(
-				{ key, 0, 0.0F, 0.25F },
+				{ key, 0, 0, 0.0F, 0.25F },
 				fine_source,
 				fine,
 				scratch
@@ -434,7 +434,7 @@ void test_page_lod_corner(
 		wt::WtChunkMeshResult direct_fine;
 		check(
 			mesher.mesh(
-				{ key, 0, 0.0F, 0.25F },
+				{ key, 0, 0, 0.0F, 0.25F },
 				source,
 				direct_fine,
 				scratch
@@ -582,7 +582,7 @@ int main() {
 	}
 	test_page_lod_corner(mesher, scratch, hash);
 	test_source_failures();
-	constexpr std::uint64_t expected_hash = 0xbf8e2544e6d0df1fULL;
+	constexpr std::uint64_t expected_hash = 0x1761e09383752d56ULL;
 	check(hash == expected_hash, "M5 page transition hash mismatch");
 	std::printf(
 		"M5_PAGE_TRANSITION_HASH %016llx\n",

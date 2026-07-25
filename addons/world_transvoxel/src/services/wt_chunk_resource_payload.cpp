@@ -24,7 +24,11 @@ bool equal_vertex(
 		left.material == right.material &&
 		left.material_authored == right.material_authored &&
 		left.endpoint_a == right.endpoint_a &&
-		left.endpoint_b == right.endpoint_b;
+		left.endpoint_b == right.endpoint_b &&
+		left.reuse_data == right.reuse_data &&
+		left.canonical_position_valid == right.canonical_position_valid &&
+		(!left.canonical_position_valid ||
+			equal_vec3(left.canonical_position, right.canonical_position));
 }
 
 bool valid_mesh_buffer(
@@ -39,6 +43,8 @@ bool valid_mesh_buffer(
 	}
 	for (const WtCellVertex &vertex : buffer.vertices) {
 		if (!finite_vec3(vertex.position) || !finite_vec3(vertex.normal) ||
+			(vertex.canonical_position_valid &&
+				!finite_vec3(vertex.canonical_position)) ||
 			vertex.endpoint_a >= kWtTransitionTopologySampleCount ||
 			vertex.endpoint_b >= kWtTransitionTopologySampleCount) {
 			return false;
@@ -71,10 +77,19 @@ bool equal_mesh_buffer(
 } // namespace
 
 bool wt_is_valid_mesh_payload(const WtChunkMeshResult &mesh) noexcept {
+	const std::uint8_t cached_transition_mask =
+		mesh.cached_transition_mask == 0 ? mesh.transition_mask :
+			mesh.cached_transition_mask;
 	if (!wt_is_valid_chunk_key(mesh.key) ||
 		mesh.world_origin != wt_chunk_bounds(mesh.key).minimum ||
 		(mesh.transition_mask & 0xc0U) != 0 ||
-		(mesh.key.lod == 0 && mesh.transition_mask != 0) ||
+		(cached_transition_mask & 0xc0U) != 0 ||
+		(mesh.transition_mask & static_cast<std::uint8_t>(~cached_transition_mask)) != 0 ||
+		!std::isfinite(mesh.transition_width_ratio) ||
+		mesh.transition_width_ratio <= 0.0F ||
+		mesh.transition_width_ratio >= 1.0F ||
+		(mesh.key.lod == 0 &&
+			(mesh.transition_mask != 0 || cached_transition_mask != 0)) ||
 		!valid_mesh_buffer(
 			mesh.regular,
 			kWtMaximumRegularChunkVertices,
@@ -83,10 +98,10 @@ bool wt_is_valid_mesh_payload(const WtChunkMeshResult &mesh) noexcept {
 		return false;
 	}
 	for (std::size_t face = 0; face < mesh.transitions.size(); ++face) {
-		const bool active = (mesh.transition_mask & wt_face_bit(
+		const bool cached = (cached_transition_mask & wt_face_bit(
 			static_cast<WtChunkFace>(face))) != 0;
 		const WtChunkMeshBuffer &buffer = mesh.transitions[face];
-		if ((!active &&
+		if ((!cached &&
 				(!buffer.vertices.empty() || !buffer.indices.empty())) ||
 			!valid_mesh_buffer(
 				buffer,
@@ -106,6 +121,8 @@ bool wt_equal_mesh_payload(
 	if (left.key != right.key ||
 		left.world_origin != right.world_origin ||
 		left.transition_mask != right.transition_mask ||
+		left.cached_transition_mask != right.cached_transition_mask ||
+		left.transition_width_ratio != right.transition_width_ratio ||
 		!equal_mesh_buffer(left.regular, right.regular)) {
 		return false;
 	}

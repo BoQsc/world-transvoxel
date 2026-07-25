@@ -54,7 +54,7 @@ std::shared_ptr<WtRenderPayload> make_payload(
 		bounds.minimum.z + half_extent,
 	};
 	source.radius = 6.25 * static_cast<double>(wt_lod_cell_size(key.lod));
-	if (mesher.mesh({ key, 0, 0.0F, 0.25F }, source, mesh, scratch) !=
+	if (mesher.mesh({ key, 0, 0, 0.0F, 0.25F }, source, mesh, scratch) !=
 		WtChunkMeshingStatus::Ok) {
 		return {};
 	}

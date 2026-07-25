@@ -290,6 +290,10 @@ private:
 	bool process_collision_readiness_repairs();
 	bool process_visual_readiness_repairs();
 	bool publish_delta(const WtDesiredSetDelta &delta);
+	bool publish_transition_mask_update(
+		const WtLodMapEntry &entry,
+		const WtDesiredChunk &desired
+	);
 	bool push_publication(WtReadOnlyPublication publication);
 	bool has_publication_backlog();
 	static bool is_priority_publication(

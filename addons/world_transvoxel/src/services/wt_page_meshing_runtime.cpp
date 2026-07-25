@@ -22,6 +22,51 @@ bool pending_result_phase(WtPageMeshingRuntimePhase phase) noexcept {
 		phase == WtPageMeshingRuntimePhase::MeshFailedReady;
 }
 
+bool support_pages_available(
+	const WtChunkKey &key,
+	WtChunkFace face,
+	const WtAsyncStorageService &storage,
+	std::array<WtChunkKey, kWtTransitionSupportPagesPerFace> &support
+) noexcept {
+	if (!wt_transition_support_page_keys(key, face, support)) {
+		return false;
+	}
+	for (const WtChunkKey &support_key : support) {
+		if (!storage.has_page(support_key)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+std::uint8_t supported_cached_transition_mask(
+	const WtChunkKey &key,
+	std::uint8_t transition_mask,
+	std::uint8_t requested_cached_transition_mask,
+	const WtAsyncStorageService &storage
+) noexcept {
+	if (key.lod == 0) {
+		return 0;
+	}
+	std::uint8_t cached_transition_mask = transition_mask;
+	for (unsigned int face_index = 0; face_index < 6; ++face_index) {
+		const std::uint8_t bit = static_cast<std::uint8_t>(1U << face_index);
+		if ((requested_cached_transition_mask & bit) == 0) {
+			continue;
+		}
+		std::array<WtChunkKey, kWtTransitionSupportPagesPerFace> support{};
+		if (support_pages_available(
+				key,
+				static_cast<WtChunkFace>(face_index),
+				storage,
+				support
+			)) {
+			cached_transition_mask |= bit;
+		}
+	}
+	return cached_transition_mask;
+}
+
 void record_failure_key(
 	WtPageMeshingRuntimeMetrics &metrics,
 	const WtChunkKey &key
@@ -125,6 +170,25 @@ WtPageMeshingRuntimeService::begin_sample_job(
 	WtStoragePageCache &cache,
 	WtStreamScheduler &scheduler
 ) {
+	return begin_sample_job(
+		job,
+		transition_mask,
+		transition_mask,
+		storage,
+		cache,
+		scheduler
+	);
+}
+
+WtPageMeshingRuntimeStatus
+WtPageMeshingRuntimeService::begin_sample_job(
+	const WtChunkJob &job,
+	std::uint8_t transition_mask,
+	std::uint8_t requested_cached_transition_mask,
+	WtAsyncStorageService &storage,
+	WtStoragePageCache &cache,
+	WtStreamScheduler &scheduler
+) {
 	if (!valid_ || !cache.valid() || !storage.is_open()) {
 		return WtPageMeshingRuntimeStatus::InvalidConfiguration;
 	}
@@ -134,9 +198,18 @@ WtPageMeshingRuntimeService::begin_sample_job(
 		return WtPageMeshingRuntimeStatus::InvalidJob;
 	}
 	if ((transition_mask & 0xc0U) != 0 ||
-		(transition_mask != 0 && job.key.lod == 0)) {
+		(requested_cached_transition_mask & 0xc0U) != 0 ||
+		((transition_mask != 0 || requested_cached_transition_mask != 0) &&
+			job.key.lod == 0)) {
 		return WtPageMeshingRuntimeStatus::InvalidTransitionMask;
 	}
+	const std::uint8_t cached_transition_mask =
+		supported_cached_transition_mask(
+			job.key,
+			transition_mask,
+			requested_cached_transition_mask,
+			storage
+		);
 	const WtChunkRecord *scheduler_record = scheduler.find_record(job.key);
 	if (scheduler_record == nullptr ||
 		scheduler_record->generation != job.generation ||
@@ -163,7 +236,7 @@ WtPageMeshingRuntimeService::begin_sample_job(
 
 	std::vector<WtChunkKey> dependency_keys = { job.key };
 	for (unsigned int face_index = 0; face_index < 6; ++face_index) {
-		if ((transition_mask & (1U << face_index)) == 0) {
+		if ((cached_transition_mask & (1U << face_index)) == 0) {
 			continue;
 		}
 		std::array<WtChunkKey, kWtTransitionSupportPagesPerFace> support{};
@@ -196,6 +269,7 @@ WtPageMeshingRuntimeService::begin_sample_job(
 	record.world_revision = job.world_revision;
 	record.priority = job.priority;
 	record.transition_mask = transition_mask;
+	record.cached_transition_mask = cached_transition_mask;
 	record.dependencies.reserve(dependency_keys.size());
 	for (const WtChunkKey &key : dependency_keys) {
 		record.dependencies.push_back({ key, {} });
@@ -430,12 +504,18 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 			}
 		}
 		source_valid = source_valid &&
-			source->has_transition_support(record->transition_mask);
+			source->has_transition_support(record->cached_transition_mask);
 	}
 	auto mesh = std::make_shared<WtChunkMeshResult>();
 	const bool mesh_ok = source_valid &&
 		mesher.mesh(
-			{ record->key, record->transition_mask, 0.0F, 0.25F },
+			{
+				record->key,
+				record->transition_mask,
+				record->cached_transition_mask,
+				0.0F,
+				0.25F
+			},
 			*source,
 			*mesh,
 			scratch
@@ -481,7 +561,13 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 			kWtStaticWaterMaterialId
 		);
 		water_mesh_ok = mesher.mesh(
-			{ record->key, record->transition_mask, 0.0F, 0.25F },
+			{
+				record->key,
+				record->transition_mask,
+				record->cached_transition_mask,
+				0.0F,
+				0.25F
+			},
 			water_source,
 			*water_mesh,
 			scratch
@@ -490,6 +576,7 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 		water_mesh->key = record->key;
 		water_mesh->world_origin = wt_chunk_bounds(record->key).minimum;
 		water_mesh->transition_mask = record->transition_mask;
+		water_mesh->cached_transition_mask = record->cached_transition_mask;
 	}
 	for (Dependency &dependency : record->dependencies) {
 		dependency.page.reset();

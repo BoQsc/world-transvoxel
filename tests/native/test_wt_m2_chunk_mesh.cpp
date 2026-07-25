@@ -238,7 +238,7 @@ void run_face_gallery(
 	const wt::WtChunkKey coarse_key = { 0, 0, 0, 1 };
 	wt::WtChunkMeshResult coarse;
 	const wt::WtChunkMeshingInput coarse_input = {
-		coarse_key, wt::wt_face_bit(face), 0.0F, 0.25F
+		coarse_key, wt::wt_face_bit(face), wt::wt_face_bit(face), 0.0F, 0.25F
 	};
 	check(mesher.mesh(coarse_input, source, coarse, scratch) ==
 		wt::WtChunkMeshingStatus::Ok, "coarse transition chunk failed");
@@ -266,7 +266,7 @@ void run_face_gallery(
 	std::set<Edge> fine_edges;
 	for (const wt::WtChunkKey &fine_key : fine_neighbors(face)) {
 		wt::WtChunkMeshResult fine;
-		check(mesher.mesh({ fine_key, 0, 0.0F, 0.25F }, source, fine, scratch) ==
+		check(mesher.mesh({ fine_key, 0, 0, 0.0F, 0.25F }, source, fine, scratch) ==
 			wt::WtChunkMeshingStatus::Ok, "fine neighbor mesh failed");
 		validate_buffer(fine.regular, "invalid fine regular buffer");
 		const std::set<Edge> edges = plane_boundary_edges(
@@ -289,9 +289,9 @@ void test_same_lod_seam(
 	source.threshold = 0.53 * 8.0 + 0.71 * 8.0 + 0.123;
 	wt::WtChunkMeshResult left;
 	wt::WtChunkMeshResult right;
-	check(mesher.mesh({ { 0, 0, 0, 0 }, 0, 0.0F, 0.25F }, source, left, scratch) ==
+	check(mesher.mesh({ { 0, 0, 0, 0 }, 0, 0, 0.0F, 0.25F }, source, left, scratch) ==
 		wt::WtChunkMeshingStatus::Ok, "left same-LOD chunk failed");
-	check(mesher.mesh({ { 1, 0, 0, 0 }, 0, 0.0F, 0.25F }, source, right, scratch) ==
+	check(mesher.mesh({ { 1, 0, 0, 0 }, 0, 0, 0.0F, 0.25F }, source, right, scratch) ==
 		wt::WtChunkMeshingStatus::Ok, "right same-LOD chunk failed");
 	const std::set<Edge> left_edges = plane_boundary_edges(left.regular, left.world_origin, 0, 16.0);
 	const std::set<Edge> right_edges = plane_boundary_edges(right.regular, right.world_origin, 0, 16.0);
@@ -318,9 +318,9 @@ void test_flat_lod0_seam_direction(
 	const wt::WtChunkKey north_key = { 69, 0, 59, 0 };
 	wt::WtChunkMeshResult south;
 	wt::WtChunkMeshResult north;
-	check(mesher.mesh({ south_key, 0, 0.0F, 0.25F }, source, south, scratch) ==
+	check(mesher.mesh({ south_key, 0, 0, 0.0F, 0.25F }, source, south, scratch) ==
 		wt::WtChunkMeshingStatus::Ok, "flat seam south chunk failed");
-	check(mesher.mesh({ north_key, 0, 0.0F, 0.25F }, source, north, scratch) ==
+	check(mesher.mesh({ north_key, 0, 0, 0.0F, 0.25F }, source, north, scratch) ==
 		wt::WtChunkMeshingStatus::Ok, "flat seam north chunk failed");
 	validate_buffer(south.regular, "invalid flat seam south buffer");
 	validate_buffer(north.regular, "invalid flat seam north buffer");
@@ -414,9 +414,9 @@ void test_extreme_same_lod_gallery(
 	source.radius = 6.25 * static_cast<double>(spacing);
 	wt::WtChunkMeshResult left;
 	wt::WtChunkMeshResult right;
-	check(mesher.mesh({ left_key, 0, 0.0F, 0.25F }, source, left, scratch) ==
+	check(mesher.mesh({ left_key, 0, 0, 0.0F, 0.25F }, source, left, scratch) ==
 		wt::WtChunkMeshingStatus::Ok, "extreme-coordinate left chunk failed");
-	check(mesher.mesh({ right_key, 0, 0.0F, 0.25F }, source, right, scratch) ==
+	check(mesher.mesh({ right_key, 0, 0, 0.0F, 0.25F }, source, right, scratch) ==
 		wt::WtChunkMeshingStatus::Ok, "extreme-coordinate right chunk failed");
 	std::map<Edge, unsigned int> edge_counts;
 	add_mesh_edges(left.regular, left.world_origin, edge_counts, left_bounds.minimum);
@@ -479,7 +479,7 @@ void test_multi_face_gallery(
 		center_coordinates[0], center_coordinates[1], center_coordinates[2]
 	};
 	wt::WtChunkMeshResult coarse;
-	check(mesher.mesh({ coarse_key, mask, 0.0F, 0.25F }, source, coarse, scratch) ==
+	check(mesher.mesh({ coarse_key, mask, mask, 0.0F, 0.25F }, source, coarse, scratch) ==
 		wt::WtChunkMeshingStatus::Ok, "multi-face coarse chunk failed");
 	validate_buffer(coarse.regular, "invalid multi-face regular buffer");
 	for (unsigned int face_index = 0; face_index < 6; ++face_index) {
@@ -510,7 +510,7 @@ void test_multi_face_gallery(
 			0,
 		};
 		wt::WtChunkMeshResult fine;
-		check(mesher.mesh({ fine_key, 0, 0.0F, 0.25F }, source, fine, scratch) ==
+		check(mesher.mesh({ fine_key, 0, 0, 0.0F, 0.25F }, source, fine, scratch) ==
 			wt::WtChunkMeshingStatus::Ok, "multi-face fine chunk failed");
 		validate_buffer(fine.regular, "invalid multi-face fine buffer");
 		add_result_edges(fine, edge_counts);
@@ -539,7 +539,7 @@ void test_convex_refined_corner_gallery(
 	}};
 	for (const auto &[key, mask] : coarse) {
 		wt::WtChunkMeshResult result;
-		check(mesher.mesh({ key, mask, 0.0F, 0.25F }, source, result, scratch) ==
+		check(mesher.mesh({ key, mask, mask, 0.0F, 0.25F }, source, result, scratch) ==
 			wt::WtChunkMeshingStatus::Ok,
 			"convex-corner coarse chunk failed");
 		validate_buffer(result.regular, "invalid convex-corner coarse regular mesh");
@@ -551,7 +551,7 @@ void test_convex_refined_corner_gallery(
 			for (std::int32_t x = 2; x < 4; ++x) {
 				wt::WtChunkMeshResult result;
 				check(mesher.mesh(
-					{ { x, y, z, 0 }, 0, 0.0F, 0.25F },
+					{ { x, y, z, 0 }, 0, 0, 0.0F, 0.25F },
 					source,
 					result,
 					scratch
@@ -577,7 +577,7 @@ void test_multiresolution_vertices_match_lod0(
 	MultiresolutionYSource source;
 	wt::WtChunkMeshResult coarse;
 	check(mesher.mesh(
-		{ { 0, 0, 0, 1 }, 0, 0.0F, 0.25F },
+		{ { 0, 0, 0, 1 }, 0, 0, 0.0F, 0.25F },
 		source,
 		coarse,
 		scratch
@@ -591,7 +591,7 @@ void test_multiresolution_vertices_match_lod0(
 		for (std::int32_t x = 0; x < 2; ++x) {
 			wt::WtChunkMeshResult fine;
 			check(mesher.mesh(
-				{ { x, 0, z, 0 }, 0, 0.0F, 0.25F },
+				{ { x, 0, z, 0 }, 0, 0, 0.0F, 0.25F },
 				source,
 				fine,
 				scratch
@@ -622,18 +622,18 @@ void test_multiresolution_vertices_match_lod0(
 void test_errors(const wt::WtChunkMesher &mesher, wt::WtChunkMeshingScratch &scratch) {
 	LinearSource source;
 	wt::WtChunkMeshResult output;
-	check(mesher.mesh({ { 0, 0, 0, 0 }, 1, 0.0F, 0.25F }, source, output, scratch) ==
+	check(mesher.mesh({ { 0, 0, 0, 0 }, 1, 1, 0.0F, 0.25F }, source, output, scratch) ==
 		wt::WtChunkMeshingStatus::InvalidInput, "LOD0 transition mask accepted");
-	check(mesher.mesh({ { 0, 0, 0, 1 }, 0, 0.0F,
+	check(mesher.mesh({ { 0, 0, 0, 1 }, 0, 0, 0.0F,
 		std::numeric_limits<float>::quiet_NaN() }, source, output, scratch) ==
 		wt::WtChunkMeshingStatus::InvalidInput, "NaN transition width accepted");
 	FailingSource failing;
-	check(mesher.mesh({ { 0, 0, 0, 0 }, 0, 0.0F, 0.25F }, failing, output, scratch) ==
+	check(mesher.mesh({ { 0, 0, 0, 0 }, 0, 0, 0.0F, 0.25F }, failing, output, scratch) ==
 		wt::WtChunkMeshingStatus::SampleSourceFailure, "sample failure was not reported");
 	check(output.regular.indices.empty(), "failed mesh retained output");
 	InvalidBackend invalid_backend;
 	const wt::WtChunkMesher invalid_mesher(invalid_backend);
-	check(invalid_mesher.mesh({ { 0, 0, 0, 0 }, 0, 0.0F, 0.25F },
+	check(invalid_mesher.mesh({ { 0, 0, 0, 0 }, 0, 0, 0.0F, 0.25F },
 		source, output, scratch) == wt::WtChunkMeshingStatus::CellBackendFailure,
 		"invalid backend provenance was accepted");
 	check(output.regular.indices.empty(), "backend failure retained output");
@@ -700,7 +700,7 @@ int main() {
 	test_multiresolution_vertices_match_lod0(mesher, scratch);
 	test_errors(mesher, scratch);
 
-	constexpr std::uint64_t expected_hash = 0x04bc06aebf0fed17ULL;
+	constexpr std::uint64_t expected_hash = 0xf3ebfec883e2de19ULL;
 	check(hash == expected_hash, "M2 chunk aggregate hash mismatch");
 	std::printf("M2_MESH_HASH %016llx\n", static_cast<unsigned long long>(hash));
 	if (failure_count != 0) {

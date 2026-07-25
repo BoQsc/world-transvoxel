@@ -31,6 +31,9 @@ struct WtCellVertex {
 	bool material_authored = false;
 	std::uint8_t endpoint_a = 0;
 	std::uint8_t endpoint_b = 0;
+	std::uint8_t reuse_data = 0;
+	WtVec3 canonical_position;
+	bool canonical_position_valid = false;
 };
 
 struct WtCellMesh {

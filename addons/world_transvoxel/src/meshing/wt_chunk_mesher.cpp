@@ -318,9 +318,12 @@ WtChunkMeshingStatus append_cell_mesh(
 				sample_a = &resolved_edge.sample_a;
 				sample_b = &resolved_edge.sample_b;
 			}
-			vertex.position = wt_canonical_edge_position(
+			const WtVec3 canonical_position = wt_canonical_edge_position(
 				position_a, position_b, *sample_a, *sample_b, isovalue
 			);
+			vertex.position = canonical_position;
+			vertex.canonical_position = canonical_position;
+			vertex.canonical_position_valid = true;
 			vertex.normal = wt_interpolated_mesh_normal(
 				*sample_a, *sample_b, isovalue
 			);
@@ -601,6 +604,8 @@ void WtChunkMeshResult::clear() noexcept {
 	key = {};
 	world_origin = {};
 	transition_mask = 0;
+	cached_transition_mask = 0;
+	transition_width_ratio = 0.25F;
 	regular.clear();
 	for (WtChunkMeshBuffer &transition : transitions) {
 		transition.clear();
@@ -633,19 +638,27 @@ WtChunkMeshingStatus WtChunkMesher::mesh(
 	WtChunkMeshingScratch &scratch
 ) const {
 	output.clear();
+	const std::uint8_t cached_transition_mask =
+		input.cached_transition_mask == 0 ?
+			input.transition_mask : input.cached_transition_mask;
 	if (!wt_is_valid_chunk_key(input.key) ||
 		(input.transition_mask & 0xC0U) != 0 ||
+		(cached_transition_mask & 0xC0U) != 0 ||
+		(input.transition_mask & static_cast<std::uint8_t>(~cached_transition_mask)) != 0 ||
 		!std::isfinite(input.isovalue) ||
 		!std::isfinite(input.transition_width_ratio) ||
 		input.transition_width_ratio <= 0.0F ||
 		input.transition_width_ratio >= 1.0F ||
-		(input.transition_mask != 0 && input.key.lod == 0)) {
+		((input.transition_mask != 0 || cached_transition_mask != 0) &&
+			input.key.lod == 0)) {
 		return WtChunkMeshingStatus::InvalidInput;
 	}
 
 	output.key = input.key;
 	output.world_origin = wt_chunk_bounds(input.key).minimum;
 	output.transition_mask = input.transition_mask;
+	output.cached_transition_mask = cached_transition_mask;
+	output.transition_width_ratio = input.transition_width_ratio;
 	output.regular.prepare(
 		kWtMaximumRegularChunkVertices,
 		kWtMaximumRegularChunkIndices
@@ -666,7 +679,7 @@ WtChunkMeshingStatus WtChunkMesher::mesh(
 		status == WtChunkMeshingStatus::Ok && face_index < 6;
 		++face_index) {
 		const WtChunkFace face = static_cast<WtChunkFace>(face_index);
-		if ((input.transition_mask & wt_face_bit(face)) != 0) {
+		if ((cached_transition_mask & wt_face_bit(face)) != 0) {
 			status = mesh_transition_face(
 				face, input, source, backend_, output, scratch
 			);

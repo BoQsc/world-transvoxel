@@ -145,6 +145,7 @@ WtPageMeshingRuntimeService::get_records() const {
 			record.world_revision,
 			record.priority,
 			record.transition_mask,
+			record.cached_transition_mask,
 			record.phase,
 			record.dependencies.size(),
 			pins,

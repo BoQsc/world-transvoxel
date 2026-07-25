@@ -73,6 +73,15 @@ WtChunkResourceCacheStatus WtChunkResourceCache::insert_mesh(
 	WtGenerationToken generation,
 	WtGenerationToken current_generation
 ) {
+	return insert_mesh(std::move(mesh), {}, generation, current_generation);
+}
+
+WtChunkResourceCacheStatus WtChunkResourceCache::insert_mesh(
+	std::shared_ptr<const WtChunkMeshResult> mesh,
+	std::shared_ptr<const WtChunkMeshResult> water_mesh,
+	WtGenerationToken generation,
+	WtGenerationToken current_generation
+) {
 	if (!valid_) return WtChunkResourceCacheStatus::InvalidConfiguration;
 	if (!mesh || generation.value == 0 || current_generation.value == 0) {
 		return WtChunkResourceCacheStatus::InvalidInput;
@@ -85,7 +94,19 @@ WtChunkResourceCacheStatus WtChunkResourceCache::insert_mesh(
 		++metrics_.invalid_payloads;
 		return WtChunkResourceCacheStatus::InvalidPayload;
 	}
-	const std::size_t resident_bytes = wt_mesh_payload_resident_bytes(*mesh);
+	if (water_mesh &&
+		(water_mesh->key != mesh->key ||
+			water_mesh->world_origin != mesh->world_origin ||
+			water_mesh->transition_mask != mesh->transition_mask ||
+			water_mesh->cached_transition_mask != mesh->cached_transition_mask ||
+			water_mesh->transition_width_ratio != mesh->transition_width_ratio ||
+			!wt_is_valid_mesh_payload(*water_mesh))) {
+		++metrics_.invalid_payloads;
+		return WtChunkResourceCacheStatus::InvalidPayload;
+	}
+	const std::size_t resident_bytes =
+		wt_mesh_payload_resident_bytes(*mesh) +
+		(water_mesh ? wt_mesh_payload_resident_bytes(*water_mesh) : 0U);
 	if (resident_bytes > limits_.mesh_byte_capacity) {
 		++metrics_.mesh.oversize_rejections;
 		return WtChunkResourceCacheStatus::MeshItemTooLarge;
@@ -96,11 +117,23 @@ WtChunkResourceCacheStatus WtChunkResourceCache::insert_mesh(
 			++metrics_.identity_conflicts;
 			return WtChunkResourceCacheStatus::IdentityConflict;
 		}
+		if (existing->water_payload && water_mesh &&
+			!wt_equal_mesh_payload(*existing->water_payload, *water_mesh)) {
+			++metrics_.identity_conflicts;
+			return WtChunkResourceCacheStatus::IdentityConflict;
+		}
 		mesh_resident_bytes_ -= existing->resident_bytes;
 		existing->payload = std::move(mesh);
-		existing->resident_bytes = resident_bytes;
+		if (water_mesh) {
+			existing->water_payload = std::move(water_mesh);
+		}
+		existing->resident_bytes =
+			wt_mesh_payload_resident_bytes(*existing->payload) +
+			(existing->water_payload ?
+				wt_mesh_payload_resident_bytes(*existing->water_payload) :
+				0U);
 		existing->last_access = next_access();
-		mesh_resident_bytes_ += resident_bytes;
+		mesh_resident_bytes_ += existing->resident_bytes;
 		++metrics_.mesh.refreshes;
 		evict_mesh_to_limits();
 		return WtChunkResourceCacheStatus::Ok;
@@ -118,6 +151,7 @@ WtChunkResourceCacheStatus WtChunkResourceCache::insert_mesh(
 	entry.key = mesh->key;
 	entry.generation = generation;
 	entry.payload = std::move(mesh);
+	entry.water_payload = std::move(water_mesh);
 	entry.resident_bytes = resident_bytes;
 	entry.last_access = next_access();
 	const auto position = std::lower_bound(
@@ -158,6 +192,17 @@ WtChunkResourceCacheStatus WtChunkResourceCache::insert_render(
 	auto existing = find_render_entry(render->key, render->generation);
 	if (existing != renders_.end()) {
 		if (!wt_equal_render_payload(*existing->payload, *render)) {
+			if (existing->payload &&
+				existing->payload->transition_mask != render->transition_mask) {
+				render_resident_bytes_ -= existing->resident_bytes;
+				existing->payload = std::move(render);
+				existing->resident_bytes = resident_bytes;
+				existing->last_access = next_access();
+				render_resident_bytes_ += resident_bytes;
+				++metrics_.render.superseded;
+				evict_render_to_limits();
+				return WtChunkResourceCacheStatus::Ok;
+			}
 			++metrics_.identity_conflicts;
 			return WtChunkResourceCacheStatus::IdentityConflict;
 		}
@@ -275,6 +320,20 @@ std::shared_ptr<const WtChunkMeshResult> WtChunkResourceCache::find_mesh(
 	entry->last_access = next_access();
 	++metrics_.mesh.hits;
 	return entry->payload;
+}
+
+std::shared_ptr<const WtChunkMeshResult> WtChunkResourceCache::find_water_mesh(
+	const WtChunkKey &key,
+	WtGenerationToken generation
+) {
+	auto entry = find_mesh_entry(key, generation);
+	if (entry == meshes_.end() || !entry->water_payload) {
+		++metrics_.mesh.misses;
+		return {};
+	}
+	entry->last_access = next_access();
+	++metrics_.mesh.hits;
+	return entry->water_payload;
 }
 
 std::shared_ptr<const WtRenderPayload> WtChunkResourceCache::find_render(

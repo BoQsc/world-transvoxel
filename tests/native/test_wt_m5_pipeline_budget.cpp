@@ -335,7 +335,7 @@ bool mesh_decoded_pages(
 		}
 		const wt::WtChunkPageSampleSource source(page);
 		if (mesher.mesh(
-				{ page.metadata.key, 0, 0.0F, 0.25F },
+				{ page.metadata.key, 0, 0, 0.0F, 0.25F },
 				source,
 				output,
 				scratch
@@ -377,7 +377,7 @@ bool mesh_transition_chunks(
 	}
 	if (!source.has_transition_support(kTransitionMask) ||
 		mesher.mesh(
-			{ kTransitionKey, kTransitionMask, 0.0F, 0.25F },
+			{ kTransitionKey, kTransitionMask, kTransitionMask, 0.0F, 0.25F },
 			source,
 			output,
 			scratch

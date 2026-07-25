@@ -338,7 +338,7 @@ std::size_t sphere_difference_component_count(
 				wt::WtChunkMeshResult result;
 				const wt::WtChunkKey key = { x, y, z, lod };
 				check(mesher.mesh(
-						{ key, 0, 0.0F, 0.25F }, source, result, scratch
+						{ key, 0, 0, 0.0F, 0.25F }, source, result, scratch
 					) == wt::WtChunkMeshingStatus::Ok,
 					"sphere difference topology mesh failed");
 				append_mesh_connectivity(result.regular, result.world_origin, adjacency);
@@ -429,11 +429,11 @@ void test_four_biome_water_free_surface(
 		wt::WtChunkMeshResult terrain_mesh;
 		wt::WtChunkMeshResult water_mesh;
 		check(mesher.mesh(
-				{ key, 0, 0.0F, 0.25F }, terrain, terrain_mesh, terrain_scratch
+				{ key, 0, 0, 0.0F, 0.25F }, terrain, terrain_mesh, terrain_scratch
 			) == wt::WtChunkMeshingStatus::Ok,
 			"four-biome lake terrain mesh failed");
 		check(mesher.mesh(
-				{ key, 0, 0.0F, 0.25F }, water, water_mesh, water_scratch
+				{ key, 0, 0, 0.0F, 0.25F }, water, water_mesh, water_scratch
 			) == wt::WtChunkMeshingStatus::Ok,
 			"four-biome lake water mesh failed");
 		wt::WtRenderPayload render;
@@ -471,12 +471,12 @@ void test_four_biome_water_free_surface(
 				wt::WtChunkMeshResult terrain_mesh;
 				wt::WtChunkMeshResult water_mesh;
 				check(mesher.mesh(
-						{ key, 0, 0.0F, 0.25F }, terrain,
+						{ key, 0, 0, 0.0F, 0.25F }, terrain,
 						terrain_mesh, terrain_scratch
 					) == wt::WtChunkMeshingStatus::Ok,
 					"four-biome shoreline terrain mesh failed");
 				check(mesher.mesh(
-						{ key, 0, 0.0F, 0.25F }, water,
+						{ key, 0, 0, 0.0F, 0.25F }, water,
 						water_mesh, water_scratch
 					) == wt::WtChunkMeshingStatus::Ok,
 					"four-biome shoreline water mesh failed");
@@ -645,7 +645,7 @@ wt::WtChunkMeshResult mesh_page_direct(
 		"human boundary repro page sample source failed");
 	wt::WtChunkMeshResult result;
 	check(mesher.mesh(
-			{ page.metadata.key, 0, 0.0F, 0.25F },
+			{ page.metadata.key, 0, 0, 0.0F, 0.25F },
 			source,
 			result,
 			scratch
@@ -697,7 +697,7 @@ bool try_mesh_procedural_page_with_transition_support(
 		return false;
 	}
 	return mesher.mesh(
-			{ key, transition_mask, 0.0F, 0.25F },
+			{ key, transition_mask, transition_mask, 0.0F, 0.25F },
 			source,
 			result,
 			scratch

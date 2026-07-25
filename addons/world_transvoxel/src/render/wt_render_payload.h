@@ -50,8 +50,23 @@ WtRenderBuildStatus wt_build_render_payload(
 
 WtRenderBuildStatus wt_build_render_payload(
 	const WtChunkMeshResult &mesh,
+	WtGenerationToken generation,
+	std::uint8_t transition_mask,
+	WtRenderPayload &output
+);
+
+WtRenderBuildStatus wt_build_render_payload(
+	const WtChunkMeshResult &mesh,
 	const WtChunkMeshResult &water_mesh,
 	WtGenerationToken generation,
+	WtRenderPayload &output
+);
+
+WtRenderBuildStatus wt_build_render_payload(
+	const WtChunkMeshResult &mesh,
+	const WtChunkMeshResult &water_mesh,
+	WtGenerationToken generation,
+	std::uint8_t transition_mask,
 	WtRenderPayload &output
 );
 

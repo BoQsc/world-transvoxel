@@ -84,7 +84,7 @@ bool WtM5ApplicationBenchmarkFixture::ensure_payloads() {
 	WtChunkMeshingScratch scratch;
 	WtChunkMeshResult mesh;
 	const BenchmarkSphereSource source;
-	if (mesher.mesh({ key, 0, 0.0F, 0.25F }, source, mesh, scratch) !=
+	if (mesher.mesh({ key, 0, 0, 0.0F, 0.25F }, source, mesh, scratch) !=
 			WtChunkMeshingStatus::Ok) {
 		return false;
 	}
