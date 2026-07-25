@@ -438,6 +438,18 @@ bool wait_for_edit_commit_idle(
 	});
 }
 
+bool wait_for_edit_commit_visible(
+	wt::WtReadOnlyWorldRuntime &runtime,
+	std::uint64_t expected_revision,
+	std::uint64_t expected_commits
+) {
+	return wait_for_runtime(runtime, [&]() {
+		const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+		return runtime.world_revision() >= expected_revision &&
+			metrics.edit_commits >= expected_commits;
+	});
+}
+
 bool collect_until(
 	wt::WtReadOnlyWorldRuntime &runtime,
 	PublicationEvidence &counts,
@@ -1373,6 +1385,121 @@ bool run_edit_retention_many_zone_regression(
 		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok;
 }
 
+bool run_edit_viewer_update_second_edit_regression(
+	wt::WtAsyncStorageService &storage,
+	const std::filesystem::path &root
+) {
+	wt::WtEditJournalStore journal;
+	const std::filesystem::path journal_path =
+		root / "edit_viewer_update_second_edit.wtedit";
+	check(journal.open(
+		journal_path,
+		storage.source_revision(),
+		storage.world_revision()
+	) == wt::WtEditJournalStoreStatus::Ok,
+		"edit/viewer/update journal open failed");
+	if (!journal.is_open()) return false;
+
+	wt::WtRuntimeConfig config;
+	config.active_chunk_capacity = 40;
+	config.viewer_capacity = 2;
+	config.demand_capacity_per_viewer = 125;
+	config.storage_request_capacity = 64;
+	config.storage_completion_capacity = 64;
+	config.encoded_page_entry_capacity = 40;
+	config.decoded_page_entry_capacity = 40;
+	config.mesh_entry_capacity = 40;
+	config.render_entry_capacity = 40;
+	config.collision_entry_capacity = 40;
+	wt::WtReadOnlyWorldRuntime runtime(config, storage, &journal);
+	check(runtime.valid(),
+		"edit/viewer/update runtime configuration rejected");
+	if (!runtime.valid()) {
+		journal.close();
+		return false;
+	}
+
+	std::atomic<wt::WtReadOnlyRuntimeStatus> run_status {
+		wt::WtReadOnlyRuntimeStatus::Ok
+	};
+	std::thread worker([&]() { run_status.store(runtime.run()); });
+	bool ok = true;
+	PublicationEvidence publications;
+	if (runtime.update_viewer({ 1, 8.0, 8.0, 8.0, 1 }, 1, 1) !=
+			wt::WtReadOnlyRuntimeStatus::Ok) {
+		check(false, "edit/viewer/update initial viewer rejected");
+		ok = false;
+	}
+	if (ok && !collect_until(runtime, publications, 9, 9)) {
+		check(false, "edit/viewer/update initial terrain did not load");
+		ok = false;
+	}
+	if (ok) {
+		const wt::WtEditTransaction transaction = carve_transaction(
+			storage.source_revision(),
+			runtime.world_revision(),
+			91,
+			8.0
+		);
+		if (runtime.submit_edit(transaction) != wt::WtReadOnlyRuntimeStatus::Ok) {
+			check(false, "edit/viewer/update first edit submit rejected");
+			ok = false;
+		} else if (!wait_for_edit_commit_visible(
+				runtime,
+				transaction.committed_revision,
+				1
+			)) {
+			check(false, "edit/viewer/update first edit did not commit");
+			ok = false;
+		}
+	}
+	if (ok && runtime.update_viewer({ 1, 40.0, 8.0, 8.0, 2 }, 1, 1) !=
+			wt::WtReadOnlyRuntimeStatus::Ok) {
+		check(false, "edit/viewer/update post-edit viewer rejected");
+		ok = false;
+	}
+	if (ok && !wait_for_viewer_update_idle(runtime, 2)) {
+		check(false, "edit/viewer/update post-edit viewer did not idle");
+		ok = false;
+	}
+	if (ok) {
+		const wt::WtEditTransaction transaction = carve_transaction(
+			storage.source_revision(),
+			runtime.world_revision(),
+			92,
+			40.0
+		);
+		if (runtime.submit_edit(transaction) != wt::WtReadOnlyRuntimeStatus::Ok) {
+			check(false, "edit/viewer/update second edit submit rejected");
+			ok = false;
+		} else if (!wait_for_edit_commit_idle(
+				runtime,
+				transaction.committed_revision,
+				2
+			)) {
+			check(false, "edit/viewer/update second edit did not commit");
+			ok = false;
+		}
+	}
+	const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+	check(metrics.edit_commits == 2 && metrics.edit_rejections == 0,
+		"edit/viewer/update edit metrics mismatch");
+	check(metrics.rejected_events == 0,
+		"edit/viewer/update rejected a viewer event");
+	runtime.request_stop();
+	worker.join();
+	journal.close();
+	check(run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok,
+		"edit/viewer/update runtime did not stop cleanly");
+	return ok &&
+		metrics.edit_commits == 2 &&
+		metrics.edit_rejections == 0 &&
+		metrics.rejected_events == 0 &&
+		run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok;
+}
+
 } // namespace
 
 int main() {
@@ -1580,6 +1707,8 @@ int main() {
 		run_edit_retention_fallback_regression(storage, fixture.path);
 	const bool many_zone_retention_ok =
 		run_edit_retention_many_zone_regression(storage, fixture.path);
+	const bool edit_viewer_second_edit_ok =
+		run_edit_viewer_update_second_edit_regression(storage, fixture.path);
 	const bool collision_reactivation_ok =
 		run_collision_reactivation_eviction_regression(storage);
 	const bool replacement_collision_continuity_ok =
@@ -1625,6 +1754,7 @@ int main() {
 	append_u64(evidence, lod_hysteresis_ok ? 1U : 0U);
 	append_u64(evidence, g21_near_field_ok ? 1U : 0U);
 	append_u64(evidence, g21_entry_count);
+	append_u64(evidence, edit_viewer_second_edit_ok ? 1U : 0U);
 	append_u64(evidence, collision_reactivation_ok ? 1U : 0U);
 	append_u64(evidence, replacement_collision_continuity_ok ? 1U : 0U);
 	append_u64(evidence, collision_publication_priority_ok ? 1U : 0U);
@@ -1646,7 +1776,8 @@ int main() {
 		"staged_expects=%zu staged_collision_preserve_expects=%zu "
 		"transition_stage_generations=%zu transition_preserve_generations=%zu "
 		"global_coarse=%d many_zone_retention=%d lod_hysteresis=%d "
-		"collision_reactivation=%d replacement_collision_continuity=%d "
+		"edit_viewer_second_edit=%d collision_reactivation=%d "
+		"replacement_collision_continuity=%d "
 		"collision_publication_priority=%d collision_publication_coalescing=%d "
 		"g21_entries=%zu "
 		"g21_nearest_coarse=%.1f transition_completions=%llu\n",
@@ -1674,6 +1805,7 @@ int main() {
 		global_coarse_ok ? 1 : 0,
 		many_zone_retention_ok ? 1 : 0,
 		lod_hysteresis_ok ? 1 : 0,
+		edit_viewer_second_edit_ok ? 1 : 0,
 		collision_reactivation_ok ? 1 : 0,
 		replacement_collision_continuity_ok ? 1 : 0,
 		collision_publication_priority_ok ? 1 : 0,
@@ -1687,6 +1819,7 @@ int main() {
 	std::printf(
 		"PRODUCTION_LOD_STREAMING_PASS pages=28 viewers=2 transitions=3 "
 		"lod_hysteresis=1 collision_reactivation=1 "
+		"edit_viewer_second_edit=1 "
 		"replacement_collision_continuity=1 collision_publication_priority=1 "
 		"collision_publication_coalescing=1 "
 		"g21_near_field=1 backend=MIT\n"

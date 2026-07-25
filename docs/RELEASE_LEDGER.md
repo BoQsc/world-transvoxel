@@ -155,7 +155,16 @@ Startup regression fix on 2026-07-26:
 - mesh completions whose current plan mask is no longer supported by the
   completed mesh publish the mesh's own safe transition mask and queue that
   same legacy transition remesh fallback, rather than failing the runtime
-  pipeline.
+  pipeline;
+- transition-mask updates that arrive before the target mesh has entered the
+  resource cache queue the same fallback instead of failing the backend. This
+  fixes the manual dig/construct regression where edit submission was rejected
+  because the read-only runtime had stopped after a non-fatal transition-mask
+  update race;
+- edit replacement cancellation now treats stale page-meshing generations as
+  benign, matching desired-set cancellation. This prevents an accepted player
+  dig/place edit from stopping the runtime when viewer movement or streaming has
+  already advanced the page-meshing generation.
 
 Remaining before acceptance:
 

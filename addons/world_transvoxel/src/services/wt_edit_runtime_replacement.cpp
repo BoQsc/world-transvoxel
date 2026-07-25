@@ -147,7 +147,8 @@ WtEditRuntimeReplacementService::apply_prepared(
 				);
 			if (status == WtPageMeshingRuntimeOwnerStatus::Ok) {
 				++metrics_.cancelled_page_meshing_generations;
-			} else if (status != WtPageMeshingRuntimeOwnerStatus::NotFound) {
+			} else if (status != WtPageMeshingRuntimeOwnerStatus::NotFound &&
+				status != WtPageMeshingRuntimeOwnerStatus::StaleGeneration) {
 				++metrics_.page_meshing_runtime_failures;
 				return WtEditRuntimeReplacementStatus::PageMeshingRuntimeFailure;
 			}

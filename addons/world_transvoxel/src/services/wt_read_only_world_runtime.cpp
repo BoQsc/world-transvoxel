@@ -1295,7 +1295,8 @@ bool WtReadOnlyWorldRuntime::publish_transition_mask_update(
 	}
 	const auto mesh = resource_cache_->find_mesh(entry.key, record->generation);
 	if (!mesh) {
-		return false;
+		queue_transition_remeshes({ desired });
+		return true;
 	}
 	const auto water_mesh = resource_cache_->find_water_mesh(
 		entry.key,
@@ -1332,7 +1333,8 @@ bool WtReadOnlyWorldRuntime::publish_transition_mask_update(
 	}
 	if (resource_cache_->insert_render(render, record->generation) !=
 		WtChunkResourceCacheStatus::Ok) {
-		return false;
+		queue_transition_remeshes({ desired });
+		return true;
 	}
 	WtReadOnlyPublication publication;
 	publication.kind = WtReadOnlyPublicationKind::RenderPayload;
