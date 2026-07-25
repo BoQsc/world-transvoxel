@@ -226,11 +226,13 @@ bool wt_is_valid_collision_payload(
 		collision.metrics.output_triangles > maximum_triangles ||
 		collision.metrics.degenerate_triangles > maximum_triangles ||
 		collision.metrics.thin_triangles > maximum_triangles ||
+		collision.metrics.decimated_triangles > maximum_triangles ||
 		collision.metrics.output_triangles * 3 != collision.faces.size() ||
 		collision.metrics.input_triangles !=
 			collision.metrics.output_triangles +
 			collision.metrics.degenerate_triangles +
-			collision.metrics.thin_triangles) {
+			collision.metrics.thin_triangles +
+			collision.metrics.decimated_triangles) {
 		return false;
 	}
 	for (const WtVec3 &face : collision.faces) {
@@ -252,7 +254,9 @@ bool wt_equal_collision_payload(
 		left.metrics.input_triangles != right.metrics.input_triangles ||
 		left.metrics.output_triangles != right.metrics.output_triangles ||
 		left.metrics.degenerate_triangles != right.metrics.degenerate_triangles ||
-		left.metrics.thin_triangles != right.metrics.thin_triangles) {
+		left.metrics.thin_triangles != right.metrics.thin_triangles ||
+		left.metrics.decimated_triangles !=
+			right.metrics.decimated_triangles) {
 		return false;
 	}
 	for (std::size_t index = 0; index < left.faces.size(); ++index) {

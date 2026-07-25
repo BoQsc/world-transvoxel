@@ -34,6 +34,14 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	const WtApplicationMetrics application = application_->get_metrics();
 	std::uint64_t visual_ready_records = 0;
 	std::uint64_t visual_required_records = 0;
+	std::uint64_t collision_ready_records = 0;
+	std::uint64_t collision_required_records = 0;
+	std::uint64_t collision_required_not_ready_records = 0;
+	WtChunkKey first_collision_not_ready_key{};
+	std::uint64_t first_collision_not_ready_generation = 0;
+	bool first_collision_not_ready_visual_required = false;
+	bool first_collision_not_ready_visual_ready = false;
+	bool first_collision_not_ready_staged = false;
 	std::uint64_t fully_ready_records = 0;
 	std::uint64_t non_retiring_records = 0;
 	std::uint64_t non_retiring_visual_ready_records = 0;
@@ -55,6 +63,19 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	for (const WtChunkApplicationRecord &record : application_->get_records()) {
 		visual_ready_records += record.visual_ready ? 1U : 0U;
 		visual_required_records += record.visual_required ? 1U : 0U;
+		collision_ready_records += record.collision_ready ? 1U : 0U;
+		collision_required_records += record.collision_required ? 1U : 0U;
+		if (record.collision_required && !record.collision_ready) {
+			if (collision_required_not_ready_records == 0) {
+				first_collision_not_ready_key = record.key;
+				first_collision_not_ready_generation = record.generation.value;
+				first_collision_not_ready_visual_required =
+					record.visual_required;
+				first_collision_not_ready_visual_ready = record.visual_ready;
+				first_collision_not_ready_staged = record.staged_replacement;
+			}
+			++collision_required_not_ready_records;
+		}
 		fully_ready_records += record.fully_ready() ? 1U : 0U;
 		const bool pending_retirement = std::binary_search(
 			pending_chunk_retirements_.begin(),
@@ -276,11 +297,66 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		"collision_latency_frames_maximum",
 		application.collision_latency_frames_maximum
 	);
+	set_metric(
+		output,
+		"collision_apply_time_ns_last",
+		application.collision_apply_time_ns_last
+	);
+	set_metric(
+		output,
+		"collision_apply_time_ns_maximum",
+		application.collision_apply_time_ns_maximum
+	);
+	set_metric(
+		output,
+		"collision_apply_time_ns_total",
+		application.collision_apply_time_ns_total
+	);
+	set_metric(
+		output,
+		"collision_apply_deadline_exhaustions",
+		application.collision_apply_deadline_exhaustions
+	);
+	set_metric(
+		output,
+		"collision_apply_deadline_ns",
+		collision_apply_deadline_ns_
+	);
 	output["active_chunk_records"] = static_cast<std::int64_t>(
 		application_->get_records().size()
 	);
 	set_metric(output, "visual_ready_chunk_records", visual_ready_records);
 	set_metric(output, "visual_required_chunk_records", visual_required_records);
+	set_metric(output, "collision_ready_chunk_records", collision_ready_records);
+	set_metric(
+		output,
+		"collision_required_chunk_records",
+		collision_required_records
+	);
+	set_metric(
+		output,
+		"collision_required_not_ready_chunk_records",
+		collision_required_not_ready_records
+	);
+	output["first_collision_not_ready_key_x"] =
+		static_cast<std::int64_t>(first_collision_not_ready_key.x);
+	output["first_collision_not_ready_key_y"] =
+		static_cast<std::int64_t>(first_collision_not_ready_key.y);
+	output["first_collision_not_ready_key_z"] =
+		static_cast<std::int64_t>(first_collision_not_ready_key.z);
+	output["first_collision_not_ready_key_lod"] =
+		static_cast<std::int64_t>(first_collision_not_ready_key.lod);
+	set_metric(
+		output,
+		"first_collision_not_ready_generation",
+		first_collision_not_ready_generation
+	);
+	output["first_collision_not_ready_visual_required"] =
+		first_collision_not_ready_visual_required;
+	output["first_collision_not_ready_visual_ready"] =
+		first_collision_not_ready_visual_ready;
+	output["first_collision_not_ready_staged"] =
+		first_collision_not_ready_staged;
 	set_metric(output, "fully_ready_chunk_records", fully_ready_records);
 	set_metric(output, "non_retiring_chunk_records", non_retiring_records);
 	set_metric(
@@ -354,6 +430,13 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	);
 	output["queued_render"] = get_queued_render_count();
 	output["queued_collision"] = get_queued_collision_count();
+	output["deferred_collision"] = static_cast<std::int64_t>(
+		application_->deferred_collision_count()
+	);
+	output["total_collision_backlog"] = static_cast<std::int64_t>(
+		application_->queued_collision_count() +
+		application_->deferred_collision_count()
+	);
 	output["render_resources"] = get_render_resource_count();
 	output["render_fading_resources"] = static_cast<std::int64_t>(
 		render_sink_->fading_count()

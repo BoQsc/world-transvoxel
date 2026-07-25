@@ -14,12 +14,14 @@ void WorldTransvoxelTerrain::_process(double delta) {
 	(void)delta;
 	const bool drained_publications = drain_world_publications();
 	update_visibility_staging_state();
-	const WtApplicationBatchResult applied = application_->apply(
-		render_apply_budget_,
-		collision_apply_budget_,
-		*render_sink_,
-		*collision_sink_
-	);
+	const WtApplicationBatchResult applied =
+		application_->apply_with_collision_deadline(
+			render_apply_budget_,
+			collision_apply_budget_,
+			collision_apply_deadline_ns_,
+			*render_sink_,
+			*collision_sink_
+		);
 	if (lifecycle_ && (drained_publications || applied.render_processed != 0)) {
 		lifecycle_->notify_application_progress();
 	}
@@ -238,9 +240,10 @@ bool WorldTransvoxelTerrain::drain_world_publications() {
 				// it reaches the physics server. The previous shape remains active
 				// there until the replacement generation is ready.
 				if (status == WtApplicationStatus::Ok) {
-					application_->apply(
+					application_->apply_with_collision_deadline(
 						0U,
 						1U,
+						collision_apply_deadline_ns_,
 						*render_sink_,
 						*collision_sink_
 					);

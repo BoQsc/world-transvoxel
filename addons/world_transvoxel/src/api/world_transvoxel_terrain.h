@@ -175,6 +175,8 @@ public:
 	std::int64_t get_render_apply_budget() const noexcept;
 	void set_collision_apply_budget(std::int64_t budget);
 	std::int64_t get_collision_apply_budget() const noexcept;
+	void set_collision_apply_deadline_us(std::int64_t deadline_us);
+	std::int64_t get_collision_apply_deadline_us() const noexcept;
 	std::int64_t get_render_resource_count() const noexcept;
 	std::int64_t get_collision_resource_count() const noexcept;
 	std::int64_t get_queued_render_count() const noexcept;
@@ -240,6 +242,7 @@ private:
 	std::unique_ptr<WtM5ApplicationBenchmarkFixture> application_benchmark_;
 	std::size_t render_apply_budget_ = kWtDefaultRenderApplyBudget;
 	std::size_t collision_apply_budget_ = kWtDefaultCollisionApplyBudget;
+	std::uint64_t collision_apply_deadline_ns_ = 4000000;
 };
 
 } // namespace world_transvoxel

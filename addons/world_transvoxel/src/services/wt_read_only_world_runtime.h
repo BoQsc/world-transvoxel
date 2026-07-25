@@ -287,6 +287,7 @@ private:
 		const WtTerrainMeshCompletion &completion
 	);
 	bool process_mesh_completions();
+	bool process_collision_readiness_repairs();
 	bool process_visual_readiness_repairs();
 	bool publish_delta(const WtDesiredSetDelta &delta);
 	bool push_publication(WtReadOnlyPublication publication);

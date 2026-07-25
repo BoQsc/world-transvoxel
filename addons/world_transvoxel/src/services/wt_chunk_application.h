@@ -5,6 +5,7 @@
 #include "render/wt_render_apply_queue.h"
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -37,6 +38,10 @@ struct WtApplicationMetrics {
 	std::uint64_t render_latency_frames_maximum = 0;
 	std::uint64_t collision_latency_frames_total = 0;
 	std::uint64_t collision_latency_frames_maximum = 0;
+	std::uint64_t collision_apply_time_ns_total = 0;
+	std::uint64_t collision_apply_time_ns_maximum = 0;
+	std::uint64_t collision_apply_time_ns_last = 0;
+	std::uint64_t collision_apply_deadline_exhaustions = 0;
 	std::int64_t last_stale_render_key_x = 0;
 	std::int64_t last_stale_render_key_y = 0;
 	std::int64_t last_stale_render_key_z = 0;
@@ -48,6 +53,7 @@ struct WtApplicationMetrics {
 struct WtApplicationBatchResult {
 	std::size_t render_processed = 0;
 	std::size_t collision_processed = 0;
+	bool collision_deadline_exhausted = false;
 };
 
 class WtChunkApplicationService {
@@ -83,6 +89,13 @@ public:
 		WtRenderSink &render_sink,
 		WtCollisionSink &collision_sink
 	);
+	WtApplicationBatchResult apply_with_collision_deadline(
+		std::size_t render_budget,
+		std::size_t collision_budget,
+		std::uint64_t collision_deadline_ns,
+		WtRenderSink &render_sink,
+		WtCollisionSink &collision_sink
+	);
 
 	const WtChunkApplicationRecord *find_record(const WtChunkKey &key) const noexcept;
 	const std::vector<WtChunkApplicationRecord> &get_records() const noexcept;
@@ -91,6 +104,7 @@ public:
 	std::size_t available_record_capacity() const noexcept;
 	std::size_t queued_render_count() const noexcept;
 	std::size_t queued_collision_count() const noexcept;
+	std::size_t deferred_collision_count() const noexcept;
 
 private:
 	WtChunkApplicationRecord *find_record_mutable(const WtChunkKey &key) noexcept;
@@ -102,12 +116,18 @@ private:
 	std::size_t apply_deferred_collisions(
 		std::size_t budget,
 		WtCollisionSink &sink,
-		std::uint64_t application_tick
+		std::uint64_t application_tick,
+		const std::chrono::steady_clock::time_point &deadline_start,
+		std::uint64_t collision_deadline_ns,
+		bool &deadline_exhausted
 	);
 	std::size_t apply_collision(
 		std::size_t budget,
 		WtCollisionSink &sink,
-		std::uint64_t application_tick
+		std::uint64_t application_tick,
+		const std::chrono::steady_clock::time_point &deadline_start,
+		std::uint64_t collision_deadline_ns,
+		bool &deadline_exhausted
 	);
 	bool should_defer_collision(
 		const WtChunkApplicationRecord &record

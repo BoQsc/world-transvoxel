@@ -300,6 +300,14 @@ void WorldTransvoxelTerrain::_bind_methods() {
 		&WorldTransvoxelTerrain::get_collision_apply_budget
 	);
 	godot::ClassDB::bind_method(
+		godot::D_METHOD("set_collision_apply_deadline_us", "deadline_us"),
+		&WorldTransvoxelTerrain::set_collision_apply_deadline_us
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_collision_apply_deadline_us"),
+		&WorldTransvoxelTerrain::get_collision_apply_deadline_us
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD("get_render_resource_count"),
 		&WorldTransvoxelTerrain::get_render_resource_count
 	);
@@ -576,6 +584,19 @@ void WorldTransvoxelTerrain::set_collision_apply_budget(std::int64_t budget) {
 
 std::int64_t WorldTransvoxelTerrain::get_collision_apply_budget() const noexcept {
 	return static_cast<std::int64_t>(collision_apply_budget_);
+}
+
+void WorldTransvoxelTerrain::set_collision_apply_deadline_us(
+	std::int64_t deadline_us
+) {
+	collision_apply_deadline_ns_ = static_cast<std::uint64_t>(
+		std::clamp<std::int64_t>(deadline_us, 0, 33333)
+	) * 1000U;
+}
+
+std::int64_t
+WorldTransvoxelTerrain::get_collision_apply_deadline_us() const noexcept {
+	return static_cast<std::int64_t>(collision_apply_deadline_ns_ / 1000U);
 }
 
 std::int64_t WorldTransvoxelTerrain::get_render_resource_count() const noexcept {

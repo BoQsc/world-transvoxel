@@ -12,11 +12,14 @@ namespace world_transvoxel {
 constexpr double kWtDefaultCollisionThinRatioSquared = 1.0e-12;
 constexpr double kWtDefaultCollisionActivationDistance = 96.0;
 constexpr double kWtDefaultCollisionDeactivationDistance = 128.0;
+constexpr std::size_t kWtDefaultCollisionMaximumOutputTriangles = 512;
 
 struct WtCollisionPolicy {
 	double thin_ratio_squared = kWtDefaultCollisionThinRatioSquared;
 	double activation_distance = kWtDefaultCollisionActivationDistance;
 	double deactivation_distance = kWtDefaultCollisionDeactivationDistance;
+	std::size_t maximum_output_triangles =
+		kWtDefaultCollisionMaximumOutputTriangles;
 };
 
 enum class WtCollisionRequirement : std::uint8_t {
@@ -37,6 +40,7 @@ struct WtCollisionBuildMetrics {
 	std::size_t output_triangles = 0;
 	std::size_t degenerate_triangles = 0;
 	std::size_t thin_triangles = 0;
+	std::size_t decimated_triangles = 0;
 };
 
 struct WtCollisionPayload {

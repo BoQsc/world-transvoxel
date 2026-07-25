@@ -1,6 +1,6 @@
 # Release ledger
 
-Status date: 2026-07-22.
+Status date: 2026-07-25.
 
 This ledger separates the ordered roadmap releases from stabilization commits
 made during human testing. Commit messages alone are not sufficient release
@@ -33,7 +33,7 @@ Exit evidence:
 
 ### Release 2 - Frame-stable collisions
 
-Status: not complete.
+Status: candidate implemented; not complete against the strict frame-time gate.
 
 Scope:
 
@@ -56,6 +56,30 @@ Exit evidence on the reference machine:
 - terrain collision application stays inside its assigned per-frame deadline;
 - any simplified collision path is accepted physically and visually here, not
   deferred into later releases.
+
+Candidate evidence gathered on 2026-07-25:
+
+- native focused checks passed:
+  `test_wt_m3_application` debug/release,
+  `test_wt_m5_resource_cache` release,
+  `test_wt_production_lod_streaming` release;
+- short native soak passed with `frame_max_ns=8330400`;
+- g23 production quality passed with `spawn_floor_hit=1`,
+  `total_collision_backlog=0`, and
+  `collision_apply_time_ns_maximum=22904200`;
+- g19 production quality and `streaming_fly_gap_gate` passed with
+  `spawn_floor_hit=1`, `collision_required_not_ready=0`, no visual gap failures,
+  and `collision_apply_time_ns_maximum=26594700`.
+
+Remaining blocker:
+
+- Godot `ConcavePolygonShape3D::set_faces` / collision shape publication can
+  still consume more than the assigned 4 ms collision deadline for a single
+  chunk. Triangle-dropping caps below 512 were rejected because they created
+  physical collision holes, and split multi-shape publication was rejected
+  because it increased Godot-side spikes. The next Release 2 step must use a
+  physically coherent collision LOD/shape representation or a lower-level
+  physics publication path; do not reintroduce triangle deletion as the default.
 
 ### Release 3 - Canonical mesh and transition representation
 

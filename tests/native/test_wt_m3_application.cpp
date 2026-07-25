@@ -3,8 +3,10 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <chrono>
 #include <limits>
 #include <memory>
+#include <thread>
 
 namespace wt = world_transvoxel;
 
@@ -223,6 +225,16 @@ struct CollisionSink final : wt::WtCollisionSink {
 	}
 };
 
+struct SlowCollisionSink final : wt::WtCollisionSink {
+	std::size_t calls = 0;
+
+	bool apply_collision(const wt::WtCollisionPayload &) override {
+		++calls;
+		std::this_thread::sleep_for(std::chrono::milliseconds(2));
+		return true;
+	}
+};
+
 void test_application_service(
 	const wt::WtRenderPayload &render_source,
 	std::size_t stale_cycles
@@ -390,6 +402,62 @@ void test_staged_replacement_collision_waits_for_render(
 		"staged replacement did not synchronize render and collision");
 }
 
+void test_collision_deadline_bounds_frame_work(
+	const wt::WtRenderPayload &render_source
+) {
+	wt::WtChunkApplicationService service(3, 1, 3);
+	RenderSink render_sink;
+	SlowCollisionSink collision_sink;
+	for (std::int32_t x = 0; x < 3; ++x) {
+		wt::WtRenderPayload render = render_source;
+		render.key = { x, 0, 0, 0 };
+		render.world_origin = wt::wt_chunk_bounds(render.key).minimum;
+		render.generation = { 1 };
+		auto collision = std::make_shared<wt::WtCollisionPayload>();
+		check(wt::wt_build_collision_payload(render, {}, *collision) ==
+			wt::WtCollisionBuildStatus::Ok,
+			"deadline collision payload build failed");
+		check(service.expect_chunk(render.key, { 1 }, true, false) ==
+			wt::WtApplicationStatus::Ok,
+			"deadline collision expectation failed");
+		check(service.submit_collision(collision) == wt::WtApplicationStatus::Ok,
+			"deadline collision submission failed");
+	}
+	const wt::WtApplicationBatchResult bounded =
+		service.apply_with_collision_deadline(
+			0,
+			3,
+			1000000,
+			render_sink,
+			collision_sink
+		);
+	check(bounded.collision_processed == 1 &&
+		bounded.collision_deadline_exhausted &&
+		collision_sink.calls == 1,
+		"collision deadline did not bound frame work");
+	check(service.queued_collision_count() == 1 &&
+		service.deferred_collision_count() == 1,
+		"deadline leftovers were not retained as backlog");
+	const wt::WtApplicationMetrics deadline_metrics = service.get_metrics();
+	check(deadline_metrics.collision_apply_deadline_exhaustions == 1 &&
+		deadline_metrics.collision_apply_time_ns_last >= 1000000,
+		"collision deadline metrics were not recorded");
+	const wt::WtApplicationBatchResult drained =
+		service.apply_with_collision_deadline(
+			0,
+			3,
+			0,
+			render_sink,
+			collision_sink
+		);
+	check(drained.collision_processed == 2 &&
+		!drained.collision_deadline_exhausted &&
+		collision_sink.calls == 3 &&
+		service.queued_collision_count() == 0 &&
+		service.deferred_collision_count() == 0,
+		"deadline collision backlog did not drain later");
+}
+
 } // namespace
 
 int main() {
@@ -399,6 +467,7 @@ int main() {
 	constexpr std::size_t stale_cycles = 1000;
 	test_application_service(render, stale_cycles);
 	test_staged_replacement_collision_waits_for_render(render);
+	test_collision_deadline_bounds_frame_work(render);
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M3_APPLICATION_FAIL failures=%d\n", failure_count);
 		return 1;

@@ -111,6 +111,9 @@ bool WorldTransvoxelTerrain::start_world(
 	collision_apply_budget_ = static_cast<std::size_t>(
 		config.collision_apply_budget
 	);
+	collision_apply_deadline_ns_ = static_cast<std::uint64_t>(
+		configuration_->get_collision_apply_deadline_us()
+	) * 1000U;
 	synchronous_world_error_ = "ok";
 	emit_lifecycle_state(WtWorldLifecycleState::Starting);
 	return true;
@@ -251,6 +254,9 @@ bool WorldTransvoxelTerrain::start_procedural_world_preset_with_vertical_origin(
 	collision_apply_budget_ = static_cast<std::size_t>(
 		config.collision_apply_budget
 	);
+	collision_apply_deadline_ns_ = static_cast<std::uint64_t>(
+		configuration_->get_collision_apply_deadline_us()
+	) * 1000U;
 	synchronous_world_error_ = "ok";
 	emit_lifecycle_state(WtWorldLifecycleState::Starting);
 	return true;
@@ -358,6 +364,9 @@ bool WorldTransvoxelTerrain::start_flat_world_with_vertical_origin(
 	collision_apply_budget_ = static_cast<std::size_t>(
 		config.collision_apply_budget
 	);
+	collision_apply_deadline_ns_ = static_cast<std::uint64_t>(
+		configuration_->get_collision_apply_deadline_us()
+	) * 1000U;
 	synchronous_world_error_ = "ok";
 	emit_lifecycle_state(WtWorldLifecycleState::Starting);
 	return true;

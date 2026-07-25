@@ -33,6 +33,21 @@ godot::Vector3 to_godot(const WtGridPoint &value) {
 
 WtGodotCollisionSink::WtGodotCollisionSink(godot::Node3D &owner) noexcept :
 		owner_(owner), owner_thread_(std::this_thread::get_id()) {
+	godot::PackedVector3Array faces;
+	faces.resize(3);
+	faces.set(0, godot::Vector3(0.0, 0.0, 0.0));
+	faces.set(1, godot::Vector3(1.0, 0.0, 0.0));
+	faces.set(2, godot::Vector3(0.0, 0.0, 1.0));
+	godot::Ref<godot::ConcavePolygonShape3D> warmup;
+	warmup.instantiate();
+	warmup->set_faces(faces);
+	godot::StaticBody3D *body = memnew(godot::StaticBody3D);
+	godot::CollisionShape3D *shape = memnew(godot::CollisionShape3D);
+	owner_.add_child(body);
+	body->add_child(shape);
+	shape->set_shape(warmup);
+	owner_.remove_child(body);
+	body->queue_free();
 }
 
 bool WtGodotCollisionSink::apply_collision(const WtCollisionPayload &payload) {

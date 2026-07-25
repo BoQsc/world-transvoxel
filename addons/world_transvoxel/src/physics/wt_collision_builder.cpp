@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace world_transvoxel {
 namespace {
@@ -30,6 +31,14 @@ double cross_squared(const WtVec3 &a, const WtVec3 &b, const WtVec3 &c) noexcept
 	return x * x + y * y + z * z;
 }
 
+struct CollisionTriangleCandidate {
+	WtVec3 a;
+	WtVec3 b;
+	WtVec3 c;
+	double area_squared = 0.0;
+	std::size_t order = 0;
+};
+
 } // namespace
 
 bool wt_is_valid_collision_policy(const WtCollisionPolicy &policy) noexcept {
@@ -37,7 +46,9 @@ bool wt_is_valid_collision_policy(const WtCollisionPolicy &policy) noexcept {
 		policy.thin_ratio_squared >= 0.0 && policy.thin_ratio_squared < 1.0 &&
 		std::isfinite(policy.activation_distance) && policy.activation_distance >= 0.0 &&
 		std::isfinite(policy.deactivation_distance) &&
-		policy.deactivation_distance >= policy.activation_distance;
+		policy.deactivation_distance >= policy.activation_distance &&
+		policy.maximum_output_triangles > 0 &&
+		policy.maximum_output_triangles <= kWtMaximumRegularChunkIndices / 3U;
 }
 
 WtCollisionRequirement wt_evaluate_collision_requirement(
@@ -152,7 +163,11 @@ WtCollisionBuildStatus wt_build_regular_collision_payload(
 	output.generation = generation;
 	output.world_origin = mesh.world_origin;
 	output.metrics.input_triangles = mesh.regular.indices.size() / 3U;
-	output.faces.reserve(mesh.regular.indices.size());
+	std::vector<CollisionTriangleCandidate> candidates;
+	candidates.reserve(std::min(
+		output.metrics.input_triangles,
+		policy.maximum_output_triangles
+	));
 	for (std::size_t triangle = 0;
 			triangle < mesh.regular.indices.size(); triangle += 3U) {
 		const std::uint32_t ia = mesh.regular.indices[triangle];
@@ -186,15 +201,48 @@ WtCollisionBuildStatus wt_build_regular_collision_payload(
 			++output.metrics.thin_triangles;
 			continue;
 		}
-		if (output.faces.size() + 3U > kWtMaximumRegularChunkIndices) {
-			output.clear();
-			return WtCollisionBuildStatus::CapacityExceeded;
-		}
-		output.faces.push_back(a);
-		output.faces.push_back(b);
-		output.faces.push_back(c);
-		++output.metrics.output_triangles;
+		candidates.push_back({
+			a,
+			b,
+			c,
+			area_squared,
+			candidates.size(),
+		});
 	}
+	if (candidates.size() > policy.maximum_output_triangles) {
+		std::nth_element(
+			candidates.begin(),
+			candidates.begin() + static_cast<std::ptrdiff_t>(
+				policy.maximum_output_triangles
+			),
+			candidates.end(),
+			[](const CollisionTriangleCandidate &left,
+				const CollisionTriangleCandidate &right) {
+				if (left.area_squared != right.area_squared) {
+					return left.area_squared > right.area_squared;
+				}
+				return left.order < right.order;
+			}
+		);
+		output.metrics.decimated_triangles =
+			candidates.size() - policy.maximum_output_triangles;
+		candidates.resize(policy.maximum_output_triangles);
+		std::sort(
+			candidates.begin(),
+			candidates.end(),
+			[](const CollisionTriangleCandidate &left,
+				const CollisionTriangleCandidate &right) {
+				return left.order < right.order;
+			}
+		);
+	}
+	output.faces.reserve(candidates.size() * 3U);
+	for (const CollisionTriangleCandidate &candidate : candidates) {
+		output.faces.push_back(candidate.a);
+		output.faces.push_back(candidate.b);
+		output.faces.push_back(candidate.c);
+	}
+	output.metrics.output_triangles = candidates.size();
 	return WtCollisionBuildStatus::Ok;
 }
 

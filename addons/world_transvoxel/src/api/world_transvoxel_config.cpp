@@ -71,6 +71,7 @@ void WorldTransvoxelConfig::_bind_methods() {
 	WT_BIND_INT_PROPERTY(trace_event_capacity, "1,262144,1");
 	WT_BIND_INT_PROPERTY(render_apply_budget, "0,128,1");
 	WT_BIND_INT_PROPERTY(collision_apply_budget, "0,128,1");
+	WT_BIND_INT_PROPERTY(collision_apply_deadline_us, "0,33333,1");
 	WT_BIND_INT_PROPERTY(render_transition_frames, "0,240,1");
 	WT_BIND_FLOAT_PROPERTY(
 		collision_activation_distance,
@@ -185,6 +186,25 @@ WT_CONFIG_INT_ACCESSORS(collision_byte_capacity)
 WT_CONFIG_INT_ACCESSORS(trace_event_capacity)
 WT_CONFIG_INT_ACCESSORS(render_apply_budget)
 WT_CONFIG_INT_ACCESSORS(collision_apply_budget)
+
+void WorldTransvoxelConfig::set_collision_apply_deadline_us(
+	std::int64_t value
+) {
+	if (value < 0) {
+		value = 0;
+	}
+	if (value > 33333) {
+		value = 33333;
+	}
+	if (collision_apply_deadline_us_ == value) return;
+	collision_apply_deadline_us_ = value;
+	emit_changed();
+}
+
+std::int64_t
+WorldTransvoxelConfig::get_collision_apply_deadline_us() const noexcept {
+	return collision_apply_deadline_us_;
+}
 
 #undef WT_CONFIG_INT_ACCESSORS
 

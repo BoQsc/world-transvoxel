@@ -59,6 +59,8 @@ public:
 	std::int64_t get_render_apply_budget() const noexcept;
 	void set_collision_apply_budget(std::int64_t value);
 	std::int64_t get_collision_apply_budget() const noexcept;
+	void set_collision_apply_deadline_us(std::int64_t value);
+	std::int64_t get_collision_apply_deadline_us() const noexcept;
 	void set_collision_activation_distance(double value);
 	double get_collision_activation_distance() const noexcept;
 	void set_collision_deactivation_distance(double value);
@@ -90,6 +92,7 @@ private:
 	std::int64_t trace_event_capacity_ = 65536;
 	std::int64_t render_apply_budget_ = 4;
 	std::int64_t collision_apply_budget_ = 2;
+	std::int64_t collision_apply_deadline_us_ = 4000;
 	double collision_activation_distance_ = 96.0;
 	double collision_deactivation_distance_ = 128.0;
 	std::int64_t render_transition_frames_ = 0;

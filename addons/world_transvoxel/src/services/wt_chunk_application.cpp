@@ -1,8 +1,29 @@
 #include "services/wt_chunk_application.h"
 
 #include <algorithm>
+#include <chrono>
 
 namespace world_transvoxel {
+namespace {
+
+using Clock = std::chrono::steady_clock;
+
+std::uint64_t elapsed_ns(const Clock::time_point &start) noexcept {
+	return static_cast<std::uint64_t>(
+		std::chrono::duration_cast<std::chrono::nanoseconds>(
+			Clock::now() - start
+		).count()
+	);
+}
+
+bool collision_deadline_reached(
+	const Clock::time_point &start,
+	std::uint64_t deadline_ns
+) noexcept {
+	return deadline_ns != 0 && elapsed_ns(start) >= deadline_ns;
+}
+
+} // namespace
 
 bool WtChunkApplicationRecord::fully_ready() const noexcept {
 	return (!visual_required || visual_ready) &&
@@ -181,12 +202,47 @@ WtApplicationBatchResult WtChunkApplicationService::apply(
 	WtRenderSink &render_sink,
 	WtCollisionSink &collision_sink
 ) {
+	return apply_with_collision_deadline(
+		render_budget,
+		collision_budget,
+		0,
+		render_sink,
+		collision_sink
+	);
+}
+
+WtApplicationBatchResult
+WtChunkApplicationService::apply_with_collision_deadline(
+	std::size_t render_budget,
+	std::size_t collision_budget,
+	std::uint64_t collision_deadline_ns,
+	WtRenderSink &render_sink,
+	WtCollisionSink &collision_sink
+) {
 	const std::uint64_t tick =
 		application_tick_.fetch_add(1, std::memory_order_relaxed) + 1;
-	return {
-		apply_render(render_budget, render_sink, tick),
-		apply_collision(collision_budget, collision_sink, tick),
-	};
+	WtApplicationBatchResult result;
+	result.render_processed = apply_render(render_budget, render_sink, tick);
+	const Clock::time_point collision_start = Clock::now();
+	result.collision_processed = apply_collision(
+		collision_budget,
+		collision_sink,
+		tick,
+		collision_start,
+		collision_deadline_ns,
+		result.collision_deadline_exhausted
+	);
+	const std::uint64_t collision_elapsed = elapsed_ns(collision_start);
+	metrics_.collision_apply_time_ns_last = collision_elapsed;
+	metrics_.collision_apply_time_ns_total += collision_elapsed;
+	metrics_.collision_apply_time_ns_maximum = std::max(
+		metrics_.collision_apply_time_ns_maximum,
+		collision_elapsed
+	);
+	if (result.collision_deadline_exhausted) {
+		++metrics_.collision_apply_deadline_exhaustions;
+	}
+	return result;
 }
 
 std::size_t WtChunkApplicationService::apply_render(
@@ -237,11 +293,21 @@ std::size_t WtChunkApplicationService::apply_render(
 std::size_t WtChunkApplicationService::apply_deferred_collisions(
 	std::size_t budget,
 	WtCollisionSink &sink,
-	std::uint64_t application_tick
+	std::uint64_t application_tick,
+	const Clock::time_point &deadline_start,
+	std::uint64_t collision_deadline_ns,
+	bool &deadline_exhausted
 ) {
 	std::size_t processed = 0;
 	for (auto iterator = deferred_collisions_.begin();
 			iterator != deferred_collisions_.end() && processed < budget;) {
+		if (processed > 0 &&
+			collision_deadline_reached(
+				deadline_start, collision_deadline_ns
+			)) {
+			deadline_exhausted = true;
+			break;
+		}
 		const WtCollisionApplyEntry entry = *iterator;
 		const WtCollisionPayloadPtr &payload = entry.payload;
 		WtChunkApplicationRecord *record = find_record_mutable(payload->key);
@@ -297,12 +363,32 @@ std::size_t WtChunkApplicationService::apply_deferred_collisions(
 std::size_t WtChunkApplicationService::apply_collision(
 	std::size_t budget,
 	WtCollisionSink &sink,
-	std::uint64_t application_tick
+	std::uint64_t application_tick,
+	const Clock::time_point &deadline_start,
+	std::uint64_t collision_deadline_ns,
+	bool &deadline_exhausted
 ) {
 	std::size_t processed =
-		apply_deferred_collisions(budget, sink, application_tick);
+		apply_deferred_collisions(
+			budget,
+			sink,
+			application_tick,
+			deadline_start,
+			collision_deadline_ns,
+			deadline_exhausted
+		);
 	WtCollisionApplyEntry entry;
 	while (processed < budget && collision_queue_.pop(entry)) {
+		if (processed > 0 &&
+			collision_deadline_reached(
+				deadline_start, collision_deadline_ns
+			)) {
+			if (!defer_collision(entry)) {
+				++metrics_.queue_rejections;
+			}
+			deadline_exhausted = true;
+			break;
+		}
 		++processed;
 		const WtCollisionPayloadPtr &payload = entry.payload;
 		const std::uint64_t latency = application_tick - entry.submission_tick;
@@ -424,6 +510,10 @@ std::size_t WtChunkApplicationService::queued_render_count() const noexcept {
 
 std::size_t WtChunkApplicationService::queued_collision_count() const noexcept {
 	return collision_queue_.size();
+}
+
+std::size_t WtChunkApplicationService::deferred_collision_count() const noexcept {
+	return deferred_collisions_.size();
 }
 
 } // namespace world_transvoxel
