@@ -1311,7 +1311,8 @@ bool WtReadOnlyWorldRuntime::publish_transition_mask_update(
 			*render
 		);
 	if (render_status != WtRenderBuildStatus::Ok) {
-		return false;
+		queue_transition_remeshes({ desired });
+		return true;
 	}
 	if (!water_mesh) {
 		const auto previous = resource_cache_->find_render(
@@ -1455,7 +1456,7 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			const std::uint8_t transition_mask =
 				entry != nullptr ? entry->transition_mask : 0;
 			const std::uint8_t cached_transition_mask =
-				job.key.lod == 0 ? 0 : 0x3FU;
+				(job.key.lod == 0 || transition_mask == 0) ? 0 : 0x3FU;
 			status = page_runtime_->begin_sample_job(
 				job,
 				transition_mask,

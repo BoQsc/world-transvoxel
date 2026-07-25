@@ -141,6 +141,18 @@ Candidate evidence gathered on 2026-07-26:
   `bridge1=320/1674`), no transition remesh generations were staged, and
   transition completions remained bounded at `2`.
 
+Startup regression fix on 2026-07-26:
+
+- the first Release 3 candidate requested six cached transition faces for every
+  non-LOD0 chunk. The g23 human startup gate stayed behind `Loading terrain...`
+  with hundreds of extra sampling records because that policy exploded page
+  dependencies for chunks that had no active transition face;
+- the cache request policy was narrowed to request the reusable six-face
+  transition cache only for chunks with an active transition mask. Existing
+  zero-mask chunks that later require a transition face use the retained legacy
+  remesh fallback until the Release 3 human candidate is accepted and the final
+  strict cache policy can be locked.
+
 Remaining before acceptance:
 
 - run the integration-game human test and fly repeatedly across LOD
