@@ -1595,14 +1595,34 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 				completion.water_mesh,
 				completion.generation,
 				record->generation
-			) != WtChunkResourceCacheStatus::Ok ||
-			wt_build_render_payload(
+			) != WtChunkResourceCacheStatus::Ok) {
+			set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
+			break;
+		}
+		WtRenderBuildStatus render_status = wt_build_render_payload(
 				*completion.mesh,
 				*completion.water_mesh,
 				completion.generation,
 				render_transition_mask,
 				*render
-			) != WtRenderBuildStatus::Ok ||
+			);
+		if (render_status != WtRenderBuildStatus::Ok &&
+			render_transition_mask != completion.mesh->transition_mask) {
+			render_status = wt_build_render_payload(
+				*completion.mesh,
+				*completion.water_mesh,
+				completion.generation,
+				completion.mesh->transition_mask,
+				*render
+			);
+			const WtDesiredChunk *desired = desired_->find_desired(
+				completion.key
+			);
+			if (desired != nullptr) {
+				queue_transition_remeshes({ *desired });
+			}
+		}
+		if (render_status != WtRenderBuildStatus::Ok ||
 			resource_cache_->insert_render(render, record->generation) !=
 				WtChunkResourceCacheStatus::Ok) {
 			set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);

@@ -151,7 +151,11 @@ Startup regression fix on 2026-07-26:
   transition cache only for chunks with an active transition mask. Existing
   zero-mask chunks that later require a transition face use the retained legacy
   remesh fallback until the Release 3 human candidate is accepted and the final
-  strict cache policy can be locked.
+  strict cache policy can be locked;
+- mesh completions whose current plan mask is no longer supported by the
+  completed mesh publish the mesh's own safe transition mask and queue that
+  same legacy transition remesh fallback, rather than failing the runtime
+  pipeline.
 
 Remaining before acceptance:
 
