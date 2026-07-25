@@ -58,6 +58,13 @@ enum class WtReadOnlyRuntimeStatus : std::uint8_t {
 	RuntimeDeltaApplicationFailure,
 	RuntimeDeltaPageMeshingRuntimeFailure,
 	PipelineFailure,
+	PipelineStorageCompletionFailure,
+	PipelineSchedulerJobFailure,
+	PipelineTerrainMeshCompletionFailure,
+	PipelineRenderCompletionFailure,
+	PipelineTransitionMaskUpdateFailure,
+	PipelineCollisionRebuildFailure,
+	PipelineCollisionRepairFailure,
 	PublicationFailure,
 };
 

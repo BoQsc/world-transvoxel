@@ -942,7 +942,9 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 				);
 			if (collision_status != WtChunkResourceCacheStatus::Ok &&
 				collision_status != WtChunkResourceCacheStatus::NotFound) {
-				set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
+				set_failure(
+					WtReadOnlyRuntimeStatus::PipelineCollisionRebuildFailure
+				);
 				return true;
 			}
 			if (!collision) continue;
@@ -1002,7 +1004,9 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		if (desired != nullptr &&
 			!publish_transition_mask_update(entry, *desired)) {
 			if (!stop_requested_.load()) {
-				set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
+				set_failure(
+					WtReadOnlyRuntimeStatus::PipelineTransitionMaskUpdateFailure
+				);
 			}
 			return true;
 		}
@@ -1037,7 +1041,9 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			);
 		if (collision_status != WtChunkResourceCacheStatus::Ok &&
 			collision_status != WtChunkResourceCacheStatus::NotFound) {
-			set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
+			set_failure(
+				WtReadOnlyRuntimeStatus::PipelineCollisionRebuildFailure
+			);
 			return true;
 		}
 		if (collision && !push_publication({
@@ -1434,7 +1440,9 @@ bool WtReadOnlyWorldRuntime::process_storage_completions() {
 			status != WtPageMeshingRuntimeStatus::StaleCompletion &&
 			status != WtPageMeshingRuntimeStatus::SchedulerBackpressure &&
 			status != WtPageMeshingRuntimeStatus::CacheFailure) {
-			set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
+			set_failure(
+				WtReadOnlyRuntimeStatus::PipelineStorageCompletionFailure
+			);
 			break;
 		}
 		std::lock_guard<std::mutex> lock(metrics_mutex_);
@@ -1502,7 +1510,7 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			status != WtPageMeshingRuntimeStatus::MeshingFailure &&
 			status != WtPageMeshingRuntimeStatus::SurfaceShiftFailure &&
 			status != WtPageMeshingRuntimeStatus::NotReady) {
-			set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
+			set_failure(WtReadOnlyRuntimeStatus::PipelineSchedulerJobFailure);
 			break;
 		}
 		if (has_pending_edit_operation()) {
@@ -1545,7 +1553,9 @@ bool WtReadOnlyWorldRuntime::process_terrain_mesh_completion(
 		) != WtCollisionBuildStatus::Ok ||
 		resource_cache_->insert_collision(collision, record->generation) !=
 			WtChunkResourceCacheStatus::Ok) {
-		set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
+		set_failure(
+			WtReadOnlyRuntimeStatus::PipelineTerrainMeshCompletionFailure
+		);
 		return false;
 	}
 	if (application_record->collision_required &&
@@ -1596,7 +1606,7 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 				completion.generation,
 				record->generation
 			) != WtChunkResourceCacheStatus::Ok) {
-			set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
+			set_failure(WtReadOnlyRuntimeStatus::PipelineRenderCompletionFailure);
 			break;
 		}
 		WtRenderBuildStatus render_status = wt_build_render_payload(
@@ -1625,7 +1635,7 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 		if (render_status != WtRenderBuildStatus::Ok ||
 			resource_cache_->insert_render(render, record->generation) !=
 				WtChunkResourceCacheStatus::Ok) {
-			set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
+			set_failure(WtReadOnlyRuntimeStatus::PipelineRenderCompletionFailure);
 			break;
 		}
 		WtReadOnlyPublication publication;
@@ -1709,7 +1719,7 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 			);
 		if (status != WtChunkResourceCacheStatus::Ok &&
 			status != WtChunkResourceCacheStatus::NotFound) {
-			set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
+			set_failure(WtReadOnlyRuntimeStatus::PipelineCollisionRepairFailure);
 			return false;
 		}
 		if (!collision) continue;

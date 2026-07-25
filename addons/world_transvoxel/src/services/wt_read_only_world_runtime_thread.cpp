@@ -250,6 +250,20 @@ const char *wt_read_only_runtime_status_message(
 			return "streaming runtime delta page meshing runtime operation failed";
 		case WtReadOnlyRuntimeStatus::PipelineFailure:
 			return "read-only page or meshing pipeline failed";
+		case WtReadOnlyRuntimeStatus::PipelineStorageCompletionFailure:
+			return "read-only storage completion pipeline failed";
+		case WtReadOnlyRuntimeStatus::PipelineSchedulerJobFailure:
+			return "read-only scheduler job pipeline failed";
+		case WtReadOnlyRuntimeStatus::PipelineTerrainMeshCompletionFailure:
+			return "read-only terrain mesh completion pipeline failed";
+		case WtReadOnlyRuntimeStatus::PipelineRenderCompletionFailure:
+			return "read-only render completion pipeline failed";
+		case WtReadOnlyRuntimeStatus::PipelineTransitionMaskUpdateFailure:
+			return "read-only transition-mask update pipeline failed";
+		case WtReadOnlyRuntimeStatus::PipelineCollisionRebuildFailure:
+			return "read-only collision rebuild pipeline failed";
+		case WtReadOnlyRuntimeStatus::PipelineCollisionRepairFailure:
+			return "read-only collision repair pipeline failed";
 		case WtReadOnlyRuntimeStatus::PublicationFailure:
 			return "read-only publication queue failed";
 	}
