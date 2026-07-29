@@ -92,17 +92,61 @@ func _run_test() -> void:
 		_fail("transition orientation was not preserved")
 		return
 
+	var chunk_mesh: Dictionary = probe.call(
+		"mesh_chunk_with_callable",
+		Callable(self, "_chunk_sample"),
+		Vector3i.ZERO,
+		0,
+		0,
+		0,
+		0.0,
+		0.25
+	)
+	if chunk_mesh.get("schema", "") != "world_transvoxel.cell_probe.chunk_mesh.v1":
+		_fail("unexpected chunk mesh schema")
+		return
+	if not bool(chunk_mesh.get("ok", false)):
+		_fail(
+			"chunk probe did not mesh ok: %s %s" %
+			[str(chunk_mesh.get("status", "")), str(chunk_mesh.get("sample_error", ""))]
+		)
+		return
+	var regular_chunk: Dictionary = chunk_mesh.get("regular", {})
+	if int(regular_chunk.get("vertex_count", 0)) <= 0 or \
+			int(regular_chunk.get("triangle_count", 0)) <= 0:
+		_fail("chunk probe produced no regular geometry")
+		return
+	if int(chunk_mesh.get("transition_triangle_count", -1)) != 0:
+		_fail("LOD 0 chunk probe unexpectedly produced transition geometry")
+		return
+	if PackedInt32Array(regular_chunk.get("indices", PackedInt32Array())).size() != \
+			PackedInt32Array(regular_chunk.get("backend_indices", PackedInt32Array())).size():
+		_fail("chunk render/backend index arrays differ in length")
+		return
+
 	print(
-		"CELL_PROBE_TEST_PASS regular_vertices=%d regular_triangles=%d transition_vertices=%d transition_triangles=%d backend=%s" %
+		"CELL_PROBE_TEST_PASS regular_vertices=%d regular_triangles=%d transition_vertices=%d transition_triangles=%d chunk_vertices=%d chunk_triangles=%d backend=%s" %
 		[
 			int(mesh.get("vertex_count", 0)),
 			int(mesh.get("triangle_count", 0)),
 			int(transition_mesh.get("vertex_count", 0)),
 			int(transition_mesh.get("triangle_count", 0)),
+			int(regular_chunk.get("vertex_count", 0)),
+			int(regular_chunk.get("triangle_count", 0)),
 			str(identity.get("backend_id", "")),
 		]
 	)
 	quit(0)
+
+
+func _chunk_sample(point: Vector3i) -> Dictionary:
+	var p := Vector3(float(point.x), float(point.y), float(point.z)) - Vector3(8.0, 8.0, 8.0)
+	var density := p.length() - 5.0
+	return {
+		"density": density,
+		"material": 1 if density < 0.0 else 0,
+		"material_authored": true,
+	}
 
 
 func _fail(message: String) -> void:

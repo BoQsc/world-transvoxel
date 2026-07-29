@@ -1,11 +1,13 @@
 #pragma once
 
 #include <godot_cpp/classes/ref_counted.hpp>
+#include <godot_cpp/variant/callable.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/packed_float32_array.hpp>
 #include <godot_cpp/variant/packed_int32_array.hpp>
 #include <godot_cpp/variant/packed_vector3_array.hpp>
 #include <godot_cpp/variant/vector3.hpp>
+#include <godot_cpp/variant/vector3i.hpp>
 
 #include <cstdint>
 
@@ -36,6 +38,15 @@ public:
 		double sample_spacing,
 		double transition_width,
 		double isovalue
+	) const;
+	godot::Dictionary mesh_chunk_with_callable(
+		const godot::Callable &sample_callable,
+		const godot::Vector3i &chunk_coordinate,
+		std::int64_t lod,
+		std::int64_t transition_mask,
+		std::int64_t cached_transition_mask,
+		double isovalue,
+		double transition_width_ratio
 	) const;
 };
 
