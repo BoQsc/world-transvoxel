@@ -93,8 +93,21 @@ frame polling. Viewer events are bounded and newer pending events for one
 viewer coalesce.
 
 Immutable render/collision payloads and chunk-control events cross to the Godot
-frame thread through a bounded publication ring. The facade defers a payload
-when its corresponding frame budget is exhausted, preserving event order.
+frame thread through bounded priority and normal publication rings. The facade
+defers a render or collision payload when its corresponding frame budget is
+exhausted. Lightweight expectation, requirement-change, and removal controls
+may overtake that budget-blocked payload so a zero resource budget cannot
+head-of-line block lifecycle state. Remaining payload order is preserved, and
+generation checks make any overtaken obsolete payload stale before a sink is
+called.
+
+Application records are shared synchronization state between the lifecycle and
+frame threads. Record mutation and snapshot reads are mutex-serialized; no
+production path retains a pointer into the mutable record vector across that
+boundary. Readiness repair publication is idempotent per chunk generation, so
+holding application budgets at zero cannot generate an unbounded duplicate
+render or collision stream.
+
 Godot objects and physics resources are created, replaced, and removed only on
 the frame thread.
 
@@ -119,14 +132,16 @@ generation replacement, page-backed official MIT transition meshing, edit-LOD
 fallback retention under planner pressure, and shutdown. Debug and release hash:
 
 ```text
-74f842843e834076ec5b7fa6e171410cca1e3329167a633e3892316086325915
+4d3cbadcef8d851df1061e6845444ba9ad4c02ac9671b072c92b1b944a4e2314
 ```
 
 `production_streaming_test.gd` and `production_lod_streaming_test.gd` prove
 the public API creates, replaces, and removes real `ArrayMesh` and
 `ConcavePolygonShape3D` resources on Godot 4.6.3 and 4.7 with debug and release
-addon builds. The production entry point then runs the complete M5-through-M0
-regression chain.
+addon builds. The LOD fixture also holds both resource budgets at zero while a
+mixed replacement plan is published, proving control-event bypass, retained-old
+terrain, and bounded per-generation readiness repair. The production entry
+point then runs the complete M5-through-M0 regression chain.
 
 ## PQ1 exit
 

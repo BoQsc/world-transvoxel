@@ -1,6 +1,6 @@
 # Release ledger
 
-Status date: 2026-07-26.
+Status date: 2026-07-29.
 
 This ledger separates the ordered roadmap releases from stabilization commits
 made during human testing. Commit messages alone are not sufficient release
@@ -90,8 +90,8 @@ Remaining blocker:
 
 ### Release 3 - Canonical mesh and transition representation
 
-Status: candidate implemented; source gates pass; pending human LOD-boundary
-flight acceptance.
+Status: accepted canonical implementation; subsequent stabilization remains
+classified separately from roadmap Release 4.
 
 Scope:
 
@@ -135,7 +135,7 @@ Candidate evidence gathered on 2026-07-26:
 - resource cache hash:
   `ecf7cbc1ddb527fbcbde760e7c6bd7b016f44c10df1bc7fb51540c9012b1f7c3`;
 - production LOD streaming hash:
-  `c5d0fcada4007b6d13fa5665174abdc89e9923dced40e6c2f60e544c1e6ccc5a`;
+  `4d3cbadcef8d851df1061e6845444ba9ad4c02ac9671b072c92b1b944a4e2314`;
 - production LOD evidence showed the bridge chunk retained generation while
   the render transition mask changed (`bridge0=320/1674`,
   `bridge1=320/1674`), no transition remesh generations were staged, and
@@ -166,14 +166,12 @@ Startup regression fix on 2026-07-26:
   dig/place edit from stopping the runtime when viewer movement or streaming has
   already advanced the page-meshing generation.
 
-Remaining before acceptance:
+Acceptance:
 
-- run the integration-game human test and fly repeatedly across LOD
-  boundaries on the g23 profile;
-- accept or reject the candidate based on seam, winding, transition, movement,
-  and streaming-stutter behavior;
-- after acceptance, remove the retained legacy pending transition-remesh path
-  instead of keeping two production architectures.
+- the candidate progressed through the g23 human test and was accepted before
+  Release 4 work began;
+- the retained legacy pending transition-remesh path is still explicit debt
+  and must be removed only with equivalent strict transition coverage.
 
 Known excluded issue:
 
@@ -184,7 +182,9 @@ Known excluded issue:
 
 ### Release 4 - Parallel meshing and cancellation
 
-Status: blocked until Release 3 is complete.
+Status: not implemented. The rejected Release 4 experiment is absent from
+`main`; work must restart from the accepted Release 3 architecture after the
+trustworthy baseline below is accepted.
 
 Scope:
 
@@ -255,10 +255,113 @@ Release 3.
 | `c6aa2a0` | `Release 2: stabilize staged edit replacement streaming` | Stabilization A: staged edit/replacement streaming safety |
 | `5dfa9fa` | `Release 3: repair visual readiness after staged swaps` | Stabilization B: visual readiness after staged swaps |
 
+## Trustworthy pre-Release-4 baseline candidate
+
+Status: automated candidate passed on 2026-07-29; pending the final human
+acceptance route.
+
+This stabilization work is not roadmap Release 4. In particular, it does not
+introduce the rejected parallel meshing/cancellation architecture. It repairs
+and measures the accepted Release 3 runtime before any new concurrency design.
+
+The controlled three-run Release 3 comparator established the old baseline:
+
+- blocked movement frames: `5, 25, 29`;
+- maximum consecutive blocked frames: `5, 12, 10`;
+- post-flight physics-target wait: `0, 15, 38` frames;
+- exact visual/collision resource readiness was not paired: visual
+  `8, 7, 7`, collision `0, 1, 1`, divergence `8, 6, 6` frames.
+
+The candidate makes the following invariants explicit:
+
+- collision drain and application share a millisecond deadline, superseded
+  collision work is coalesced, and backlog/deadline telemetry is published;
+- player collision prediction follows requested movement intent and retains
+  blocked intent until a true stop;
+- storage requests coalesce by immutable page identity, bounded procedural
+  generation workers fan one result out to all current generation waiters, and
+  runtime metric snapshots are mutex-published;
+- interactive edits take scheduling precedence over new viewer work;
+- render and collision readiness each carry their exact resource generation;
+- a replacement publishes only when every required resource matches the
+  replacement generation, while an edit-local paired replacement may publish
+  without waiting for unrelated travel staging;
+- the chunk containing the edit-command center is scheduled before adjacent
+  affected chunks;
+- application-record mutation and snapshot reads are synchronized across the
+  lifecycle and Godot frame threads;
+- lightweight lifecycle controls bypass a render/collision payload held by a
+  zero application budget, preventing publication head-of-line blocking;
+- readiness repair is idempotent per chunk generation, preventing the prior
+  unbounded duplicate render/collision application loop while budgets are held.
+
+The final strict three-run integration gate, with no relaxed thresholds,
+reported:
+
+- blocked movement frames: `4, 11, 8`;
+- maximum consecutive blocked frames: `2, 5, 4`;
+- post-flight physics-target wait: `0, 0, 0` frames;
+- edit authority commit: `2, 5, 2` frames;
+- exact visual and collision readiness: `7, 8, 7` frames for both;
+- visual/collision divergence: `0, 0, 0` frames;
+- overall frame p95: `18.544, 17.034, 18.354` ms;
+- overall frame p99: `21.759, 18.049, 20.143` ms;
+- collision application remained inside the declared
+  deadline-plus-one-indivisible-shape bound.
+
+The gate artifact is
+`.godot/captures/p0_candidate_foreground_ordering_3run.json` in the integration
+fixture's ignored evidence directory.
+
+The final publication/readiness qualification added on 2026-07-29 reported:
+
+- the canonical native LOD hash remained
+  `4d3cbadcef8d851df1061e6845444ba9ad4c02ac9671b072c92b1b944a4e2314`
+  for 20 consecutive debug and 10 consecutive release runs;
+- the zero-budget LOD fixture passed five consecutive debug and five
+  consecutive release runs on each of Godot 4.6.3 and 4.7;
+- the complete production Godot matrix passed for debug/release on both
+  engines;
+- readiness-repair submissions remained below the fixture's hard bound of 128
+  render and 128 collision payloads, with zero sink failures and zero queue
+  rejections;
+- the sequential example route is now waited in real elapsed time and locks the
+  canonical hysteresis result: 24 returned-mid leaves and 12 non-empty
+  resources. The old nine-resource assertion observed an intermediate state,
+  not settled terrain.
+
+After the publication, application-record synchronization, and idempotent
+repair fixes were all present in the exact integration build, the final strict
+three-run P0 rerun reported:
+
+- blocked movement frames: `14, 7, 13`;
+- maximum consecutive blocked frames: `7, 2, 8`;
+- post-flight physics-target wait: `0, 0, 0` frames;
+- edit authority commit: `2, 1, 2` frames;
+- exact visual and collision readiness: `9, 10, 8` frames for both;
+- visual/collision divergence: `0, 0, 0` frames;
+- overall frame p95: `16.677, 17.521, 17.634` ms;
+- overall frame p99: `17.049, 18.669, 18.538` ms;
+- collision application remained inside the declared
+  deadline-plus-one-indivisible-shape bound in all three runs.
+
+The final gate artifact is
+`.godot/captures/p0_candidate_publication_readiness_3run.json` in the
+integration fixture's ignored evidence directory.
+
+Known exclusions remain visible rather than being silently accepted:
+
+- the long-standing pixel-sized cave pinholes are deferred to a dedicated
+  topology diagnostics and oracle pass after the roadmap releases, as directed
+  during human testing;
+- the non-deterministic distant-surface gap observed by the streaming gap probe
+  remains a tracked baseline defect. It is not evidence of a canonical
+  Transvoxel acceptance and must receive an isolated deterministic fixture.
+
 ## Rule for continuing
 
-Release 2 has been accepted for progression with collision publication debt
-tracked above. Do not begin Release 4 until the Release 3 human LOD-boundary
-test accepts the canonical transition candidate. Parallel meshing, page
+Release 2 and Release 3 have been accepted for progression with their explicit
+debt tracked above. Do not restart Release 4 until the trustworthy pre-Release-4
+baseline candidate passes its final human route. Parallel meshing, page
 acceleration, and render cleanup stay blocked until their predecessor release
 gates pass.

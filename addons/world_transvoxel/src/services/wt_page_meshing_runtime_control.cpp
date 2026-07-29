@@ -174,7 +174,39 @@ std::size_t WtPageMeshingRuntimeService::pinned_page_count() const noexcept {
 
 WtPageMeshingRuntimeMetrics
 WtPageMeshingRuntimeService::get_metrics() const noexcept {
-	return metrics_;
+	WtPageMeshingRuntimeMetrics snapshot = metrics_;
+	for (const Record &record : records_) {
+		switch (record.phase) {
+			case WtPageMeshingRuntimePhase::Loading:
+				++snapshot.loading_records;
+				break;
+			case WtPageMeshingRuntimePhase::SampleReady:
+			case WtPageMeshingRuntimePhase::SampleFailedReady:
+				++snapshot.sample_ready_records;
+				break;
+			case WtPageMeshingRuntimePhase::AwaitingMesh:
+				++snapshot.awaiting_mesh_records;
+				break;
+			case WtPageMeshingRuntimePhase::MeshReady:
+			case WtPageMeshingRuntimePhase::MeshFailedReady:
+				++snapshot.mesh_ready_records;
+				break;
+			case WtPageMeshingRuntimePhase::Ready:
+				++snapshot.ready_records;
+				break;
+		}
+		for (const Dependency &dependency : record.dependencies) {
+			if (dependency.page) {
+				++snapshot.pinned_pages;
+			} else {
+				++snapshot.unresolved_dependencies;
+			}
+			if (dependency.request_pending) {
+				++snapshot.pending_dependency_requests;
+			}
+		}
+	}
+	return snapshot;
 }
 
 } // namespace world_transvoxel

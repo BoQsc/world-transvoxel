@@ -27,8 +27,9 @@ For every accepted job the service:
 1. derives and sorts the primary/support page keys;
 2. pins decoded cache hits immediately;
 3. submits misses to `WtAsyncStorageService` with the job generation and
-   priority;
-4. validates each completion against the owning record and cache identity;
+   priority, coalescing immutable page work by page key;
+4. validates each completion against cache identity and fans it to all active
+   records waiting for that page key;
 5. submits one sample result to `WtStreamScheduler` when every page is pinned;
 6. constructs `WtChunkPageSampleSource` from the primary and support pages;
 7. runs `WtChunkMesher` with the official MIT backend supplied by the caller;
@@ -56,9 +57,10 @@ sample/mesh failure, cancellation, desired-set removal, edit replacement, or
 dependency invalidation.
 
 The storage worker does not expose per-request cancellation. Cancelling a
-runtime generation removes its record and pins immediately; any already
-started storage completion is then classified as unowned stale work and cannot
-enter the cache through this service.
+runtime generation removes its record and pins immediately. An already-started
+successful immutable completion may still enter the cache and satisfy another
+active generation waiting for the same page. It cannot resurrect or publish
+the cancelled generation.
 
 ## Movement, edits, and invalidation
 
@@ -124,7 +126,7 @@ owner interface.
 The locked aggregate hash is:
 
 ```text
-d4abf3eb87cd102b598f6b365ecc8b33aa333bf0875427f4334f002f0ff373ee
+ea428b532f85d6b1abb751856e27532c49acff9f2d320a5756a1723165908ad7
 ```
 
 This completes native support-page scheduling, pinning, cancellation, and

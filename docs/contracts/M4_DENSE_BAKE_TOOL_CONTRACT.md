@@ -128,7 +128,7 @@ pages remain readable with missing provenance conservatively treated as
 authored. The locked current world SHA-256 is:
 
 ```text
-81f5ed3c7dd62d8d7eec2cf49799239eafb6d6b6e75d3484513805b303876026
+4c2e183d83c30f5778c6babfae6f12cad48a2fffa3542faf964cca8a682d102f
 ```
 
 No generated bake artifacts remain in the repository.

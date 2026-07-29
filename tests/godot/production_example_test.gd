@@ -48,11 +48,15 @@ func _run_test() -> void:
 		return
 
 	viewer.position = Vector3(40, 8, 8)
-	if not await _wait_for_counts(terrain, 9, 9):
+	# Returning from the far region stays refined inside the documented
+	# one-child-chunk LOD exit hysteresis shell (24 leaves, 12 non-empty).
+	if not await _wait_for_counts(terrain, 12, 12):
 		_fail("example transform event did not settle balanced refinement")
 		return
 	if terrain.get_node_or_null("WT_Render_2_0_0_L0") == null or \
-			terrain.get_node_or_null("WT_Render_2_0_0_L1") == null:
+			terrain.get_node_or_null("WT_Render_5_0_0_L0") == null or \
+			terrain.get_node_or_null("WT_Render_2_0_0_L1") != null:
+		_print_render_identities(terrain)
 		_fail("balanced example resources have incorrect identities")
 		return
 
@@ -77,7 +81,10 @@ func _wait_for_state(terrain: Node, expected: String) -> bool:
 			return true
 		if terrain.call("get_world_state_name") == "failed":
 			return false
-		await process_frame
+		# Headless frames can outrun the native storage/meshing thread by orders
+		# of magnitude; use real elapsed time for an asynchronous readiness gate.
+		await create_timer(0.001).timeout
+	_print_diagnostic(terrain)
 	return false
 
 
@@ -95,8 +102,37 @@ func _wait_for_counts(terrain: Node, render_count: int, collision_count: int) ->
 			return true
 		if terrain.call("get_world_state_name") == "failed":
 			return false
-		await process_frame
+		await create_timer(0.001).timeout
+	_print_diagnostic(terrain)
 	return false
+
+
+func _print_diagnostic(terrain: Node) -> void:
+	var metrics: Dictionary = terrain.call("get_runtime_metrics")
+	print(
+		(
+			"PRODUCTION_GODOT_EXAMPLE_DIAGNOSTIC: rendered=%d collision=%d " +
+			"active=%d fully_ready=%d queued_render=%d queued_collision=%d"
+		) %
+		[
+			int(terrain.call("get_rendered_chunk_count")),
+			int(terrain.call("get_collision_chunk_count")),
+			int(metrics.get("active_chunk_records", -1)),
+			int(metrics.get("fully_ready_chunk_records", -1)),
+			int(metrics.get("queued_render", -1)),
+			int(metrics.get("queued_collision", -1)),
+		]
+	)
+
+
+func _print_render_identities(terrain: Node) -> void:
+	var identities: Array[String] = []
+	for child in terrain.get_children():
+		if child.name.begins_with("WT_Render_"):
+			identities.append(child.name)
+	identities.sort()
+	print("PRODUCTION_GODOT_EXAMPLE_RENDER_IDENTITIES: %s" %
+		JSON.stringify(identities))
 
 
 func _fail(message: String) -> void:

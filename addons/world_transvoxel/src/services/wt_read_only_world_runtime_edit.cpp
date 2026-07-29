@@ -125,6 +125,7 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 		publication.visual_required = replacement.visual_required;
 		publication.staged_replacement = true;
 		publication.preserve_collision_ready = replacement.collision_required;
+		publication.independently_publishable_replacement = true;
 		if (!push_publication(std::move(publication))) {
 			if (!stop_requested_.load()) {
 				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);

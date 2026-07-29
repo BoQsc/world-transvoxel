@@ -32,6 +32,7 @@ bool WtReadOnlyWorldRuntime::enqueue_world_operation(
 			}
 		);
 		world_operations_.insert(insertion, std::move(operation));
+		pending_edit_operation_.store(true, std::memory_order_release);
 		notify_work();
 		return true;
 	}
@@ -41,14 +42,7 @@ bool WtReadOnlyWorldRuntime::enqueue_world_operation(
 }
 
 bool WtReadOnlyWorldRuntime::has_pending_edit_operation() {
-	std::lock_guard<std::mutex> lock(input_mutex_);
-	return std::any_of(
-		world_operations_.begin(),
-		world_operations_.end(),
-		[](const WorldOperation &operation) {
-			return operation.kind == WorldOperationKind::Edit;
-		}
-	);
+	return pending_edit_operation_.load(std::memory_order_acquire);
 }
 
 WtReadOnlyRuntimeStatus
@@ -129,6 +123,19 @@ bool WtReadOnlyWorldRuntime::process_world_operation_event() {
 		if (world_operations_.empty()) return false;
 		operation = std::move(world_operations_.front());
 		world_operations_.erase(world_operations_.begin());
+		if (operation.kind == WorldOperationKind::Edit) {
+			const bool another_edit_is_pending = std::any_of(
+				world_operations_.begin(),
+				world_operations_.end(),
+				[](const WorldOperation &queued) {
+					return queued.kind == WorldOperationKind::Edit;
+				}
+			);
+			pending_edit_operation_.store(
+				another_edit_is_pending,
+				std::memory_order_release
+			);
+		}
 	}
 	switch (operation.kind) {
 		case WorldOperationKind::Edit:

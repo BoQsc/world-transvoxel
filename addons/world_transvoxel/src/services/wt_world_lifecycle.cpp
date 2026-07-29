@@ -47,6 +47,9 @@ WtWorldLifecycleStatus WtWorldLifecycleService::start(
 				static_cast<std::size_t>(config_.storage_request_capacity),
 				static_cast<std::size_t>(config_.storage_completion_capacity),
 				kWtMaximumContainerSize,
+				static_cast<std::size_t>(
+					config_.procedural_generation_worker_count
+				),
 			}
 		);
 		last_storage_status_ = WtAsyncStorageStatus::Ok;
@@ -97,6 +100,9 @@ WtWorldLifecycleStatus WtWorldLifecycleService::start_procedural(
 				static_cast<std::size_t>(config_.storage_request_capacity),
 				static_cast<std::size_t>(config_.storage_completion_capacity),
 				kWtMaximumContainerSize,
+				static_cast<std::size_t>(
+					config_.procedural_generation_worker_count
+				),
 			}
 		);
 		last_storage_status_ = WtAsyncStorageStatus::Ok;
@@ -369,6 +375,13 @@ bool WtWorldLifecycleService::pop_publication(
 ) {
 	std::lock_guard<std::mutex> lock(state_mutex_);
 	return runtime_ && runtime_->pop_publication(publication);
+}
+
+bool WtWorldLifecycleService::pop_unbudgeted_publication(
+	WtReadOnlyPublication &publication
+) {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	return runtime_ && runtime_->pop_unbudgeted_publication(publication);
 }
 
 std::uint64_t WtWorldLifecycleService::source_revision() const noexcept {

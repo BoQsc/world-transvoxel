@@ -211,10 +211,16 @@ public:
 private:
 	void emit_lifecycle_state(WtWorldLifecycleState state);
 	void notify_lifecycle_state();
-	bool drain_world_publications();
+	bool drain_world_publications(
+		std::size_t &collision_publication_count,
+		std::uint64_t collision_apply_time_ns_start
+	);
 	void stage_chunk_retirement(const WtChunkKey &key);
 	void cancel_chunk_retirement(const WtChunkKey &key);
-	void stage_chunk_replacement(const WtChunkKey &key);
+	void stage_chunk_replacement(
+		const WtChunkKey &key,
+		bool independently_publishable
+	);
 	void cancel_chunk_replacement(const WtChunkKey &key);
 	void stage_render_retirement(const WtChunkKey &key);
 	void cancel_render_retirement(const WtChunkKey &key);
@@ -234,6 +240,7 @@ private:
 	bool has_deferred_publication_ = false;
 	std::vector<WtChunkKey> pending_chunk_retirements_;
 	std::vector<WtChunkKey> pending_chunk_replacements_;
+	std::vector<WtChunkKey> independently_publishable_chunk_replacements_;
 	std::vector<WtChunkKey> pending_render_retirements_;
 	std::unique_ptr<WtChunkApplicationService> application_;
 	std::unique_ptr<WtGodotRenderSink> render_sink_;
@@ -243,6 +250,12 @@ private:
 	std::size_t render_apply_budget_ = kWtDefaultRenderApplyBudget;
 	std::size_t collision_apply_budget_ = kWtDefaultCollisionApplyBudget;
 	std::uint64_t collision_apply_deadline_ns_ = 4000000;
+	std::uint64_t collision_apply_frame_time_ns_last_ = 0;
+	std::uint64_t collision_apply_frame_time_ns_total_ = 0;
+	std::uint64_t collision_apply_frame_time_ns_maximum_ = 0;
+	std::uint64_t collision_apply_frame_items_last_ = 0;
+	std::uint64_t collision_apply_frame_items_maximum_ = 0;
+	std::uint64_t collision_apply_frame_deadline_overruns_ = 0;
 };
 
 } // namespace world_transvoxel

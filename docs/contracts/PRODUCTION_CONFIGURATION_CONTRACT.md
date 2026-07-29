@@ -23,6 +23,7 @@ consume them.
 | `demand_capacity_per_viewer` | 4,096 | 1..65,536 |
 | `storage_request_capacity` | 256 | 1..65,536 |
 | `storage_completion_capacity` | 256 | 1..65,536 |
+| `procedural_generation_worker_count` | 2 | 1..8 |
 | `encoded_page_entry_capacity` | 256 | 1..65,536 |
 | `encoded_page_byte_capacity` | 67,108,864 | 1..1,073,741,824 |
 | `decoded_page_entry_capacity` | 128 | 1..65,536 |
@@ -36,6 +37,7 @@ consume them.
 | `trace_event_capacity` | 65,536 | 1..262,144 |
 | `render_apply_budget` | 4 | 0..128 |
 | `collision_apply_budget` | 2 | 0..128 |
+| `collision_apply_deadline_us` | 4,000 | 0..33,333 |
 | `collision_activation_distance` | 96.0 | finite and nonnegative |
 | `collision_deactivation_distance` | 128.0 | finite and at least activation |
 
@@ -65,7 +67,7 @@ inspection. This attachment alone makes no running-world claim.
 
 ## Proof
 
-`test_wt_production_config.cpp` locks defaults, schema identity, eleven
+`test_wt_production_config.cpp` locks defaults, schema identity,
 rejection categories, deterministic validation messages, and matching hashes
 in debug and release builds.
 

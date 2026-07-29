@@ -36,6 +36,7 @@ public:
 		const std::vector<WtChunkKey> &keys
 	);
 	bool has_staged_records() const noexcept;
+	bool publish_staged_record(const WtChunkKey &key) noexcept;
 	void publish_staged_records() noexcept;
 	WtGenerationToken applied_generation(const WtChunkKey &key) const noexcept;
 	WtGenerationToken staged_generation(const WtChunkKey &key) const noexcept;

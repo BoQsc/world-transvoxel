@@ -131,27 +131,28 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 
 	for (const WtChunkKey &key : delta.removed) {
 		const WtChunkRecord *record = scheduler.find_record(key);
-		const WtChunkApplicationRecord *application_record =
-			application.find_record(key);
-		if (record == nullptr || application_record == nullptr ||
-			record->generation != application_record->generation) {
+		WtChunkApplicationRecord application_record;
+		if (record == nullptr ||
+			!application.copy_record(key, application_record) ||
+			record->generation != application_record.generation) {
 			++metrics_.state_rejections;
 			return WtDesiredSetRuntimeStatus::RuntimeStateMismatch;
 		}
 	}
 	for (const WtDesiredChunk &item : delta.updated) {
 		const WtChunkRecord *record = scheduler.find_record(item.key);
-		const WtChunkApplicationRecord *application_record =
-			application.find_record(item.key);
-		if (record == nullptr || application_record == nullptr ||
-			record->generation != application_record->generation) {
+		WtChunkApplicationRecord application_record;
+		if (record == nullptr ||
+			!application.copy_record(item.key, application_record) ||
+			record->generation != application_record.generation) {
 			++metrics_.state_rejections;
 			return WtDesiredSetRuntimeStatus::RuntimeStateMismatch;
 		}
 	}
 	for (const WtDesiredChunk &item : delta.added) {
+		WtChunkApplicationRecord application_record;
 		if (scheduler.find_record(item.key) != nullptr ||
-			application.find_record(item.key) != nullptr) {
+			application.copy_record(item.key, application_record)) {
 			++metrics_.state_rejections;
 			return WtDesiredSetRuntimeStatus::RuntimeStateMismatch;
 		}
@@ -166,10 +167,10 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 	std::size_t visual_promotions_requiring_remesh = 0;
 	for (const WtDesiredChunk &item : delta.updated) {
 		const WtChunkRecord *record = scheduler.find_record(item.key);
-		const WtChunkApplicationRecord *application_record =
-			application.find_record(item.key);
-		if (record != nullptr && application_record != nullptr &&
-			!application_record->visual_required && item.visual_required &&
+		WtChunkApplicationRecord application_record;
+		if (record != nullptr &&
+			application.copy_record(item.key, application_record) &&
+			!application_record.visual_required && item.visual_required &&
 			record->lifecycle == WtChunkLifecycle::Ready) {
 			++visual_promotions_requiring_remesh;
 		}
@@ -204,10 +205,10 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 		metrics_.evicted_resource_entries += resource_cache.erase_key(key);
 	}
 	for (const WtDesiredChunk &item : delta.updated) {
-		const WtChunkApplicationRecord *application_record =
-			application.find_record(item.key);
-		const bool promote_visual = application_record != nullptr &&
-			!application_record->visual_required && item.visual_required;
+		WtChunkApplicationRecord application_record;
+		const bool promote_visual =
+			application.copy_record(item.key, application_record) &&
+			!application_record.visual_required && item.visual_required;
 		const WtChunkRecord *record = scheduler.find_record(item.key);
 		const bool interactive_edit_in_flight =
 			record != nullptr &&

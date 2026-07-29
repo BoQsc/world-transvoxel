@@ -90,7 +90,35 @@ bool WtAsyncStorageService::configuration_valid() const noexcept {
 		limits_.completion_capacity != 0 &&
 		limits_.completion_capacity <= kWtMaximumStorageQueueCapacity &&
 		limits_.maximum_page_bytes >= kWtContainerHeaderSize &&
-		limits_.maximum_page_bytes <= kWtMaximumContainerSize;
+		limits_.maximum_page_bytes <= kWtMaximumContainerSize &&
+		limits_.procedural_generation_worker_count != 0 &&
+		limits_.procedural_generation_worker_count <=
+			kWtMaximumProceduralGenerationWorkerCount;
+}
+
+void WtAsyncStorageService::start_workers(std::size_t worker_count) {
+	std::lock_guard<std::mutex> lock(mutex_);
+	workers_.reserve(worker_count);
+	for (std::size_t index = 0; index < worker_count; ++index) {
+		workers_.emplace_back(&WtAsyncStorageService::worker_main, this);
+	}
+}
+
+void WtAsyncStorageService::reset_closed_state_locked() noexcept {
+	open_ = false;
+	stop_requested_ = false;
+	requests_.clear();
+	active_requests_.clear();
+	in_flight_requests_.clear();
+	completion_head_ = 0;
+	completion_count_ = 0;
+	object_root_.clear();
+	manifest_bytes_.clear();
+	manifest_ = {};
+	procedural_ = false;
+	procedural_descriptor_ = {};
+	procedural_keys_.clear();
+	completion_notifier_ = {};
 }
 
 WtAsyncStorageStatus WtAsyncStorageService::open(
@@ -123,41 +151,48 @@ WtAsyncStorageStatus WtAsyncStorageService::open(
 		return WtAsyncStorageStatus::ManifestIoFailure;
 	}
 
-	std::lock_guard<std::mutex> lock(mutex_);
-	requests_.reserve(limits_.request_capacity);
-	active_requests_.reserve(
-		limits_.request_capacity + limits_.completion_capacity + 1
-	);
-	completion_slots_.assign(limits_.completion_capacity, {});
-	manifest_bytes_ = std::move(manifest_bytes);
-	if (wt_open_world_manifest(
-			{ manifest_bytes_.data(), manifest_bytes_.size() },
-			manifest_
-		) != WtWorldManifestStatus::Ok) {
-		manifest_bytes_.clear();
-		manifest_ = {};
-		return WtAsyncStorageStatus::ManifestFailure;
-	}
-	for (const WtWorldPageIndexEntry &entry : manifest_.pages) {
-		if (entry.byte_size > limits_.maximum_page_bytes) {
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		requests_.reserve(limits_.request_capacity);
+		active_requests_.reserve(
+			limits_.request_capacity + limits_.completion_capacity +
+				kWtMaximumProceduralGenerationWorkerCount
+		);
+		in_flight_requests_.reserve(kWtMaximumProceduralGenerationWorkerCount);
+		completion_slots_.assign(limits_.completion_capacity, {});
+		manifest_bytes_ = std::move(manifest_bytes);
+		if (wt_open_world_manifest(
+				{ manifest_bytes_.data(), manifest_bytes_.size() },
+				manifest_
+			) != WtWorldManifestStatus::Ok) {
 			manifest_bytes_.clear();
 			manifest_ = {};
-			return WtAsyncStorageStatus::PageSizeLimitExceeded;
+			return WtAsyncStorageStatus::ManifestFailure;
 		}
+		for (const WtWorldPageIndexEntry &entry : manifest_.pages) {
+			if (entry.byte_size > limits_.maximum_page_bytes) {
+				manifest_bytes_.clear();
+				manifest_ = {};
+				return WtAsyncStorageStatus::PageSizeLimitExceeded;
+			}
+		}
+		object_root_ = object_root;
+		procedural_ = false;
+		procedural_descriptor_ = {};
+		procedural_keys_.clear();
+		requests_.clear();
+		active_requests_.clear();
+		in_flight_requests_.clear();
+		completion_head_ = 0;
+		completion_count_ = 0;
+		sequence_counter_ = 0;
+		stop_requested_ = false;
+		metrics_ = {};
+		open_ = true;
 	}
-	object_root_ = object_root;
-	procedural_ = false;
-	procedural_descriptor_ = {};
-	procedural_keys_.clear();
-	requests_.clear();
-	active_requests_.clear();
-	completion_head_ = 0;
-	completion_count_ = 0;
-	sequence_counter_ = 0;
-	stop_requested_ = false;
-	metrics_ = {};
-	open_ = true;
-	worker_ = std::thread(&WtAsyncStorageService::worker_main, this);
+	// Parallel reads from one object store can add random-I/O contention. Keep
+	// the authoritative file-backed path single-worker.
+	start_workers(1);
 	return WtAsyncStorageStatus::Ok;
 }
 
@@ -176,27 +211,32 @@ WtAsyncStorageStatus WtAsyncStorageService::open_procedural(
 			return WtAsyncStorageStatus::AlreadyOpen;
 		}
 	}
-	std::lock_guard<std::mutex> lock(mutex_);
-	requests_.reserve(limits_.request_capacity);
-	active_requests_.reserve(
-		limits_.request_capacity + limits_.completion_capacity + 1
-	);
-	completion_slots_.assign(limits_.completion_capacity, {});
-	manifest_bytes_.clear();
-	manifest_ = {};
-	object_root_.clear();
-	procedural_ = true;
-	procedural_descriptor_ = descriptor;
-	procedural_keys_ = wt_procedural_keys(descriptor);
-	requests_.clear();
-	active_requests_.clear();
-	completion_head_ = 0;
-	completion_count_ = 0;
-	sequence_counter_ = 0;
-	stop_requested_ = false;
-	metrics_ = {};
-	open_ = true;
-	worker_ = std::thread(&WtAsyncStorageService::worker_main, this);
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		requests_.reserve(limits_.request_capacity);
+		active_requests_.reserve(
+			limits_.request_capacity + limits_.completion_capacity +
+				kWtMaximumProceduralGenerationWorkerCount
+		);
+		in_flight_requests_.reserve(kWtMaximumProceduralGenerationWorkerCount);
+		completion_slots_.assign(limits_.completion_capacity, {});
+		manifest_bytes_.clear();
+		manifest_ = {};
+		object_root_.clear();
+		procedural_ = true;
+		procedural_descriptor_ = descriptor;
+		procedural_keys_ = wt_procedural_keys(descriptor);
+		requests_.clear();
+		active_requests_.clear();
+		in_flight_requests_.clear();
+		completion_head_ = 0;
+		completion_count_ = 0;
+		sequence_counter_ = 0;
+		stop_requested_ = false;
+		metrics_ = {};
+		open_ = true;
+	}
+	start_workers(limits_.procedural_generation_worker_count);
 	return WtAsyncStorageStatus::Ok;
 }
 
@@ -214,22 +254,14 @@ void WtAsyncStorageService::close() noexcept {
 		completion_available_.notify_all();
 		completion_space_available_.notify_all();
 	}
-	if (worker_.joinable()) {
-		worker_.join();
+	for (std::thread &worker : workers_) {
+		if (worker.joinable()) {
+			worker.join();
+		}
 	}
 	std::lock_guard<std::mutex> lock(mutex_);
-	open_ = false;
-	stop_requested_ = false;
-	active_requests_.clear();
-	completion_head_ = 0;
-	completion_count_ = 0;
-	object_root_.clear();
-	manifest_bytes_.clear();
-	manifest_ = {};
-	procedural_ = false;
-	procedural_descriptor_ = {};
-	procedural_keys_.clear();
-	completion_notifier_ = {};
+	workers_.clear();
+	reset_closed_state_locked();
 }
 
 WtAsyncStorageStatus WtAsyncStorageService::request_page(
@@ -255,7 +287,10 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 		active_requests_.begin(),
 		active_requests_.end(),
 		[&](const RequestIdentity &identity) {
-			return identity.key == key && identity.generation == generation;
+			// A storage page is immutable for the source revision of the open
+			// world. Consumer generations identify runtime ownership, not
+			// distinct storage work.
+			return identity.key == key;
 		}
 	);
 	if (active != active_requests_.end()) {
@@ -263,7 +298,7 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 			requests_.begin(),
 			requests_.end(),
 			[&](const Request &request) {
-				return request.key == key && request.generation == generation;
+				return request.key == key;
 			}
 		);
 		if (queued != requests_.end() && queued->priority != priority) {
@@ -385,7 +420,7 @@ bool WtAsyncStorageService::pop_completion_locked(
 	completion_head_ =
 		(completion_head_ + 1) % limits_.completion_capacity;
 	--completion_count_;
-	remove_active_locked(completion.key, completion.generation);
+	remove_active_locked(completion.key);
 	completion_space_available_.notify_one();
 	return true;
 }
@@ -414,15 +449,12 @@ bool WtAsyncStorageService::wait_pop_completion(
 	return pop_completion_locked(completion);
 }
 
-void WtAsyncStorageService::remove_active_locked(
-	const WtChunkKey &key,
-	WtGenerationToken generation
-) {
+void WtAsyncStorageService::remove_active_locked(const WtChunkKey &key) {
 	const auto active = std::find_if(
 		active_requests_.begin(),
 		active_requests_.end(),
 		[&](const RequestIdentity &identity) {
-			return identity.key == key && identity.generation == generation;
+			return identity.key == key;
 		}
 	);
 	if (active != active_requests_.end()) {
@@ -433,6 +465,7 @@ void WtAsyncStorageService::remove_active_locked(
 void WtAsyncStorageService::worker_main() noexcept {
 	for (;;) {
 		Request request;
+		std::chrono::steady_clock::time_point load_started;
 		{
 			std::unique_lock<std::mutex> lock(mutex_);
 			work_available_.wait(lock, [&]() {
@@ -444,12 +477,41 @@ void WtAsyncStorageService::worker_main() noexcept {
 			request = requests_.front();
 			requests_.erase(requests_.begin());
 			++metrics_.started_requests;
+			load_started = std::chrono::steady_clock::now();
+			in_flight_requests_.push_back({
+				{ request.key, request.generation },
+				load_started,
+			});
+			metrics_.maximum_in_flight_requests = std::max<std::uint64_t>(
+				metrics_.maximum_in_flight_requests,
+				in_flight_requests_.size()
+			);
 		}
 
 		std::uint64_t bytes_read = 0;
 		WtPageLoadCompletion completion = load_page(request, bytes_read);
+		const auto load_finished = std::chrono::steady_clock::now();
 
 		std::unique_lock<std::mutex> lock(mutex_);
+		const std::uint64_t load_time_ns = static_cast<std::uint64_t>(
+			std::chrono::duration_cast<std::chrono::nanoseconds>(
+				load_finished - load_started
+			).count()
+		);
+		metrics_.load_time_ns_last = load_time_ns;
+		metrics_.load_time_ns_total += load_time_ns;
+		metrics_.load_time_ns_maximum =
+			std::max(metrics_.load_time_ns_maximum, load_time_ns);
+		const auto in_flight = std::find_if(
+			in_flight_requests_.begin(),
+			in_flight_requests_.end(),
+			[&](const InFlightRequest &candidate) {
+				return candidate.identity.key == request.key;
+			}
+		);
+		if (in_flight != in_flight_requests_.end()) {
+			in_flight_requests_.erase(in_flight);
+		}
 		completion_space_available_.wait(lock, [&]() {
 			return stop_requested_ ||
 				completion_count_ < limits_.completion_capacity;
@@ -589,9 +651,37 @@ std::size_t WtAsyncStorageService::queued_completion_count() const noexcept {
 	return completion_count_;
 }
 
+std::size_t WtAsyncStorageService::active_request_count() const noexcept {
+	std::lock_guard<std::mutex> lock(mutex_);
+	return active_requests_.size();
+}
+
 WtAsyncStorageMetrics WtAsyncStorageService::get_metrics() const noexcept {
 	std::lock_guard<std::mutex> lock(mutex_);
-	return metrics_;
+	WtAsyncStorageMetrics snapshot = metrics_;
+	snapshot.worker_count = workers_.size();
+	snapshot.in_flight_requests = in_flight_requests_.size();
+	if (!in_flight_requests_.empty()) {
+		const auto oldest = std::min_element(
+			in_flight_requests_.begin(),
+			in_flight_requests_.end(),
+			[](const InFlightRequest &left, const InFlightRequest &right) {
+				return left.started < right.started;
+			}
+		);
+		snapshot.in_flight_elapsed_ns = static_cast<std::uint64_t>(
+			std::chrono::duration_cast<std::chrono::nanoseconds>(
+				std::chrono::steady_clock::now() - oldest->started
+			).count()
+		);
+		snapshot.in_flight_key_x = oldest->identity.key.x;
+		snapshot.in_flight_key_y = oldest->identity.key.y;
+		snapshot.in_flight_key_z = oldest->identity.key.z;
+		snapshot.in_flight_key_lod = oldest->identity.key.lod;
+		snapshot.in_flight_generation =
+			oldest->identity.generation.value;
+	}
+	return snapshot;
 }
 
 } // namespace world_transvoxel

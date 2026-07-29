@@ -1,5 +1,8 @@
 #include "api/world_transvoxel_terrain.h"
 
+#include "physics/wt_godot_collision_sink.h"
+#include "render/wt_godot_render_sink.h"
+
 #include "services/wt_chunk_application.h"
 
 #include <godot_cpp/classes/project_settings.hpp>
@@ -95,7 +98,17 @@ WorldTransvoxelTerrain::query_chunk_state(
 	};
 	godot::Ref<WorldTransvoxelChunkState> snapshot;
 	snapshot.instantiate();
-	snapshot->set_snapshot(key, application_->find_record(key));
+	WtChunkApplicationRecord application_record;
+	const WtChunkApplicationRecord *application_record_pointer =
+		application_->copy_record(key, application_record) ?
+			&application_record : nullptr;
+	snapshot->set_snapshot(
+		key,
+		application_record_pointer,
+		render_sink_->applied_generation(key),
+		render_sink_->staged_generation(key),
+		collision_sink_->applied_generation(key)
+	);
 	return snapshot;
 }
 

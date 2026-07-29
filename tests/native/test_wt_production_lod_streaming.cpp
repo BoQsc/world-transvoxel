@@ -414,6 +414,38 @@ bool collect_runtime_until(
 	return predicate();
 }
 
+template <typename Collector, typename Predicate>
+bool collect_runtime_until_quiescent(
+	wt::WtReadOnlyWorldRuntime &runtime,
+	Collector collector,
+	Predicate predicate
+) {
+	const auto deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(8);
+	constexpr auto quiet_period = std::chrono::milliseconds(50);
+	auto quiet_since = std::chrono::steady_clock::time_point{};
+	while (std::chrono::steady_clock::now() < deadline) {
+		wt::WtReadOnlyPublication publication;
+		bool consumed = false;
+		while (runtime.pop_publication(publication)) {
+			consumed = true;
+			collector(publication);
+		}
+		const auto now = std::chrono::steady_clock::now();
+		if (!predicate() || consumed) {
+			quiet_since = {};
+		} else if (quiet_since == std::chrono::steady_clock::time_point{}) {
+			quiet_since = now;
+		} else if (now - quiet_since >= quiet_period) {
+			return true;
+		}
+		if (!consumed) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	wt::WtReadOnlyPublication publication;
+	while (runtime.pop_publication(publication)) collector(publication);
+	return predicate();
+}
+
 bool wait_for_viewer_update_idle(
 	wt::WtReadOnlyWorldRuntime &runtime,
 	std::uint64_t expected_viewer_updates
@@ -700,7 +732,7 @@ bool run_replacement_collision_continuity_regression(
 	check(runtime.update_viewer({ 1, 8.0, 8.0, 8.0, 1 }, 1, 1) ==
 		wt::WtReadOnlyRuntimeStatus::Ok,
 		"replacement collision-continuity initial viewer was rejected");
-	const bool initial_ready = collect_runtime_until(
+	const bool initial_ready = collect_runtime_until_quiescent(
 		runtime,
 		[&](const wt::WtReadOnlyPublication &publication) {
 			if (publication.kind == wt::WtReadOnlyPublicationKind::ExpectChunk &&
@@ -732,7 +764,7 @@ bool run_replacement_collision_continuity_regression(
 		check(runtime.update_viewer({ 1, 40.0, 8.0, 8.0, 2 }, 1, 1) ==
 			wt::WtReadOnlyRuntimeStatus::Ok,
 			"replacement collision-continuity moving viewer was rejected");
-		replacement_ready = collect_runtime_until(
+		replacement_ready = collect_runtime_until_quiescent(
 			runtime,
 			[&](const wt::WtReadOnlyPublication &publication) {
 				replacement_publications.push_back(publication);
@@ -778,6 +810,40 @@ bool run_replacement_collision_continuity_regression(
 		every_removal_had_collision_handoff =
 			every_removal_had_collision_handoff &&
 			requirement_before_removal && payload_before_removal;
+	}
+	if (!saw_visual_only_removal) {
+		std::fprintf(
+			stderr,
+			"DIAG: collision-continuity initial_visible=%zu "
+			"replacement_publications=%zu\n",
+			initial_visible_visual_only.size(),
+			replacement_publications.size()
+		);
+		for (const wt::WtChunkKey &key : initial_visible_visual_only) {
+			std::fprintf(
+				stderr,
+				"DIAG: initial_visual_only key=%d,%d,%d lod=%u\n",
+				key.x,
+				key.y,
+				key.z,
+				static_cast<unsigned int>(key.lod)
+			);
+		}
+		for (const wt::WtReadOnlyPublication &publication :
+			replacement_publications) {
+			std::fprintf(
+				stderr,
+				"DIAG: publication kind=%u key=%d,%d,%d lod=%u "
+				"collision=%d visual=%d\n",
+				static_cast<unsigned int>(publication.kind),
+				publication.key.x,
+				publication.key.y,
+				publication.key.z,
+				static_cast<unsigned int>(publication.key.lod),
+				publication.collision_required ? 1 : 0,
+				publication.visual_required ? 1 : 0
+			);
+		}
 	}
 	check(saw_visual_only_removal,
 		"replacement collision-continuity move removed no visual-only chunk");
@@ -1533,6 +1599,23 @@ int main() {
 	check(plan.entries.size() == 9 && bridge != nullptr &&
 		bridge->transition_mask == wt::wt_face_bit(wt::WtChunkFace::NegativeX),
 		"initial balanced LOD topology mismatch");
+	wt::WtBalancedLodPlan far_plan;
+	check(planner.plan(
+		{ planner_viewer(2, 1, 80.0) }, {}, {}, far_plan
+	) == wt::WtBalancedLodPlannerStatus::Ok,
+		"far balanced LOD plan failed");
+	check(far_plan.entries.size() == 10,
+		"far balanced LOD topology mismatch");
+	wt::WtBalancedLodPlan returned_mid_plan;
+	check(planner.plan(
+		{ planner_viewer(1, 3, 40.0) },
+		desired_from_plan(far_plan),
+		{},
+		returned_mid_plan
+	) == wt::WtBalancedLodPlannerStatus::Ok,
+		"returned-mid balanced LOD plan failed");
+	check(returned_mid_plan.entries.size() == 24,
+		"returned-mid LOD hysteresis topology mismatch");
 	const wt::WtChunkKey retained_edit_key { 5, 0, 0, 0 };
 	check(find_entry(plan, retained_edit_key) == nullptr,
 		"far edited detail key was unexpectedly active before retention");

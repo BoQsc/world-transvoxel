@@ -367,7 +367,9 @@ void test_staged_replacement_collision_waits_for_render(
 	const wt::WtChunkApplicationRecord *initial_record =
 		service.find_record(key);
 	check(render_sink.calls == 1 && collision_sink.calls == 1 &&
-		initial_record != nullptr && initial_record->fully_ready(),
+		initial_record != nullptr && initial_record->fully_ready() &&
+		initial_record->visual_generation.value == 1 &&
+		initial_record->collision_generation.value == 1,
 		"staged replacement initial resources did not become ready");
 
 	auto render2 = std::make_shared<wt::WtRenderPayload>(render_source);
@@ -398,8 +400,43 @@ void test_staged_replacement_collision_waits_for_render(
 		synchronized.collision_processed == 1 &&
 		render_sink.calls == 2 && collision_sink.calls == 2 &&
 		record != nullptr && record->fully_ready() &&
-		!record->staged_replacement,
+		!record->staged_replacement &&
+		record->visual_generation.value == 2 &&
+		record->collision_generation.value == 2,
 		"staged replacement did not synchronize render and collision");
+
+	auto render3 = std::make_shared<wt::WtRenderPayload>(render_source);
+	render3->generation = { 3 };
+	auto collision3 = std::make_shared<wt::WtCollisionPayload>();
+	check(wt::wt_build_collision_payload(*render3, {}, *collision3) ==
+		wt::WtCollisionBuildStatus::Ok,
+		"preserved replacement collision payload failed");
+	check(service.expect_chunk(key, { 3 }, true, true, true, true) ==
+		wt::WtApplicationStatus::Ok,
+		"preserved replacement expectation failed");
+	record = service.find_record(key);
+	check(record != nullptr && record->collision_ready &&
+		record->collision_generation.value == 2 &&
+		record->visual_generation.value == 0 &&
+		!record->fully_ready(),
+		"preserved prior collision was mistaken for current readiness");
+	check(service.submit_render(render3) == wt::WtApplicationStatus::Ok,
+		"preserved replacement render submission failed");
+	service.apply(1, 0, render_sink, collision_sink);
+	record = service.find_record(key);
+	check(record != nullptr && record->visual_generation.value == 3 &&
+		record->collision_generation.value == 2 &&
+		!record->fully_ready() && record->staged_replacement,
+		"replacement became ready before its collision generation");
+	check(service.submit_collision(collision3) == wt::WtApplicationStatus::Ok,
+		"preserved replacement collision submission failed");
+	service.apply(0, 1, render_sink, collision_sink);
+	record = service.find_record(key);
+	check(record != nullptr && record->fully_ready() &&
+		record->visual_generation.value == 3 &&
+		record->collision_generation.value == 3 &&
+		!record->staged_replacement,
+		"preserved replacement generations did not synchronize");
 }
 
 void test_collision_deadline_bounds_frame_work(

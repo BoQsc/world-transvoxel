@@ -291,6 +291,28 @@ void test_open_failures(const StorageFixture &fixture) {
 			wt::WtAsyncStorageStatus::InvalidConfiguration,
 		"zero request capacity was accepted"
 	);
+	wt::WtAsyncStorageService invalid_workers({
+		1,
+		1,
+		wt::kWtMaximumContainerSize,
+		0,
+	});
+	check(
+		invalid_workers.open(fixture.world_path, fixture.root) ==
+			wt::WtAsyncStorageStatus::InvalidConfiguration,
+		"zero procedural worker count was accepted"
+	);
+	wt::WtAsyncStorageService excessive_workers({
+		1,
+		1,
+		wt::kWtMaximumContainerSize,
+		wt::kWtMaximumProceduralGenerationWorkerCount + 1,
+	});
+	check(
+		excessive_workers.open(fixture.world_path, fixture.root) ==
+			wt::WtAsyncStorageStatus::InvalidConfiguration,
+		"excessive procedural worker count was accepted"
+	);
 	wt::WtAsyncStorageService small({
 		1,
 		1,
@@ -358,6 +380,11 @@ void test_async_service(
 	check(
 		wait_for_completion_count(service, 1),
 		"first completion was not produced asynchronously"
+	);
+	check(
+		service.request_page(fixture.pages[0].key, { 111 }, 9) ==
+			wt::WtAsyncStorageStatus::AlreadyPending,
+		"immutable page request was not coalesced across consumer generations"
 	);
 	check(
 		service.request_page(fixture.pages[1].key, { 12 }, 2) ==
@@ -449,7 +476,10 @@ void test_async_service(
 		metrics.successful_pages == 1 &&
 			metrics.failed_pages == 4 &&
 			metrics.request_queue_rejections == 1 &&
-			metrics.duplicate_requests == 1,
+			metrics.duplicate_requests == 2 &&
+			metrics.worker_count == 1 &&
+			metrics.in_flight_requests == 0 &&
+			metrics.maximum_in_flight_requests == 1,
 		"storage result metrics mismatch"
 	);
 	check(
@@ -871,7 +901,10 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 			metrics.completed_requests == 1 &&
 			metrics.successful_pages == 1 &&
 			metrics.failed_pages == 0 &&
-			metrics.bytes_read == completion_size,
+			metrics.bytes_read == completion_size &&
+			metrics.worker_count == 1 &&
+			metrics.in_flight_requests == 0 &&
+			metrics.maximum_in_flight_requests == 1,
 		"procedural async metrics mismatch"
 	);
 	if (completion.page_bytes) {
@@ -889,6 +922,83 @@ void test_procedural_service(std::vector<std::uint8_t> &evidence) {
 			!service.has_page({ 1, 0, 1, 0 }),
 		"closed procedural service retained page state"
 	);
+}
+
+void test_parallel_procedural_service() {
+	wt::WtProceduralWorldDescriptor descriptor;
+	descriptor.chunk_count_x = 4;
+	descriptor.chunk_count_z = 4;
+	descriptor.source_revision = 190020;
+	descriptor.world_revision = 2;
+	descriptor.seed = 19020;
+	descriptor.mode = wt::WtProceduralWorldMode::FourBiomesLakesCavesRoads;
+	wt::WtAsyncStorageService service({
+		32,
+		32,
+		wt::kWtMaximumContainerSize,
+		4,
+	});
+	check(
+		service.open_procedural(descriptor) == wt::WtAsyncStorageStatus::Ok,
+		"parallel procedural storage service open failed"
+	);
+	std::vector<wt::WtChunkKey> keys;
+	for (std::int32_t z = 0; z < 4; ++z) {
+		for (std::int32_t x = 0; x < 4; ++x) {
+			keys.push_back({ x, 0, z, 0 });
+		}
+	}
+	for (std::size_t index = 0; index < keys.size(); ++index) {
+		check(
+			service.request_page(
+				keys[index],
+				{ static_cast<std::uint64_t>(100 + index) },
+				0
+			) == wt::WtAsyncStorageStatus::Ok,
+			"parallel procedural request was rejected"
+		);
+	}
+	std::vector<wt::WtPageLoadCompletion> completions;
+	completions.reserve(keys.size());
+	for (std::size_t index = 0; index < keys.size(); ++index) {
+		wt::WtPageLoadCompletion completion;
+		check(
+			service.wait_pop_completion(
+				completion,
+				std::chrono::seconds(3)
+			),
+			"parallel procedural completion timed out"
+		);
+		check(
+			completion.status == wt::WtPageLoadStatus::Ok &&
+				completion.page_bytes && !completion.page_bytes->empty(),
+			"parallel procedural completion failed"
+		);
+		completions.push_back(std::move(completion));
+	}
+	for (const wt::WtPageLoadCompletion &completion : completions) {
+		std::shared_ptr<const std::vector<std::uint8_t>> expected;
+		check(
+			service.load_page_now(completion.key, expected) ==
+					wt::WtPageLoadStatus::Ok &&
+				expected && completion.page_bytes &&
+				*expected == *completion.page_bytes,
+			"parallel procedural output changed from serial generation"
+		);
+	}
+	const wt::WtAsyncStorageMetrics metrics = service.get_metrics();
+	check(
+		metrics.worker_count == 4 &&
+			metrics.accepted_requests == keys.size() &&
+			metrics.completed_requests == keys.size() &&
+			metrics.successful_pages == keys.size() &&
+			metrics.failed_pages == 0 &&
+			metrics.in_flight_requests == 0 &&
+			metrics.maximum_in_flight_requests >= 2 &&
+			metrics.maximum_in_flight_requests <= 4,
+		"parallel procedural worker metrics mismatch"
+	);
+	service.close();
 }
 
 void test_procedural_cave_portal() {
@@ -1081,6 +1191,7 @@ int main() {
 	test_async_service(fixture, evidence);
 	test_shutdown_accounting(fixture);
 	test_procedural_service(evidence);
+	test_parallel_procedural_service();
 	test_procedural_cave_portal();
 	test_procedural_road_network();
 	test_four_biome_lake_world();
@@ -1093,6 +1204,7 @@ int main() {
 	std::printf(
 		"M5_ASYNC_STORAGE_PASS requests=5 successes=1 failures=4 "
 		"queue_rejections=1 procedural_strata=1 procedural_lod3=1 "
+		"parallel_procedural_generation=1 "
 		"procedural_cave_portal=1 procedural_roads=1 "
 		"four_biome_lake_world=1\n"
 	);

@@ -17,6 +17,7 @@
 namespace world_transvoxel {
 
 constexpr std::size_t kWtMaximumStorageQueueCapacity = 65536;
+constexpr std::size_t kWtMaximumProceduralGenerationWorkerCount = 8;
 
 struct WtScalarSample;
 
@@ -24,6 +25,9 @@ struct WtAsyncStorageLimits {
 	std::size_t request_capacity = 256;
 	std::size_t completion_capacity = 256;
 	std::size_t maximum_page_bytes = kWtMaximumContainerSize;
+	// File-backed storage always uses one I/O worker. This limit applies only
+	// when open_procedural() generates immutable source pages.
+	std::size_t procedural_generation_worker_count = 1;
 };
 
 enum class WtProceduralWorldMode : std::uint8_t {
@@ -88,6 +92,18 @@ struct WtAsyncStorageMetrics {
 	std::uint64_t duplicate_requests = 0;
 	std::uint64_t cancelled_requests = 0;
 	std::uint64_t discarded_completions = 0;
+	std::uint64_t load_time_ns_last = 0;
+	std::uint64_t load_time_ns_total = 0;
+	std::uint64_t load_time_ns_maximum = 0;
+	std::uint64_t worker_count = 0;
+	std::uint64_t in_flight_requests = 0;
+	std::uint64_t maximum_in_flight_requests = 0;
+	std::uint64_t in_flight_elapsed_ns = 0;
+	std::int64_t in_flight_key_x = 0;
+	std::int64_t in_flight_key_y = 0;
+	std::int64_t in_flight_key_z = 0;
+	std::uint64_t in_flight_key_lod = 0;
+	std::uint64_t in_flight_generation = 0;
 };
 
 std::filesystem::path wt_page_object_path(
@@ -143,6 +159,7 @@ public:
 	std::size_t page_count() const noexcept;
 	std::size_t queued_request_count() const noexcept;
 	std::size_t queued_completion_count() const noexcept;
+	std::size_t active_request_count() const noexcept;
 	WtAsyncStorageMetrics get_metrics() const noexcept;
 
 private:
@@ -159,12 +176,16 @@ private:
 		WtGenerationToken generation;
 	};
 
+	struct InFlightRequest {
+		RequestIdentity identity;
+		std::chrono::steady_clock::time_point started;
+	};
+
 	bool configuration_valid() const noexcept;
 	bool pop_completion_locked(WtPageLoadCompletion &completion);
-	void remove_active_locked(
-		const WtChunkKey &key,
-		WtGenerationToken generation
-	);
+	void remove_active_locked(const WtChunkKey &key);
+	void start_workers(std::size_t worker_count);
+	void reset_closed_state_locked() noexcept;
 	void worker_main() noexcept;
 	WtPageLoadCompletion load_page(
 		const Request &request,
@@ -182,9 +203,10 @@ private:
 	std::size_t completion_head_ = 0;
 	std::size_t completion_count_ = 0;
 	std::uint64_t sequence_counter_ = 0;
+	std::vector<InFlightRequest> in_flight_requests_;
 	bool open_ = false;
 	bool stop_requested_ = false;
-	std::thread worker_;
+	std::vector<std::thread> workers_;
 	std::filesystem::path object_root_;
 	std::vector<std::uint8_t> manifest_bytes_;
 	WtWorldManifestView manifest_;

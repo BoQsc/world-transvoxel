@@ -67,10 +67,12 @@ wt::WtId128 id(std::uint64_t seed) {
 	return value;
 }
 
-wt::WtEditTransaction transaction(
+wt::WtEditTransaction transaction_at(
 	std::uint64_t source_revision,
 	std::uint64_t base_revision,
-	std::int64_t center,
+	std::int64_t center_x,
+	std::int64_t center_y,
+	std::int64_t center_z,
 	std::uint64_t identity
 ) {
 	wt::WtEditTransaction result;
@@ -86,15 +88,31 @@ wt::WtEditTransaction transaction(
 	command.shape = wt::WtEditShape::Sphere;
 	command.density_value = -0.5F;
 	command.sphere = {
-		center * wt::kWtEditCoordinateScale,
-		center * wt::kWtEditCoordinateScale,
-		center * wt::kWtEditCoordinateScale,
+		center_x * wt::kWtEditCoordinateScale,
+		center_y * wt::kWtEditCoordinateScale,
+		center_z * wt::kWtEditCoordinateScale,
 		static_cast<std::uint64_t>(wt::kWtEditCoordinateScale / 4),
 	};
 	check(wt::wt_edit_sphere_bounds(command.sphere, command.bounds),
 		"edit replacement bounds construction failed");
 	result.commands.push_back(command);
 	return result;
+}
+
+wt::WtEditTransaction transaction(
+	std::uint64_t source_revision,
+	std::uint64_t base_revision,
+	std::int64_t center,
+	std::uint64_t identity
+) {
+	return transaction_at(
+		source_revision,
+		base_revision,
+		center,
+		center,
+		center,
+		identity
+	);
 }
 
 class CacheSource final : public wt::WtChunkSampleSource {
@@ -576,6 +594,64 @@ void test_atomic_rejections() {
 		"edit replacement rejection metrics mismatch");
 }
 
+void test_foreground_interaction_ordering() {
+	constexpr std::uint64_t source_revision = 750;
+	const std::vector<wt::WtChunkKey> keys = {
+		{ 0, 0, 0, 0 },
+		{ 0, 0, 1, 0 },
+		{ 1, 0, 0, 0 },
+		{ 1, 0, 1, 0 },
+	};
+	const wt::WtChunkKey foreground_key = { 1, 0, 1, 0 };
+	wt::WtEditSpatialIndex spatial(keys.size(), 64, keys.size());
+	check(spatial.rebuild(keys) == wt::WtEditSpatialStatus::Ok,
+		"foreground ordering spatial rebuild failed");
+	wt::WtStreamScheduler scheduler(keys.size(), 16, 16, 1);
+	wt::WtChunkApplicationService application(keys.size(), 4, 4);
+	for (const wt::WtChunkKey &key : keys) {
+		const wt::WtGenerationToken generation = request_ready(
+			scheduler, key, source_revision, 7, 1
+		);
+		check(application.expect_chunk(key, generation, true, true) ==
+			wt::WtApplicationStatus::Ok,
+			"foreground ordering application setup failed");
+	}
+	wt::WtStoragePageCache page_cache({
+		keys.size(),
+		wt::kWtMaximumContainerSize,
+		keys.size(),
+		wt::kWtMaximumContainerSize,
+	});
+	wt::WtChunkResourceCache resource_cache({
+		keys.size(),
+		wt::kWtMaximumResourceCacheBytes,
+		keys.size(),
+		wt::kWtMaximumResourceCacheBytes,
+		keys.size(),
+		wt::kWtMaximumResourceCacheBytes,
+	});
+	wt::WtEditRuntimeReplacementService service(keys.size());
+	check(service.replace_loaded_chunks(
+		transaction_at(source_revision, 7, 16, 8, 16, 50),
+		spatial,
+		scheduler,
+		page_cache,
+		resource_cache,
+		application,
+		nullptr
+	) == wt::WtEditRuntimeReplacementStatus::Ok,
+		"foreground ordering replacement failed");
+	const auto &replacements = service.get_last_replacements();
+	check(replacements.size() == keys.size() &&
+		replacements.front().key == foreground_key,
+		"interacted chunk was not the first replacement");
+	wt::WtChunkJob job;
+	check(scheduler.pop_job(job) &&
+		job.key == foreground_key &&
+		job.stage == wt::WtChunkJobStage::Sample,
+		"interacted chunk was not the first scheduled edit job");
+}
+
 void test_repeated_bounded_replacement(std::vector<std::uint8_t> &evidence) {
 	constexpr std::uint64_t source_revision = 900;
 	const wt::WtChunkKey key = { 0, 0, 0, 0 };
@@ -635,6 +711,7 @@ int main() {
 	std::vector<std::uint8_t> evidence;
 	test_end_to_end(evidence);
 	test_atomic_rejections();
+	test_foreground_interaction_ordering();
 	test_repeated_bounded_replacement(evidence);
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M5_EDIT_REPLACEMENT_FAIL failures=%d\n",
@@ -644,7 +721,8 @@ int main() {
 	std::printf("M5_EDIT_REPLACEMENT_HASH ");
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
-		"M5_EDIT_REPLACEMENT_PASS affected=2 stale_pipeline=4 cycles=1000\n"
+		"M5_EDIT_REPLACEMENT_PASS affected=2 foreground_first=yes "
+		"stale_pipeline=4 cycles=1000\n"
 	);
 	return 0;
 }

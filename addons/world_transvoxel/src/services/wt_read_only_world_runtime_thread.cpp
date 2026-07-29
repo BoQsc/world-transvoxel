@@ -2,6 +2,7 @@
 
 #include "services/wt_page_meshing_runtime.h"
 #include "storage/wt_async_storage_service.h"
+#include "storage/wt_storage_page_cache.h"
 #include "streaming/wt_stream_scheduler.h"
 
 #include <utility>
@@ -18,8 +19,11 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 	storage_.set_completion_notifier([this]() { notify_work(); });
 	std::uint64_t observed_wake = 0;
 	while (!stop_requested_.load()) {
-		bool progressed = process_viewer_event();
-		progressed = process_world_operation_event() || progressed;
+		// Foreground edits must not sit behind a potentially large viewer-plan
+		// delta. Viewer events are coalesced and may safely follow the edit; the
+		// edit journal remains authoritative for chunks requested afterward.
+		bool progressed = process_world_operation_event();
+		progressed = process_viewer_event() || progressed;
 		progressed = process_storage_completions() || progressed;
 		progressed = page_runtime_->resume_loading_records(
 			storage_,
@@ -41,6 +45,7 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 		progressed = process_mesh_completions() || progressed;
 		progressed = process_collision_readiness_repairs() || progressed;
 		progressed = process_visual_readiness_repairs() || progressed;
+		refresh_metrics_snapshot();
 		if (last_status_.load() != WtReadOnlyRuntimeStatus::Ok) break;
 		if (!progressed) {
 			std::unique_lock<std::mutex> lock(wake_mutex_);
@@ -52,6 +57,7 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 		}
 	}
 	storage_.set_completion_notifier({});
+	refresh_metrics_snapshot();
 	return last_status_.load();
 }
 
@@ -115,6 +121,56 @@ bool WtReadOnlyWorldRuntime::pop_publication(
 	return true;
 }
 
+bool WtReadOnlyWorldRuntime::pop_unbudgeted_publication(
+	WtReadOnlyPublication &publication
+) {
+	std::lock_guard<std::mutex> lock(publication_mutex_);
+	const auto pop_matching = [&publication](
+		std::vector<WtReadOnlyPublication> &slots,
+		std::size_t &head,
+		std::size_t &count
+	) {
+		for (std::size_t offset = 0; offset < count; ++offset) {
+			const std::size_t index = (head + offset) % slots.size();
+			const WtReadOnlyPublicationKind kind = slots[index].kind;
+			if (kind == WtReadOnlyPublicationKind::RenderPayload ||
+				kind == WtReadOnlyPublicationKind::CollisionPayload) {
+				continue;
+			}
+			publication = std::move(slots[index]);
+			for (std::size_t shift = offset; shift + 1U < count; ++shift) {
+				const std::size_t destination = (head + shift) % slots.size();
+				const std::size_t source = (head + shift + 1U) % slots.size();
+				slots[destination] = std::move(slots[source]);
+			}
+			const std::size_t tail = (head + count - 1U) % slots.size();
+			slots[tail] = {};
+			--count;
+			return true;
+		}
+		return false;
+	};
+	if (pop_matching(
+			priority_publication_slots_,
+			priority_publication_head_,
+			priority_publication_count_
+		)) {
+		++priority_publication_burst_;
+		publication_space_available_.notify_one();
+		return true;
+	}
+	if (pop_matching(
+			publication_slots_,
+			publication_head_,
+			publication_count_
+		)) {
+		priority_publication_burst_ = 0;
+		publication_space_available_.notify_one();
+		return true;
+	}
+	return false;
+}
+
 bool WtReadOnlyWorldRuntime::has_publication_backlog() {
 	std::lock_guard<std::mutex> lock(publication_mutex_);
 	return publication_count_ != 0 || priority_publication_count_ != 0;
@@ -173,7 +229,15 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::last_status() const noexcept {
 WtReadOnlyRuntimeMetrics
 WtReadOnlyWorldRuntime::get_metrics() const noexcept {
 	std::lock_guard<std::mutex> lock(metrics_mutex_);
-	WtReadOnlyRuntimeMetrics snapshot = metrics_;
+	return published_metrics_;
+}
+
+void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
+	WtReadOnlyRuntimeMetrics snapshot;
+	{
+		std::lock_guard<std::mutex> lock(metrics_mutex_);
+		snapshot = metrics_;
+	}
 	if (scheduler_) {
 		const WtSchedulerMetrics scheduler = scheduler_->get_metrics();
 		snapshot.scheduler_requested_records = scheduler.requested_records;
@@ -186,6 +250,30 @@ WtReadOnlyWorldRuntime::get_metrics() const noexcept {
 			scheduler_->queued_completion_count();
 		snapshot.scheduler_queue_rejections = scheduler.queue_rejections;
 	}
+	const WtAsyncStorageMetrics storage = storage_.get_metrics();
+	snapshot.storage_queued_requests = storage_.queued_request_count();
+	snapshot.storage_queued_completions = storage_.queued_completion_count();
+	snapshot.storage_active_requests = storage_.active_request_count();
+	snapshot.storage_accepted_requests = storage.accepted_requests;
+	snapshot.storage_started_requests = storage.started_requests;
+	snapshot.storage_completed_requests = storage.completed_requests;
+	snapshot.storage_request_queue_rejections =
+		storage.request_queue_rejections;
+	snapshot.storage_duplicate_requests = storage.duplicate_requests;
+	snapshot.storage_successful_pages = storage.successful_pages;
+	snapshot.storage_load_time_ns_last = storage.load_time_ns_last;
+	snapshot.storage_load_time_ns_total = storage.load_time_ns_total;
+	snapshot.storage_load_time_ns_maximum = storage.load_time_ns_maximum;
+	snapshot.storage_worker_count = storage.worker_count;
+	snapshot.storage_in_flight_requests = storage.in_flight_requests;
+	snapshot.storage_maximum_in_flight_requests =
+		storage.maximum_in_flight_requests;
+	snapshot.storage_in_flight_elapsed_ns = storage.in_flight_elapsed_ns;
+	snapshot.storage_in_flight_key_x = storage.in_flight_key_x;
+	snapshot.storage_in_flight_key_y = storage.in_flight_key_y;
+	snapshot.storage_in_flight_key_z = storage.in_flight_key_z;
+	snapshot.storage_in_flight_key_lod = storage.in_flight_key_lod;
+	snapshot.storage_in_flight_generation = storage.in_flight_generation;
 	if (page_runtime_) {
 		const WtPageMeshingRuntimeMetrics page = page_runtime_->get_metrics();
 		snapshot.page_sample_failures = page.sample_failures;
@@ -193,12 +281,48 @@ WtReadOnlyWorldRuntime::get_metrics() const noexcept {
 		snapshot.page_storage_failures = page.storage_failures;
 		snapshot.page_cache_failures = page.cache_failures;
 		snapshot.page_scheduler_backpressure = page.scheduler_backpressure;
+		snapshot.page_dependency_requests = page.dependency_requests;
+		snapshot.page_dependency_reprioritizations =
+			page.dependency_reprioritizations;
+		snapshot.page_dependency_cache_hits = page.dependency_cache_hits;
+		snapshot.page_dependency_cache_misses = page.dependency_cache_misses;
+		snapshot.page_accepted_storage_completions =
+			page.accepted_storage_completions;
+		snapshot.page_stale_storage_completions =
+			page.stale_storage_completions;
+		snapshot.page_loading_records = page.loading_records;
+		snapshot.page_sample_ready_records = page.sample_ready_records;
+		snapshot.page_awaiting_mesh_records = page.awaiting_mesh_records;
+		snapshot.page_mesh_ready_records = page.mesh_ready_records;
+		snapshot.page_ready_records = page.ready_records;
+		snapshot.page_unresolved_dependencies =
+			page.unresolved_dependencies;
+		snapshot.page_pending_dependency_requests =
+			page.pending_dependency_requests;
+		snapshot.page_pinned_pages = page.pinned_pages;
 		snapshot.page_last_failure_key_x = page.last_failure_key_x;
 		snapshot.page_last_failure_key_y = page.last_failure_key_y;
 		snapshot.page_last_failure_key_z = page.last_failure_key_z;
 		snapshot.page_last_failure_key_lod = page.last_failure_key_lod;
 	}
-	return snapshot;
+	if (page_cache_) {
+		const WtStoragePageCacheMetrics cache = page_cache_->get_metrics();
+		snapshot.page_cache_encoded_entries = page_cache_->encoded_entry_count();
+		snapshot.page_cache_decoded_entries = page_cache_->decoded_entry_count();
+		snapshot.page_cache_encoded_hits = cache.encoded_hits;
+		snapshot.page_cache_encoded_misses = cache.encoded_misses;
+		snapshot.page_cache_encoded_insertions = cache.encoded_insertions;
+		snapshot.page_cache_encoded_refreshes = cache.encoded_refreshes;
+		snapshot.page_cache_encoded_evictions = cache.encoded_evictions;
+		snapshot.page_cache_decoded_hits = cache.decoded_hits;
+		snapshot.page_cache_decoded_misses = cache.decoded_misses;
+		snapshot.page_cache_decoded_insertions = cache.decoded_insertions;
+		snapshot.page_cache_decoded_evictions = cache.decoded_evictions;
+	}
+	{
+		std::lock_guard<std::mutex> lock(metrics_mutex_);
+		published_metrics_ = snapshot;
+	}
 }
 
 std::uint64_t WtReadOnlyWorldRuntime::world_revision() const noexcept {

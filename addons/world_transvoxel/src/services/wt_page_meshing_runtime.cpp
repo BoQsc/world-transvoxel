@@ -299,76 +299,6 @@ WtPageMeshingRuntimeService::begin_sample_job(
 }
 
 WtPageMeshingRuntimeStatus
-WtPageMeshingRuntimeService::accept_storage_completion(
-	const WtPageLoadCompletion &completion,
-	WtStoragePageCache &cache,
-	WtStreamScheduler &scheduler
-) {
-	if (!valid_ || !cache.valid()) {
-		return WtPageMeshingRuntimeStatus::InvalidConfiguration;
-	}
-	auto owner = find_completion_owner(completion);
-	if (owner == records_.end()) {
-		++metrics_.stale_storage_completions;
-		return WtPageMeshingRuntimeStatus::CompletionNotOwned;
-	}
-	const std::size_t record_index = static_cast<std::size_t>(
-		owner - records_.begin()
-	);
-	if (owner->phase != WtPageMeshingRuntimePhase::Loading) {
-		++metrics_.stale_storage_completions;
-		return WtPageMeshingRuntimeStatus::StaleCompletion;
-	}
-	auto dependency = std::lower_bound(
-		owner->dependencies.begin(),
-		owner->dependencies.end(),
-		completion.key,
-		[](const Dependency &left, const WtChunkKey &right) {
-			return left.key < right;
-		}
-	);
-	if (dependency == owner->dependencies.end() ||
-		dependency->key != completion.key || dependency->page) {
-		++metrics_.stale_storage_completions;
-		return WtPageMeshingRuntimeStatus::StaleCompletion;
-	}
-	if (completion.status != WtPageLoadStatus::Ok) {
-		cache.accept_completion(completion, owner->generation);
-		++metrics_.storage_failures;
-		record_failure_key(metrics_, completion.key);
-		mark_sample_failure(record_index, scheduler);
-		return WtPageMeshingRuntimeStatus::StorageRequestFailure;
-	}
-	if (cache.accept_completion(completion, owner->generation) !=
-			WtStoragePageCacheStatus::Ok ||
-		cache.find_or_decode(
-			completion.key,
-			owner->source_revision,
-			dependency->page
-		) != WtStoragePageCacheStatus::Ok ||
-		!dependency->page) {
-		++metrics_.cache_failures;
-		record_failure_key(metrics_, completion.key);
-		mark_sample_failure(record_index, scheduler);
-		return WtPageMeshingRuntimeStatus::CacheFailure;
-	}
-	dependency->request_pending = false;
-	++metrics_.accepted_storage_completions;
-	update_maximum_pins();
-	if (std::all_of(
-			owner->dependencies.begin(),
-			owner->dependencies.end(),
-			[](const Dependency &dependency) {
-				return static_cast<bool>(dependency.page);
-			}
-		)) {
-		owner->phase = WtPageMeshingRuntimePhase::SampleReady;
-		return submit_pending_result(record_index, scheduler);
-	}
-	return WtPageMeshingRuntimeStatus::Ok;
-}
-
-WtPageMeshingRuntimeStatus
 WtPageMeshingRuntimeService::execute_mesh_job(
 	const WtChunkJob &job,
 	const WtChunkMesher &mesher,
@@ -742,30 +672,6 @@ WtPageMeshingRuntimeService::find_record(
 	);
 	return record != records_.end() && record->key == key ?
 		record : records_.end();
-}
-
-std::vector<WtPageMeshingRuntimeService::Record>::iterator
-WtPageMeshingRuntimeService::find_completion_owner(
-	const WtPageLoadCompletion &completion
-) noexcept {
-	for (auto record = records_.begin(); record != records_.end(); ++record) {
-		if (record->generation != completion.generation) {
-			continue;
-		}
-		const auto dependency = std::lower_bound(
-			record->dependencies.begin(),
-			record->dependencies.end(),
-			completion.key,
-			[](const Dependency &left, const WtChunkKey &right) {
-				return left.key < right;
-			}
-		);
-		if (dependency != record->dependencies.end() &&
-			dependency->key == completion.key) {
-			return record;
-		}
-	}
-	return records_.end();
 }
 
 WtPageMeshingRuntimeStatus

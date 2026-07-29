@@ -11,6 +11,9 @@ readiness. The snapshot exposes:
 - requested chunk coordinate and LOD;
 - whether an active application record exists;
 - current generation token;
+- currently applied render generation;
+- staged render generation, when visibility publication is intentionally held;
+- currently applied collision generation;
 - visual readiness;
 - whether collision is required;
 - collision readiness;
@@ -33,6 +36,9 @@ surface. Therefore a ready active chunk can intentionally have no
 
 Generation is an opaque runtime identity. Callers may compare nonzero values
 for equality to detect replacement, but must not persist or predict them.
+Resource-generation values are diagnostic evidence from the actual render and
+collision sinks. They distinguish logical queue readiness from a resource that
+is still staged or still belongs to the preceding generation.
 
 The method is a Godot main-thread capability over native application state.
 It performs a bounded binary search and does not scan viewers, pages, or the
@@ -48,7 +54,9 @@ release addon builds:
 - fine and coarse active readiness;
 - an active ready chunk with an empty render surface;
 - collision-required and combined readiness;
-- transition-mask replacement changes generation;
+- applied render/collision generations match the current generation after
+  readiness, with no staged render left behind;
+- transition-mask-only viewer changes retain the canonical mesh generation;
 - prior snapshots remain unchanged;
 - viewer eviction removes the current application record;
 - clean lifecycle shutdown.

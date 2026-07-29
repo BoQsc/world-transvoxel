@@ -24,6 +24,18 @@ void WorldTransvoxelChunkState::_bind_methods() {
 		&WorldTransvoxelChunkState::get_generation
 	);
 	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_render_generation"),
+		&WorldTransvoxelChunkState::get_render_generation
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_staged_render_generation"),
+		&WorldTransvoxelChunkState::get_staged_render_generation
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_collision_generation"),
+		&WorldTransvoxelChunkState::get_collision_generation
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD("is_visual_ready"),
 		&WorldTransvoxelChunkState::is_visual_ready
 	);
@@ -62,6 +74,21 @@ std::int64_t WorldTransvoxelChunkState::get_generation() const noexcept {
 	return static_cast<std::int64_t>(generation_.value);
 }
 
+std::int64_t
+WorldTransvoxelChunkState::get_render_generation() const noexcept {
+	return static_cast<std::int64_t>(render_generation_.value);
+}
+
+std::int64_t
+WorldTransvoxelChunkState::get_staged_render_generation() const noexcept {
+	return static_cast<std::int64_t>(staged_render_generation_.value);
+}
+
+std::int64_t
+WorldTransvoxelChunkState::get_collision_generation() const noexcept {
+	return static_cast<std::int64_t>(collision_generation_.value);
+}
+
 bool WorldTransvoxelChunkState::is_visual_ready() const noexcept {
 	return visual_ready_;
 }
@@ -85,11 +112,17 @@ bool WorldTransvoxelChunkState::is_fully_ready() const noexcept {
 
 void WorldTransvoxelChunkState::set_snapshot(
 	const WtChunkKey &key,
-	const WtChunkApplicationRecord *record
+	const WtChunkApplicationRecord *record,
+	WtGenerationToken render_generation,
+	WtGenerationToken staged_render_generation,
+	WtGenerationToken collision_generation
 ) noexcept {
 	key_ = key;
 	present_ = record != nullptr;
 	generation_ = record != nullptr ? record->generation : WtGenerationToken{};
+	render_generation_ = render_generation;
+	staged_render_generation_ = staged_render_generation;
+	collision_generation_ = collision_generation;
 	visual_ready_ = record != nullptr && record->visual_ready;
 	visual_required_ = record != nullptr && record->visual_required;
 	collision_required_ = record != nullptr && record->collision_required;

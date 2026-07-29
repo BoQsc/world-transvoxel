@@ -12,16 +12,61 @@
 namespace world_transvoxel {
 void WorldTransvoxelTerrain::_process(double delta) {
 	(void)delta;
-	const bool drained_publications = drain_world_publications();
+	const WtApplicationMetrics application_before =
+		application_->get_metrics();
+	std::size_t collision_publication_count = 0;
+	const bool drained_publications = drain_world_publications(
+		collision_publication_count,
+		application_before.collision_apply_time_ns_total
+	);
 	update_visibility_staging_state();
+	const WtApplicationMetrics application_after_drain =
+		application_->get_metrics();
+	const std::uint64_t collision_apply_time_ns_used =
+		application_after_drain.collision_apply_time_ns_total -
+		application_before.collision_apply_time_ns_total;
+	const std::size_t collision_apply_budget_remaining =
+		collision_publication_count < collision_apply_budget_ ?
+		collision_apply_budget_ - collision_publication_count : 0U;
+	const std::uint64_t collision_apply_deadline_ns_remaining =
+		collision_apply_deadline_ns_ == 0U ? 0U :
+		collision_apply_time_ns_used < collision_apply_deadline_ns_ ?
+		collision_apply_deadline_ns_ - collision_apply_time_ns_used : 0U;
+	const std::size_t bounded_collision_apply_budget =
+		collision_apply_deadline_ns_ == 0U ||
+			collision_apply_deadline_ns_remaining != 0U ?
+		collision_apply_budget_remaining : 0U;
 	const WtApplicationBatchResult applied =
 		application_->apply_with_collision_deadline(
 			render_apply_budget_,
-			collision_apply_budget_,
-			collision_apply_deadline_ns_,
+			bounded_collision_apply_budget,
+			collision_apply_deadline_ns_remaining,
 			*render_sink_,
 			*collision_sink_
 		);
+	const WtApplicationMetrics application_after =
+		application_->get_metrics();
+	collision_apply_frame_time_ns_last_ =
+		application_after.collision_apply_time_ns_total -
+		application_before.collision_apply_time_ns_total;
+	collision_apply_frame_items_last_ =
+		application_after.applied_collision -
+		application_before.applied_collision;
+	collision_apply_frame_time_ns_total_ +=
+		collision_apply_frame_time_ns_last_;
+	collision_apply_frame_time_ns_maximum_ = std::max(
+		collision_apply_frame_time_ns_maximum_,
+		collision_apply_frame_time_ns_last_
+	);
+	collision_apply_frame_items_maximum_ = std::max(
+		collision_apply_frame_items_maximum_,
+		collision_apply_frame_items_last_
+	);
+	if (collision_apply_frame_items_last_ != 0 &&
+		collision_apply_frame_time_ns_last_ >
+			collision_apply_deadline_ns_) {
+		++collision_apply_frame_deadline_overruns_;
+	}
 	if (lifecycle_ && (drained_publications || applied.render_processed != 0)) {
 		lifecycle_->notify_application_progress();
 	}
@@ -138,10 +183,12 @@ WorldTransvoxelTerrain::get_collision_chunk_count() const noexcept {
 	return static_cast<std::int64_t>(collision_sink_->resource_count());
 }
 
-bool WorldTransvoxelTerrain::drain_world_publications() {
+bool WorldTransvoxelTerrain::drain_world_publications(
+	std::size_t &collision_publication_count,
+	std::uint64_t collision_apply_time_ns_start
+) {
 	if (!lifecycle_) return false;
 	std::size_t render_count = 0;
-	std::size_t collision_count = 0;
 	bool drained = false;
 	for (std::size_t count = 0; count < 256U; ++count) {
 		WtReadOnlyPublication publication;
@@ -151,16 +198,24 @@ bool WorldTransvoxelTerrain::drain_world_publications() {
 		} else if (!lifecycle_->pop_publication(publication)) {
 			break;
 		}
+		const std::uint64_t collision_apply_time_ns_used =
+			application_->get_metrics().collision_apply_time_ns_total -
+			collision_apply_time_ns_start;
+		const bool collision_deadline_reached =
+			collision_apply_deadline_ns_ != 0U &&
+			collision_apply_time_ns_used >= collision_apply_deadline_ns_;
 		if ((publication.kind == WtReadOnlyPublicationKind::RenderPayload &&
 				render_count >= render_apply_budget_) ||
 			(publication.kind == WtReadOnlyPublicationKind::CollisionPayload &&
-				collision_count >= collision_apply_budget_)) {
+				(collision_publication_count >= collision_apply_budget_ ||
+					collision_deadline_reached))) {
 			deferred_publication_ = std::move(publication);
 			has_deferred_publication_ = true;
-			break;
+			if (!lifecycle_->pop_unbudgeted_publication(publication)) break;
 		}
 		drained = true;
 		WtApplicationStatus status = WtApplicationStatus::Ok;
+		bool collision_deadline_exhausted = false;
 		switch (publication.kind) {
 			case WtReadOnlyPublicationKind::ExpectChunk:
 				status = application_->expect_chunk(
@@ -178,15 +233,17 @@ bool WorldTransvoxelTerrain::drain_world_publications() {
 						cancel_render_retirement(publication.key);
 					}
 					if (publication.staged_replacement) {
-						stage_chunk_replacement(publication.key);
+						stage_chunk_replacement(
+							publication.key,
+							publication.independently_publishable_replacement
+						);
 					}
 				}
 				break;
 			case WtReadOnlyPublicationKind::SetCollisionRequired: {
-				const WtChunkApplicationRecord *record =
-					application_->find_record(publication.key);
-				if (record == nullptr ||
-					record->generation != publication.generation) {
+				WtChunkApplicationRecord record;
+				if (!application_->copy_record(publication.key, record) ||
+					record.generation != publication.generation) {
 					status = WtApplicationStatus::StaleGeneration;
 					break;
 				}
@@ -200,10 +257,9 @@ bool WorldTransvoxelTerrain::drain_world_publications() {
 				break;
 			}
 			case WtReadOnlyPublicationKind::SetVisualRequired: {
-				const WtChunkApplicationRecord *record =
-					application_->find_record(publication.key);
-				if (record == nullptr ||
-					record->generation != publication.generation) {
+				WtChunkApplicationRecord record;
+				if (!application_->copy_record(publication.key, record) ||
+					record.generation != publication.generation) {
 					status = WtApplicationStatus::StaleGeneration;
 					break;
 				}
@@ -229,7 +285,7 @@ bool WorldTransvoxelTerrain::drain_world_publications() {
 					WtApplicationStatus::InvalidInput;
 				break;
 			case WtReadOnlyPublicationKind::CollisionPayload:
-				++collision_count;
+				++collision_publication_count;
 				status = publication.collision ?
 					application_->submit_collision(publication.collision) :
 					WtApplicationStatus::InvalidInput;
@@ -240,13 +296,29 @@ bool WorldTransvoxelTerrain::drain_world_publications() {
 				// it reaches the physics server. The previous shape remains active
 				// there until the replacement generation is ready.
 				if (status == WtApplicationStatus::Ok) {
+					const std::uint64_t remaining_deadline_ns =
+						collision_apply_deadline_ns_ == 0U ? 0U :
+						collision_apply_time_ns_used <
+								collision_apply_deadline_ns_ ?
+							collision_apply_deadline_ns_ -
+								collision_apply_time_ns_used :
+							0U;
 					application_->apply_with_collision_deadline(
 						0U,
 						1U,
-						collision_apply_deadline_ns_,
+						remaining_deadline_ns,
 						*render_sink_,
 						*collision_sink_
 					);
+					const std::uint64_t total_collision_apply_time_ns =
+						application_->get_metrics().
+							collision_apply_time_ns_total -
+						collision_apply_time_ns_start;
+					if (collision_apply_deadline_ns_ != 0U &&
+						total_collision_apply_time_ns >=
+							collision_apply_deadline_ns_) {
+						collision_deadline_exhausted = true;
+					}
 				}
 				break;
 			case WtReadOnlyPublicationKind::EditCommitted:
@@ -353,6 +425,9 @@ bool WorldTransvoxelTerrain::drain_world_publications() {
 			synchronous_world_error_ =
 				"world publication application failed";
 		}
+		if (collision_deadline_exhausted) {
+			break;
+		}
 	}
 	return drained;
 }
@@ -386,7 +461,8 @@ void WorldTransvoxelTerrain::cancel_chunk_retirement(
 }
 
 void WorldTransvoxelTerrain::stage_chunk_replacement(
-	const WtChunkKey &key
+	const WtChunkKey &key,
+	bool independently_publishable
 ) {
 	const auto iterator = std::lower_bound(
 		pending_chunk_replacements_.begin(),
@@ -395,6 +471,20 @@ void WorldTransvoxelTerrain::stage_chunk_replacement(
 	);
 	if (iterator == pending_chunk_replacements_.end() || *iterator != key) {
 		pending_chunk_replacements_.insert(iterator, key);
+	}
+	if (!independently_publishable) return;
+	const auto independent = std::lower_bound(
+		independently_publishable_chunk_replacements_.begin(),
+		independently_publishable_chunk_replacements_.end(),
+		key
+	);
+	if (independent ==
+			independently_publishable_chunk_replacements_.end() ||
+			*independent != key) {
+		independently_publishable_chunk_replacements_.insert(
+			independent,
+			key
+		);
 	}
 }
 
@@ -408,6 +498,16 @@ void WorldTransvoxelTerrain::cancel_chunk_replacement(
 	);
 	if (iterator != pending_chunk_replacements_.end() && *iterator == key) {
 		pending_chunk_replacements_.erase(iterator);
+	}
+	const auto independent = std::lower_bound(
+		independently_publishable_chunk_replacements_.begin(),
+		independently_publishable_chunk_replacements_.end(),
+		key
+	);
+	if (independent !=
+			independently_publishable_chunk_replacements_.end() &&
+			*independent == key) {
+		independently_publishable_chunk_replacements_.erase(independent);
 	}
 }
 
@@ -476,15 +576,41 @@ void WorldTransvoxelTerrain::flush_ready_render_retirements() {
 void WorldTransvoxelTerrain::flush_ready_chunk_replacements() {
 	for (auto iterator = pending_chunk_replacements_.begin();
 			iterator != pending_chunk_replacements_.end();) {
-		const WtChunkApplicationRecord *record =
-			application_->find_record(*iterator);
-		if (record == nullptr) {
+		WtChunkApplicationRecord record;
+		if (!application_->copy_record(*iterator, record)) {
+			const WtChunkKey key = *iterator;
 			iterator = pending_chunk_replacements_.erase(iterator);
+			const auto independent = std::lower_bound(
+				independently_publishable_chunk_replacements_.begin(),
+				independently_publishable_chunk_replacements_.end(),
+				key
+			);
+			if (independent !=
+					independently_publishable_chunk_replacements_.end() &&
+					*independent == key) {
+				independently_publishable_chunk_replacements_.erase(
+					independent
+				);
+			}
 			continue;
 		}
-		if (!record->fully_ready()) {
+		if (!record.fully_ready()) {
 			++iterator;
 			continue;
+		}
+		const auto independent = std::lower_bound(
+			independently_publishable_chunk_replacements_.begin(),
+			independently_publishable_chunk_replacements_.end(),
+			*iterator
+		);
+		if (independent !=
+				independently_publishable_chunk_replacements_.end() &&
+				*independent == *iterator) {
+			if (!render_sink_->publish_staged_record(*iterator)) {
+				++iterator;
+				continue;
+			}
+			independently_publishable_chunk_replacements_.erase(independent);
 		}
 		iterator = pending_chunk_replacements_.erase(iterator);
 	}
@@ -538,6 +664,12 @@ void WorldTransvoxelTerrain::publish_staged_records_if_ready() {
 void WorldTransvoxelTerrain::reset_world_application(std::size_t capacity) {
 	has_deferred_publication_ = false;
 	deferred_publication_ = {};
+	collision_apply_frame_time_ns_last_ = 0;
+	collision_apply_frame_time_ns_total_ = 0;
+	collision_apply_frame_time_ns_maximum_ = 0;
+	collision_apply_frame_items_last_ = 0;
+	collision_apply_frame_items_maximum_ = 0;
+	collision_apply_frame_deadline_overruns_ = 0;
 	const std::size_t staging_capacity = capacity <=
 		std::numeric_limits<std::size_t>::max() / 2U ?
 		capacity * 2U : std::numeric_limits<std::size_t>::max();
@@ -545,6 +677,8 @@ void WorldTransvoxelTerrain::reset_world_application(std::size_t capacity) {
 	pending_chunk_retirements_.reserve(staging_capacity);
 	pending_chunk_replacements_.clear();
 	pending_chunk_replacements_.reserve(staging_capacity);
+	independently_publishable_chunk_replacements_.clear();
+	independently_publishable_chunk_replacements_.reserve(staging_capacity);
 	pending_render_retirements_.clear();
 	pending_render_retirements_.reserve(staging_capacity);
 	application_ = std::make_unique<WtChunkApplicationService>(

@@ -7,7 +7,72 @@
 #include "streaming/wt_multi_viewer_desired_set.h"
 #include "streaming/wt_stream_scheduler.h"
 
+#include <algorithm>
+
 namespace world_transvoxel {
+
+namespace {
+
+std::int64_t floor_q16(std::int64_t value) noexcept {
+	const std::int64_t quotient = value / kWtEditCoordinateScale;
+	return value < 0 && value % kWtEditCoordinateScale != 0 ?
+		quotient - 1 :
+		quotient;
+}
+
+std::int64_t midpoint_q16(
+	std::int64_t minimum,
+	std::int64_t maximum
+) noexcept {
+	return minimum / 2 + maximum / 2 +
+		(minimum % 2 + maximum % 2) / 2;
+}
+
+WtGridPoint command_center(const WtEditCommand &command) noexcept {
+	if (command.shape == WtEditShape::Sphere) {
+		return {
+			floor_q16(command.sphere.center_x_q16),
+			floor_q16(command.sphere.center_y_q16),
+			floor_q16(command.sphere.center_z_q16),
+		};
+	}
+	return {
+		floor_q16(midpoint_q16(
+			command.box.minimum_x_q16,
+			command.box.maximum_x_q16
+		)),
+		floor_q16(midpoint_q16(
+			command.box.minimum_y_q16,
+			command.box.maximum_y_q16
+		)),
+		floor_q16(midpoint_q16(
+			command.box.minimum_z_q16,
+			command.box.maximum_z_q16
+		)),
+	};
+}
+
+bool contains_point(
+	const WtChunkBounds &bounds,
+	const WtGridPoint &point
+) noexcept {
+	return point.x >= bounds.minimum.x && point.x < bounds.maximum.x &&
+		point.y >= bounds.minimum.y && point.y < bounds.maximum.y &&
+		point.z >= bounds.minimum.z && point.z < bounds.maximum.z;
+}
+
+bool contains_command_center(
+	const WtChunkKey &key,
+	const WtEditTransaction &transaction
+) noexcept {
+	const WtChunkBounds bounds = wt_chunk_bounds(key);
+	for (const WtEditCommand &command : transaction.commands) {
+		if (contains_point(bounds, command_center(command))) return true;
+	}
+	return false;
+}
+
+} // namespace
 
 WtEditRuntimeReplacementService::WtEditRuntimeReplacementService(
 	std::size_t replacement_capacity
@@ -63,11 +128,11 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 
 	for (const WtChunkKey &key : affected_) {
 		const WtChunkRecord *record = scheduler.find_record(key);
-		const WtChunkApplicationRecord *application_record =
-			application.find_record(key);
-		if (record == nullptr || application_record == nullptr ||
+		WtChunkApplicationRecord application_record;
+		if (record == nullptr ||
+			!application.copy_record(key, application_record) ||
 			record->lifecycle == WtChunkLifecycle::Cancelled ||
-			application_record->generation != record->generation) {
+			application_record.generation != record->generation) {
 			++metrics_.state_rejections;
 			return WtEditRuntimeReplacementStatus::RuntimeStateMismatch;
 		}
@@ -79,8 +144,8 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 			++metrics_.state_rejections;
 			return WtEditRuntimeReplacementStatus::WorldRevisionMismatch;
 		}
-		bool collision_required = application_record->collision_required;
-		bool visual_required = application_record->visual_required;
+		bool collision_required = application_record.collision_required;
+		bool visual_required = application_record.visual_required;
 		if (desired_chunks != nullptr) {
 			const WtDesiredChunk *desired = nullptr;
 			for (const WtDesiredChunk &candidate : *desired_chunks) {
@@ -103,8 +168,23 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 			record->world_revision,
 			collision_required,
 			visual_required,
+			contains_command_center(key, transaction),
 		});
 	}
+	std::sort(
+		prepared_.begin(),
+		prepared_.end(),
+		[](const PreparedReplacement &left,
+			const PreparedReplacement &right) {
+			if (left.foreground_interaction != right.foreground_interaction) {
+				return left.foreground_interaction;
+			}
+			if (left.collision_required != right.collision_required) {
+				return left.collision_required;
+			}
+			return left.key < right.key;
+		}
+	);
 	if (scheduler.available_job_capacity() < prepared_.size()) {
 		++metrics_.capacity_rejections;
 		return WtEditRuntimeReplacementStatus::JobQueueCapacityExceeded;

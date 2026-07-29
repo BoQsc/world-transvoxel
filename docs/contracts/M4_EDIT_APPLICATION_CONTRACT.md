@@ -119,7 +119,7 @@ history.
 `tests/native/test_wt_m4_apply.cpp` locks the debug/release edited-page hash:
 
 ```text
-4218e0b2e7cff2e44cac31e3b5cf44df9c212a029c88be5a22b0c988e7a3d4a1
+718299711f482dec5c606b31fefa61e6576d73f4226c0b84c5059e70031eded1
 ```
 
 The test covers:

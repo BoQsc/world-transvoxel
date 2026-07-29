@@ -5,8 +5,10 @@ Status: implemented foundation
 ## Responsibility
 
 `WtAsyncStorageService` owns an immutable `wtworld` manifest copy and resolves
-its indexed pages from a content-addressed filesystem object store. Page I/O
-occurs on one native worker thread. The caller submits typed chunk requests and
+its indexed pages from a content-addressed filesystem object store. File-backed
+page I/O occurs on one native worker thread. Procedural immutable page
+generation uses a separately configured bounded pool of one to eight workers;
+the production default is two. The caller submits typed chunk requests and
 polls or waits for typed completions.
 
 The service does not own desired LOD, decoded samples, meshes, Godot resources,
@@ -47,8 +49,11 @@ common container header size and 256 MiB. Opening rejects a manifest containing
 any page larger than the configured limit.
 
 The request queue is ordered by descending integer priority and then FIFO
-sequence. Exact duplicate `(chunk key, generation)` requests are rejected while
-pending. A full request queue rejects new work without mutating accepted work.
+sequence. Because a source page is immutable for the open world revision,
+duplicate chunk-key requests coalesce even when consumer generations differ.
+A duplicate may raise the queued request's priority but cannot start redundant
+storage or procedural work. A full request queue rejects new work without
+mutating accepted work.
 
 The worker sleeps on a condition variable when idle. It never scans the world
 manifest for work. A full completion queue applies backpressure to the worker;
@@ -60,10 +65,12 @@ Every request requires a nonzero `WtGenerationToken`. The token is copied
 unchanged into its completion. The returned byte vector is immutable shared
 ownership.
 
-This foundation deliberately does not decide whether a completion is stale.
-The later M5 scheduler integration must compare the completion token against
-the current chunk generation before decoding, caching, meshing, or applying
-resources.
+The completion retains the generation of the request that owned the shared
+load. The page-meshing layer fans one successful immutable completion to every
+currently waiting generation for the same page key. A cancelled first owner
+does not invalidate the page bytes: a successful completion may still enter
+the page cache for coalesced or future consumers. Scheduler/application
+generation checks remain mandatory before meshing or publishing resources.
 
 ## Shutdown
 
@@ -80,7 +87,8 @@ store. It proves:
 - generation-token preservation;
 - priority ordering under bounded completion backpressure;
 - request overflow rejection;
-- duplicate request rejection;
+- duplicate request coalescing and priority update;
+- byte-identical procedural output with four generation workers;
 - missing, short, hash-corrupt, and metadata-mismatched object failures;
 - invalid configuration, path, manifest, key, and page-size rejection;
 - no unrequested work while idle;
@@ -88,7 +96,7 @@ store. It proves:
 - matching debug/release evidence hash:
 
 ```text
-e269d25e9b1cc7f2178d07342519c65dca64187ee89ab202b86caa944943b072
+9aca3433346bf02392062fea7ffd5ee1edddda81b1245c844e642517f4b1517c
 ```
 
 This contract completed the first M5 work item. Bounded caches, multi-viewer

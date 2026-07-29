@@ -40,6 +40,11 @@ func _run_test() -> void:
 			absent.call("get_lod") != 1 or absent.call("get_generation") != 0:
 		_fail("valid absent chunk snapshot mismatch")
 		return
+	if absent.call("get_render_generation") != 0 or \
+			absent.call("get_staged_render_generation") != 0 or \
+			absent.call("get_collision_generation") != 0:
+		_fail("absent chunk exposed applied resource generations")
+		return
 	if terrain.call("query_chunk_state", Vector3i.ZERO, -1) != null or \
 			terrain.call("query_chunk_state", Vector3i.ZERO, 21) != null:
 		_fail("invalid LOD query was accepted")
@@ -53,7 +58,8 @@ func _run_test() -> void:
 		"query_chunk_state", Vector3i(1, 0, 0), 1
 	)
 	if not _is_ready_snapshot(first_bridge) or \
-			first_bridge.call("get_generation") <= 0:
+			first_bridge.call("get_generation") <= 0 or \
+			not _has_matching_applied_generations(first_bridge):
 		_fail("coarse bridge readiness snapshot mismatch")
 		return
 	var empty_surface: RefCounted = terrain.call(
@@ -73,9 +79,20 @@ func _run_test() -> void:
 		"query_chunk_state", Vector3i(1, 0, 0), 1
 	)
 	if not _is_ready_snapshot(second_bridge) or \
-			second_bridge.call("get_generation") == first_generation or \
+			second_bridge.call("get_generation") != first_generation or \
+			not _has_matching_applied_generations(second_bridge) or \
 			first_bridge.call("get_generation") != first_generation:
-		_fail("generation replacement snapshot mismatch")
+		_fail(
+			"mask-only stable-generation snapshot mismatch first=%d current=%d render=%d staged=%d collision=%d ready=%s" %
+			[
+				first_generation,
+				second_bridge.call("get_generation"),
+				second_bridge.call("get_render_generation"),
+				second_bridge.call("get_staged_render_generation"),
+				second_bridge.call("get_collision_generation"),
+				str(_is_ready_snapshot(second_bridge)),
+			]
+		)
 		return
 
 	if not terrain.call("remove_viewer", 1, 2) or \
@@ -94,7 +111,7 @@ func _run_test() -> void:
 			not await _wait_for_state(terrain, "stopped"):
 		_fail("query fixture did not stop cleanly")
 		return
-	print("PRODUCTION_GODOT_CHUNK_QUERY_PASS snapshots=5 replacement=1")
+	print("PRODUCTION_GODOT_CHUNK_QUERY_PASS snapshots=5 mask_stable=1")
 	terrain.queue_free()
 	await process_frame
 	quit(0)
@@ -106,6 +123,13 @@ func _is_ready_snapshot(snapshot: RefCounted) -> bool:
 		snapshot.call("is_collision_required") and \
 		snapshot.call("is_collision_ready") and \
 		snapshot.call("is_fully_ready")
+
+
+func _has_matching_applied_generations(snapshot: RefCounted) -> bool:
+	var generation: int = snapshot.call("get_generation")
+	return snapshot.call("get_render_generation") == generation and \
+		snapshot.call("get_staged_render_generation") == 0 and \
+		snapshot.call("get_collision_generation") == generation
 
 
 func _wait_for_state(terrain: Node, expected: String) -> bool:

@@ -61,10 +61,23 @@ but they do not issue competing replacement requests.
 
 ## Successful replacement
 
-For each canonical affected key, a successful replacement:
+Before publication work is enqueued, affected chunks are ordered
+deterministically:
+
+1. chunks containing the center of an edit command;
+2. other chunks that currently require collision;
+3. the canonical chunk-key order.
+
+The half-open authoritative integer chunk bounds choose exactly one foreground
+chunk per LOD when a command center lies on a boundary. This ordering does not
+omit, merge, or cancel neighboring edit work. It prevents the chunk the player
+actually interacted with from waiting behind every adjacent chunk when one
+brush crosses a chunk corner.
+
+For each ordered affected key, a successful replacement:
 
 1. requests a new sample job with the original source revision, committed
-   world revision, existing priority, and a new generation token;
+   world revision, interactive-edit priority, and a new generation token;
 2. cancels matching page-meshing ownership before replacement when that owner
    exists;
 3. makes queued or in-flight storage, sample, mesh, render, and collision work
@@ -102,6 +115,8 @@ and page-meshing coordination failures.
 - every affected page-meshing generation receives an exact cancellation call;
 - old storage, scheduler, render, and collision completions are stale;
 - visual and collision readiness reset and recover independently;
+- a four-chunk boundary edit schedules the chunk containing the command center
+  first, independent of canonical spatial-index ordering;
 - insufficient queue capacity and missing application state reject atomically;
 - 1,000 repeated edit replacements retain one scheduler record, one
   application record, and bounded empty queues.
@@ -109,7 +124,7 @@ and page-meshing coordination failures.
 The locked deterministic evidence hash is:
 
 ```text
-03eedad6263963350d32226bd5c59f9aba48e4b35adefa4f2cd774cd70cfb9df
+6ae2b170d2a823a91a5cd985734b08ff7d459f4260ee79ba48263bb318cc17fe
 ```
 
 This completes the edit-driven runtime replacement coordination unit, including

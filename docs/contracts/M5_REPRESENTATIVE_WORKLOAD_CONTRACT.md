@@ -114,7 +114,7 @@ The test additionally proves:
 - matching debug/release output hash:
 
 ```text
-c5bdf6b8896f0a5e4271c5aeab2e8f552e7b776bccc66e9082595467ff90b2a3
+b758a78f2da5582081a579ea74de5bec0d33901a334001a395f3a462dbf27d44
 ```
 
 These are deterministic functional bounds, not production hardware budgets.

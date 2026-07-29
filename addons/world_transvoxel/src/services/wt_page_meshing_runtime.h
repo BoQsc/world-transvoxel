@@ -108,6 +108,14 @@ struct WtPageMeshingRuntimeMetrics {
 	std::uint64_t invalidated_records = 0;
 	std::uint64_t discarded_mesh_completions = 0;
 	std::size_t maximum_pinned_pages = 0;
+	std::uint64_t loading_records = 0;
+	std::uint64_t sample_ready_records = 0;
+	std::uint64_t awaiting_mesh_records = 0;
+	std::uint64_t mesh_ready_records = 0;
+	std::uint64_t ready_records = 0;
+	std::uint64_t unresolved_dependencies = 0;
+	std::uint64_t pending_dependency_requests = 0;
+	std::uint64_t pinned_pages = 0;
 	std::int64_t last_failure_key_x = 0;
 	std::int64_t last_failure_key_y = 0;
 	std::int64_t last_failure_key_z = 0;
@@ -231,9 +239,6 @@ private:
 	std::vector<Record>::const_iterator find_record(
 		const WtChunkKey &key
 	) const noexcept;
-	std::vector<Record>::iterator find_completion_owner(
-		const WtPageLoadCompletion &completion
-	) noexcept;
 	WtPageMeshingRuntimeStatus resolve_dependency(
 		std::size_t record_index,
 		std::size_t dependency_index,

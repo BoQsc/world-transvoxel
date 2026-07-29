@@ -89,6 +89,7 @@ public:
 	);
 	void notify_application_progress() noexcept;
 	bool pop_publication(WtReadOnlyPublication &publication);
+	bool pop_unbudgeted_publication(WtReadOnlyPublication &publication);
 
 	WtWorldLifecycleState state() const noexcept;
 	WtAsyncStorageStatus last_storage_status() const noexcept;

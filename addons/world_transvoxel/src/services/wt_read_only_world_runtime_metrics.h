@@ -1,0 +1,103 @@
+#pragma once
+
+#include <cstdint>
+
+namespace world_transvoxel {
+
+struct WtReadOnlyRuntimeMetrics {
+	std::uint64_t viewer_updates = 0;
+	std::uint64_t viewer_removals = 0;
+	std::uint64_t collision_viewer_updates = 0;
+	std::uint64_t collision_viewer_removals = 0;
+	std::uint64_t coalesced_viewer_events = 0;
+	std::uint64_t planned_demands = 0;
+	std::uint64_t sample_jobs = 0;
+	std::uint64_t mesh_jobs = 0;
+	std::uint64_t sample_job_time_ns_last = 0;
+	std::uint64_t sample_job_time_ns_total = 0;
+	std::uint64_t sample_job_time_ns_maximum = 0;
+	std::uint64_t mesh_job_time_ns_last = 0;
+	std::uint64_t mesh_job_time_ns_total = 0;
+	std::uint64_t mesh_job_time_ns_maximum = 0;
+	std::uint64_t storage_completions = 0;
+	std::uint64_t mesh_completions = 0;
+	std::uint64_t transition_mesh_completions = 0;
+	std::uint64_t edit_commits = 0;
+	std::uint64_t edit_rejections = 0;
+	std::uint64_t edit_replacements = 0;
+	std::uint64_t edit_lod_retention_zones = 0;
+	std::uint64_t edit_lod_retention_active_viewers = 0;
+	std::uint64_t edit_lod_retention_plans = 0;
+	std::uint64_t edit_lod_retention_fallbacks = 0;
+	std::uint64_t sample_queries = 0;
+	std::uint64_t sample_query_rejections = 0;
+	std::uint64_t world_snapshots = 0;
+	std::uint64_t world_snapshot_rejections = 0;
+	std::uint64_t published_events = 0;
+	std::uint64_t rejected_events = 0;
+	std::uint64_t scheduler_requested_records = 0;
+	std::uint64_t scheduler_sampling_records = 0;
+	std::uint64_t scheduler_meshing_records = 0;
+	std::uint64_t scheduler_ready_records = 0;
+	std::uint64_t scheduler_failed_records = 0;
+	std::uint64_t scheduler_queued_jobs = 0;
+	std::uint64_t scheduler_queued_completions = 0;
+	std::uint64_t scheduler_queue_rejections = 0;
+	std::uint64_t storage_queued_requests = 0;
+	std::uint64_t storage_queued_completions = 0;
+	std::uint64_t storage_active_requests = 0;
+	std::uint64_t storage_accepted_requests = 0;
+	std::uint64_t storage_started_requests = 0;
+	std::uint64_t storage_completed_requests = 0;
+	std::uint64_t storage_request_queue_rejections = 0;
+	std::uint64_t storage_duplicate_requests = 0;
+	std::uint64_t storage_successful_pages = 0;
+	std::uint64_t storage_load_time_ns_last = 0;
+	std::uint64_t storage_load_time_ns_total = 0;
+	std::uint64_t storage_load_time_ns_maximum = 0;
+	std::uint64_t storage_worker_count = 0;
+	std::uint64_t storage_in_flight_requests = 0;
+	std::uint64_t storage_maximum_in_flight_requests = 0;
+	std::uint64_t storage_in_flight_elapsed_ns = 0;
+	std::int64_t storage_in_flight_key_x = 0;
+	std::int64_t storage_in_flight_key_y = 0;
+	std::int64_t storage_in_flight_key_z = 0;
+	std::uint64_t storage_in_flight_key_lod = 0;
+	std::uint64_t storage_in_flight_generation = 0;
+	std::uint64_t page_sample_failures = 0;
+	std::uint64_t page_mesh_failures = 0;
+	std::uint64_t page_storage_failures = 0;
+	std::uint64_t page_cache_failures = 0;
+	std::uint64_t page_scheduler_backpressure = 0;
+	std::uint64_t page_dependency_requests = 0;
+	std::uint64_t page_dependency_reprioritizations = 0;
+	std::uint64_t page_dependency_cache_hits = 0;
+	std::uint64_t page_dependency_cache_misses = 0;
+	std::uint64_t page_accepted_storage_completions = 0;
+	std::uint64_t page_stale_storage_completions = 0;
+	std::uint64_t page_cache_encoded_entries = 0;
+	std::uint64_t page_cache_decoded_entries = 0;
+	std::uint64_t page_cache_encoded_hits = 0;
+	std::uint64_t page_cache_encoded_misses = 0;
+	std::uint64_t page_cache_encoded_insertions = 0;
+	std::uint64_t page_cache_encoded_refreshes = 0;
+	std::uint64_t page_cache_encoded_evictions = 0;
+	std::uint64_t page_cache_decoded_hits = 0;
+	std::uint64_t page_cache_decoded_misses = 0;
+	std::uint64_t page_cache_decoded_insertions = 0;
+	std::uint64_t page_cache_decoded_evictions = 0;
+	std::uint64_t page_loading_records = 0;
+	std::uint64_t page_sample_ready_records = 0;
+	std::uint64_t page_awaiting_mesh_records = 0;
+	std::uint64_t page_mesh_ready_records = 0;
+	std::uint64_t page_ready_records = 0;
+	std::uint64_t page_unresolved_dependencies = 0;
+	std::uint64_t page_pending_dependency_requests = 0;
+	std::uint64_t page_pinned_pages = 0;
+	std::int64_t page_last_failure_key_x = 0;
+	std::int64_t page_last_failure_key_y = 0;
+	std::int64_t page_last_failure_key_z = 0;
+	std::uint64_t page_last_failure_key_lod = 0;
+};
+
+} // namespace world_transvoxel

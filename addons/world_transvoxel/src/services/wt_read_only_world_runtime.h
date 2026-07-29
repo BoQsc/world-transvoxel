@@ -3,6 +3,7 @@
 #include "physics/wt_collision_apply_queue.h"
 #include "render/wt_render_apply_queue.h"
 #include "services/wt_authoritative_sample_query.h"
+#include "services/wt_read_only_world_runtime_metrics.h"
 #include "services/wt_runtime_config.h"
 #include "storage/wt_world_snapshot_store.h"
 #include "streaming/wt_balanced_lod_planner.h"
@@ -117,50 +118,7 @@ struct WtReadOnlyPublication {
 	std::filesystem::path snapshot_manifest_path;
 	std::uint64_t snapshot_source_revision = 0;
 	std::size_t snapshot_page_count = 0;
-};
-
-struct WtReadOnlyRuntimeMetrics {
-	std::uint64_t viewer_updates = 0;
-	std::uint64_t viewer_removals = 0;
-	std::uint64_t collision_viewer_updates = 0;
-	std::uint64_t collision_viewer_removals = 0;
-	std::uint64_t coalesced_viewer_events = 0;
-	std::uint64_t planned_demands = 0;
-	std::uint64_t sample_jobs = 0;
-	std::uint64_t mesh_jobs = 0;
-	std::uint64_t storage_completions = 0;
-	std::uint64_t mesh_completions = 0;
-	std::uint64_t transition_mesh_completions = 0;
-	std::uint64_t edit_commits = 0;
-	std::uint64_t edit_rejections = 0;
-	std::uint64_t edit_replacements = 0;
-	std::uint64_t edit_lod_retention_zones = 0;
-	std::uint64_t edit_lod_retention_active_viewers = 0;
-	std::uint64_t edit_lod_retention_plans = 0;
-	std::uint64_t edit_lod_retention_fallbacks = 0;
-	std::uint64_t sample_queries = 0;
-	std::uint64_t sample_query_rejections = 0;
-	std::uint64_t world_snapshots = 0;
-	std::uint64_t world_snapshot_rejections = 0;
-	std::uint64_t published_events = 0;
-	std::uint64_t rejected_events = 0;
-	std::uint64_t scheduler_requested_records = 0;
-	std::uint64_t scheduler_sampling_records = 0;
-	std::uint64_t scheduler_meshing_records = 0;
-	std::uint64_t scheduler_ready_records = 0;
-	std::uint64_t scheduler_failed_records = 0;
-	std::uint64_t scheduler_queued_jobs = 0;
-	std::uint64_t scheduler_queued_completions = 0;
-	std::uint64_t scheduler_queue_rejections = 0;
-	std::uint64_t page_sample_failures = 0;
-	std::uint64_t page_mesh_failures = 0;
-	std::uint64_t page_storage_failures = 0;
-	std::uint64_t page_cache_failures = 0;
-	std::uint64_t page_scheduler_backpressure = 0;
-	std::int64_t page_last_failure_key_x = 0;
-	std::int64_t page_last_failure_key_y = 0;
-	std::int64_t page_last_failure_key_z = 0;
-	std::uint64_t page_last_failure_key_lod = 0;
+	bool independently_publishable_replacement = false;
 };
 
 class WtReadOnlyWorldRuntime {
@@ -217,6 +175,7 @@ public:
 	WtReadOnlyRuntimeStatus run();
 	void request_stop() noexcept;
 	bool pop_publication(WtReadOnlyPublication &publication);
+	bool pop_unbudgeted_publication(WtReadOnlyPublication &publication);
 	void notify_application_progress() noexcept;
 
 	WtReadOnlyRuntimeStatus last_status() const noexcept;
@@ -271,9 +230,12 @@ private:
 		WtChunkKey key;
 		WtGenerationToken generation;
 		bool render_republished = false;
-		std::uint64_t render_republish_application_sequence = 0;
 	};
 	struct ReadinessRepairRemeshAttempt {
+		WtChunkKey key;
+		WtGenerationToken generation;
+	};
+	struct CollisionReadinessRepairAttempt {
 		WtChunkKey key;
 		WtGenerationToken generation;
 	};
@@ -290,6 +252,10 @@ private:
 	bool process_storage_completions();
 	bool process_pending_transition_remeshes();
 	bool process_scheduler_jobs();
+	bool prepare_terrain_collision_payload(
+		const WtTerrainMeshCompletion &completion,
+		std::shared_ptr<WtCollisionPayload> &collision
+	);
 	bool process_terrain_mesh_completion(
 		const WtTerrainMeshCompletion &completion
 	);
@@ -321,6 +287,7 @@ private:
 	) const;
 	void notify_work() noexcept;
 	void set_failure(WtReadOnlyRuntimeStatus status) noexcept;
+	void refresh_metrics_snapshot() noexcept;
 
 	WtRuntimeConfig config_;
 	WtAsyncStorageService &storage_;
@@ -340,6 +307,7 @@ private:
 	std::vector<WorldOperation> world_operations_;
 	std::size_t world_operation_capacity_ = 0;
 	std::uint64_t next_request_id_ = 0;
+	std::atomic<bool> pending_edit_operation_{ false };
 
 	mutable std::mutex publication_mutex_;
 	std::condition_variable publication_space_available_;
@@ -363,10 +331,10 @@ private:
 	std::vector<EditLodRetentionZone> edit_lod_retention_zones_;
 	std::vector<WtDesiredChunk> pending_transition_remeshes_;
 	std::vector<WtChunkKey> readiness_repair_candidate_keys_;
+	std::vector<CollisionReadinessRepairAttempt>
+		collision_readiness_repair_attempts_;
 	std::vector<ReadinessRepairAttempt> readiness_repair_attempts_;
 	std::vector<ReadinessRepairRemeshAttempt> readiness_repair_remesh_attempts_;
-	std::uint64_t readiness_repair_application_sequence_ = 0;
-	std::size_t readiness_render_repairs_this_sequence_ = 0;
 	std::uint64_t next_edit_lod_retention_revision_ = 1;
 	std::uint64_t next_edit_lod_retention_viewer_id_ = 1;
 	WtBalancedLodPlan current_plan_;
@@ -383,6 +351,7 @@ private:
 	std::unique_ptr<WtChunkMeshingScratch> meshing_scratch_;
 	mutable std::mutex metrics_mutex_;
 	WtReadOnlyRuntimeMetrics metrics_;
+	WtReadOnlyRuntimeMetrics published_metrics_;
 };
 
 const char *wt_read_only_runtime_status_message(

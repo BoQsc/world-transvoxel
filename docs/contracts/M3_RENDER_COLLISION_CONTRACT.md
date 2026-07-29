@@ -90,10 +90,17 @@ and bounded readiness.
 
 Render and collision use separate mutex-protected bounded FIFO queues. Queue
 overflow is explicit and counted. `WtChunkApplicationService` owns a bounded,
-sorted set of expected chunk generations and independent visual/collision
-readiness bits.
+sorted set of expected chunk generations, independent visual/collision
+readiness bits, and the exact generation last accepted by each sink. Its
+mutable record set is mutex-serialized because the lifecycle worker prepares
+expectations while the Godot frame thread applies resources. Concurrent
+production readers receive value snapshots rather than pointers into that
+mutable vector.
 
-- Expecting a newer generation resets both readiness states.
+- Expecting a newer generation resets current-generation readiness. A staged
+  edit replacement may retain the prior collision shape and its readiness bit
+  while the replacement is built, but that prior generation cannot satisfy
+  combined readiness for the replacement.
 - Older expectations are rejected.
 - A queued payload is compared with the expected generation before a sink is
   called.
@@ -103,20 +110,29 @@ readiness bits.
   frame cannot perform unbounded cleanup.
 - Queue latency is recorded in application-frame ticks with total and maximum
   values for render and collision independently.
-- A chunk is fully ready when visual output is ready and collision output is
-  either ready or not required.
+- A chunk is fully ready only when every required output is ready and its
+  applied generation equals the expected generation.
+- Staged edit render output is not made visible until its required replacement
+  collision generation is also applied. The previous visible mesh and
+  collision shape remain authoritative during that interval.
+- Collision application is bounded by both item count and a shared per-frame
+  time deadline across publication draining and backlog application. One
+  indivisible Godot shape publication may exceed the deadline; no second shape
+  begins after exhaustion.
 - A zero budget performs no queue work or record scan.
 
-Queue submission is worker-safe. Expectations, application, readiness access,
-and Godot sinks are main-thread operations.
+Queue submission and application-record synchronization are worker-safe.
+Immutable readiness snapshots may be read from either owning thread. Payload
+application and all Godot sinks remain main-thread operations.
 
 ## Proof
 
 `tests/native/test_wt_m3_application.cpp` proves deterministic render-buffer
 combination, inactive-face rejection, collision sanitation and metrics,
 distance hysteresis, bounded queues and records, independent readiness,
-pre-sink stale rejection, frame budgets, and 1,000 supersession cycles with
-bounded state in debug and optimized builds.
+pre-sink stale rejection, frame budgets, preserved-old-collision replacement
+generation synchronization, and 1,000 supersession cycles with bounded state
+in debug and optimized builds.
 
 `tests/godot/m3_integration_test.gd` applies actual M2-generated spheres to
 Godot `ArrayMesh` and `ConcavePolygonShape3D` resources. It covers zero and

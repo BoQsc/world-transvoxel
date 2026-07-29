@@ -1688,6 +1688,221 @@ void test_priority_ordered_loading_retry(const RuntimeFixture &fixture) {
 	storage.close();
 }
 
+void test_shared_page_completion_fanout(const RuntimeFixture &fixture) {
+	check(!fixture.support_keys.empty(),
+		"shared completion fixture has no support page");
+	if (fixture.support_keys.empty()) {
+		return;
+	}
+	const wt::WtChunkKey shared_key = fixture.support_keys.front();
+	wt::WtAsyncStorageService storage({
+		32, 32, wt::kWtMaximumContainerSize
+	});
+	check(
+		storage.open(fixture.world_path, fixture.root) ==
+			wt::WtAsyncStorageStatus::Ok,
+		"shared completion storage open failed"
+	);
+	wt::WtStoragePageCache cache({
+		32,
+		wt::kWtMaximumContainerSize,
+		32,
+		wt::kWtMaximumContainerSize,
+	});
+	wt::WtStreamScheduler scheduler(16, 16, 16, 1);
+	wt::WtPageMeshingRuntimeService runtime(16);
+	const wt::WtChunkJob coarse = request_sample_job(
+		scheduler,
+		fixture.coarse_key,
+		kWorldRevision + 8,
+		9
+	);
+	check(
+		runtime.begin_sample_job(
+			coarse,
+			fixture.transition_mask,
+			storage,
+			cache,
+			scheduler
+		) == wt::WtPageMeshingRuntimeStatus::Ok,
+		"shared completion coarse request failed"
+	);
+	const wt::WtChunkJob fine = request_sample_job(
+		scheduler,
+		shared_key,
+		kWorldRevision + 8,
+		10
+	);
+	check(
+		runtime.begin_sample_job(
+			fine,
+			0,
+			storage,
+			cache,
+			scheduler
+		) == wt::WtPageMeshingRuntimeStatus::Ok &&
+			storage.get_metrics().accepted_requests == kDependencyCount &&
+			storage.get_metrics().duplicate_requests == 1,
+		"shared page was regenerated for a second consumer generation"
+	);
+	for (std::size_t index = 0; index < kDependencyCount; ++index) {
+		wt::WtPageLoadCompletion completion;
+		if (!wait_completion(storage, completion)) {
+			break;
+		}
+		const wt::WtPageMeshingRuntimeStatus status =
+			runtime.accept_storage_completion(completion, cache, scheduler);
+		check(
+			status == wt::WtPageMeshingRuntimeStatus::Ok ||
+				status ==
+					wt::WtPageMeshingRuntimeStatus::SchedulerBackpressure,
+			"shared completion fanout rejected a page"
+		);
+		runtime.flush_scheduler_results(scheduler);
+	}
+	const auto records = runtime.get_records();
+	const auto coarse_record = std::find_if(
+		records.begin(),
+		records.end(),
+		[&](const wt::WtPageMeshingRuntimeRecordSnapshot &record) {
+			return record.key == fixture.coarse_key;
+		}
+	);
+	const auto fine_record = std::find_if(
+		records.begin(),
+		records.end(),
+		[&](const wt::WtPageMeshingRuntimeRecordSnapshot &record) {
+			return record.key == shared_key;
+		}
+	);
+	const wt::WtPageMeshingRuntimeMetrics metrics = runtime.get_metrics();
+	check(
+		coarse_record != records.end() &&
+			fine_record != records.end() &&
+			coarse_record->phase ==
+				wt::WtPageMeshingRuntimePhase::AwaitingMesh &&
+			fine_record->phase ==
+				wt::WtPageMeshingRuntimePhase::AwaitingMesh &&
+			metrics.accepted_storage_completions ==
+				kDependencyCount + 1 &&
+			storage.get_metrics().completed_requests == kDependencyCount,
+		"one immutable completion did not satisfy every waiting consumer"
+	);
+	storage.close();
+}
+
+void test_shared_page_completion_survives_first_owner_cancellation(
+	const RuntimeFixture &fixture
+) {
+	check(!fixture.support_keys.empty(),
+		"shared cancellation fixture has no support page");
+	if (fixture.support_keys.empty()) {
+		return;
+	}
+	const wt::WtChunkKey shared_key = fixture.support_keys.front();
+	wt::WtAsyncStorageService storage({
+		32, 32, wt::kWtMaximumContainerSize
+	});
+	check(
+		storage.open(fixture.world_path, fixture.root) ==
+			wt::WtAsyncStorageStatus::Ok,
+		"shared cancellation storage open failed"
+	);
+	wt::WtStoragePageCache cache({
+		32,
+		wt::kWtMaximumContainerSize,
+		32,
+		wt::kWtMaximumContainerSize,
+	});
+	wt::WtStreamScheduler scheduler(16, 16, 16, 1);
+	wt::WtPageMeshingRuntimeService runtime(16);
+	const wt::WtChunkJob first_owner = request_sample_job(
+		scheduler,
+		fixture.coarse_key,
+		kWorldRevision + 9,
+		9
+	);
+	check(
+		runtime.begin_sample_job(
+			first_owner,
+			fixture.transition_mask,
+			storage,
+			cache,
+			scheduler
+		) == wt::WtPageMeshingRuntimeStatus::Ok,
+		"shared cancellation first owner request failed"
+	);
+	const wt::WtChunkJob surviving_owner = request_sample_job(
+		scheduler,
+		shared_key,
+		kWorldRevision + 9,
+		10
+	);
+	check(
+		runtime.begin_sample_job(
+			surviving_owner,
+			0,
+			storage,
+			cache,
+			scheduler
+		) == wt::WtPageMeshingRuntimeStatus::Ok &&
+			storage.get_metrics().accepted_requests == kDependencyCount &&
+			storage.get_metrics().duplicate_requests == 1,
+		"shared cancellation did not coalesce the surviving owner"
+	);
+	check(
+		runtime.cancel_owned_generation(
+			fixture.coarse_key,
+			first_owner.generation
+		) == wt::WtPageMeshingRuntimeOwnerStatus::Ok &&
+			scheduler.cancel_chunk(fixture.coarse_key) ==
+				wt::WtSchedulerStatus::Ok &&
+			scheduler.forget_chunk(fixture.coarse_key) ==
+				wt::WtSchedulerStatus::Ok,
+		"shared cancellation failed to retire the first owner"
+	);
+	std::size_t stale_count = 0;
+	for (std::size_t index = 0; index < kDependencyCount; ++index) {
+		wt::WtPageLoadCompletion completion;
+		if (!wait_completion(storage, completion)) {
+			break;
+		}
+		const wt::WtPageMeshingRuntimeStatus status =
+			runtime.accept_storage_completion(completion, cache, scheduler);
+		stale_count +=
+			status == wt::WtPageMeshingRuntimeStatus::CompletionNotOwned ?
+				1U : 0U;
+		check(
+			status == wt::WtPageMeshingRuntimeStatus::Ok ||
+				status == wt::WtPageMeshingRuntimeStatus::SchedulerBackpressure ||
+				status == wt::WtPageMeshingRuntimeStatus::CompletionNotOwned,
+			"shared cancellation rejected an immutable page completion"
+		);
+		runtime.flush_scheduler_results(scheduler);
+	}
+	const auto records = runtime.get_records();
+	const auto surviving_record = std::find_if(
+		records.begin(),
+		records.end(),
+		[&](const wt::WtPageMeshingRuntimeRecordSnapshot &record) {
+			return record.key == shared_key;
+		}
+	);
+	const wt::WtPageMeshingRuntimeMetrics metrics = runtime.get_metrics();
+	check(
+		records.size() == 1 &&
+			surviving_record != records.end() &&
+			surviving_record->phase ==
+				wt::WtPageMeshingRuntimePhase::AwaitingMesh &&
+			stale_count == kDependencyCount - 1 &&
+			metrics.accepted_storage_completions == 1 &&
+			metrics.stale_storage_completions == kDependencyCount - 1 &&
+			storage.get_metrics().completed_requests == kDependencyCount,
+		"cancelling the first owner stranded the surviving page consumer"
+	);
+	storage.close();
+}
+
 void test_missing_support(const RuntimeFixture &fixture) {
 	wt::WtAsyncStorageService storage({ 32, 32, wt::kWtMaximumContainerSize });
 	check(
@@ -1762,6 +1977,8 @@ int main() {
 	test_edited_coarse_procedural_rebuild(evidence);
 	test_storage_backpressure_retry(fixture);
 	test_priority_ordered_loading_retry(fixture);
+	test_shared_page_completion_fanout(fixture);
+	test_shared_page_completion_survives_first_owner_cancellation(fixture);
 	test_missing_support(fixture);
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M5_PAGE_MESHING_RUNTIME_FAIL failures=%d\n",
@@ -1773,7 +1990,8 @@ int main() {
 	std::printf(
 		"M5_PAGE_MESHING_RUNTIME_PASS dependencies=13 cache_entries=2 "
 		"backpressure=1 cancellations=1 invalidations=1 missing_support=1 "
-		"priority_ordered_loading_retry=1 "
+		"priority_ordered_loading_retry=1 shared_page_fanout=1 "
+		"shared_page_cancellation_fanout=1 "
 		"human_boundary_repro=1 edited_coarse_rebuild=1 "
 		"sphere_difference_topology=1 smooth_sphere_difference=1 "
 		"material_volume_distance=1 water_lod_footprint=1\n"

@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <vector>
 
 namespace world_transvoxel {
@@ -15,6 +16,8 @@ namespace world_transvoxel {
 struct WtChunkApplicationRecord {
 	WtChunkKey key;
 	WtGenerationToken generation;
+	WtGenerationToken visual_generation;
+	WtGenerationToken collision_generation;
 	bool collision_required = false;
 	bool visual_required = true;
 	bool visual_ready = false;
@@ -97,8 +100,14 @@ public:
 		WtCollisionSink &collision_sink
 	);
 
+	bool copy_record(
+		const WtChunkKey &key,
+		WtChunkApplicationRecord &record
+	) const noexcept;
+	// Single-threaded fixture access only. Concurrent production code must use
+	// copy_record() so a vector mutation cannot invalidate the returned pointer.
 	const WtChunkApplicationRecord *find_record(const WtChunkKey &key) const noexcept;
-	const std::vector<WtChunkApplicationRecord> &get_records() const noexcept;
+	std::vector<WtChunkApplicationRecord> get_records() const;
 	WtApplicationMetrics get_metrics() const noexcept;
 	std::size_t record_capacity() const noexcept;
 	std::size_t available_record_capacity() const noexcept;
@@ -135,6 +144,7 @@ private:
 	bool defer_collision(const WtCollisionApplyEntry &entry);
 
 	std::size_t record_capacity_ = 0;
+	mutable std::mutex records_mutex_;
 	std::vector<WtChunkApplicationRecord> records_;
 	std::vector<WtCollisionApplyEntry> deferred_collisions_;
 	WtRenderApplyQueue render_queue_;

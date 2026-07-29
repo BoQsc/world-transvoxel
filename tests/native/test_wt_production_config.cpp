@@ -47,6 +47,7 @@ void test_defaults(std::vector<std::uint8_t> &evidence) {
 		config.viewer_capacity == 8 &&
 		config.demand_capacity_per_viewer == 4096 &&
 		config.lod_refinement_radius_chunks == 0 &&
+		config.procedural_generation_worker_count == 2 &&
 		config.storage_request_capacity == 256 &&
 		config.storage_completion_capacity == 256 &&
 		config.encoded_page_entry_capacity == 256 &&
@@ -64,6 +65,7 @@ void test_defaults(std::vector<std::uint8_t> &evidence) {
 	append_u64(evidence, config.viewer_capacity);
 	append_u64(evidence, config.demand_capacity_per_viewer);
 	append_u64(evidence, config.lod_refinement_radius_chunks);
+	append_u64(evidence, config.procedural_generation_worker_count);
 	append_u64(evidence, config.encoded_page_byte_capacity);
 	append_u64(evidence, config.decoded_page_byte_capacity);
 	append_u64(evidence, config.mesh_byte_capacity);
@@ -110,6 +112,14 @@ void test_rejections(std::vector<std::uint8_t> &evidence) {
 	expect_status(config, wt::WtRuntimeConfigStatus::InvalidLodRefinementRadius,
 		"excess LOD refinement radius was accepted", evidence);
 	config = {};
+	config.procedural_generation_worker_count = 0;
+	expect_status(
+		config,
+		wt::WtRuntimeConfigStatus::InvalidProceduralGenerationWorkerCount,
+		"zero procedural generation worker count was accepted",
+		evidence
+	);
+	config = {};
 	config.viewer_capacity = 1024;
 	config.demand_capacity_per_viewer = 65536;
 	expect_status(config, wt::WtRuntimeConfigStatus::InvalidTotalDemandCapacity,
@@ -152,6 +162,9 @@ int main() {
 	}
 	std::printf("PRODUCTION_CONFIG_HASH ");
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
-	std::printf("PRODUCTION_CONFIG_PASS schema=1 rejection_cases=12 lod_refinement_radius=1\n");
+	std::printf(
+		"PRODUCTION_CONFIG_PASS schema=1 rejection_cases=13 "
+		"lod_refinement_radius=1 procedural_generation_workers=2\n"
+	);
 	return 0;
 }

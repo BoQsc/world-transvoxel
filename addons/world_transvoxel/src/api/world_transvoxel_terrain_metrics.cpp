@@ -92,22 +92,23 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		}
 	}
 	for (const WtChunkKey &key : pending_chunk_replacements_) {
-		const WtChunkApplicationRecord *record = application_->find_record(key);
-		if (record != nullptr && record->fully_ready()) continue;
+		WtChunkApplicationRecord record;
+		const bool record_present = application_->copy_record(key, record);
+		if (record_present && record.fully_ready()) continue;
 		if (blocked_pending_replacements == 0) {
 			first_blocked_replacement_key = key;
-			first_blocked_replacement_missing = record == nullptr;
-			if (record != nullptr) {
+			first_blocked_replacement_missing = !record_present;
+			if (record_present) {
 				first_blocked_replacement_visual_required =
-					record->visual_required;
-				first_blocked_replacement_visual_ready = record->visual_ready;
+					record.visual_required;
+				first_blocked_replacement_visual_ready = record.visual_ready;
 				first_blocked_replacement_collision_required =
-					record->collision_required;
+					record.collision_required;
 				first_blocked_replacement_collision_ready =
-					record->collision_ready;
-				first_blocked_replacement_staged = record->staged_replacement;
+					record.collision_ready;
+				first_blocked_replacement_staged = record.staged_replacement;
 				first_blocked_replacement_generation =
-					record->generation.value;
+					record.generation.value;
 				first_blocked_replacement_render_generation =
 					render_sink_->applied_generation(key).value;
 				first_blocked_replacement_render_record_present =
@@ -145,6 +146,22 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	set_metric(output, "planned_demands", runtime.planned_demands);
 	set_metric(output, "sample_jobs", runtime.sample_jobs);
 	set_metric(output, "mesh_jobs", runtime.mesh_jobs);
+	set_metric(
+		output, "sample_job_time_ns_last", runtime.sample_job_time_ns_last
+	);
+	set_metric(
+		output, "sample_job_time_ns_total", runtime.sample_job_time_ns_total
+	);
+	set_metric(
+		output,
+		"sample_job_time_ns_maximum",
+		runtime.sample_job_time_ns_maximum
+	);
+	set_metric(output, "mesh_job_time_ns_last", runtime.mesh_job_time_ns_last);
+	set_metric(output, "mesh_job_time_ns_total", runtime.mesh_job_time_ns_total);
+	set_metric(
+		output, "mesh_job_time_ns_maximum", runtime.mesh_job_time_ns_maximum
+	);
 	set_metric(output, "storage_completions", runtime.storage_completions);
 	set_metric(output, "mesh_completions", runtime.mesh_completions);
 	set_metric(
@@ -223,6 +240,99 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		"scheduler_queue_rejections",
 		runtime.scheduler_queue_rejections
 	);
+	set_metric(output, "storage_queued_requests", runtime.storage_queued_requests);
+	set_metric(
+		output,
+		"storage_queued_completions",
+		runtime.storage_queued_completions
+	);
+	set_metric(output, "storage_active_requests", runtime.storage_active_requests);
+	set_metric(
+		output,
+		"storage_accepted_requests",
+		runtime.storage_accepted_requests
+	);
+	set_metric(
+		output,
+		"storage_started_requests",
+		runtime.storage_started_requests
+	);
+	set_metric(
+		output,
+		"storage_completed_requests",
+		runtime.storage_completed_requests
+	);
+	set_metric(
+		output,
+		"storage_request_queue_rejections",
+		runtime.storage_request_queue_rejections
+	);
+	set_metric(
+		output,
+		"storage_duplicate_requests",
+		runtime.storage_duplicate_requests
+	);
+	set_metric(
+		output,
+		"storage_successful_pages",
+		runtime.storage_successful_pages
+	);
+	set_metric(
+		output,
+		"storage_load_time_ns_last",
+		runtime.storage_load_time_ns_last
+	);
+	set_metric(
+		output,
+		"storage_load_time_ns_total",
+		runtime.storage_load_time_ns_total
+	);
+	set_metric(
+		output,
+		"storage_load_time_ns_maximum",
+		runtime.storage_load_time_ns_maximum
+	);
+	set_metric(output, "storage_worker_count", runtime.storage_worker_count);
+	set_metric(
+		output,
+		"storage_in_flight_requests",
+		runtime.storage_in_flight_requests
+	);
+	set_metric(
+		output,
+		"storage_maximum_in_flight_requests",
+		runtime.storage_maximum_in_flight_requests
+	);
+	set_metric(
+		output,
+		"storage_in_flight_elapsed_ns",
+		runtime.storage_in_flight_elapsed_ns
+	);
+	set_metric(
+		output,
+		"storage_in_flight_key_x",
+		runtime.storage_in_flight_key_x
+	);
+	set_metric(
+		output,
+		"storage_in_flight_key_y",
+		runtime.storage_in_flight_key_y
+	);
+	set_metric(
+		output,
+		"storage_in_flight_key_z",
+		runtime.storage_in_flight_key_z
+	);
+	set_metric(
+		output,
+		"storage_in_flight_key_lod",
+		runtime.storage_in_flight_key_lod
+	);
+	set_metric(
+		output,
+		"storage_in_flight_generation",
+		runtime.storage_in_flight_generation
+	);
 	set_metric(output, "page_sample_failures", runtime.page_sample_failures);
 	set_metric(output, "page_mesh_failures", runtime.page_mesh_failures);
 	set_metric(output, "page_storage_failures", runtime.page_storage_failures);
@@ -232,6 +342,111 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		"page_scheduler_backpressure",
 		runtime.page_scheduler_backpressure
 	);
+	set_metric(output, "page_dependency_requests", runtime.page_dependency_requests);
+	set_metric(
+		output,
+		"page_dependency_reprioritizations",
+		runtime.page_dependency_reprioritizations
+	);
+	set_metric(
+		output,
+		"page_dependency_cache_hits",
+		runtime.page_dependency_cache_hits
+	);
+	set_metric(
+		output,
+		"page_dependency_cache_misses",
+		runtime.page_dependency_cache_misses
+	);
+	set_metric(
+		output,
+		"page_accepted_storage_completions",
+		runtime.page_accepted_storage_completions
+	);
+	set_metric(
+		output,
+		"page_stale_storage_completions",
+		runtime.page_stale_storage_completions
+	);
+	set_metric(
+		output,
+		"page_cache_encoded_entries",
+		runtime.page_cache_encoded_entries
+	);
+	set_metric(
+		output,
+		"page_cache_decoded_entries",
+		runtime.page_cache_decoded_entries
+	);
+	set_metric(
+		output,
+		"page_cache_encoded_hits",
+		runtime.page_cache_encoded_hits
+	);
+	set_metric(
+		output,
+		"page_cache_encoded_misses",
+		runtime.page_cache_encoded_misses
+	);
+	set_metric(
+		output,
+		"page_cache_encoded_insertions",
+		runtime.page_cache_encoded_insertions
+	);
+	set_metric(
+		output,
+		"page_cache_encoded_refreshes",
+		runtime.page_cache_encoded_refreshes
+	);
+	set_metric(
+		output,
+		"page_cache_encoded_evictions",
+		runtime.page_cache_encoded_evictions
+	);
+	set_metric(
+		output,
+		"page_cache_decoded_hits",
+		runtime.page_cache_decoded_hits
+	);
+	set_metric(
+		output,
+		"page_cache_decoded_misses",
+		runtime.page_cache_decoded_misses
+	);
+	set_metric(
+		output,
+		"page_cache_decoded_insertions",
+		runtime.page_cache_decoded_insertions
+	);
+	set_metric(
+		output,
+		"page_cache_decoded_evictions",
+		runtime.page_cache_decoded_evictions
+	);
+	set_metric(output, "page_loading_records", runtime.page_loading_records);
+	set_metric(
+		output,
+		"page_sample_ready_records",
+		runtime.page_sample_ready_records
+	);
+	set_metric(
+		output,
+		"page_awaiting_mesh_records",
+		runtime.page_awaiting_mesh_records
+	);
+	set_metric(output, "page_mesh_ready_records", runtime.page_mesh_ready_records);
+	set_metric(output, "page_ready_records", runtime.page_ready_records);
+	set_metric(
+		output,
+		"page_unresolved_dependencies",
+		runtime.page_unresolved_dependencies
+	);
+	set_metric(
+		output,
+		"page_pending_dependency_requests",
+		runtime.page_pending_dependency_requests
+	);
+	set_metric(output, "page_pinned_pages", runtime.page_pinned_pages);
 	output["page_last_failure_key_x"] =
 		static_cast<std::int64_t>(runtime.page_last_failure_key_x);
 	output["page_last_failure_key_y"] =
@@ -321,6 +536,36 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		output,
 		"collision_apply_deadline_ns",
 		collision_apply_deadline_ns_
+	);
+	set_metric(
+		output,
+		"collision_apply_frame_time_ns_last",
+		collision_apply_frame_time_ns_last_
+	);
+	set_metric(
+		output,
+		"collision_apply_frame_time_ns_total",
+		collision_apply_frame_time_ns_total_
+	);
+	set_metric(
+		output,
+		"collision_apply_frame_time_ns_maximum",
+		collision_apply_frame_time_ns_maximum_
+	);
+	set_metric(
+		output,
+		"collision_apply_frame_items_last",
+		collision_apply_frame_items_last_
+	);
+	set_metric(
+		output,
+		"collision_apply_frame_items_maximum",
+		collision_apply_frame_items_maximum_
+	);
+	set_metric(
+		output,
+		"collision_apply_frame_deadline_overruns",
+		collision_apply_frame_deadline_overruns_
 	);
 	output["active_chunk_records"] = static_cast<std::int64_t>(
 		application_->get_records().size()

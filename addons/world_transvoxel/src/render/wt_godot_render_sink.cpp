@@ -559,6 +559,45 @@ bool WtGodotRenderSink::has_staged_records() const noexcept {
 	return false;
 }
 
+bool WtGodotRenderSink::publish_staged_record(
+	const WtChunkKey &key
+) noexcept {
+	if (!on_owner_thread()) {
+		return false;
+	}
+	const auto iterator = records_.find(key);
+	if (iterator == records_.end() || !iterator->second.staged) {
+		return true;
+	}
+	Record &record = iterator->second;
+	if (record.instance == nullptr) {
+		return false;
+	}
+	if (record.staged_empty) {
+		owner_.remove_child(record.instance);
+		record.instance->queue_free();
+		records_.erase(iterator);
+		return true;
+	}
+	if (record.staged_mesh.is_valid()) {
+		record.instance->set_mesh(record.staged_mesh);
+		apply_record_material_override(record);
+		record.generation = record.staged_generation;
+		record.staged_mesh.unref();
+		record.staged_generation = {};
+		record.retiring = false;
+		record.introducing = false;
+		record.retirement_frame = 0;
+		record.introduction_frame = 0;
+		record.retirement_start_transparency = 0.0F;
+		set_record_transparency(record, 0.0F);
+	}
+	record.staged = false;
+	record.staged_empty = false;
+	record.instance->set_visible(true);
+	return true;
+}
+
 void WtGodotRenderSink::publish_staged_records() noexcept {
 	if (!on_owner_thread()) {
 		return;

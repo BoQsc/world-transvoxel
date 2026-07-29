@@ -26,8 +26,10 @@ bool collision_deadline_reached(
 } // namespace
 
 bool WtChunkApplicationRecord::fully_ready() const noexcept {
-	return (!visual_required || visual_ready) &&
-		(!collision_required || collision_ready);
+	return (!visual_required ||
+			(visual_ready && visual_generation == generation)) &&
+		(!collision_required ||
+			(collision_ready && collision_generation == generation));
 }
 
 WtChunkApplicationService::WtChunkApplicationService(
@@ -50,6 +52,7 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 	bool staged_replacement,
 	bool preserve_collision_ready
 ) {
+	std::lock_guard<std::mutex> lock(records_mutex_);
 	if (!wt_is_valid_chunk_key(key) || generation.value == 0 ||
 		(!visual_required && !collision_required)) {
 		return WtApplicationStatus::InvalidInput;
@@ -83,9 +86,14 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 		const bool carried_collision_ready =
 			preserve_collision_ready && collision_required &&
 			record->collision_required && record->collision_ready;
+		const WtGenerationToken carried_collision_generation =
+			carried_collision_ready ? record->collision_generation :
+				WtGenerationToken{};
 		*record = {
 			key,
 			generation,
+			{},
+			carried_collision_generation,
 			collision_required,
 			visual_required,
 			false,
@@ -100,6 +108,8 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 	records_.push_back({
 		key,
 		generation,
+		{},
+		{},
 		collision_required,
 		visual_required,
 		false,
@@ -116,6 +126,7 @@ WtApplicationStatus WtChunkApplicationService::set_visual_required(
 	const WtChunkKey &key,
 	bool required
 ) {
+	std::lock_guard<std::mutex> lock(records_mutex_);
 	WtChunkApplicationRecord *record = find_record_mutable(key);
 	if (record == nullptr) {
 		return WtApplicationStatus::NotFound;
@@ -129,6 +140,7 @@ WtApplicationStatus WtChunkApplicationService::set_visual_required(
 	record->visual_required = required;
 	if (required) {
 		record->visual_ready = false;
+		record->visual_generation = {};
 	}
 	return WtApplicationStatus::Ok;
 }
@@ -137,6 +149,7 @@ WtApplicationStatus WtChunkApplicationService::set_collision_required(
 	const WtChunkKey &key,
 	bool required
 ) {
+	std::lock_guard<std::mutex> lock(records_mutex_);
 	WtChunkApplicationRecord *record = find_record_mutable(key);
 	if (record == nullptr) {
 		return WtApplicationStatus::NotFound;
@@ -150,11 +163,13 @@ WtApplicationStatus WtChunkApplicationService::set_collision_required(
 	record->collision_required = required;
 	if (required) {
 		record->collision_ready = false;
+		record->collision_generation = {};
 	}
 	return WtApplicationStatus::Ok;
 }
 
 WtApplicationStatus WtChunkApplicationService::forget_chunk(const WtChunkKey &key) {
+	std::lock_guard<std::mutex> lock(records_mutex_);
 	const auto iterator = std::lower_bound(
 		records_.begin(), records_.end(), key,
 		[](const WtChunkApplicationRecord &record, const WtChunkKey &value) {
@@ -219,6 +234,7 @@ WtChunkApplicationService::apply_with_collision_deadline(
 	WtRenderSink &render_sink,
 	WtCollisionSink &collision_sink
 ) {
+	std::lock_guard<std::mutex> lock(records_mutex_);
 	const std::uint64_t tick =
 		application_tick_.fetch_add(1, std::memory_order_relaxed) + 1;
 	WtApplicationBatchResult result;
@@ -282,6 +298,7 @@ std::size_t WtChunkApplicationService::apply_render(
 			continue;
 		}
 		record->visual_ready = true;
+		record->visual_generation = payload->generation;
 		if (record->fully_ready()) {
 			record->staged_replacement = false;
 		}
@@ -351,6 +368,7 @@ std::size_t WtChunkApplicationService::apply_deferred_collisions(
 			continue;
 		}
 		record->collision_ready = true;
+		record->collision_generation = payload->generation;
 		if (record->fully_ready()) {
 			record->staged_replacement = false;
 		}
@@ -424,6 +442,7 @@ std::size_t WtChunkApplicationService::apply_collision(
 			continue;
 		}
 		record->collision_ready = true;
+		record->collision_generation = payload->generation;
 		if (record->fully_ready()) {
 			record->staged_replacement = false;
 		}
@@ -471,16 +490,33 @@ const WtChunkApplicationRecord *WtChunkApplicationService::find_record(
 	return iterator != records_.end() && iterator->key == key ? &*iterator : nullptr;
 }
 
+bool WtChunkApplicationService::copy_record(
+	const WtChunkKey &key,
+	WtChunkApplicationRecord &record
+) const noexcept {
+	std::lock_guard<std::mutex> lock(records_mutex_);
+	const WtChunkApplicationRecord *found = find_record(key);
+	if (found == nullptr) return false;
+	record = *found;
+	return true;
+}
+
 WtChunkApplicationRecord *WtChunkApplicationService::find_record_mutable(
 	const WtChunkKey &key
 ) noexcept {
-	return const_cast<WtChunkApplicationRecord *>(
-		static_cast<const WtChunkApplicationService *>(this)->find_record(key)
+	const auto iterator = std::lower_bound(
+		records_.begin(), records_.end(), key,
+		[](const WtChunkApplicationRecord &record, const WtChunkKey &value) {
+			return record.key < value;
+		}
 	);
+	return iterator != records_.end() && iterator->key == key ?
+		&*iterator : nullptr;
 }
 
-const std::vector<WtChunkApplicationRecord> &
-WtChunkApplicationService::get_records() const noexcept {
+std::vector<WtChunkApplicationRecord>
+WtChunkApplicationService::get_records() const {
+	std::lock_guard<std::mutex> lock(records_mutex_);
 	return records_;
 }
 
@@ -501,6 +537,7 @@ std::size_t WtChunkApplicationService::record_capacity() const noexcept {
 
 std::size_t
 WtChunkApplicationService::available_record_capacity() const noexcept {
+	std::lock_guard<std::mutex> lock(records_mutex_);
 	return record_capacity_ - records_.size();
 }
 
@@ -513,6 +550,7 @@ std::size_t WtChunkApplicationService::queued_collision_count() const noexcept {
 }
 
 std::size_t WtChunkApplicationService::deferred_collision_count() const noexcept {
+	std::lock_guard<std::mutex> lock(records_mutex_);
 	return deferred_collisions_.size();
 }
 

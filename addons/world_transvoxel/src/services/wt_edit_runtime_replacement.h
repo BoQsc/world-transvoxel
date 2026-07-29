@@ -106,6 +106,7 @@ private:
 		std::uint64_t previous_world_revision = 0;
 		bool collision_required = false;
 		bool visual_required = true;
+		bool foreground_interaction = false;
 	};
 
 	std::size_t replacement_capacity_ = 0;
