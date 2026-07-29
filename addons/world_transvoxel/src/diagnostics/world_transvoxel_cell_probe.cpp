@@ -1,4 +1,4 @@
-#include "api/world_transvoxel_cell_probe.h"
+#include "diagnostics/world_transvoxel_cell_probe.h"
 
 #include "backend/wt_transvoxel_mit_backend.h"
 #include "meshing/wt_chunk_mesher.h"

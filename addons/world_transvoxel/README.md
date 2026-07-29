@@ -78,6 +78,11 @@ use 8 vertical chunks at origin 0. Larger bounded volumes must pass explicit
 ceiling is `524288` pages so this 2K x 256 reference volume can start as real
 volumetric terrain.
 
+Diagnostic-only native helpers live under `src/diagnostics`. They are allowed to
+expose authoritative backend data for tests and external validation labs, but
+they must not carry editor UI, lab scenes, fallback meshers, or production
+terrain gameplay workflow.
+
 Build from the repository root:
 
 ```console

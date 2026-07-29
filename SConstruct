@@ -56,6 +56,7 @@ sources = (
     + Glob("addons/world_transvoxel/src/backend/*.cpp")
     + Glob("addons/world_transvoxel/src/bake/*.cpp")
     + Glob("addons/world_transvoxel/src/core/*.cpp")
+    + Glob("addons/world_transvoxel/src/diagnostics/*.cpp")
     + Glob("addons/world_transvoxel/src/editing/*.cpp")
     + Glob("addons/world_transvoxel/src/meshing/*.cpp")
     + Glob("addons/world_transvoxel/src/physics/*.cpp")

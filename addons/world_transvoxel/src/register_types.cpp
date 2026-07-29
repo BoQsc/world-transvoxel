@@ -1,11 +1,11 @@
 #include "register_types.h"
 
 #include "api/world_transvoxel_chunk_state.h"
-#include "api/world_transvoxel_cell_probe.h"
 #include "api/world_transvoxel_config.h"
 #include "api/world_transvoxel_edit_transaction.h"
 #include "api/world_transvoxel_sample.h"
 #include "api/world_transvoxel_terrain.h"
+#include "diagnostics/world_transvoxel_cell_probe.h"
 
 #include <gdextension_interface.h>
 
