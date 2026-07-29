@@ -1,6 +1,7 @@
 #include "register_types.h"
 
 #include "api/world_transvoxel_chunk_state.h"
+#include "api/world_transvoxel_cell_probe.h"
 #include "api/world_transvoxel_config.h"
 #include "api/world_transvoxel_edit_transaction.h"
 #include "api/world_transvoxel_sample.h"
@@ -20,6 +21,7 @@ void initialize_world_transvoxel_module(
 	}
 
 	GDREGISTER_CLASS(world_transvoxel::WorldTransvoxelChunkState);
+	GDREGISTER_CLASS(world_transvoxel::WorldTransvoxelCellProbe);
 	GDREGISTER_CLASS(world_transvoxel::WorldTransvoxelConfig);
 	GDREGISTER_CLASS(world_transvoxel::WorldTransvoxelEditTransaction);
 	GDREGISTER_CLASS(world_transvoxel::WorldTransvoxelSample);
