@@ -157,6 +157,7 @@ stale-result rejection, viewer revisions, queue capacity, and 1,000 repeated
 supersession cycles with bounded state.
 
 `tests/native/test_wt_m2_chunk_mesh.cpp` covers three same-LOD closed galleries,
+an exact-tangent sphere control, and a retained smoothed-crater tangent seam,
 including signed 32-bit coordinate extremes at LOD 20; each of the six
 transition directions; all 12 signed LOD-edge orientations; all eight signed
 LOD-corner orientations; one translated negative-coordinate corner whose
@@ -166,7 +167,7 @@ quantized triangle edge to have exactly two incident triangles. Individual
 transition tests also require exact matching contours at both full and half
 faces.
 
-The locked chunk aggregate hash is `04bc06aebf0fed17`. Debug and optimized
+The locked chunk aggregate hash is `f3ebfec883e2de19`. Debug and optimized
 release builds must produce the same hash. `scripts/test_m2.py` runs both M2
 native contracts, the complete M1 contract, repository validation, and both
 Godot compatibility load tests.

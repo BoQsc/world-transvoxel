@@ -1,8 +1,8 @@
-# World Transvoxel 1.0.14-dev Operating Limits
+# World Transvoxel 1.0.15-dev Operating Limits
 
 ## Qualified release matrix
 
-The 1.0.14-dev development build inherits the 1.0.9 Windows x86-64
+The 1.0.15-dev development build inherits the 1.0.9 Windows x86-64
 qualification matrix, includes the documented 1.0.10-dev batched authoritative
 sample query, keeps native render transition fading opt-in/default-off, keeps
 fade shader instance-parameter writes opt-in/default-off, and adds the
@@ -32,7 +32,7 @@ release even if the source can be compiled for them.
 - The finalizer builds its edge-connectivity graph from quantized position keys
   at 1/1024 world-unit precision. This is a connectivity/orientation key only;
   it does not snap exported vertex positions.
-- The M2 mesh topology hash is `02f60fe4c93375f9`.
+- The M2 mesh topology hash is `f3ebfec883e2de19`.
 - Matched interior or chunk-face connector slivers are no longer an accepted
   endpoint artifact for edited terrain. If a marker reports open-gap-free mesh
   quality warnings, it must be promoted into a targeted gate and resolved or

@@ -33,9 +33,10 @@ fade state can also be published to custom shaders through the opt-in
 per-instance `wt_fade_opacity` parameter. Development build `1.0.12-dev`
 keeps shader fade parameters and native render transition fading disabled by
 default; replacement meshes direct-swap unless `render_transition_frames` is
-set above zero. Development build `1.0.14-dev` adds endpoint-regularized mesh
-extraction for edited SDF terrain, preventing reproduced closed-surface
-near-grid-sample sliver triangles without deleting surface triangles. The
+set above zero. Development build `1.0.15-dev` adds endpoint-regularized mesh
+extraction for edited SDF terrain and defers near-sliver rejection until after
+that regularization, preventing reproduced closed-surface near-grid-sample
+slivers and same-LOD tangent-edit cracks without deleting surface triangles. The
 deterministic install directory is:
 
 ```text
@@ -54,8 +55,9 @@ terrain-edit latency work. Version `1.0.11-dev` clears default
 for S2 large-scale visual evidence. Version `1.0.12-dev` also makes native
 render transition fading opt-in/default-off so editing does not blink by
 default. Version `1.0.13-dev` added quantized finalizer connectivity keys.
-Version `1.0.14-dev` supersedes the old mesh hash with endpoint-regularized
-chunk meshing. These development builds are not the deterministic 1.0.9
+Version `1.0.15-dev` supersedes the old mesh hash with endpoint-regularized
+chunk meshing and closes the retained smoothed-crater tangent seam. These
+development builds are not the deterministic 1.0.9
 release artifact.
 
 ## Canonical direction

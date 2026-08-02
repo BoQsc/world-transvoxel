@@ -86,6 +86,32 @@ struct MultiresolutionYSource final : wt::WtChunkSampleSource {
 	}
 };
 
+struct ObservatoryCraterSource final : wt::WtChunkSampleSource {
+	bool sample(
+		const wt::WtGridPoint &point,
+		wt::WtScalarSample &output
+	) const noexcept override {
+		const double x = static_cast<double>(point.x) * 0.5;
+		const double y = static_cast<double>(point.y) * 0.5;
+		const double z = static_cast<double>(point.z) * 0.5;
+		const double height = 8.5 + 2.8 * std::sin(x * 0.055) +
+			2.0 * std::cos(z * 0.072) + 0.9 * std::sin((x + z) * 0.11);
+		const double base_density = y - height;
+		const double dx = x + 1.0;
+		const double dy = y - 9.5;
+		const double dz = z - 4.0;
+		const double sphere_density = std::sqrt(dx * dx + dy * dy + dz * dz) - 4.0;
+		const double a = -base_density;
+		const double b = sphere_density;
+		const double width = 0.75;
+		const double h = std::max(0.0, std::min(1.0, 0.5 + 0.5 * (b - a) / width));
+		const double density = -(b * (1.0 - h) + a * h - width * h * (1.0 - h));
+		output.density = static_cast<float>(density);
+		output.material = density < 0.0 ? 1 : 0;
+		return true;
+	}
+};
+
 QuantizedPoint quantize_world(
 	const wt::WtVec3 &position,
 	const wt::WtGridPoint &origin
@@ -342,6 +368,58 @@ void test_flat_lod0_seam_direction(
 	);
 	hash_result(hash, south);
 	hash_result(hash, north);
+}
+
+void test_tangent_same_lod_seam(
+	const wt::WtChunkMesher &mesher,
+	wt::WtChunkMeshingScratch &scratch
+) {
+	SphereSource source;
+	source.center = { 8, 8, 4 };
+	source.radius = 4.0;
+	const wt::WtChunkKey negative_z_key = { 0, 0, -1, 0 };
+	const wt::WtChunkKey positive_z_key = { 0, 0, 0, 0 };
+	wt::WtChunkMeshResult negative_z;
+	wt::WtChunkMeshResult positive_z;
+	check(mesher.mesh({ negative_z_key, 0, 0, 0.0F, 0.25F }, source, negative_z, scratch) ==
+		wt::WtChunkMeshingStatus::Ok, "tangent negative-Z chunk failed");
+	check(mesher.mesh({ positive_z_key, 0, 0, 0.0F, 0.25F }, source, positive_z, scratch) ==
+		wt::WtChunkMeshingStatus::Ok, "tangent positive-Z chunk failed");
+	const std::set<Edge> negative_z_edges = plane_boundary_edges(
+		negative_z.regular, negative_z.world_origin, 2, 0.0
+	);
+	const std::set<Edge> positive_z_edges = plane_boundary_edges(
+		positive_z.regular, positive_z.world_origin, 2, 0.0
+	);
+	check(negative_z_edges == positive_z_edges,
+		"tangent same-LOD seam edge positions mismatch");
+	std::map<Edge, unsigned int> edge_counts;
+	add_mesh_edges(negative_z.regular, negative_z.world_origin, edge_counts);
+	add_mesh_edges(positive_z.regular, positive_z.world_origin, edge_counts);
+	check_closed_surface(edge_counts, "tangent same-LOD sphere is open");
+}
+
+void test_smoothed_crater_same_lod_seam(
+	const wt::WtChunkMesher &mesher,
+	wt::WtChunkMeshingScratch &scratch
+) {
+	ObservatoryCraterSource source;
+	const wt::WtChunkKey negative_z_key = { -1, 1, -1, 0 };
+	const wt::WtChunkKey positive_z_key = { -1, 1, 0, 0 };
+	wt::WtChunkMeshResult negative_z;
+	wt::WtChunkMeshResult positive_z;
+	check(mesher.mesh({ negative_z_key, 0, 0, 0.0F, 0.25F }, source, negative_z, scratch) ==
+		wt::WtChunkMeshingStatus::Ok, "smoothed crater negative-Z chunk failed");
+	check(mesher.mesh({ positive_z_key, 0, 0, 0.0F, 0.25F }, source, positive_z, scratch) ==
+		wt::WtChunkMeshingStatus::Ok, "smoothed crater positive-Z chunk failed");
+	const std::set<Edge> negative_z_edges = plane_boundary_edges(
+		negative_z.regular, negative_z.world_origin, 2, 0.0
+	);
+	const std::set<Edge> positive_z_edges = plane_boundary_edges(
+		positive_z.regular, positive_z.world_origin, 2, 0.0
+	);
+	check(negative_z_edges == positive_z_edges,
+		"smoothed crater same-LOD seam edge positions mismatch");
 }
 
 void test_finalizer_orients_inverted_connected_component() {
@@ -650,6 +728,8 @@ int main() {
 	test_finalizer_orients_quantized_edge_component();
 	test_same_lod_seam(mesher, scratch, hash);
 	test_flat_lod0_seam_direction(mesher, scratch, hash);
+	test_tangent_same_lod_seam(mesher, scratch);
+	test_smoothed_crater_same_lod_seam(mesher, scratch);
 	test_extreme_same_lod_gallery(
 		mesher,
 		scratch,
@@ -707,7 +787,7 @@ int main() {
 		std::fprintf(stderr, "M2_CHUNK_MESH_FAIL failures=%d\n", failure_count);
 		return 1;
 	}
-	std::printf("M2_CHUNK_MESH_PASS same_lod=3 transition_faces=6 edge_galleries=12 "
+	std::printf("M2_CHUNK_MESH_PASS same_lod=5 transition_faces=6 edge_galleries=12 "
 		"corner_galleries=9 convex_refined_corners=1 winding=outward\n");
 	return 0;
 }
