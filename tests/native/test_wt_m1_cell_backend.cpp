@@ -341,8 +341,18 @@ void test_contract_edges(const wt::WtMeshingBackend &backend) {
 	for (unsigned int index = 1; index < regular.samples.size(); ++index) {
 		regular.samples[index].density = -1.0F;
 	}
-	check(backend.mesh_regular_cell(regular, mesh, scratch) == wt::WtCellStatus::Empty,
-		"exact-isovalue degenerate triangle was not removed");
+	check(backend.mesh_regular_cell(regular, mesh, scratch) == wt::WtCellStatus::Ok,
+		"exact-isovalue endpoint triangle was removed before regularization");
+	check(mesh.vertex_count == 3 && mesh.index_count == 3,
+		"exact-isovalue endpoint topology was not retained");
+	const wt::WtVec3 endpoint_normal = cross(
+		subtract(mesh.vertices[mesh.indices[1]].position,
+			mesh.vertices[mesh.indices[0]].position),
+		subtract(mesh.vertices[mesh.indices[2]].position,
+			mesh.vertices[mesh.indices[0]].position)
+	);
+	check(dot(endpoint_normal, endpoint_normal) > 0.0F,
+		"exact-isovalue endpoint regularization retained a degenerate triangle");
 
 	regular = make_regular_input(1);
 	for (wt::WtCellSample &sample : regular.samples) {

@@ -1,8 +1,8 @@
-# World Transvoxel 1.0.15-dev Operating Limits
+# World Transvoxel 1.0.16-dev Operating Limits
 
 ## Qualified release matrix
 
-The 1.0.15-dev development build inherits the 1.0.9 Windows x86-64
+The 1.0.16-dev development build inherits the 1.0.9 Windows x86-64
 qualification matrix, includes the documented 1.0.10-dev batched authoritative
 sample query, keeps native render transition fading opt-in/default-off, keeps
 fade shader instance-parameter writes opt-in/default-off, and adds the
@@ -25,10 +25,10 @@ release even if the source can be compiled for them.
 ## Mesh finalizer and topology boundary
 
 - Mesh extraction regularizes the isosurface interpolation fraction to
-  `[1/32, 31/32]` before canonical chunk positioning and normal interpolation.
-  This prevents closed edited SDF surfaces from generating near-grid-sample
-  sliver triangles that are topologically valid but visually unstable in carved
-  terrain.
+  `[1/32, 31/32]` in the shared cell backend, before cell-level degenerate
+  cleanup and canonical chunk positioning. This retains triangles incident to
+  exact-isovalue tangent samples and prevents both open poles and visually
+  unstable near-grid-sample slivers in edited terrain.
 - The finalizer builds its edge-connectivity graph from quantized position keys
   at 1/1024 world-unit precision. This is a connectivity/orientation key only;
   it does not snap exported vertex positions.
@@ -42,6 +42,9 @@ release even if the source can be compiled for them.
   `nonmanifold_edges=0`, `orientation_conflict_edges=0`,
   `repeated_point_key_triangles=0`, `zero_area_unknown_triangles=0`, and
   `zero_edge_triangles=0`.
+- The retained smoothed-crater finite-window regression permits open edges only
+  on the six exterior volume planes and requires zero interior openings and
+  zero non-manifold edges across all 18 assembled chunks.
 - Unknown zero-area triangles, repeated-point-key triangles, zero-edge
   triangles, interior/unknown boundary edges, nonmanifold edges, and orientation
   conflicts are hard failures.

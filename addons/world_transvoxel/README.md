@@ -60,13 +60,14 @@ opt-in/default-off because Godot retains per-instance shader-parameter slots
 after use. Version 1.0.12-dev also makes native render transition fading
 opt-in/default-off; the default replacement path is a direct swap so terrain
 edits do not blink. Version 1.0.13-dev stabilizes mesh-finalizer edge ownership
-with quantized position keys at 1/1024 world-unit precision. Version
-1.0.15-dev endpoint-regularizes isosurface interpolation to `[1/32, 31/32]`
-before canonical chunk positioning and normal interpolation, and defers
-near-sliver rejection until after that regularization. The retained M2 mesh
-hash is `f3ebfec883e2de19`; closed edited-surface slivers and same-LOD
-tangent-edit cracks are rejected without deleting required surface triangles. These
-development builds are not the deterministic PQ4 release artifact. The release
+with quantized position keys at 1/1024 world-unit precision. Version 1.0.15-dev
+endpoint-regularized canonical chunk positioning but did not retain every cell
+triangle incident to an exact-isovalue tangent sample. Version 1.0.16-dev
+applies the same `[1/32, 31/32]` interpolation policy in the shared cell backend
+before degenerate cleanup. The retained M2 mesh hash is `f3ebfec883e2de19`;
+exact-isovalue cell and 18-chunk smoothed-crater closure regressions now reject
+the previously missed interior openings. These development builds are not the
+deterministic PQ4 release artifact. The release
 ships API/limit documentation, addon-local bake/storage wrappers, runtime
 DLLs, and native tools. Compute acceleration is optional later work.
 

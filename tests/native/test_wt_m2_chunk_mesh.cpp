@@ -140,6 +140,20 @@ bool edge_forward(QuantizedPoint a, QuantizedPoint b) {
 	return !(b < a);
 }
 
+bool edge_on_window_boundary(
+	const Edge &edge,
+	const QuantizedPoint &minimum,
+	const QuantizedPoint &maximum
+) {
+	return
+		(edge.a.x == minimum.x && edge.b.x == minimum.x) ||
+		(edge.a.x == maximum.x && edge.b.x == maximum.x) ||
+		(edge.a.y == minimum.y && edge.b.y == minimum.y) ||
+		(edge.a.y == maximum.y && edge.b.y == maximum.y) ||
+		(edge.a.z == minimum.z && edge.b.z == minimum.z) ||
+		(edge.a.z == maximum.z && edge.b.z == maximum.z);
+}
+
 double world_axis_value(
 	const wt::WtVec3 &position,
 	const wt::WtGridPoint &origin,
@@ -420,6 +434,55 @@ void test_smoothed_crater_same_lod_seam(
 	);
 	check(negative_z_edges == positive_z_edges,
 		"smoothed crater same-LOD seam edge positions mismatch");
+}
+
+void test_smoothed_crater_window_topology(
+	const wt::WtChunkMesher &mesher,
+	wt::WtChunkMeshingScratch &scratch
+) {
+	ObservatoryCraterSource source;
+	EdgeCounts edge_counts;
+	for (std::int32_t x = -1; x <= 1; ++x) {
+		for (std::int32_t y = 0; y <= 1; ++y) {
+			for (std::int32_t z = -1; z <= 1; ++z) {
+				wt::WtChunkMeshResult chunk;
+				const wt::WtChunkMeshingStatus status = mesher.mesh(
+					{ { x, y, z, 0 }, 0, 0, 0.0F, 0.25F },
+					source,
+					chunk,
+					scratch
+				);
+				check(status == wt::WtChunkMeshingStatus::Ok,
+					"smoothed crater topology window chunk failed");
+				if (status == wt::WtChunkMeshingStatus::Ok) {
+					add_mesh_edges(chunk.regular, chunk.world_origin, edge_counts);
+				}
+			}
+		}
+	}
+	constexpr std::int64_t scale = 1000000;
+	const QuantizedPoint minimum = { -16 * scale, 0, -16 * scale };
+	const QuantizedPoint maximum = { 32 * scale, 32 * scale, 32 * scale };
+	std::size_t exterior_open_edges = 0;
+	std::size_t interior_open_edges = 0;
+	std::size_t nonmanifold_edges = 0;
+	for (const auto &entry : edge_counts) {
+		if (entry.second == 1U) {
+			if (edge_on_window_boundary(entry.first, minimum, maximum)) {
+				++exterior_open_edges;
+			} else {
+				++interior_open_edges;
+			}
+		} else if (entry.second != 2U) {
+			++nonmanifold_edges;
+		}
+	}
+	check(exterior_open_edges > 0,
+		"smoothed crater topology window did not exercise an exterior contour");
+	check(interior_open_edges == 0,
+		"smoothed crater topology window contains an interior opening");
+	check(nonmanifold_edges == 0,
+		"smoothed crater topology window contains nonmanifold edges");
 }
 
 void test_finalizer_orients_inverted_connected_component() {
@@ -730,6 +793,7 @@ int main() {
 	test_flat_lod0_seam_direction(mesher, scratch, hash);
 	test_tangent_same_lod_seam(mesher, scratch);
 	test_smoothed_crater_same_lod_seam(mesher, scratch);
+	test_smoothed_crater_window_topology(mesher, scratch);
 	test_extreme_same_lod_gallery(
 		mesher,
 		scratch,
@@ -787,7 +851,7 @@ int main() {
 		std::fprintf(stderr, "M2_CHUNK_MESH_FAIL failures=%d\n", failure_count);
 		return 1;
 	}
-	std::printf("M2_CHUNK_MESH_PASS same_lod=5 transition_faces=6 edge_galleries=12 "
+	std::printf("M2_CHUNK_MESH_PASS same_lod=5 topology_windows=1 transition_faces=6 edge_galleries=12 "
 		"corner_galleries=9 convex_refined_corners=1 winding=outward\n");
 	return 0;
 }

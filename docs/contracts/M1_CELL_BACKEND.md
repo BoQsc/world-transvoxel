@@ -111,10 +111,13 @@ Non-positive or non-finite sizes return `InvalidScale`. Invalid transition
 directions return `InvalidOrientation`. A table/input contradiction returns
 `TopologyFailure`.
 
-Triangles having exactly zero geometric area are removed. No epsilon-based
-thin-triangle filtering is performed in M1; collision sanitation is an M3
-decision. Partially degenerate outputs may retain vertices no longer addressed
-by an index.
+The shared isosurface interpolation fraction is regularized to `[1/32, 31/32]`
+before cell geometry is evaluated. This preserves triangles incident to an
+exact-isovalue sample so chunk assembly can remain closed. Triangles that still
+have exactly zero geometric area after regularization are removed. No
+epsilon-based thin-triangle filtering is performed in M1; collision sanitation
+is an M3 decision. Partially degenerate outputs may retain vertices no longer
+addressed by an index.
 
 ## Locked production defaults
 

@@ -1,5 +1,7 @@
 #include "backend/wt_transvoxel_mit_backend.h"
 
+#include "backend/wt_isosurface_policy.h"
+
 #include <cmath>
 
 // The upstream file is deliberately included in this MIT adapter translation
@@ -115,12 +117,10 @@ WtCellStatus make_vertex(
 	if (denominator == 0.0F) {
 		return WtCellStatus::TopologyFailure;
 	}
-	float alpha = (isovalue - sample_a.density) / denominator;
-	if (alpha < 0.0F) {
-		alpha = 0.0F;
-	} else if (alpha > 1.0F) {
-		alpha = 1.0F;
-	}
+	const float alpha = static_cast<float>(wt_regularized_isosurface_alpha(
+		(static_cast<double>(isovalue) - static_cast<double>(sample_a.density)) /
+		static_cast<double>(denominator)
+	));
 
 	vertex.position = lerp(
 		scratch.positions[endpoint_a],
