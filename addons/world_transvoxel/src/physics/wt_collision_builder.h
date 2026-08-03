@@ -12,7 +12,13 @@ namespace world_transvoxel {
 constexpr double kWtDefaultCollisionThinRatioSquared = 1.0e-12;
 constexpr double kWtDefaultCollisionActivationDistance = 96.0;
 constexpr double kWtDefaultCollisionDeactivationDistance = 128.0;
-constexpr std::size_t kWtDefaultCollisionMaximumOutputTriangles = 512;
+// Runtime collision must preserve every valid regular-cell triangle. A
+// largest-area cap can remove caves, crater floors, and thin constructed
+// surfaces while the authoritative field and render mesh still contain them.
+// Collision residency is bounded by demand; per-chunk correctness is not a
+// permissible residency tradeoff.
+constexpr std::size_t kWtDefaultCollisionMaximumOutputTriangles =
+	kWtMaximumRegularChunkIndices / 3U;
 
 struct WtCollisionPolicy {
 	double thin_ratio_squared = kWtDefaultCollisionThinRatioSquared;

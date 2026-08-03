@@ -203,6 +203,31 @@ void test_collision_builder() {
 		regular_collision.metrics.output_triangles == 1 &&
 		regular_collision.faces.size() == 3,
 		"transition seam geometry leaked into regular collision");
+
+	wt::WtChunkMeshResult detailed_mesh;
+	detailed_mesh.key = { 0, 0, 0, 0 };
+	detailed_mesh.world_origin = wt::wt_chunk_bounds(detailed_mesh.key).minimum;
+	for (std::size_t triangle = 0; triangle < 513; ++triangle) {
+		const float x = static_cast<float>(triangle % 27U) * 0.5F;
+		const float y = static_cast<float>((triangle / 27U) % 19U) * 0.5F;
+		const float z = static_cast<float>(triangle / (27U * 19U)) * 0.5F;
+		add_triangle(
+			detailed_mesh.regular,
+			vertex(x, y, z, 1),
+			vertex(x + 0.25F, y, z, 1),
+			vertex(x, y + 0.25F, z, 1)
+		);
+	}
+	wt::WtCollisionPayload detailed_collision;
+	check(wt::wt_build_regular_collision_payload(
+			detailed_mesh, { 13 }, policy, detailed_collision
+		) == wt::WtCollisionBuildStatus::Ok,
+		"detailed regular collision build failed");
+	check(detailed_collision.metrics.input_triangles == 513 &&
+		detailed_collision.metrics.output_triangles == 513 &&
+		detailed_collision.metrics.decimated_triangles == 0 &&
+		detailed_collision.faces.size() == 513 * 3,
+		"default collision policy removed valid regular terrain triangles");
 }
 
 struct RenderSink final : wt::WtRenderSink {
