@@ -154,6 +154,7 @@ public:
 		const godot::Vector3i &chunk_coordinate,
 		std::int64_t lod
 	) const;
+	godot::Array query_active_chunk_states() const;
 	std::int64_t request_authoritative_sample(
 		const godot::Vector3i &grid_point,
 		std::int64_t lod = 0

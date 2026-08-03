@@ -20,6 +20,11 @@ readiness. The snapshot exposes:
 - collision readiness;
 - combined readiness.
 
+`query_active_chunk_states()` returns the same immutable snapshot type for
+every active application record in canonical chunk-key order. Unlike scene-tree
+render inspection, this includes authoritative chunks whose valid render or
+collision payload is empty. The query is bounded by `active_chunk_capacity`.
+
 The query copies state. It does not retain an internal container pointer, and
 later replacement or eviction cannot mutate an earlier result.
 
@@ -41,8 +46,9 @@ Resource-generation values are diagnostic evidence from the actual render and
 collision sinks. They distinguish logical queue readiness from a resource that
 is still staged or still belongs to the preceding generation.
 
-The method is a Godot main-thread capability over native application state.
-It performs a bounded binary search and does not scan viewers, pages, or the
+Both methods are Godot main-thread capabilities over native application state.
+The keyed query performs a bounded binary search; enumeration copies the
+already sorted active record set and does not scan viewers, pages, or the
 world. Scalar/material sampling and authoritative edit queries remain later
 PQ2 work.
 
@@ -52,6 +58,7 @@ PQ2 work.
 release addon builds:
 
 - valid absent and invalid-LOD behavior;
+- complete canonical active-record enumeration, including an empty surface;
 - fine and coarse active readiness;
 - an active ready chunk with an empty render surface;
 - collision-required and combined readiness;

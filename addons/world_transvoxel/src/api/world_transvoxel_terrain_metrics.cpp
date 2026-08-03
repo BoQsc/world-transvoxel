@@ -174,6 +174,40 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	set_metric(output, "edit_rejections", runtime.edit_rejections);
 	set_metric(output, "edit_replacements", runtime.edit_replacements);
 	set_metric(
+		output, "edit_transaction_attempts", runtime.edit_transaction_attempts
+	);
+	set_metric(
+		output,
+		"edit_completed_transactions",
+		runtime.edit_completed_transactions
+	);
+	set_metric(output, "edit_empty_transactions", runtime.edit_empty_transactions);
+	set_metric(output, "edit_queried_chunks", runtime.edit_queried_chunks);
+	set_metric(output, "edit_replaced_chunks", runtime.edit_replaced_chunks);
+	set_metric(
+		output, "edit_evicted_page_entries", runtime.edit_evicted_page_entries
+	);
+	set_metric(
+		output,
+		"edit_evicted_resource_entries",
+		runtime.edit_evicted_resource_entries
+	);
+	set_metric(output, "edit_spatial_rejections", runtime.edit_spatial_rejections);
+	set_metric(output, "edit_capacity_rejections", runtime.edit_capacity_rejections);
+	set_metric(output, "edit_state_rejections", runtime.edit_state_rejections);
+	set_metric(output, "edit_scheduler_failures", runtime.edit_scheduler_failures);
+	set_metric(output, "edit_application_failures", runtime.edit_application_failures);
+	set_metric(
+		output,
+		"edit_page_meshing_runtime_failures",
+		runtime.edit_page_meshing_runtime_failures
+	);
+	set_metric(
+		output,
+		"edit_cancelled_page_meshing_generations",
+		runtime.edit_cancelled_page_meshing_generations
+	);
+	set_metric(
 		output,
 		"edit_lod_retention_zones",
 		runtime.edit_lod_retention_zones

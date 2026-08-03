@@ -55,6 +55,13 @@ func _run_test() -> void:
 			not await _wait_for_counts(terrain, 5, 5):
 		_fail("initial query plan did not settle")
 		return
+	var active_states: Array = terrain.call("query_active_chunk_states")
+	var active_metrics: Dictionary = terrain.call("get_runtime_metrics")
+	if active_states.size() != int(active_metrics.get("active_chunk_records", -1)) or \
+			active_states.size() <= terrain.call("get_rendered_chunk_count") or \
+			not _active_states_are_canonical(active_states):
+		_fail("active chunk enumeration is incomplete or non-canonical")
+		return
 	var first_bridge: RefCounted = terrain.call(
 		"query_chunk_state", Vector3i(1, 0, 0), 1
 	)
@@ -75,6 +82,13 @@ func _run_test() -> void:
 	if not terrain.call("update_viewer", 2, 1, Vector3(80, 8, 8), 1, 1) or \
 			not await _wait_for_counts(terrain, 10, 10):
 		_fail("second query viewer plan did not settle")
+		return
+	active_states = terrain.call("query_active_chunk_states")
+	active_metrics = terrain.call("get_runtime_metrics")
+	if active_states.size() != int(active_metrics.get("active_chunk_records", -1)) or \
+			active_states.size() <= terrain.call("get_rendered_chunk_count") or \
+			not _active_states_are_canonical(active_states):
+		_fail("active chunk enumeration did not follow viewer ownership")
 		return
 	var second_bridge: RefCounted = terrain.call(
 		"query_chunk_state", Vector3i(1, 0, 0), 1
@@ -113,7 +127,7 @@ func _run_test() -> void:
 			not await _wait_for_state(terrain, "stopped"):
 		_fail("query fixture did not stop cleanly")
 		return
-	print("PRODUCTION_GODOT_CHUNK_QUERY_PASS snapshots=5 mask_stable=1")
+	print("PRODUCTION_GODOT_CHUNK_QUERY_PASS snapshots=5 enumeration=1 mask_stable=1")
 	terrain.queue_free()
 	await process_frame
 	quit(0)
@@ -133,6 +147,39 @@ func _has_matching_applied_generations(snapshot: RefCounted) -> bool:
 		snapshot.call("get_staged_render_generation") == 0 and \
 		snapshot.call("get_collision_generation") == generation and \
 		snapshot.call("get_staged_collision_generation") == 0
+
+
+func _active_states_are_canonical(states: Array) -> bool:
+	var previous_coordinate := Vector3i.ZERO
+	var previous_lod := -1
+	for state_value in states:
+		var state := state_value as RefCounted
+		if state == null or not bool(state.call("is_present")):
+			return false
+		var coordinate: Vector3i = state.call("get_chunk_coordinate")
+		var lod := int(state.call("get_lod"))
+		if previous_lod >= 0 and not _key_less(
+			previous_coordinate, previous_lod, coordinate, lod
+		):
+			return false
+		previous_coordinate = coordinate
+		previous_lod = lod
+	return true
+
+
+func _key_less(
+	left: Vector3i,
+	left_lod: int,
+	right: Vector3i,
+	right_lod: int
+) -> bool:
+	if left_lod != right_lod:
+		return left_lod < right_lod
+	if left.z != right.z:
+		return left.z < right.z
+	if left.y != right.y:
+		return left.y < right.y
+	return left.x < right.x
 
 
 func _wait_for_state(terrain: Node, expected: String) -> bool:

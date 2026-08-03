@@ -90,6 +90,21 @@ func _run_test() -> void:
 	):
 		_fail("edited chunk generation did not settle as empty")
 		return
+	var edit_metrics: Dictionary = terrain.call("get_runtime_metrics")
+	if int(edit_metrics.get("edit_transaction_attempts", 0)) != 1 or \
+			int(edit_metrics.get("edit_completed_transactions", 0)) != 1 or \
+			int(edit_metrics.get("edit_empty_transactions", -1)) != 0 or \
+			int(edit_metrics.get("edit_queried_chunks", 0)) != 1 or \
+			int(edit_metrics.get("edit_replaced_chunks", 0)) != 1 or \
+			int(edit_metrics.get("edit_replacements", 0)) != 1 or \
+			int(edit_metrics.get("edit_spatial_rejections", -1)) != 0 or \
+			int(edit_metrics.get("edit_capacity_rejections", -1)) != 0 or \
+			int(edit_metrics.get("edit_state_rejections", -1)) != 0 or \
+			int(edit_metrics.get("edit_scheduler_failures", -1)) != 0 or \
+			int(edit_metrics.get("edit_application_failures", -1)) != 0 or \
+			int(edit_metrics.get("edit_page_meshing_runtime_failures", -1)) != 0:
+		_fail("edit replacement metrics do not match the committed chunk")
+		return
 	if not FileAccess.file_exists(journal_path):
 		_fail("durable edit journal was not created")
 		return

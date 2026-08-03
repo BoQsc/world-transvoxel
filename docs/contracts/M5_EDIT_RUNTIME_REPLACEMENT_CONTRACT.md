@@ -104,6 +104,11 @@ capacity rejections, state/revision rejections, and invariant-level scheduler
 or application failures. They also report cancelled page-meshing generations
 and page-meshing coordination failures.
 
+The Godot `WorldTransvoxelTerrain.get_runtime_metrics()` snapshot publishes
+these replacement counters with the `edit_` prefix. This is read-only,
+main-thread observability over the native service. It does not infer affected
+chunks from rendered scene nodes and does not alter replacement ownership.
+
 ## Evidence
 
 `test_wt_m5_edit_replacement` proves in debug and release builds:

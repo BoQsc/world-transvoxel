@@ -28,6 +28,10 @@ void WorldTransvoxelTerrain::bind_query_snapshot_methods() {
 		DEFVAL(0)
 	);
 	godot::ClassDB::bind_method(
+		godot::D_METHOD("query_active_chunk_states"),
+		&WorldTransvoxelTerrain::query_active_chunk_states
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD("request_authoritative_samples", "grid_points", "lod"),
 		&WorldTransvoxelTerrain::request_authoritative_samples,
 		DEFVAL(0)
@@ -111,6 +115,28 @@ WorldTransvoxelTerrain::query_chunk_state(
 		collision_sink_->staged_generation(key)
 	);
 	return snapshot;
+}
+
+godot::Array WorldTransvoxelTerrain::query_active_chunk_states() const {
+	godot::Array snapshots;
+	const std::vector<WtChunkApplicationRecord> records =
+		application_->get_records();
+	snapshots.resize(static_cast<std::int64_t>(records.size()));
+	for (std::size_t index = 0; index < records.size(); ++index) {
+		const WtChunkApplicationRecord &record = records[index];
+		godot::Ref<WorldTransvoxelChunkState> snapshot;
+		snapshot.instantiate();
+		snapshot->set_snapshot(
+			record.key,
+			&record,
+			render_sink_->applied_generation(record.key),
+			render_sink_->staged_generation(record.key),
+			collision_sink_->applied_generation(record.key),
+			collision_sink_->staged_generation(record.key)
+		);
+		snapshots[static_cast<std::int64_t>(index)] = snapshot;
+	}
+	return snapshots;
 }
 
 std::int64_t WorldTransvoxelTerrain::request_authoritative_sample(
