@@ -14,6 +14,7 @@ readiness. The snapshot exposes:
 - currently applied render generation;
 - staged render generation, when visibility publication is intentionally held;
 - currently applied collision generation;
+- staged collision generation, when replacement ownership is intentionally held;
 - visual readiness;
 - whether collision is required;
 - collision readiness;
@@ -55,7 +56,7 @@ release addon builds:
 - an active ready chunk with an empty render surface;
 - collision-required and combined readiness;
 - applied render/collision generations match the current generation after
-  readiness, with no staged render left behind;
+  readiness, with no staged render or collision generation left behind;
 - transition-mask-only viewer changes retain the canonical mesh generation;
 - prior snapshots remain unchanged;
 - viewer eviction removes the current application record;

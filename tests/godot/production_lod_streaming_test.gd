@@ -1,5 +1,8 @@
 extends SceneTree
 
+var collision_overlap_frames := 0
+var maximum_staged_collision_resources := 0
+
 
 func _initialize() -> void:
 	call_deferred("_run_test")
@@ -169,6 +172,12 @@ func _run_test() -> void:
 		_fail("multi-LOD viewer removal did not evict resources")
 		return
 	var final_metrics: Dictionary = terrain.call("get_runtime_metrics")
+	if collision_overlap_frames != 0:
+		_fail("dynamic LOD replacement exposed overlapping collision ownership")
+		return
+	if maximum_staged_collision_resources <= 0:
+		_fail("dynamic LOD replacement did not exercise collision staging")
+		return
 	if int(final_metrics.get("application_submitted_render", 0)) > 128 or \
 			int(final_metrics.get("application_submitted_collision", 0)) > 128 or \
 			int(final_metrics.get("application_sink_failures", 0)) != 0 or \
@@ -199,6 +208,7 @@ func _wait_for_state(terrain: Node, expected: String) -> bool:
 
 func _wait_for_counts(terrain: Node, render_count: int, collision_count: int) -> bool:
 	for _frame in range(900):
+		_audit_collision_ownership(terrain)
 		var metrics: Dictionary = terrain.call("get_runtime_metrics")
 		if terrain.call("get_rendered_chunk_count") == render_count and \
 				terrain.call("get_collision_chunk_count") == collision_count and \
@@ -219,6 +229,7 @@ func _wait_for_plan(
 	previous_viewer_update_count: int
 ) -> bool:
 	for _frame in range(900):
+		_audit_collision_ownership(terrain)
 		var metrics: Dictionary = terrain.call("get_runtime_metrics")
 		if int(metrics.get("planned_demands", 0)) > previous_plan_count and \
 				int(metrics.get("viewer_updates", 0)) > \
@@ -234,6 +245,7 @@ func _wait_for_retained_replacements(
 	minimum_rendered: int
 ) -> bool:
 	for _frame in range(900):
+		_audit_collision_ownership(terrain)
 		var rendered := int(terrain.call("get_rendered_chunk_count"))
 		if rendered < minimum_rendered:
 			return false
@@ -243,6 +255,35 @@ func _wait_for_retained_replacements(
 			return true
 		await create_timer(0.001).timeout
 	return false
+
+
+func _audit_collision_ownership(terrain: Node) -> void:
+	var metrics: Dictionary = terrain.call("get_runtime_metrics")
+	maximum_staged_collision_resources = maxi(
+		maximum_staged_collision_resources,
+		int(metrics.get("staged_collision_resources", 0))
+	)
+	var bounds: Array[AABB] = []
+	for child in terrain.get_children():
+		var child_name := str(child.name)
+		if not child is StaticBody3D or not child_name.begins_with("WT_Collision_"):
+			continue
+		var parts := child_name.trim_prefix("WT_Collision_").split("_")
+		if parts.size() != 4 or not parts[3].begins_with("L"):
+			continue
+		var lod := int(parts[3].trim_prefix("L"))
+		var extent := 16.0 * float(1 << lod)
+		bounds.append(AABB(
+			Vector3(float(parts[0]), float(parts[1]), float(parts[2])) * extent,
+			Vector3.ONE * extent
+		))
+	for first_index in range(bounds.size()):
+		for second_index in range(first_index + 1, bounds.size()):
+			var overlap := bounds[first_index].intersection(bounds[second_index])
+			if overlap.size.x > 0.0001 and overlap.size.y > 0.0001 \
+					and overlap.size.z > 0.0001:
+				collision_overlap_frames += 1
+				return
 
 
 func _fail(message: String) -> void:

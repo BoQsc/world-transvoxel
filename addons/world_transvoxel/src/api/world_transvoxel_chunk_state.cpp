@@ -36,6 +36,10 @@ void WorldTransvoxelChunkState::_bind_methods() {
 		&WorldTransvoxelChunkState::get_collision_generation
 	);
 	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_staged_collision_generation"),
+		&WorldTransvoxelChunkState::get_staged_collision_generation
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD("is_visual_ready"),
 		&WorldTransvoxelChunkState::is_visual_ready
 	);
@@ -89,6 +93,11 @@ WorldTransvoxelChunkState::get_collision_generation() const noexcept {
 	return static_cast<std::int64_t>(collision_generation_.value);
 }
 
+std::int64_t
+WorldTransvoxelChunkState::get_staged_collision_generation() const noexcept {
+	return static_cast<std::int64_t>(staged_collision_generation_.value);
+}
+
 bool WorldTransvoxelChunkState::is_visual_ready() const noexcept {
 	return visual_ready_;
 }
@@ -115,7 +124,8 @@ void WorldTransvoxelChunkState::set_snapshot(
 	const WtChunkApplicationRecord *record,
 	WtGenerationToken render_generation,
 	WtGenerationToken staged_render_generation,
-	WtGenerationToken collision_generation
+	WtGenerationToken collision_generation,
+	WtGenerationToken staged_collision_generation
 ) noexcept {
 	key_ = key;
 	present_ = record != nullptr;
@@ -123,6 +133,7 @@ void WorldTransvoxelChunkState::set_snapshot(
 	render_generation_ = render_generation;
 	staged_render_generation_ = staged_render_generation;
 	collision_generation_ = collision_generation;
+	staged_collision_generation_ = staged_collision_generation;
 	visual_ready_ = record != nullptr && record->visual_ready;
 	visual_required_ = record != nullptr && record->visual_required;
 	collision_required_ = record != nullptr && record->collision_required;

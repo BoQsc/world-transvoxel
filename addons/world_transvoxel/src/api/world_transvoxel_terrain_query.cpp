@@ -107,7 +107,8 @@ WorldTransvoxelTerrain::query_chunk_state(
 		application_record_pointer,
 		render_sink_->applied_generation(key),
 		render_sink_->staged_generation(key),
-		collision_sink_->applied_generation(key)
+		collision_sink_->applied_generation(key),
+		collision_sink_->staged_generation(key)
 	);
 	return snapshot;
 }

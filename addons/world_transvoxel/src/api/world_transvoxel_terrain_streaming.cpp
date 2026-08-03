@@ -606,7 +606,8 @@ void WorldTransvoxelTerrain::flush_ready_chunk_replacements() {
 		if (independent !=
 				independently_publishable_chunk_replacements_.end() &&
 				*independent == *iterator) {
-			if (!render_sink_->publish_staged_record(*iterator)) {
+			if (!render_sink_->publish_staged_record(*iterator) ||
+					!collision_sink_->publish_staged_record(*iterator)) {
 				++iterator;
 				continue;
 			}
@@ -622,6 +623,8 @@ void WorldTransvoxelTerrain::update_visibility_staging_state() {
 			pending_render_retirements_.empty()) {
 		render_sink_->set_visibility_staging_reference_chunks({});
 		render_sink_->set_new_record_visibility_staging_enabled(false);
+		collision_sink_->set_staging_reference_chunks({});
+		collision_sink_->set_new_record_staging_enabled(false);
 		return;
 	}
 	std::vector<WtChunkKey> references = pending_chunk_retirements_;
@@ -642,6 +645,8 @@ void WorldTransvoxelTerrain::update_visibility_staging_state() {
 	);
 	render_sink_->set_visibility_staging_reference_chunks(references);
 	render_sink_->set_new_record_visibility_staging_enabled(true);
+	collision_sink_->set_staging_reference_chunks(references);
+	collision_sink_->set_new_record_staging_enabled(true);
 }
 
 void WorldTransvoxelTerrain::publish_staged_records_if_ready() {
@@ -656,8 +661,13 @@ void WorldTransvoxelTerrain::publish_staged_records_if_ready() {
 	}
 	render_sink_->set_new_record_visibility_staging_enabled(false);
 	render_sink_->set_visibility_staging_reference_chunks({});
+	collision_sink_->set_new_record_staging_enabled(false);
+	collision_sink_->set_staging_reference_chunks({});
 	if (render_sink_->has_staged_records()) {
 		render_sink_->publish_staged_records();
+	}
+	if (collision_sink_->has_staged_records()) {
+		collision_sink_->publish_staged_records();
 	}
 }
 

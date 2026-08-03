@@ -42,7 +42,8 @@ func _run_test() -> void:
 		return
 	if absent.call("get_render_generation") != 0 or \
 			absent.call("get_staged_render_generation") != 0 or \
-			absent.call("get_collision_generation") != 0:
+			absent.call("get_collision_generation") != 0 or \
+			absent.call("get_staged_collision_generation") != 0:
 		_fail("absent chunk exposed applied resource generations")
 		return
 	if terrain.call("query_chunk_state", Vector3i.ZERO, -1) != null or \
@@ -83,13 +84,14 @@ func _run_test() -> void:
 			not _has_matching_applied_generations(second_bridge) or \
 			first_bridge.call("get_generation") != first_generation:
 		_fail(
-			"mask-only stable-generation snapshot mismatch first=%d current=%d render=%d staged=%d collision=%d ready=%s" %
+			"mask-only stable-generation snapshot mismatch first=%d current=%d render=%d staged=%d collision=%d staged_collision=%d ready=%s" %
 			[
 				first_generation,
 				second_bridge.call("get_generation"),
 				second_bridge.call("get_render_generation"),
 				second_bridge.call("get_staged_render_generation"),
 				second_bridge.call("get_collision_generation"),
+				second_bridge.call("get_staged_collision_generation"),
 				str(_is_ready_snapshot(second_bridge)),
 			]
 		)
@@ -129,7 +131,8 @@ func _has_matching_applied_generations(snapshot: RefCounted) -> bool:
 	var generation: int = snapshot.call("get_generation")
 	return snapshot.call("get_render_generation") == generation and \
 		snapshot.call("get_staged_render_generation") == 0 and \
-		snapshot.call("get_collision_generation") == generation
+		snapshot.call("get_collision_generation") == generation and \
+		snapshot.call("get_staged_collision_generation") == 0
 
 
 func _wait_for_state(terrain: Node, expected: String) -> bool:

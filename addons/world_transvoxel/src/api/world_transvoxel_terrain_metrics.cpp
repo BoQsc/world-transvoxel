@@ -1,5 +1,6 @@
 #include "api/world_transvoxel_terrain.h"
 
+#include "physics/wt_godot_collision_sink.h"
 #include "render/wt_godot_render_sink.h"
 #include "services/wt_chunk_application.h"
 
@@ -690,6 +691,9 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		render_sink_->staged_count()
 	);
 	output["collision_resources"] = get_collision_resource_count();
+	output["staged_collision_resources"] = static_cast<std::int64_t>(
+		collision_sink_->staged_count()
+	);
 	return output;
 }
 

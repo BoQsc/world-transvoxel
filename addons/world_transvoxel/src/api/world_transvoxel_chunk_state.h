@@ -26,6 +26,7 @@ public:
 	std::int64_t get_render_generation() const noexcept;
 	std::int64_t get_staged_render_generation() const noexcept;
 	std::int64_t get_collision_generation() const noexcept;
+	std::int64_t get_staged_collision_generation() const noexcept;
 	bool is_visual_ready() const noexcept;
 	bool is_visual_required() const noexcept;
 	bool is_collision_required() const noexcept;
@@ -40,7 +41,8 @@ private:
 		const WtChunkApplicationRecord *record,
 		WtGenerationToken render_generation,
 		WtGenerationToken staged_render_generation,
-		WtGenerationToken collision_generation
+		WtGenerationToken collision_generation,
+		WtGenerationToken staged_collision_generation
 	) noexcept;
 
 	WtChunkKey key_;
@@ -48,6 +50,7 @@ private:
 	WtGenerationToken render_generation_;
 	WtGenerationToken staged_render_generation_;
 	WtGenerationToken collision_generation_;
+	WtGenerationToken staged_collision_generation_;
 	bool present_ = false;
 	bool visual_ready_ = false;
 	bool visual_required_ = false;
