@@ -3,6 +3,7 @@
 #include "bake/wt_chunk_baker.h"
 #include "storage/wt_procedural_cave_field.h"
 #include "storage/wt_procedural_road_field.h"
+#include "testing/wt_fault_injection.h"
 
 #include <algorithm>
 #include <cmath>
@@ -751,6 +752,12 @@ WtPageLoadCompletion wt_generate_procedural_page(
 	completion.generation = generation;
 	if (!wt_procedural_can_generate_page(descriptor, key)) {
 		completion.status = WtPageLoadStatus::PageFailure;
+		return completion;
+	}
+	if (wt_should_inject_fault(
+			WtFaultInjectionSite::PageBufferAllocation
+		)) {
+		completion.status = WtPageLoadStatus::AllocationFailure;
 		return completion;
 	}
 	WtProceduralTerrainVolumeSource source(descriptor);

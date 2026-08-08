@@ -55,6 +55,7 @@ enum class WtPageLoadStatus : std::uint8_t {
 	HashMismatch,
 	PageFailure,
 	MetadataMismatch,
+	AllocationFailure,
 };
 
 struct WtPageLoadCompletion {

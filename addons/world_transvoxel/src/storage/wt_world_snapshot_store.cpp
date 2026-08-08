@@ -10,6 +10,7 @@
 #include "storage/wt_procedural_snapshot_descriptor.h"
 #include "storage/wt_procedural_world_source.h"
 #include "storage/wt_world_manifest.h"
+#include "testing/wt_fault_injection.h"
 
 #include <algorithm>
 #include <array>
@@ -782,6 +783,11 @@ WtWorldSnapshotStoreStatus wt_write_migrated_world_snapshot(
 	if (journal.transaction_count() != 0) {
 		return WtWorldSnapshotStoreStatus::JournalNotEmpty;
 	}
+	if (wt_should_inject_fault(
+			WtFaultInjectionSite::SnapshotWorkspaceAllocation
+		)) {
+		return WtWorldSnapshotStoreStatus::AllocationFailure;
+	}
 	if (storage.is_procedural()) {
 		return write_procedural_snapshot(
 			storage,
@@ -833,6 +839,11 @@ WtWorldSnapshotStoreStatus wt_write_compacted_world_snapshot(
 		if (new_source_revision <= storage.source_revision()) {
 			return WtWorldSnapshotStoreStatus::InvalidInput;
 		}
+		if (wt_should_inject_fault(
+				WtFaultInjectionSite::SnapshotWorkspaceAllocation
+			)) {
+			return WtWorldSnapshotStoreStatus::AllocationFailure;
+		}
 		return write_procedural_snapshot(
 			storage,
 			journal,
@@ -841,6 +852,11 @@ WtWorldSnapshotStoreStatus wt_write_compacted_world_snapshot(
 			true,
 			output
 		);
+	}
+	if (wt_should_inject_fault(
+			WtFaultInjectionSite::SnapshotWorkspaceAllocation
+		)) {
+		return WtWorldSnapshotStoreStatus::AllocationFailure;
 	}
 	std::vector<std::uint8_t> previous_world;
 	WtWorldManifestView view;
@@ -866,35 +882,6 @@ WtWorldSnapshotStoreStatus wt_write_compacted_world_snapshot(
 		compacted.pages,
 		output
 	);
-}
-
-const char *wt_world_snapshot_store_status_message(
-	WtWorldSnapshotStoreStatus status
-) noexcept {
-	switch (status) {
-		case WtWorldSnapshotStoreStatus::Ok: return "ok";
-		case WtWorldSnapshotStoreStatus::InvalidInput:
-			return "world snapshot output path or revision is invalid";
-		case WtWorldSnapshotStoreStatus::CapacityExceeded:
-			return "world snapshot page or byte capacity is exceeded";
-		case WtWorldSnapshotStoreStatus::OutputExists:
-			return "world snapshot output directory already exists";
-		case WtWorldSnapshotStoreStatus::ManifestFailure:
-			return "world snapshot manifest validation failed";
-		case WtWorldSnapshotStoreStatus::PageFailure:
-			return "world snapshot page loading or validation failed";
-		case WtWorldSnapshotStoreStatus::JournalNotEmpty:
-			return "world migration requires an empty edit journal";
-		case WtWorldSnapshotStoreStatus::JournalEmpty:
-			return "world compaction requires committed edits";
-		case WtWorldSnapshotStoreStatus::CompactionFailure:
-			return "world snapshot compaction failed";
-		case WtWorldSnapshotStoreStatus::IoFailure:
-			return "world snapshot file writing failed";
-		case WtWorldSnapshotStoreStatus::PublishFailure:
-			return "world snapshot directory publication failed";
-	}
-	return "unknown world snapshot status";
 }
 
 } // namespace world_transvoxel

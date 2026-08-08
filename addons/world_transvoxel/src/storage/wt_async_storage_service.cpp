@@ -2,6 +2,7 @@
 
 #include "storage/wt_procedural_snapshot_descriptor.h"
 #include "storage/wt_procedural_world_source.h"
+#include "testing/wt_fault_injection.h"
 
 #include <algorithm>
 #include <fstream>
@@ -642,6 +643,12 @@ WtPageLoadCompletion WtAsyncStorageService::load_page(
 	}
 	if (stored_size != request.entry.byte_size) {
 		completion.status = WtPageLoadStatus::SizeMismatch;
+		return completion;
+	}
+	if (wt_should_inject_fault(
+			WtFaultInjectionSite::PageBufferAllocation
+		)) {
+		completion.status = WtPageLoadStatus::AllocationFailure;
 		return completion;
 	}
 	auto bytes = std::make_shared<std::vector<std::uint8_t>>();

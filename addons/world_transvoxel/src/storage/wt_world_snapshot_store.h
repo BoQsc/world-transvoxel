@@ -24,6 +24,7 @@ enum class WtWorldSnapshotStoreStatus : std::uint8_t {
 	CompactionFailure,
 	IoFailure,
 	PublishFailure,
+	AllocationFailure,
 };
 
 struct WtWorldSnapshotStoreResult {

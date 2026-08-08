@@ -384,6 +384,7 @@ m5_async_storage_test = native_test_env.Program(
         "addons/world_transvoxel/src/storage/wt_procedural_world_source.cpp",
         "addons/world_transvoxel/src/storage/wt_procedural_road_field.cpp",
         "addons/world_transvoxel/src/storage/wt_world_manifest.cpp",
+        "addons/world_transvoxel/src/testing/wt_fault_injection.cpp",
     ],
 )
 
@@ -598,6 +599,7 @@ m5_pipeline_budget_test = native_test_env.Program(
         "addons/world_transvoxel/src/storage/wt_procedural_world_source.cpp",
         "addons/world_transvoxel/src/storage/wt_procedural_road_field.cpp",
         "addons/world_transvoxel/src/storage/wt_world_manifest.cpp",
+        "addons/world_transvoxel/src/testing/wt_fault_injection.cpp",
     ],
 )
 
@@ -680,6 +682,7 @@ m5_page_meshing_runtime_test = native_test_env.Program(
         "addons/world_transvoxel/src/storage/wt_storage_page_cache.cpp",
         "addons/world_transvoxel/src/storage/wt_world_manifest.cpp",
         "addons/world_transvoxel/src/streaming/wt_stream_scheduler.cpp",
+        "addons/world_transvoxel/src/testing/wt_fault_injection.cpp",
     ],
 )
 
@@ -759,6 +762,48 @@ production_snapshot_query_test = native_test_env.Program(
         "addons/world_transvoxel/src/storage/wt_procedural_road_field.cpp",
         "addons/world_transvoxel/src/storage/wt_world_manifest.cpp",
         "addons/world_transvoxel/src/storage/wt_world_snapshot_store.cpp",
+        "addons/world_transvoxel/src/storage/wt_world_snapshot_store_status.cpp",
+        "addons/world_transvoxel/src/testing/wt_fault_injection.cpp",
+    ],
+)
+
+fault_order_determinism_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_fault_order_determinism.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_fault_order_determinism.cpp",
+        "addons/world_transvoxel/src/bake/wt_chunk_baker.cpp",
+        "addons/world_transvoxel/src/meshing/wt_multiresolution_vertex_resolver.cpp",
+        "addons/world_transvoxel/src/bake/wt_snapshot_compactor.cpp",
+        "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/editing/wt_chunk_edit_state.cpp",
+        "addons/world_transvoxel/src/editing/wt_edit_journal.cpp",
+        "addons/world_transvoxel/src/editing/wt_edit_transaction.cpp",
+        "addons/world_transvoxel/src/editing/wt_edit_types.cpp",
+        "addons/world_transvoxel/src/storage/wt_async_storage_service.cpp",
+        "addons/world_transvoxel/src/storage/wt_page_hierarchy.cpp",
+        "addons/world_transvoxel/src/storage/wt_procedural_snapshot_descriptor.cpp",
+        "addons/world_transvoxel/src/storage/wt_binary_io.cpp",
+        "addons/world_transvoxel/src/storage/wt_chunk_page.cpp",
+        "addons/world_transvoxel/src/storage/wt_chunk_surface_shift.cpp",
+        "addons/world_transvoxel/src/storage/wt_container_format.cpp",
+        "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+        "addons/world_transvoxel/src/storage/wt_procedural_cave_field.cpp",
+        "addons/world_transvoxel/src/storage/wt_procedural_world_source.cpp",
+        "addons/world_transvoxel/src/storage/wt_procedural_road_field.cpp",
+        "addons/world_transvoxel/src/storage/wt_world_manifest.cpp",
+        "addons/world_transvoxel/src/storage/wt_world_snapshot_store.cpp",
+        "addons/world_transvoxel/src/streaming/wt_multi_viewer_desired_set.cpp",
+        "addons/world_transvoxel/src/streaming/wt_stream_scheduler.cpp",
+        "addons/world_transvoxel/src/telemetry/wt_determinism_trace.cpp",
+        "addons/world_transvoxel/src/testing/wt_fault_injection.cpp",
     ],
 )
 
@@ -821,6 +866,7 @@ production_read_only_runtime_sources = [
     "addons/world_transvoxel/src/streaming/wt_lod_map.cpp",
     "addons/world_transvoxel/src/streaming/wt_multi_viewer_desired_set.cpp",
     "addons/world_transvoxel/src/streaming/wt_stream_scheduler.cpp",
+    "addons/world_transvoxel/src/testing/wt_fault_injection.cpp",
 ]
 
 production_lifecycle_test = native_test_env.Program(
@@ -1076,6 +1122,11 @@ if env["platform"] == "windows":
     )
 
     env.AddPostAction(
+        fault_order_determinism_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
+    env.AddPostAction(
         production_lifecycle_test,
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
@@ -1128,6 +1179,7 @@ Default([
     production_config_test,
     production_edit_journal_test,
     production_snapshot_query_test,
+    fault_order_determinism_test,
     production_lifecycle_test,
     production_streaming_test,
     production_lod_streaming_test,

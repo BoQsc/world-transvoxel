@@ -31,6 +31,9 @@ EXPECTED_EDIT_JOURNAL_HASH = (
 EXPECTED_SNAPSHOT_QUERY_HASH = (
     "2b3da9885262e7548e95192e698eb00eebe57fadc82e05aa05b5da83dbc2c689"
 )
+EXPECTED_FAULT_ORDER_DETERMINISM_HASH = (
+    "4cfe12662b60691f93eda8a27d20e1c978e9bab58c2c144b323750d2f39316bf"
+)
 EXPECTED_LIFECYCLE_HASH = (
     "ccdb1e1ad000f824ebd4628e640a6c1d95f9d734cc1298f738de3d0c98f3a126"
 )
@@ -282,6 +285,13 @@ def test_production_qualification(
             "PRODUCTION_SNAPSHOT_QUERY_PASS",
             "PRODUCTION_SNAPSHOT_QUERY_HASH",
             EXPECTED_SNAPSHOT_QUERY_HASH,
+        )
+        run_hashed_native(
+            configuration,
+            "test_wt_fault_order_determinism",
+            "FAULT_ORDER_DETERMINISM_PASS",
+            "FAULT_ORDER_DETERMINISM_HASH",
+            EXPECTED_FAULT_ORDER_DETERMINISM_HASH,
         )
         run_hashed_native(
             configuration,
