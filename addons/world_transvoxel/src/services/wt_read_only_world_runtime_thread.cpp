@@ -295,6 +295,26 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 	snapshot.storage_in_flight_key_z = storage.in_flight_key_z;
 	snapshot.storage_in_flight_key_lod = storage.in_flight_key_lod;
 	snapshot.storage_in_flight_generation = storage.in_flight_generation;
+	if (lod_planner_) {
+		const WtPageHierarchyMetrics hierarchy =
+			lod_planner_->hierarchy_metrics();
+		snapshot.hierarchy_kind = static_cast<std::uint64_t>(hierarchy.kind);
+		snapshot.hierarchy_declared_pages = hierarchy.declared_page_count;
+		snapshot.hierarchy_explicit_index_entries =
+			hierarchy.explicit_index_entries;
+		snapshot.hierarchy_estimated_index_bytes =
+			hierarchy.estimated_index_bytes;
+		snapshot.hierarchy_membership_queries = hierarchy.membership_queries;
+		snapshot.hierarchy_child_queries = hierarchy.child_queries;
+		snapshot.hierarchy_ancestor_queries = hierarchy.ancestor_queries;
+		snapshot.hierarchy_neighbor_queries = hierarchy.neighbor_queries;
+		snapshot.hierarchy_range_queries = hierarchy.range_queries;
+		snapshot.hierarchy_viewer_root_queries = hierarchy.viewer_root_queries;
+		snapshot.hierarchy_lod_enumerations = hierarchy.lod_enumerations;
+	}
+	snapshot.hierarchy_sparse_overlay_entries = storage_.overlay_page_count();
+	snapshot.hierarchy_sparse_overlay_index_bytes =
+		storage_.overlay_index_bytes();
 	if (page_runtime_) {
 		const WtPageMeshingRuntimeMetrics page = page_runtime_->get_metrics();
 		snapshot.page_sample_failures = page.sample_failures;

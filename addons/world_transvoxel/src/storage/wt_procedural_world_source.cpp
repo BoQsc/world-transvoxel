@@ -547,6 +547,17 @@ private:
 
 } // namespace
 
+bool wt_same_procedural_world_geometry(
+	const WtProceduralWorldDescriptor &left,
+	const WtProceduralWorldDescriptor &right
+) noexcept {
+	return left.chunk_count_x == right.chunk_count_x &&
+		left.chunk_count_y == right.chunk_count_y &&
+		left.chunk_count_z == right.chunk_count_z &&
+		left.chunk_y == right.chunk_y &&
+		left.seed == right.seed && left.mode == right.mode;
+}
+
 bool wt_sample_procedural_world(
 	const WtProceduralWorldDescriptor &descriptor,
 	const WtGridPoint &point,
@@ -595,31 +606,104 @@ std::uint64_t wt_procedural_page_count(
 	return pages;
 }
 
+std::uint64_t wt_procedural_lod_page_count(
+	const WtProceduralWorldDescriptor &descriptor,
+	std::uint8_t lod
+) noexcept {
+	if (descriptor.chunk_count_x == 0 || descriptor.chunk_count_y == 0 ||
+		descriptor.chunk_count_z == 0 || lod > kWtProceduralMaximumLod) {
+		return 0;
+	}
+	const std::uint32_t span = lod_span(lod);
+	return static_cast<std::uint64_t>(
+		ceil_divide_u32(descriptor.chunk_count_x, span)
+	) * static_cast<std::uint64_t>(
+		ceil_divide_u32(descriptor.chunk_count_z, span)
+	) * static_cast<std::uint64_t>(vertical_layer_count(descriptor, lod));
+}
+
+bool wt_procedural_is_declared_page(
+	const WtProceduralWorldDescriptor &descriptor,
+	const WtChunkKey &key
+) noexcept {
+	WtChunkKey minimum;
+	WtChunkKey maximum;
+	return wt_procedural_lod_key_bounds(
+			descriptor, key.lod, minimum, maximum
+		) &&
+		key.x >= minimum.x && key.x <= maximum.x &&
+		key.y >= minimum.y && key.y <= maximum.y &&
+		key.z >= minimum.z && key.z <= maximum.z;
+}
+
+bool wt_procedural_lod_key_bounds(
+	const WtProceduralWorldDescriptor &descriptor,
+	std::uint8_t lod,
+	WtChunkKey &minimum,
+	WtChunkKey &maximum
+) noexcept {
+	minimum = {};
+	maximum = {};
+	if (wt_procedural_lod_page_count(descriptor, lod) == 0) return false;
+	const std::uint32_t span = lod_span(lod);
+	const std::uint32_t count_x = ceil_divide_u32(
+		descriptor.chunk_count_x, span
+	);
+	const std::uint32_t count_z = ceil_divide_u32(
+		descriptor.chunk_count_z, span
+	);
+	const std::uint32_t count_y = vertical_layer_count(descriptor, lod);
+	const std::int32_t origin_y = vertical_origin(descriptor, lod);
+	minimum = { 0, origin_y, 0, lod };
+	maximum = {
+		static_cast<std::int32_t>(count_x - 1U),
+		static_cast<std::int32_t>(
+			origin_y + static_cast<std::int32_t>(count_y - 1U)
+		),
+		static_cast<std::int32_t>(count_z - 1U),
+		lod,
+	};
+	return true;
+}
+
+bool wt_append_procedural_lod_keys(
+	const WtProceduralWorldDescriptor &descriptor,
+	std::uint8_t lod,
+	std::vector<WtChunkKey> &output,
+	std::size_t capacity
+) {
+	const std::uint64_t count = wt_procedural_lod_page_count(descriptor, lod);
+	if (count == 0 || output.size() > capacity ||
+		count > static_cast<std::uint64_t>(capacity - output.size())) {
+		return false;
+	}
+	WtChunkKey minimum;
+	WtChunkKey maximum;
+	if (!wt_procedural_lod_key_bounds(descriptor, lod, minimum, maximum)) {
+		return false;
+	}
+	for (std::int32_t z = minimum.z; z <= maximum.z; ++z) {
+		for (std::int32_t y = minimum.y; y <= maximum.y; ++y) {
+			for (std::int32_t x = minimum.x; x <= maximum.x; ++x) {
+				output.push_back({ x, y, z, lod });
+			}
+		}
+	}
+	return true;
+}
+
 std::vector<WtChunkKey> wt_procedural_keys(
 	const WtProceduralWorldDescriptor &descriptor
 ) {
 	std::vector<WtChunkKey> keys;
 	keys.reserve(static_cast<std::size_t>(wt_procedural_page_count(descriptor)));
 	for (std::uint8_t lod = 0; lod <= kWtProceduralMaximumLod; ++lod) {
-		const std::uint32_t span = lod_span(lod);
-		const std::uint32_t count_x = ceil_divide_u32(descriptor.chunk_count_x, span);
-		const std::uint32_t count_z = ceil_divide_u32(descriptor.chunk_count_z, span);
-		const std::uint32_t count_y = vertical_layer_count(descriptor, lod);
-		const std::int32_t origin_y = vertical_origin(descriptor, lod);
-		for (std::uint32_t z = 0; z < count_z; ++z) {
-			for (std::uint32_t y = 0; y < count_y; ++y) {
-				for (std::uint32_t x = 0; x < count_x; ++x) {
-					keys.push_back({
-						static_cast<std::int32_t>(x),
-						static_cast<std::int32_t>(origin_y + static_cast<std::int32_t>(y)),
-						static_cast<std::int32_t>(z),
-						lod,
-					});
-				}
-			}
+		if (!wt_append_procedural_lod_keys(
+				descriptor, lod, keys, kWtMaximumProceduralPageCount
+			)) {
+			return {};
 		}
 	}
-	std::sort(keys.begin(), keys.end());
 	return keys;
 }
 

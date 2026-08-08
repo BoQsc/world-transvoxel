@@ -34,6 +34,9 @@ inline constexpr WtFormatMagic kWtEditMagic = {
 inline constexpr WtFormatMagic kWtTraceMagic = {
 	'W', 'T', 'T', 'R', 'A', 'C', 'E', 0
 };
+inline constexpr WtFormatMagic kWtProceduralSnapshotMagic = {
+	'W', 'T', 'P', 'R', 'O', 'C', 0, 0
+};
 
 enum class WtStorageCodec : std::uint16_t {
 	None = 0,

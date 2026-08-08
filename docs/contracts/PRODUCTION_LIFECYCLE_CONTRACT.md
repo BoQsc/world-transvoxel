@@ -52,6 +52,13 @@ pages are generated on demand through the existing native page baker and then
 flow through the same cache, meshing, editing, and application pipeline as
 manifest-backed pages.
 
+`start_procedural_snapshot(snapshot_directory, journal_root)` starts from a
+checksummed procedural descriptor plus a sparse content-addressed overlay. The
+snapshot directory remains immutable; new durable edits append under the
+separate journal root. Pages absent from the overlay are generated from the
+descriptor, so opening the retained 299,520-page hierarchy does not allocate a
+299,520-key catalog.
+
 `start_flat_world(chunk_count_x, chunk_count_z, source_revision, object_root)`
 follows the same lifecycle and bounded storage ownership with the procedural
 descriptor set to flat mode. It produces a flat y=8 surface while retaining the
@@ -101,6 +108,7 @@ copied native startup configuration.
 The facade exposes:
 
 - `start_world(world_manifest_path, object_root) -> bool`;
+- `start_procedural_snapshot(snapshot_directory, journal_root) -> bool`;
 - `start_procedural_world(chunk_count_x, chunk_count_z, seed, source_revision, object_root) -> bool`;
 - `start_flat_world(chunk_count_x, chunk_count_z, source_revision, object_root) -> bool`;
 - `stop_world() -> bool`;
@@ -116,8 +124,10 @@ errors. Empty API paths and invalid configuration fail synchronously before a
 thread is created.
 
 Procedural and flat startup reject invalid dimensions, missing object roots,
-nonpositive source revisions, and descriptors above the 262,144 hierarchy-page
-compact runtime limit synchronously before a thread is created.
+nonpositive source revisions, and descriptors above the 524,288 declared-page
+limit synchronously before a thread is created. Procedural-snapshot corruption,
+missing manifests, revision disagreement, and invalid sparse overlays transition
+through the same asynchronous fail-closed lifecycle as manifest startup.
 
 ## Proof
 
@@ -136,8 +146,9 @@ restart, and queue-free cleanup on Godot 4.6.3 and 4.7 with both addon builds.
 
 `test_wt_m5_async_storage.cpp` proves procedural descriptor validation,
 procedural page indexing, synchronous and asynchronous generated page loads,
-manifest-snapshot rejection in procedural mode, metrics accounting, and clean
-close behavior.
+metrics accounting, and clean close behavior. The production snapshot-query
+test additionally proves sparse procedural snapshot startup, overlay-first
+loading, generated-page fallback, corruption rejection, and reopen identity.
 
 The production qualification entry point generates its deterministic manifest
 fixture through the native format writer before running Godot. No binary

@@ -63,6 +63,10 @@ public:
 		const godot::String &world_manifest_path,
 		const godot::String &object_root
 	);
+	bool start_procedural_snapshot(
+		const godot::String &snapshot_directory,
+		const godot::String &journal_root
+	);
 	bool start_procedural_world(
 		std::int64_t chunk_count_x,
 		std::int64_t chunk_count_z,

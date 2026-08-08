@@ -1,6 +1,7 @@
 #pragma once
 
 #include "physics/wt_collision_builder.h"
+#include "storage/wt_page_hierarchy.h"
 #include "streaming/wt_lod_map.h"
 #include "streaming/wt_multi_viewer_desired_set.h"
 
@@ -44,6 +45,12 @@ public:
 		std::uint32_t refinement_radius_limit_chunks = 0,
 		bool global_coarse_lod_coverage = false
 	);
+	WtBalancedLodPlanner(
+		std::size_t active_capacity,
+		WtPageHierarchy page_hierarchy,
+		std::uint32_t refinement_radius_limit_chunks = 0,
+		bool global_coarse_lod_coverage = false
+	);
 
 	bool valid() const noexcept;
 	WtBalancedLodPlannerStatus plan(
@@ -55,6 +62,7 @@ public:
 
 	std::size_t active_capacity() const noexcept;
 	std::size_t catalog_size() const noexcept;
+	WtPageHierarchyMetrics hierarchy_metrics() const noexcept;
 
 private:
 	bool catalog_contains(const WtChunkKey &key) const noexcept;
@@ -80,7 +88,7 @@ private:
 
 	std::size_t active_capacity_ = 0;
 	std::uint32_t refinement_radius_limit_chunks_ = 0;
-	std::vector<WtChunkKey> page_catalog_;
+	WtPageHierarchy page_hierarchy_;
 	bool global_coarse_lod_coverage_ = false;
 	bool valid_ = false;
 };

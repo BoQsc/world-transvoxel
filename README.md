@@ -145,6 +145,14 @@ Committed edits now replace only spatially affected loaded generations,
 preserve separate source/world revisions, evict authoritative and derived
 cache ownership, reject stale pipeline results, and reset visual/collision
 readiness until remeshing and application complete.
+Large procedural worlds retain their declared LOD hierarchy as an implicit
+descriptor instead of a full sorted key vector. Local durable edits compact to
+a checksummed sparse overlay, reopen through `start_procedural_snapshot()`, and
+preserve generated-page fallback for untouched regions. The runtime exposes
+separate declared-hierarchy, sparse-index, overlay, cache, active-record, and
+resource metrics. The retained 299,520-page reference compacts, reopens,
+migrates, and replays central and finite-boundary edits without materializing
+all page keys.
 Desired-set deltas now create, reprioritize, and release bounded runtime
 ownership. A deterministic workload covers fast movement, teleportation,
 underground and vertical traversal, two viewers, collision-demand changes, and
@@ -204,6 +212,7 @@ python scripts/test_m5.py
 python scripts/test_pq3.py
 python scripts/test_pq4.py
 python scripts/build_release.py
+python scripts/benchmark_sparse_hierarchy.py
 python tools/benchmark_m5_runtime.py
 python tools/benchmark_m5_pipeline.py
 python tools/benchmark_m5_application.py --engine-version 4.6.3

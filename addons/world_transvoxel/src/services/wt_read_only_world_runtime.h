@@ -327,7 +327,6 @@ private:
 	std::unique_ptr<WtBalancedLodPlanner> lod_planner_;
 	std::vector<WtLodPlannerViewer> planner_viewers_;
 	std::vector<CollisionViewer> collision_viewers_;
-	std::vector<WtChunkKey> page_keys_;
 	std::vector<EditLodRetentionZone> edit_lod_retention_zones_;
 	std::vector<WtDesiredChunk> pending_transition_remeshes_;
 	std::vector<WtChunkKey> readiness_repair_candidate_keys_;

@@ -1,5 +1,6 @@
 #include "storage/wt_async_storage_service.h"
 
+#include "storage/wt_procedural_snapshot_descriptor.h"
 #include "storage/wt_procedural_world_source.h"
 
 #include <algorithm>
@@ -117,7 +118,6 @@ void WtAsyncStorageService::reset_closed_state_locked() noexcept {
 	manifest_ = {};
 	procedural_ = false;
 	procedural_descriptor_ = {};
-	procedural_keys_.clear();
 	completion_notifier_ = {};
 }
 
@@ -179,7 +179,6 @@ WtAsyncStorageStatus WtAsyncStorageService::open(
 		object_root_ = object_root;
 		procedural_ = false;
 		procedural_descriptor_ = {};
-		procedural_keys_.clear();
 		requests_.clear();
 		active_requests_.clear();
 		in_flight_requests_.clear();
@@ -225,7 +224,87 @@ WtAsyncStorageStatus WtAsyncStorageService::open_procedural(
 		object_root_.clear();
 		procedural_ = true;
 		procedural_descriptor_ = descriptor;
-		procedural_keys_ = wt_procedural_keys(descriptor);
+		requests_.clear();
+		active_requests_.clear();
+		in_flight_requests_.clear();
+		completion_head_ = 0;
+		completion_count_ = 0;
+		sequence_counter_ = 0;
+		stop_requested_ = false;
+		metrics_ = {};
+		open_ = true;
+	}
+	start_workers(limits_.procedural_generation_worker_count);
+	return WtAsyncStorageStatus::Ok;
+}
+
+WtAsyncStorageStatus WtAsyncStorageService::open_procedural_snapshot(
+	const std::filesystem::path &snapshot_directory
+) {
+	if (!configuration_valid()) {
+		return WtAsyncStorageStatus::InvalidConfiguration;
+	}
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		if (open_) return WtAsyncStorageStatus::AlreadyOpen;
+	}
+	std::error_code error;
+	if (!std::filesystem::is_directory(snapshot_directory, error) || error) {
+		return WtAsyncStorageStatus::InvalidPath;
+	}
+	std::vector<std::uint8_t> descriptor_bytes;
+	std::vector<std::uint8_t> manifest_bytes;
+	if (!read_file(
+			snapshot_directory / "world.wtproc",
+			kWtMaximumContainerSize,
+			descriptor_bytes
+		) ||
+		!read_file(
+			snapshot_directory / "world.wtworld",
+			kWtMaximumContainerSize,
+			manifest_bytes
+		)) {
+		return WtAsyncStorageStatus::ManifestIoFailure;
+	}
+	WtProceduralSnapshotDescriptor snapshot;
+	WtWorldManifestView manifest;
+	if (wt_open_procedural_snapshot_descriptor(
+			{ descriptor_bytes.data(), descriptor_bytes.size() }, snapshot
+		) != WtProceduralSnapshotDescriptorStatus::Ok ||
+		wt_open_world_manifest(
+			{ manifest_bytes.data(), manifest_bytes.size() }, manifest
+		) != WtWorldManifestStatus::Ok ||
+		wt_sha256(manifest_bytes.data(), manifest_bytes.size()) !=
+			snapshot.overlay_manifest_hash ||
+		manifest.source_revision != snapshot.world.source_revision ||
+		manifest.world_revision != snapshot.world.world_revision ||
+		manifest.configuration_hash !=
+			wt_procedural_configuration_hash(snapshot.world) ||
+		manifest.pages.size() > kWtMaximumProceduralOverlayPageCount) {
+		return WtAsyncStorageStatus::ManifestFailure;
+	}
+	for (const WtWorldPageIndexEntry &entry : manifest.pages) {
+		if (entry.byte_size > limits_.maximum_page_bytes) {
+			return WtAsyncStorageStatus::PageSizeLimitExceeded;
+		}
+		if (!wt_procedural_can_generate_page(snapshot.world, entry.key)) {
+			return WtAsyncStorageStatus::ManifestFailure;
+		}
+	}
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		requests_.reserve(limits_.request_capacity);
+		active_requests_.reserve(
+			limits_.request_capacity + limits_.completion_capacity +
+				kWtMaximumProceduralGenerationWorkerCount
+		);
+		in_flight_requests_.reserve(kWtMaximumProceduralGenerationWorkerCount);
+		completion_slots_.assign(limits_.completion_capacity, {});
+		manifest_bytes_ = std::move(manifest_bytes);
+		manifest_ = std::move(manifest);
+		object_root_ = snapshot_directory;
+		procedural_ = true;
+		procedural_descriptor_ = snapshot.world;
 		requests_.clear();
 		active_requests_.clear();
 		in_flight_requests_.clear();
@@ -276,8 +355,7 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 	if (!open_ || stop_requested_) {
 		return WtAsyncStorageStatus::NotOpen;
 	}
-	const WtWorldPageIndexEntry *entry = procedural_ ?
-		nullptr : manifest_.find_page(key);
+	const WtWorldPageIndexEntry *entry = manifest_.find_page(key);
 	if ((procedural_ &&
 			!wt_procedural_can_generate_page(procedural_descriptor_, key)) ||
 		(!procedural_ && entry == nullptr)) {
@@ -327,6 +405,7 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 	if (entry != nullptr) {
 		request.entry = *entry;
 	}
+	request.procedural_fallback = procedural_ && entry == nullptr;
 	request.sequence = ++sequence_counter_;
 	request.priority = priority;
 	const auto position = std::lower_bound(
@@ -353,31 +432,23 @@ WtPageLoadStatus WtAsyncStorageService::load_page_now(
 ) const {
 	page_bytes.reset();
 	Request request;
-	WtProceduralWorldDescriptor procedural_descriptor;
-	bool procedural = false;
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
 		if (!open_ || stop_requested_) return WtPageLoadStatus::IoFailure;
-		procedural = procedural_;
-		procedural_descriptor = procedural_descriptor_;
-		const WtWorldPageIndexEntry *entry = procedural ?
-			nullptr : manifest_.find_page(key);
-		if ((procedural &&
-				!wt_procedural_can_generate_page(procedural_descriptor, key)) ||
-			(!procedural && entry == nullptr)) {
+		const WtWorldPageIndexEntry *entry = manifest_.find_page(key);
+		if ((procedural_ &&
+				!wt_procedural_can_generate_page(procedural_descriptor_, key)) ||
+			(!procedural_ && entry == nullptr)) {
 			return WtPageLoadStatus::PageFailure;
 		}
 		request.key = key;
 		if (entry != nullptr) {
 			request.entry = *entry;
 		}
+		request.procedural_fallback = procedural_ && entry == nullptr;
 	}
 	std::uint64_t bytes_read = 0;
-	WtPageLoadCompletion completion = procedural ?
-		wt_generate_procedural_page(
-			procedural_descriptor, key, {}, bytes_read
-		) :
-		load_page(request, bytes_read);
+	WtPageLoadCompletion completion = load_page(request, bytes_read);
 	if (completion.status == WtPageLoadStatus::Ok) {
 		page_bytes = std::move(completion.page_bytes);
 	}
@@ -389,7 +460,7 @@ bool WtAsyncStorageService::snapshot_manifest(
 ) const {
 	std::lock_guard<std::mutex> lock(mutex_);
 	manifest_bytes.clear();
-	if (!open_ || stop_requested_ || procedural_) return false;
+	if (!open_ || stop_requested_ || manifest_bytes_.empty()) return false;
 	manifest_bytes = manifest_bytes_;
 	return true;
 }
@@ -544,7 +615,7 @@ WtPageLoadCompletion WtAsyncStorageService::load_page(
 	WtPageLoadCompletion completion;
 	completion.key = request.key;
 	completion.generation = request.generation;
-	if (procedural_) {
+	if (request.procedural_fallback) {
 		return wt_generate_procedural_page(
 			procedural_descriptor_,
 			request.key,
@@ -595,6 +666,21 @@ bool WtAsyncStorageService::is_open() const noexcept {
 	return open_ && !stop_requested_;
 }
 
+bool WtAsyncStorageService::is_procedural() const noexcept {
+	std::lock_guard<std::mutex> lock(mutex_);
+	return open_ && !stop_requested_ && procedural_;
+}
+
+bool WtAsyncStorageService::procedural_descriptor(
+	WtProceduralWorldDescriptor &descriptor
+) const noexcept {
+	std::lock_guard<std::mutex> lock(mutex_);
+	descriptor = {};
+	if (!open_ || stop_requested_ || !procedural_) return false;
+	descriptor = procedural_descriptor_;
+	return true;
+}
+
 void WtAsyncStorageService::set_completion_notifier(
 	std::function<void()> notifier
 ) {
@@ -605,20 +691,42 @@ void WtAsyncStorageService::set_completion_notifier(
 bool WtAsyncStorageService::has_page(const WtChunkKey &key) const noexcept {
 	std::lock_guard<std::mutex> lock(mutex_);
 	return open_ && (procedural_ ?
-		wt_procedural_has_key(procedural_keys_, key) :
+		wt_procedural_is_declared_page(procedural_descriptor_, key) :
 		manifest_.find_page(key) != nullptr);
+}
+
+bool WtAsyncStorageService::has_overlay_page(
+	const WtChunkKey &key
+) const noexcept {
+	std::lock_guard<std::mutex> lock(mutex_);
+	return open_ && !stop_requested_ && procedural_ &&
+		manifest_.find_page(key) != nullptr;
 }
 
 std::vector<WtChunkKey> WtAsyncStorageService::page_keys() const {
 	std::lock_guard<std::mutex> lock(mutex_);
 	std::vector<WtChunkKey> keys;
 	if (!open_) return keys;
-	if (procedural_) return procedural_keys_;
+	if (procedural_) return wt_procedural_keys(procedural_descriptor_);
 	keys.reserve(manifest_.pages.size());
 	for (const WtWorldPageIndexEntry &entry : manifest_.pages) {
 		keys.push_back(entry.key);
 	}
 	return keys;
+}
+
+WtPageHierarchy WtAsyncStorageService::page_hierarchy() const {
+	std::lock_guard<std::mutex> lock(mutex_);
+	if (!open_) return {};
+	if (procedural_) {
+		return WtPageHierarchy::implicit_procedural(procedural_descriptor_);
+	}
+	std::vector<WtChunkKey> keys;
+	keys.reserve(manifest_.pages.size());
+	for (const WtWorldPageIndexEntry &entry : manifest_.pages) {
+		keys.push_back(entry.key);
+	}
+	return WtPageHierarchy::explicit_catalog(std::move(keys));
 }
 
 std::uint64_t WtAsyncStorageService::source_revision() const noexcept {
@@ -638,7 +746,19 @@ std::uint64_t WtAsyncStorageService::world_revision() const noexcept {
 std::size_t WtAsyncStorageService::page_count() const noexcept {
 	std::lock_guard<std::mutex> lock(mutex_);
 	if (!open_) return 0;
-	return procedural_ ? procedural_keys_.size() : manifest_.pages.size();
+	return procedural_ ?
+		static_cast<std::size_t>(wt_procedural_page_count(procedural_descriptor_)) :
+		manifest_.pages.size();
+}
+
+std::size_t WtAsyncStorageService::overlay_page_count() const noexcept {
+	std::lock_guard<std::mutex> lock(mutex_);
+	return open_ && procedural_ ? manifest_.pages.size() : 0;
+}
+
+std::size_t WtAsyncStorageService::overlay_index_bytes() const noexcept {
+	std::lock_guard<std::mutex> lock(mutex_);
+	return open_ && procedural_ ? manifest_bytes_.size() : 0;
 }
 
 std::size_t WtAsyncStorageService::queued_request_count() const noexcept {

@@ -121,6 +121,12 @@ void WorldTransvoxelTerrain::_bind_methods() {
 	);
 	godot::ClassDB::bind_method(
 		godot::D_METHOD(
+			"start_procedural_snapshot", "snapshot_directory", "journal_root"
+		),
+		&WorldTransvoxelTerrain::start_procedural_snapshot
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
 			"start_procedural_world",
 			"chunk_count_x",
 			"chunk_count_z",

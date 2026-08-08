@@ -368,6 +368,67 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		"storage_in_flight_generation",
 		runtime.storage_in_flight_generation
 	);
+	set_metric(output, "hierarchy_kind", runtime.hierarchy_kind);
+	set_metric(
+		output,
+		"hierarchy_declared_pages",
+		runtime.hierarchy_declared_pages
+	);
+	set_metric(
+		output,
+		"hierarchy_explicit_index_entries",
+		runtime.hierarchy_explicit_index_entries
+	);
+	set_metric(
+		output,
+		"hierarchy_estimated_index_bytes",
+		runtime.hierarchy_estimated_index_bytes
+	);
+	set_metric(
+		output,
+		"hierarchy_sparse_overlay_entries",
+		runtime.hierarchy_sparse_overlay_entries
+	);
+	set_metric(
+		output,
+		"hierarchy_sparse_overlay_index_bytes",
+		runtime.hierarchy_sparse_overlay_index_bytes
+	);
+	set_metric(
+		output,
+		"hierarchy_membership_queries",
+		runtime.hierarchy_membership_queries
+	);
+	set_metric(
+		output,
+		"hierarchy_child_queries",
+		runtime.hierarchy_child_queries
+	);
+	set_metric(
+		output,
+		"hierarchy_ancestor_queries",
+		runtime.hierarchy_ancestor_queries
+	);
+	set_metric(
+		output,
+		"hierarchy_neighbor_queries",
+		runtime.hierarchy_neighbor_queries
+	);
+	set_metric(
+		output,
+		"hierarchy_range_queries",
+		runtime.hierarchy_range_queries
+	);
+	set_metric(
+		output,
+		"hierarchy_viewer_root_queries",
+		runtime.hierarchy_viewer_root_queries
+	);
+	set_metric(
+		output,
+		"hierarchy_lod_enumerations",
+		runtime.hierarchy_lod_enumerations
+	);
 	set_metric(output, "page_sample_failures", runtime.page_sample_failures);
 	set_metric(output, "page_mesh_failures", runtime.page_mesh_failures);
 	set_metric(output, "page_storage_failures", runtime.page_storage_failures);

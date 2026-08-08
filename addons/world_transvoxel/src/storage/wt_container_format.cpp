@@ -13,7 +13,8 @@ bool add_fits(std::uint64_t a, std::uint64_t b, std::uint64_t maximum) noexcept 
 
 bool valid_magic(const WtFormatMagic &magic) noexcept {
 	return magic == kWtWorldMagic || magic == kWtChunkMagic ||
-		magic == kWtEditMagic || magic == kWtTraceMagic;
+		magic == kWtEditMagic || magic == kWtTraceMagic ||
+		magic == kWtProceduralSnapshotMagic;
 }
 
 WtContainerStatus write_header(

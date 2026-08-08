@@ -49,6 +49,10 @@ public:
 		const WtProceduralWorldDescriptor &descriptor,
 		const std::filesystem::path &object_root
 	);
+	WtWorldLifecycleStatus start_procedural_snapshot(
+		const std::filesystem::path &snapshot_directory,
+		const std::filesystem::path &journal_root
+	);
 	WtWorldLifecycleStatus request_stop() noexcept;
 	void shutdown_blocking() noexcept;
 	WtReadOnlyRuntimeStatus update_viewer(
@@ -124,6 +128,7 @@ private:
 	std::filesystem::path world_manifest_path_;
 	std::filesystem::path object_root_;
 	bool procedural_ = false;
+	bool procedural_snapshot_ = false;
 	WtProceduralWorldDescriptor procedural_descriptor_;
 	std::unique_ptr<WtAsyncStorageService> storage_;
 	std::unique_ptr<WtEditJournalStore> edit_journal_store_;

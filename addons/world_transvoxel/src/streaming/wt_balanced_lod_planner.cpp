@@ -4,7 +4,6 @@
 #include "storage/wt_world_manifest.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <limits>
 #include <utility>
@@ -85,24 +84,6 @@ bool chunk_coordinate(
 	return true;
 }
 
-std::array<WtChunkKey, 8> child_keys(const WtChunkKey &parent) noexcept {
-	std::array<WtChunkKey, 8> children{};
-	std::size_t index = 0;
-	for (std::int32_t z = 0; z < 2; ++z) {
-		for (std::int32_t y = 0; y < 2; ++y) {
-			for (std::int32_t x = 0; x < 2; ++x) {
-				children[index++] = {
-					static_cast<std::int32_t>(parent.x * 2 + x),
-					static_cast<std::int32_t>(parent.y * 2 + y),
-					static_cast<std::int32_t>(parent.z * 2 + z),
-					static_cast<std::uint8_t>(parent.lod - 1),
-				};
-			}
-		}
-	}
-	return children;
-}
-
 const WtDesiredChunk *find_current(
 	const std::vector<WtDesiredChunk> &current,
 	const WtChunkKey &key
@@ -136,27 +117,28 @@ WtBalancedLodPlanner::WtBalancedLodPlanner(
 	std::vector<WtChunkKey> page_catalog,
 	std::uint32_t refinement_radius_limit_chunks,
 	bool global_coarse_lod_coverage
+) : WtBalancedLodPlanner(
+		active_capacity,
+		WtPageHierarchy::explicit_catalog(std::move(page_catalog)),
+		refinement_radius_limit_chunks,
+		global_coarse_lod_coverage
+	) {
+}
+
+WtBalancedLodPlanner::WtBalancedLodPlanner(
+	std::size_t active_capacity,
+	WtPageHierarchy page_hierarchy,
+	std::uint32_t refinement_radius_limit_chunks,
+	bool global_coarse_lod_coverage
 ) :
 		active_capacity_(active_capacity),
 		refinement_radius_limit_chunks_(refinement_radius_limit_chunks),
 		global_coarse_lod_coverage_(global_coarse_lod_coverage),
-		page_catalog_(std::move(page_catalog)) {
-	std::sort(page_catalog_.begin(), page_catalog_.end());
+		page_hierarchy_(std::move(page_hierarchy)) {
 	valid_ = active_capacity_ != 0 &&
 		active_capacity_ <= kWtMaximumRuntimeActiveChunks &&
-		page_catalog_.size() <= kWtMaximumWorldPageCount;
-	for (std::size_t index = 0; valid_ && index < page_catalog_.size(); ++index) {
-		const WtChunkKey key = page_catalog_[index];
-		const bool refinable_coordinates = key.lod == 0 ||
-			(key.x >= std::numeric_limits<std::int32_t>::min() / 2 &&
-				key.x <= std::numeric_limits<std::int32_t>::max() / 2 &&
-				key.y >= std::numeric_limits<std::int32_t>::min() / 2 &&
-				key.y <= std::numeric_limits<std::int32_t>::max() / 2 &&
-				key.z >= std::numeric_limits<std::int32_t>::min() / 2 &&
-				key.z <= std::numeric_limits<std::int32_t>::max() / 2);
-		valid_ = wt_is_valid_chunk_key(key) && refinable_coordinates &&
-			(index == 0 || page_catalog_[index - 1] < page_catalog_[index]);
-	}
+		page_hierarchy_.valid() &&
+		page_hierarchy_.page_count() <= kWtMaximumWorldPageCount;
 }
 
 bool WtBalancedLodPlanner::valid() const noexcept {
@@ -166,7 +148,7 @@ bool WtBalancedLodPlanner::valid() const noexcept {
 bool WtBalancedLodPlanner::catalog_contains(
 	const WtChunkKey &key
 ) const noexcept {
-	return std::binary_search(page_catalog_.begin(), page_catalog_.end(), key);
+	return page_hierarchy_.contains(key);
 }
 
 bool WtBalancedLodPlanner::should_refine(
@@ -211,12 +193,8 @@ bool WtBalancedLodPlanner::append_subtree(
 	std::vector<WtChunkKey> &leaves
 ) const {
 	if (should_refine(key, viewers, refined_ancestors)) {
-		const auto children = child_keys(key);
-		const bool complete = std::all_of(
-			children.begin(), children.end(),
-			[&](const WtChunkKey &child) { return catalog_contains(child); }
-		);
-		if (complete) {
+		std::array<WtChunkKey, 8> children{};
+		if (page_hierarchy_.complete_children(key, children)) {
 			for (const WtChunkKey &child : children) {
 				if (!append_subtree(
 						child, viewers, refined_ancestors, leaves
@@ -240,11 +218,8 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::refine_leaf(
 	if (leaves.size() > active_capacity_ - 7U) {
 		return WtBalancedLodPlannerStatus::CapacityExceeded;
 	}
-	const auto children = child_keys(leaves[leaf_index]);
-	if (!std::all_of(
-			children.begin(), children.end(),
-			[&](const WtChunkKey &child) { return catalog_contains(child); }
-		)) {
+	std::array<WtChunkKey, 8> children{};
+	if (!page_hierarchy_.complete_children(leaves[leaf_index], children)) {
 		return WtBalancedLodPlannerStatus::IncompleteHierarchy;
 	}
 	leaves.erase(leaves.begin() + static_cast<std::ptrdiff_t>(leaf_index));
@@ -345,18 +320,14 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 
 	std::vector<WtChunkKey> roots;
 	if (global_coarse_lod_coverage_) {
-		std::size_t coarse_root_count = 0;
-		for (const WtChunkKey &key : page_catalog_) {
-			if (key.lod == maximum_lod) {
-				++coarse_root_count;
-			}
-		}
+		const std::size_t coarse_root_count =
+			page_hierarchy_.lod_page_count(maximum_lod);
 		if (coarse_root_count <= active_capacity_) {
 			roots.reserve(coarse_root_count);
-			for (const WtChunkKey &key : page_catalog_) {
-				if (key.lod == maximum_lod) {
-					roots.push_back(key);
-				}
+			if (!page_hierarchy_.append_lod_keys(
+					maximum_lod, roots, active_capacity_
+				)) {
+				return WtBalancedLodPlannerStatus::InvalidConfiguration;
 			}
 		}
 	}
@@ -369,29 +340,16 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 			!chunk_coordinate(viewer.snapshot.z, maximum_lod, center_z)) {
 			return WtBalancedLodPlannerStatus::InvalidViewer;
 		}
-		const std::int64_t radius = viewer.radius_chunks;
-		for (std::int64_t z = -radius; z <= radius; ++z) {
-			for (std::int64_t y = -radius; y <= radius; ++y) {
-				for (std::int64_t x = -radius; x <= radius; ++x) {
-					const std::int64_t px = static_cast<std::int64_t>(center_x) + x;
-					const std::int64_t py = static_cast<std::int64_t>(center_y) + y;
-					const std::int64_t pz = static_cast<std::int64_t>(center_z) + z;
-					if (px < std::numeric_limits<std::int32_t>::min() ||
-						px > std::numeric_limits<std::int32_t>::max() ||
-						py < std::numeric_limits<std::int32_t>::min() ||
-						py > std::numeric_limits<std::int32_t>::max() ||
-						pz < std::numeric_limits<std::int32_t>::min() ||
-						pz > std::numeric_limits<std::int32_t>::max()) continue;
-					const WtChunkKey root {
-						static_cast<std::int32_t>(px),
-						static_cast<std::int32_t>(py),
-						static_cast<std::int32_t>(pz),
-						maximum_lod,
-					};
-					if (catalog_contains(root)) roots.push_back(root);
-				}
-			}
+		std::vector<WtChunkKey> viewer_roots;
+		if (!page_hierarchy_.query_viewer_roots(
+				{ center_x, center_y, center_z, maximum_lod },
+				viewer.radius_chunks,
+				viewer_roots,
+				active_capacity_
+			)) {
+			return WtBalancedLodPlannerStatus::CapacityExceeded;
 		}
+		roots.insert(roots.end(), viewer_roots.begin(), viewer_roots.end());
 	}
 	std::sort(roots.begin(), roots.end());
 	roots.erase(std::unique(roots.begin(), roots.end()), roots.end());
@@ -456,7 +414,11 @@ std::size_t WtBalancedLodPlanner::active_capacity() const noexcept {
 }
 
 std::size_t WtBalancedLodPlanner::catalog_size() const noexcept {
-	return page_catalog_.size();
+	return page_hierarchy_.page_count();
+}
+
+WtPageHierarchyMetrics WtBalancedLodPlanner::hierarchy_metrics() const noexcept {
+	return page_hierarchy_.metrics();
 }
 
 const char *wt_balanced_lod_planner_status_message(

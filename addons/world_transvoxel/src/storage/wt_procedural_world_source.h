@@ -26,6 +26,30 @@ std::uint64_t wt_procedural_page_count(
 	const WtProceduralWorldDescriptor &descriptor
 ) noexcept;
 
+std::uint64_t wt_procedural_lod_page_count(
+	const WtProceduralWorldDescriptor &descriptor,
+	std::uint8_t lod
+) noexcept;
+
+bool wt_procedural_is_declared_page(
+	const WtProceduralWorldDescriptor &descriptor,
+	const WtChunkKey &key
+) noexcept;
+
+bool wt_procedural_lod_key_bounds(
+	const WtProceduralWorldDescriptor &descriptor,
+	std::uint8_t lod,
+	WtChunkKey &minimum,
+	WtChunkKey &maximum
+) noexcept;
+
+bool wt_append_procedural_lod_keys(
+	const WtProceduralWorldDescriptor &descriptor,
+	std::uint8_t lod,
+	std::vector<WtChunkKey> &output,
+	std::size_t capacity
+);
+
 std::vector<WtChunkKey> wt_procedural_keys(
 	const WtProceduralWorldDescriptor &descriptor
 );

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "core/wt_chunk_state.h"
+#include "storage/wt_page_hierarchy.h"
+#include "storage/wt_procedural_world_descriptor.h"
 #include "storage/wt_world_manifest.h"
 
 #include <chrono>
@@ -28,25 +30,6 @@ struct WtAsyncStorageLimits {
 	// File-backed storage always uses one I/O worker. This limit applies only
 	// when open_procedural() generates immutable source pages.
 	std::size_t procedural_generation_worker_count = 1;
-};
-
-enum class WtProceduralWorldMode : std::uint8_t {
-	Terrain = 0,
-	Flat = 1,
-	RollingHillsCave = 2,
-	RollingHillsCaveRoads = 3,
-	FourBiomesLakesCavesRoads = 4,
-};
-
-struct WtProceduralWorldDescriptor {
-	std::uint32_t chunk_count_x = 0;
-	std::uint32_t chunk_count_y = 8;
-	std::uint32_t chunk_count_z = 0;
-	std::int32_t chunk_y = 0;
-	std::uint64_t source_revision = 0;
-	std::uint64_t world_revision = 0;
-	std::uint32_t seed = 1;
-	WtProceduralWorldMode mode = WtProceduralWorldMode::Terrain;
 };
 
 enum class WtAsyncStorageStatus : std::uint8_t {
@@ -126,6 +109,9 @@ public:
 	WtAsyncStorageStatus open_procedural(
 		const WtProceduralWorldDescriptor &descriptor
 	);
+	WtAsyncStorageStatus open_procedural_snapshot(
+		const std::filesystem::path &snapshot_directory
+	);
 	void close() noexcept;
 
 	WtAsyncStorageStatus request_page(
@@ -152,11 +138,19 @@ public:
 	void set_completion_notifier(std::function<void()> notifier);
 
 	bool is_open() const noexcept;
+	bool is_procedural() const noexcept;
+	bool procedural_descriptor(
+		WtProceduralWorldDescriptor &descriptor
+	) const noexcept;
 	bool has_page(const WtChunkKey &key) const noexcept;
+	bool has_overlay_page(const WtChunkKey &key) const noexcept;
 	std::vector<WtChunkKey> page_keys() const;
+	WtPageHierarchy page_hierarchy() const;
 	std::uint64_t source_revision() const noexcept;
 	std::uint64_t world_revision() const noexcept;
 	std::size_t page_count() const noexcept;
+	std::size_t overlay_page_count() const noexcept;
+	std::size_t overlay_index_bytes() const noexcept;
 	std::size_t queued_request_count() const noexcept;
 	std::size_t queued_completion_count() const noexcept;
 	std::size_t active_request_count() const noexcept;
@@ -167,6 +161,7 @@ private:
 		WtChunkKey key;
 		WtGenerationToken generation;
 		WtWorldPageIndexEntry entry;
+		bool procedural_fallback = false;
 		std::uint64_t sequence = 0;
 		std::int32_t priority = 0;
 	};
@@ -212,7 +207,6 @@ private:
 	WtWorldManifestView manifest_;
 	bool procedural_ = false;
 	WtProceduralWorldDescriptor procedural_descriptor_;
-	std::vector<WtChunkKey> procedural_keys_;
 	std::function<void()> completion_notifier_;
 	WtAsyncStorageMetrics metrics_;
 };

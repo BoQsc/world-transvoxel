@@ -211,12 +211,14 @@ bool run_g21_near_field_capacity_regression(
 	descriptor.source_revision = 190323;
 	descriptor.seed = 19021;
 	descriptor.mode = wt::WtProceduralWorldMode::RollingHillsCave;
-	std::vector<wt::WtChunkKey> keys = wt::wt_procedural_keys(descriptor);
+	wt::WtPageHierarchy hierarchy =
+		wt::WtPageHierarchy::implicit_procedural(descriptor);
 	check(
-		keys.size() == 299520,
-		"g21 near-field page hierarchy size mismatch"
+		hierarchy.page_count() == 299520 &&
+		hierarchy.metrics().explicit_index_entries == 0,
+		"g21 implicit page hierarchy size mismatch"
 	);
-	wt::WtBalancedLodPlanner planner(8192, std::move(keys), 3, true);
+	wt::WtBalancedLodPlanner planner(8192, std::move(hierarchy), 3, true);
 	wt::WtBalancedLodPlan plan;
 	const std::vector<wt::WtLodPlannerViewer> viewers = {
 		{
