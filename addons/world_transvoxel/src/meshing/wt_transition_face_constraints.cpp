@@ -164,6 +164,113 @@ std::vector<ConstraintVertex> edge_constraints(
 	return constraints;
 }
 
+WideSigned projected_twice_area(
+	const QuantizedPoint &a,
+	const QuantizedPoint &b,
+	const QuantizedPoint &c,
+	WtChunkFace face
+) noexcept {
+	const QuantizedPoint ab = subtract(b, a);
+	const QuantizedPoint ac = subtract(c, a);
+	switch (face) {
+		case WtChunkFace::NegativeX:
+		case WtChunkFace::PositiveX:
+			return static_cast<WideSigned>(ab.y) * ac.z -
+				static_cast<WideSigned>(ab.z) * ac.y;
+		case WtChunkFace::NegativeY:
+		case WtChunkFace::PositiveY:
+			return static_cast<WideSigned>(ab.z) * ac.x -
+				static_cast<WideSigned>(ab.x) * ac.z;
+		case WtChunkFace::NegativeZ:
+		case WtChunkFace::PositiveZ:
+			return static_cast<WideSigned>(ab.x) * ac.y -
+				static_cast<WideSigned>(ab.y) * ac.x;
+	}
+	return 0;
+}
+
+bool append_constrained_triangle(
+	const std::array<std::uint32_t, 3> &triangle,
+	const std::vector<QuantizedPoint> &points,
+	const std::vector<std::uint32_t> &face_vertices,
+	WtChunkFace face,
+	std::int64_t plane,
+	std::size_t triangle_limit,
+	std::vector<std::array<std::uint32_t, 3>> &output
+) {
+	std::vector<std::uint32_t> boundary;
+	boundary.reserve(3);
+	for (unsigned int edge = 0; edge < 3; ++edge) {
+		const std::uint32_t index_a = triangle[edge];
+		const std::uint32_t index_b = triangle[(edge + 1U) % 3U];
+		boundary.push_back(index_a);
+		if (face_coordinate(points[index_a], face) != plane ||
+			face_coordinate(points[index_b], face) != plane) {
+			continue;
+		}
+		const std::vector<ConstraintVertex> constraints = edge_constraints(
+			index_a, index_b, points, face_vertices
+		);
+		for (const ConstraintVertex &constraint : constraints) {
+			boundary.push_back(constraint.index);
+		}
+	}
+
+	const std::size_t required_triangles = boundary.size() - 2U;
+	if (output.size() > triangle_limit ||
+		required_triangles > triangle_limit - output.size()) {
+		return false;
+	}
+	if (boundary.size() == 3U) {
+		output.push_back(triangle);
+		return true;
+	}
+
+	// The boundary is the source triangle with zero or more collinear points
+	// inserted along its edges. Removing the smallest non-collinear ear avoids
+	// discarding the only off-edge corner, while remaining bounded and unable to
+	// rediscover a prior split.
+	while (boundary.size() > 3U) {
+		std::size_t best = boundary.size();
+		WideSigned best_area = 0;
+		for (std::size_t index = 0; index < boundary.size(); ++index) {
+			const std::size_t previous =
+				(index + boundary.size() - 1U) % boundary.size();
+			const std::size_t next = (index + 1U) % boundary.size();
+			const WideSigned area = magnitude(projected_twice_area(
+				points[boundary[previous]],
+				points[boundary[index]],
+				points[boundary[next]],
+				face
+			));
+			if (area != 0 && (best == boundary.size() || area < best_area)) {
+				best = index;
+				best_area = area;
+			}
+		}
+		if (best == boundary.size() || best_area == 0) {
+			// Transition generation can emit an entirely degenerate source
+			// triangle. Preserve its constrained boundary as a bounded fan; the
+			// mesher's following finalize pass removes the degenerate triangles.
+			for (std::size_t index = 1; index + 1U < boundary.size(); ++index) {
+				output.push_back({
+					boundary[0], boundary[index], boundary[index + 1U]
+				});
+			}
+			return true;
+		}
+		const std::size_t previous =
+			(best + boundary.size() - 1U) % boundary.size();
+		const std::size_t next = (best + 1U) % boundary.size();
+		output.push_back({
+			boundary[previous], boundary[best], boundary[next]
+		});
+		boundary.erase(boundary.begin() + static_cast<std::ptrdiff_t>(best));
+	}
+	output.push_back({ boundary[0], boundary[1], boundary[2] });
+	return true;
+}
+
 } // namespace
 
 bool wt_preserve_transition_face_constraints(
@@ -197,61 +304,28 @@ bool wt_preserve_transition_face_constraints(
 	}
 
 	using Triangle = std::array<std::uint32_t, 3>;
-	std::vector<Triangle> pending;
-	pending.reserve(buffer.indices.size() / 3U);
+	std::vector<Triangle> constrained;
+	constrained.reserve(buffer.indices.size() / 3U);
+	const std::size_t triangle_limit = buffer.index_limit / 3U;
 	for (std::size_t index = 0; index < buffer.indices.size(); index += 3) {
-		if (buffer.indices[index] >= points.size() ||
-			buffer.indices[index + 1] >= points.size() ||
-			buffer.indices[index + 2] >= points.size()) {
-			return false;
-		}
-		pending.push_back({
+		const Triangle triangle = {
 			buffer.indices[index],
 			buffer.indices[index + 1],
 			buffer.indices[index + 2],
-		});
-	}
-	std::vector<Triangle> constrained;
-	constrained.reserve(pending.size());
-	const std::size_t triangle_limit = buffer.index_limit / 3U;
-	while (!pending.empty()) {
-		const Triangle triangle = pending.back();
-		pending.pop_back();
-		bool split = false;
-		for (unsigned int edge = 0; edge < 3 && !split; ++edge) {
-			const std::uint32_t index_a = triangle[edge];
-			const std::uint32_t index_b = triangle[(edge + 1U) % 3U];
-			const std::uint32_t index_c = triangle[(edge + 2U) % 3U];
-			if (face_coordinate(points[index_a], face) != plane ||
-				face_coordinate(points[index_b], face) != plane) {
-				continue;
-			}
-			const std::vector<ConstraintVertex> constraints =
-				edge_constraints(
-					index_a, index_b, points, face_vertices
-				);
-			if (constraints.empty()) {
-				continue;
-			}
-			const std::size_t added = constraints.size() + 1U;
-			if (constrained.size() + pending.size() > triangle_limit ||
-				added > triangle_limit -
-					(constrained.size() + pending.size())) {
-				return false;
-			}
-			std::uint32_t segment_a = index_a;
-			for (const ConstraintVertex &constraint : constraints) {
-				pending.push_back({ segment_a, constraint.index, index_c });
-				segment_a = constraint.index;
-			}
-			pending.push_back({ segment_a, index_b, index_c });
-			split = true;
-		}
-		if (!split) {
-			if (constrained.size() >= triangle_limit) {
-				return false;
-			}
-			constrained.push_back(triangle);
+		};
+		if (triangle[0] >= points.size() ||
+			triangle[1] >= points.size() ||
+			triangle[2] >= points.size() ||
+			!append_constrained_triangle(
+				triangle,
+				points,
+				face_vertices,
+				face,
+				plane,
+				triangle_limit,
+				constrained
+			)) {
+			return false;
 		}
 	}
 	buffer.indices.clear();

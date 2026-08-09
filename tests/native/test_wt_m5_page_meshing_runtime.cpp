@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -727,6 +728,122 @@ wt::WtChunkMeshResult mesh_procedural_page_with_transition_support(
 			"invalid streaming pixel repro transition mesh");
 	}
 	return result;
+}
+
+void test_large_rolling_hills_cave_lod2_transition_masks() {
+	wt::WtProceduralWorldDescriptor descriptor;
+	descriptor.chunk_count_x = 128;
+	descriptor.chunk_count_y = 16;
+	descriptor.chunk_count_z = 128;
+	descriptor.chunk_y = -8;
+	descriptor.source_revision = 957001;
+	descriptor.world_revision = 0;
+	descriptor.seed = 470047;
+	descriptor.mode = wt::WtProceduralWorldMode::RollingHillsCave;
+	const wt::WtChunkKey key = { 2, 0, 29, 2 };
+	const wt::WtChunkMesher mesher(wt::wt_get_transvoxel_mit_backend());
+	wt::WtChunkMeshingScratch scratch;
+	std::vector<wt::WtChunkPage> pages;
+	pages.reserve(1U + wt::kWtMaximumTransitionSupportPages);
+	pages.emplace_back();
+	check(try_generate_procedural_page(descriptor, key, pages.back()),
+		"large rolling-hills/cave primary page failed");
+	wt::WtChunkPageSampleSource source(pages.front());
+	check(source.status() == wt::WtChunkPageSampleSourceStatus::Ok,
+		"large rolling-hills/cave source failed");
+	for (unsigned int face_index = 0; face_index < 6; ++face_index) {
+		const wt::WtChunkFace face = static_cast<wt::WtChunkFace>(face_index);
+		std::array<wt::WtChunkKey, wt::kWtTransitionSupportPagesPerFace> support_keys{};
+		check(wt::wt_transition_support_page_keys(key, face, support_keys),
+			"large rolling-hills/cave support keys failed");
+		for (const wt::WtChunkKey &support_key : support_keys) {
+			pages.emplace_back();
+			check(try_generate_procedural_page(descriptor, support_key, pages.back()),
+				"large rolling-hills/cave support page failed");
+			check(source.add_transition_support_page(pages.back()) ==
+					wt::WtChunkPageSampleSourceStatus::Ok,
+				"large rolling-hills/cave support assembly failed");
+		}
+	}
+	check(source.has_transition_support(0x3FU),
+		"large rolling-hills/cave complete support missing");
+	const wt::WtMaterialVolumeSampleSource water_source(
+		source,
+		wt::kWtStaticWaterMaterialId
+	);
+	std::size_t maximum_transition_indices = 0;
+	auto check_pair = [&](std::uint8_t current_mask, std::uint8_t cached_mask) {
+			wt::WtChunkMeshResult result;
+			const wt::WtChunkMeshingInput input = {
+				key, current_mask, cached_mask, 0.0F, 0.25F
+			};
+			const wt::WtChunkMeshingStatus terrain_status = mesher.mesh(
+				input, source, result, scratch
+			);
+			wt::WtChunkMeshResult water_result;
+			const wt::WtChunkMeshingStatus water_status = mesher.mesh(
+				input, water_source, water_result, scratch
+			);
+			for (const wt::WtChunkMeshBuffer &buffer : result.transitions) {
+				maximum_transition_indices = std::max(
+					maximum_transition_indices,
+					buffer.indices.size()
+				);
+			}
+			for (const wt::WtChunkMeshBuffer &buffer : water_result.transitions) {
+				maximum_transition_indices = std::max(
+					maximum_transition_indices,
+					buffer.indices.size()
+				);
+			}
+			if (terrain_status != wt::WtChunkMeshingStatus::Ok ||
+				water_status != wt::WtChunkMeshingStatus::Ok) {
+				std::fprintf(
+					stderr,
+					"LARGE_ROLLING_HILLS_CAVE_LOD2_PAIR_FAIL current=%u cached=%u terrain=%u water=%u\n",
+					static_cast<unsigned int>(current_mask),
+					static_cast<unsigned int>(cached_mask),
+					static_cast<unsigned int>(terrain_status),
+					static_cast<unsigned int>(water_status)
+				);
+			}
+			check(terrain_status == wt::WtChunkMeshingStatus::Ok,
+				"large rolling-hills/cave LOD2 terrain mask pair failed");
+			check(water_status == wt::WtChunkMeshingStatus::Ok,
+				"large rolling-hills/cave LOD2 water mask pair failed");
+	};
+	std::size_t checked_pairs = 0;
+	if (std::getenv("WT_EXHAUSTIVE_LARGE_TRANSITION_MASKS") != nullptr) {
+		for (std::uint8_t cached_mask = 0; cached_mask < 64; ++cached_mask) {
+			for (std::uint8_t current_mask = 0; current_mask < 64; ++current_mask) {
+				if ((current_mask & static_cast<std::uint8_t>(~cached_mask)) != 0) {
+					continue;
+				}
+				check_pair(current_mask, cached_mask);
+				++checked_pairs;
+			}
+		}
+	} else {
+		constexpr std::array<std::array<std::uint8_t, 2>, 8> pairs = {{
+			{{ 0, 0 }},
+			{{ 0, 2 }},
+			{{ 0, 32 }},
+			{{ 0, 63 }},
+			{{ 1, 33 }},
+			{{ 31, 63 }},
+			{{ 32, 32 }},
+			{{ 62, 63 }},
+		}};
+		for (const auto &pair : pairs) {
+			check_pair(pair[0], pair[1]);
+			++checked_pairs;
+		}
+	}
+	std::printf(
+		"LARGE_ROLLING_HILLS_CAVE_LOD2_TRANSITION_MASKS pairs=%zu max_indices=%zu\n",
+		checked_pairs,
+		maximum_transition_indices
+	);
 }
 
 void check_mesh_winding_matches_normals(
@@ -1973,6 +2090,7 @@ int main() {
 	test_four_biome_water_free_surface(evidence);
 	test_human_boundary_edit_repro(evidence);
 	test_streaming_pixel_transition_repro(evidence);
+	test_large_rolling_hills_cave_lod2_transition_masks();
 	test_runtime_lifecycle(fixture, evidence);
 	test_edited_coarse_procedural_rebuild(evidence);
 	test_storage_backpressure_retry(fixture);
@@ -1992,6 +2110,7 @@ int main() {
 		"backpressure=1 cancellations=1 invalidations=1 missing_support=1 "
 		"priority_ordered_loading_retry=1 shared_page_fanout=1 "
 		"shared_page_cancellation_fanout=1 "
+		"large_rolling_hills_cave_lod2_mask_regression=1 "
 		"human_boundary_repro=1 edited_coarse_rebuild=1 "
 		"sphere_difference_topology=1 smooth_sphere_difference=1 "
 		"material_volume_distance=1 water_lod_footprint=1\n"
