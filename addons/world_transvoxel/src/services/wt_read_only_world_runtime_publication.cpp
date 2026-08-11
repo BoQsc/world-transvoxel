@@ -247,6 +247,10 @@ bool WtReadOnlyWorldRuntime::publish_transition_mask_update(
 		queue_transition_remeshes({ desired });
 		return true;
 	}
+	if (mesh->transition_mask != entry.transition_mask) {
+		queue_transition_remeshes({ desired });
+		return true;
+	}
 	const auto water_mesh = resource_cache_->find_water_mesh(
 		entry.key,
 		record->generation
@@ -418,12 +422,10 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			);
 			const std::uint8_t transition_mask =
 				entry != nullptr ? entry->transition_mask : 0;
-			const std::uint8_t cached_transition_mask =
-				(job.key.lod == 0 || transition_mask == 0) ? 0 : 0x3FU;
 			status = page_runtime_->begin_sample_job(
 				job,
 				transition_mask,
-				cached_transition_mask,
+				transition_mask,
 				storage_,
 				*page_cache_,
 				*scheduler_

@@ -394,6 +394,7 @@ WtRenderBuildStatus wt_build_render_payload(
 		(mesh.transition_mask & 0xC0U) != 0 ||
 		(cached_transition_mask & 0xC0U) != 0 ||
 		(transition_mask & 0xC0U) != 0 ||
+		transition_mask != mesh.transition_mask ||
 		(mesh.transition_mask & static_cast<std::uint8_t>(~cached_transition_mask)) != 0 ||
 		(transition_mask & static_cast<std::uint8_t>(~cached_transition_mask)) != 0 ||
 		!std::isfinite(mesh.transition_width_ratio) ||

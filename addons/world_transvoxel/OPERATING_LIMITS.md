@@ -125,6 +125,10 @@ This section records the practical runtime limits that implement it.
   far, and back, then assert edit persistence, no open/nonmanifold rendered
   geometry, and acceptable far-LOD shape continuity for that game's camera
   distances and performance settings.
+- Transition-mask changes use staged exact-mask remeshing. A mesh generated for
+  one transition mask must not be rendered with another mask, even when extra
+  transition faces were cached. The prior same-generation cross-mask render
+  optimization was withdrawn after it produced open LOD3-to-LOD2 terrain seams.
 - Render transition fading is opt-in and disabled by default. Enabling
   `render_transition_frames` is a presentation choice; it must not be used as a
   substitute for missing geometry or as proof that terrain is seamless.

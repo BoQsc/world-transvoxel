@@ -132,7 +132,7 @@ generation replacement, page-backed official MIT transition meshing, edit-LOD
 fallback retention under planner pressure, and shutdown. Debug and release hash:
 
 ```text
-4d3cbadcef8d851df1061e6845444ba9ad4c02ac9671b072c92b1b944a4e2314
+7c9071d1c31da0397e48db0338c299b8bf923dbb0e80448ae11cf049c3c0d2fb
 ```
 
 `production_streaming_test.gd` and `production_lod_streaming_test.gd` prove

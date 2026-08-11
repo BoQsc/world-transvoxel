@@ -145,6 +145,15 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 		const std::uint8_t render_transition_mask =
 			entry != nullptr ? entry->transition_mask :
 				completion.mesh->transition_mask;
+		if (render_transition_mask != completion.mesh->transition_mask) {
+			const WtDesiredChunk *desired = desired_->find_desired(
+				completion.key
+			);
+			if (desired != nullptr) {
+				queue_transition_remeshes({ *desired });
+			}
+			continue;
+		}
 		if (resource_cache_->insert_mesh(
 				completion.mesh,
 				completion.water_mesh,
@@ -154,29 +163,13 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			set_failure(WtReadOnlyRuntimeStatus::PipelineRenderCompletionFailure);
 			break;
 		}
-		WtRenderBuildStatus render_status = wt_build_render_payload(
+		const WtRenderBuildStatus render_status = wt_build_render_payload(
 				*completion.mesh,
 				*completion.water_mesh,
 				completion.generation,
 				render_transition_mask,
 				*render
 			);
-		if (render_status != WtRenderBuildStatus::Ok &&
-			render_transition_mask != completion.mesh->transition_mask) {
-			render_status = wt_build_render_payload(
-				*completion.mesh,
-				*completion.water_mesh,
-				completion.generation,
-				completion.mesh->transition_mask,
-				*render
-			);
-			const WtDesiredChunk *desired = desired_->find_desired(
-				completion.key
-			);
-			if (desired != nullptr) {
-				queue_transition_remeshes({ *desired });
-			}
-		}
 		if (render_status != WtRenderBuildStatus::Ok ||
 			resource_cache_->insert_render(render, record->generation) !=
 				WtChunkResourceCacheStatus::Ok) {

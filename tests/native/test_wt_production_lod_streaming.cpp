@@ -1690,21 +1690,26 @@ int main() {
 		"second multi-LOD viewer was rejected");
 	check(collect_until(runtime, publications, 19, 19),
 		"second viewer did not publish balanced transition chunks");
-	const bool bridge_mask_only_update =
-		publications.bridge_generations.size() >= 2 &&
-		publications.bridge_transition_masks.size() ==
-			publications.bridge_generations.size() &&
-		publications.bridge_generations[0] == publications.bridge_generations[1] &&
-		publications.bridge_transition_masks[0] !=
-			publications.bridge_transition_masks[1] &&
+	const std::vector<std::size_t> second_viewer_bridge_indices =
+		unique_bridge_render_indices(publications);
+	const bool bridge_exact_mask_remesh =
+		second_viewer_bridge_indices.size() >= 2 &&
+		publications.bridge_generations[second_viewer_bridge_indices[0]] !=
+			publications.bridge_generations[second_viewer_bridge_indices[1]] &&
+		publications.bridge_transition_masks[second_viewer_bridge_indices[0]] !=
+			publications.bridge_transition_masks[second_viewer_bridge_indices[1]] &&
 		publications.removals == removals_before_second_viewer &&
-		publications.bridge_staged_expect_generations.empty() &&
-		publications.bridge_preserved_collision_generations.empty() &&
-		publications.expects >= 18;
-	if (!bridge_mask_only_update) {
+		!publications.bridge_staged_expect_generations.empty() &&
+		publications.bridge_staged_expect_generations.back() ==
+			publications.bridge_generations[second_viewer_bridge_indices[1]] &&
+		!publications.bridge_preserved_collision_generations.empty() &&
+		publications.bridge_preserved_collision_generations.back() ==
+			publications.bridge_generations[second_viewer_bridge_indices[1]] &&
+		publications.expects >= 19;
+	if (!bridge_exact_mask_remesh) {
 		std::fprintf(
 			stderr,
-			"bridge mask-only evidence: renders=%zu staged=%zu "
+			"bridge exact-mask remesh evidence: renders=%zu staged=%zu "
 			"preserved=%zu removals=%zu/%zu",
 			publications.bridge_generations.size(),
 			publications.bridge_staged_expect_generations.size(),
@@ -1735,9 +1740,9 @@ int main() {
 		}
 		std::fprintf(stderr, "\n");
 	}
-	check(bridge_mask_only_update,
-		"transition-mask change did not publish a cached bridge render "
-		"variant without remeshing");
+	check(bridge_exact_mask_remesh,
+		"transition-mask change did not stage an exact-mask bridge remesh "
+		"with preserved collision readiness");
 
 	const std::size_t order_before_moving_viewer =
 		publications.expect_remove_order.size();
@@ -1784,9 +1789,24 @@ int main() {
 	check(run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
 		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok,
 		"multi-LOD runtime did not stop cleanly");
+	if (metrics.viewer_updates != 3 || metrics.viewer_removals != 2 ||
+		metrics.transition_mesh_completions < 3 ||
+		metrics.mesh_completions < 27 || metrics.rejected_events != 0) {
+		std::fprintf(
+			stderr,
+			"multi-LOD metrics: viewer_updates=%llu viewer_removals=%llu "
+			"transition_mesh_completions=%llu mesh_completions=%llu "
+			"rejected_events=%llu\n",
+			static_cast<unsigned long long>(metrics.viewer_updates),
+			static_cast<unsigned long long>(metrics.viewer_removals),
+			static_cast<unsigned long long>(metrics.transition_mesh_completions),
+			static_cast<unsigned long long>(metrics.mesh_completions),
+			static_cast<unsigned long long>(metrics.rejected_events)
+		);
+	}
 	check(metrics.viewer_updates == 3 && metrics.viewer_removals == 2 &&
-		metrics.transition_mesh_completions >= 2 &&
-		metrics.mesh_completions >= 26 && metrics.rejected_events == 0,
+		metrics.transition_mesh_completions >= 3 &&
+		metrics.mesh_completions >= 27 && metrics.rejected_events == 0,
 		"multi-LOD runtime metrics mismatch");
 	const bool fallback_retention_ok =
 		run_edit_retention_fallback_regression(storage, fixture.path);
@@ -1809,13 +1829,8 @@ int main() {
 	append_u64(evidence, bridge == nullptr ? 0 : bridge->transition_mask);
 	append_u64(evidence, retained_plan.entries.size());
 	append_u64(evidence, find_entry(retained_plan, retained_edit_key) != nullptr);
-	std::vector<std::size_t> bridge_render_indices;
-	for (std::size_t index = 0;
-			index < publications.bridge_generations.size() &&
-				bridge_render_indices.size() < 2;
-			++index) {
-		bridge_render_indices.push_back(index);
-	}
+	const std::vector<std::size_t> bridge_render_indices =
+		unique_bridge_render_indices(publications);
 	for (const std::size_t index : bridge_render_indices) {
 		append_u64(evidence, publications.bridge_transition_masks[index]);
 		append_u64(evidence, publications.bridge_vertices[index]);

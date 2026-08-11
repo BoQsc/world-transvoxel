@@ -180,6 +180,27 @@ Known excluded issue:
   They must not be used to block Release 3 unless this candidate clearly makes
   them worse.
 
+Correction on 2026-08-11:
+
+- the accepted same-generation cross-mask render optimization is withdrawn;
+  cached buffers had already discarded triangles after deformation for their
+  source mask, so changing only the render mask could not reconstruct valid
+  target topology;
+- the authority reproducer isolated the visible sawtooth to an LOD3-to-LOD2
+  boundary with 58 open edges, while direct exact-mask Transvoxel meshing was
+  manifold and matched all 32 fine-neighbor contour edges;
+- cross-mask render requests now return `InvalidInput`. Runtime transition-mask
+  changes retain accepted terrain, stage a new chunk generation, preserve
+  collision readiness, and publish only the exact-mask remesh;
+- the pinned-runtime regression now reports bridge geometry changing from
+  `320/1674` to `351/1812`, one staged transition generation, one preserved
+  collision generation, and debug/release hash
+  `7c9071d1c31da0397e48db0338c299b8bf923dbb0e80448ae11cf049c3c0d2fb`.
+
+The supported production contract is exact-mask remeshing. Reusable cross-mask
+rendering may be reconsidered only with a mask-independent raw topology
+representation and an exhaustive target-mask oracle.
+
 ### Release 4 - Parallel meshing and cancellation
 
 Status: not implemented. The rejected Release 4 experiment is absent from
