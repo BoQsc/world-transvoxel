@@ -205,6 +205,12 @@ def run_engine_tests(engine: Path, name: str) -> None:
     )
     run_godot_test(
         engine,
+        f"{name}-lod-edit-atomicity",
+        "res://tests/godot/production_lod_edit_atomicity_test.gd",
+        "PRODUCTION_GODOT_LOD_EDIT_ATOMICITY_PASS",
+    )
+    run_godot_test(
+        engine,
         f"{name}-g8-2000x2000-streaming",
         "res://tests/godot/production_g8_2000x2000_streaming_test.gd",
         "PRODUCTION_GODOT_G8_2000X2000_STREAMING_PASS",

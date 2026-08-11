@@ -3,6 +3,7 @@
 #include "physics/wt_godot_collision_sink.h"
 #include "render/wt_godot_render_sink.h"
 #include "services/wt_chunk_application.h"
+#include "services/wt_chunk_publication_policy.h"
 
 #include <algorithm>
 #include <cmath>
@@ -606,10 +607,17 @@ void WorldTransvoxelTerrain::flush_ready_chunk_replacements() {
 		if (independent !=
 				independently_publishable_chunk_replacements_.end() &&
 				*independent == *iterator) {
-			if (!render_sink_->publish_staged_record(*iterator) ||
-					!collision_sink_->publish_staged_record(*iterator)) {
-				++iterator;
-				continue;
+			const bool requires_regional_publication =
+				wt_chunk_replacement_requires_regional_publication(
+					*iterator,
+					pending_chunk_retirements_
+				);
+			if (!requires_regional_publication) {
+				if (!render_sink_->publish_staged_record(*iterator) ||
+						!collision_sink_->publish_staged_record(*iterator)) {
+					++iterator;
+					continue;
+				}
 			}
 			independently_publishable_chunk_replacements_.erase(independent);
 		}

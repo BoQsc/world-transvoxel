@@ -1,5 +1,6 @@
 #include "physics/wt_collision_builder.h"
 #include "services/wt_chunk_application.h"
+#include "services/wt_chunk_publication_policy.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -464,6 +465,47 @@ void test_staged_replacement_collision_waits_for_render(
 		"preserved replacement generations did not synchronize");
 }
 
+void test_cross_lod_replacement_publication_policy() {
+	const wt::WtChunkKey fine { 2, 0, 0, 0 };
+	const wt::WtChunkKey containing_coarse { 1, 0, 0, 1 };
+	const wt::WtChunkKey adjacent_coarse { 0, 0, 0, 1 };
+	const wt::WtChunkKey distant_coarse { 3, 0, 0, 1 };
+	const wt::WtChunkKey negative_fine { -1, 0, 0, 0 };
+	const wt::WtChunkKey negative_coarse { -1, 0, 0, 1 };
+	check(
+		!wt::wt_chunk_replacement_requires_regional_publication(fine, {}),
+		"replacement without retirements was not independently publishable"
+	);
+	check(
+		wt::wt_chunk_replacement_requires_regional_publication(
+			fine,
+			{ containing_coarse }
+		),
+		"fine replacement could publish beneath retained coarse terrain"
+	);
+	check(
+		!wt::wt_chunk_replacement_requires_regional_publication(
+			fine,
+			{ adjacent_coarse, distant_coarse }
+		),
+		"touching or distant retirement blocked independent publication"
+	);
+	check(
+		wt::wt_chunk_replacement_requires_regional_publication(
+			containing_coarse,
+			{ fine }
+		),
+		"coarse replacement could publish over retained fine terrain"
+	);
+	check(
+		wt::wt_chunk_replacement_requires_regional_publication(
+			negative_fine,
+			{ negative_coarse }
+		),
+		"negative-coordinate cross-LOD overlap was not detected"
+	);
+}
+
 void test_collision_deadline_bounds_frame_work(
 	const wt::WtRenderPayload &render_source
 ) {
@@ -529,11 +571,15 @@ int main() {
 	constexpr std::size_t stale_cycles = 1000;
 	test_application_service(render, stale_cycles);
 	test_staged_replacement_collision_waits_for_render(render);
+	test_cross_lod_replacement_publication_policy();
 	test_collision_deadline_bounds_frame_work(render);
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M3_APPLICATION_FAIL failures=%d\n", failure_count);
 		return 1;
 	}
-	std::printf("M3_APPLICATION_PASS stale_cycles=%zu\n", stale_cycles);
+	std::printf(
+		"M3_APPLICATION_PASS stale_cycles=%zu cross_lod_publication=1\n",
+		stale_cycles
+	);
 	return 0;
 }

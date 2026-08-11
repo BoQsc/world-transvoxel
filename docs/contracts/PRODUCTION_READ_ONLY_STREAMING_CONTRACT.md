@@ -143,6 +143,11 @@ mixed replacement plan is published, proving control-event bypass, retained-old
 terrain, and bounded per-generation readiness repair. The production entry
 point then runs the complete M5-through-M0 regression chain.
 
+The production_lod_edit_atomicity_test.gd fixture adds the movement-plus-edit
+case: an independently publishable edit that overlaps a pending cross-LOD
+retirement is promoted to regional publication. The Godot 4.7 debug and release
+route requires matched visible render/collision ownership throughout the swap.
+
 ## PQ1 exit
 
 The thin root `world_transvoxel/` example consumes this coordinator in a real

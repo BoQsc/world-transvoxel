@@ -115,6 +115,10 @@ mutable vector.
 - Staged edit render output is not made visible until its required replacement
   collision generation is also applied. The previous visible mesh and
   collision shape remain authoritative during that interval.
+- An edit-local replacement cannot publish independently while its positive
+  volume overlaps a chunk waiting to retire. That cross-LOD region publishes
+  through the coordinated retirement path, so an edited fine collision cannot
+  become active beneath an unchanged coarse render.
 - Collision application is bounded by both item count and a shared per-frame
   time deadline across publication draining and backlog application. One
   indivisible Godot shape publication may exceed the deadline; no second shape
@@ -132,7 +136,8 @@ combination, inactive-face rejection, collision sanitation and metrics,
 distance hysteresis, bounded queues and records, independent readiness,
 pre-sink stale rejection, frame budgets, preserved-old-collision replacement
 generation synchronization, and 1,000 supersession cycles with bounded state
-in debug and optimized builds.
+in debug and optimized builds. It also locks positive-volume cross-LOD overlap
+classification, including touching and negative-coordinate cases.
 
 `tests/godot/m3_integration_test.gd` applies actual M2-generated spheres to
 Godot `ArrayMesh` and `ConcavePolygonShape3D` resources. It covers zero and
@@ -142,6 +147,14 @@ vertices plus instance-carried origin at a far signed chunk coordinate, an
 outside ray hitting one-sided sphere collision, 16 collision
 activation/deactivation movement cycles, resource bounds, in-flight eviction,
 and shutdown with queued work.
+
+The production_lod_edit_atomicity_test.gd fixture freezes application during
+an LOD refinement, commits an edit inside the refining region, resumes
+application, and audits every frame. It rejects collision without a matching
+visible render, visible canonical cross-LOD overlap, and overlapping collision
+ownership. A controlled mutation to the old independent-publication behavior
+reproduces five invalid coarse/fine overlap frames; the guarded policy produces
+zero.
 
 The integration runner executes this contract against debug and optimized
 addon builds on both supported Godot versions. No GPU readback or frame-thread

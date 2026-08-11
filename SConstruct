@@ -170,6 +170,7 @@ m3_application_test = native_test_env.Program(
         "addons/world_transvoxel/src/render/wt_render_apply_queue.cpp",
         "addons/world_transvoxel/src/render/wt_render_payload.cpp",
         "addons/world_transvoxel/src/services/wt_chunk_application.cpp",
+        "addons/world_transvoxel/src/services/wt_chunk_publication_policy.cpp",
     ],
 )
 

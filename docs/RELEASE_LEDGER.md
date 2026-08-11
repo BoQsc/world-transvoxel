@@ -1,6 +1,6 @@
 # Release ledger
 
-Status date: 2026-07-29.
+Status date: 2026-08-11.
 
 This ledger separates the ordered roadmap releases from stabilization commits
 made during human testing. Commit messages alone are not sufficient release
@@ -357,6 +357,23 @@ Known exclusions remain visible rather than being silently accepted:
 - the non-deterministic distant-surface gap observed by the streaming gap probe
   remains a tracked baseline defect. It is not evidence of a canonical
   Transvoxel acceptance and must receive an isolated deterministic fixture.
+
+## Cross-LOD edit publication correction
+
+Status: authority regression passed on 2026-08-11; downstream human acceptance
+remains required.
+
+A player report exposed unchanged coarse terrain remaining visible over an
+edited fine region during concurrent travel staging. The lookup tables,
+density edit, and generated fine mesh were not the source. The frame-thread
+publication policy allowed an edit-local fine replacement to publish while an
+overlapping coarse chunk was still retained by the LOD transition.
+
+The corrected policy promotes that replacement to regional publication. The
+old render and old collision remain paired until the replacement region can
+swap. A controlled mutation reproduced five invalid visible overlap frames
+between coarse chunk (1,0,0,L1) and fine chunk (2,0,0,L0); the corrected Godot
+4.7 debug and release tests produced zero mixed-ownership frames.
 
 ## Rule for continuing
 

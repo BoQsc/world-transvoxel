@@ -74,6 +74,8 @@ REQUIRED_FILES = (
     "tests/godot/production_streaming_test.gd.uid",
     "tests/godot/production_lod_streaming_test.gd",
     "tests/godot/production_lod_streaming_test.gd.uid",
+    "tests/godot/production_lod_edit_atomicity_test.gd",
+    "tests/godot/production_lod_edit_atomicity_test.gd.uid",
     "tests/godot/production_example_test.gd",
     "tests/godot/production_example_test.gd.uid",
     "tests/godot/production_chunk_query_test.gd",
