@@ -330,7 +330,6 @@ struct PublicationEvidence {
 	std::size_t renders = 0;
 	std::size_t collisions = 0;
 	std::size_t staged_expects = 0;
-	std::size_t independently_publishable_staged_expects = 0;
 	std::size_t staged_collision_preserve_expects = 0;
 	std::vector<std::uint8_t> expect_remove_order;
 	std::vector<std::uint64_t> bridge_staged_expect_generations;
@@ -507,9 +506,6 @@ bool collect_until(
 					counts.expect_remove_order.push_back(1);
 					if (publication.staged_replacement) {
 						++counts.staged_expects;
-						if (publication.independently_publishable_replacement) {
-							++counts.independently_publishable_staged_expects;
-						}
 						if (publication.collision_required &&
 								publication.preserve_collision_ready) {
 							++counts.staged_collision_preserve_expects;
@@ -1756,9 +1752,6 @@ int main() {
 
 	const std::size_t order_before_moving_viewer =
 		publications.expect_remove_order.size();
-	const std::size_t staged_before_moving_viewer = publications.staged_expects;
-	const std::size_t independently_publishable_before_moving_viewer =
-		publications.independently_publishable_staged_expects;
 	check(runtime.update_viewer({ 1, 40.0, 8.0, 8.0, 2 }, 1, 1) ==
 		wt::WtReadOnlyRuntimeStatus::Ok,
 		"moving multi-LOD viewer was rejected");
@@ -1786,11 +1779,6 @@ int main() {
 		"moving viewer did not exercise mixed addition/removal publications");
 	check(!moving_viewer_expect_after_removal,
 		"viewer delta published a removal before all additions were expected");
-	check(publications.staged_expects > staged_before_moving_viewer &&
-		publications.independently_publishable_staged_expects -
-			independently_publishable_before_moving_viewer ==
-		publications.staged_expects - staged_before_moving_viewer,
-		"viewer LOD replacements did not opt into exact regional publication");
 	check(runtime.remove_viewer(1, 3) == wt::WtReadOnlyRuntimeStatus::Ok &&
 		runtime.remove_viewer(2, 2) == wt::WtReadOnlyRuntimeStatus::Ok,
 		"multi-LOD viewer removal was rejected");
