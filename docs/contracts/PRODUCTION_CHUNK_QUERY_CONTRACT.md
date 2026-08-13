@@ -64,7 +64,8 @@ release addon builds:
 - collision-required and combined readiness;
 - applied render/collision generations match the current generation after
   readiness, with no staged render or collision generation left behind;
-- transition-mask-only viewer changes retain the canonical mesh generation;
+- transition-mask-only viewer changes publish a new canonical exact-mask mesh
+  generation with matched render/collision ownership;
 - prior snapshots remain unchanged;
 - viewer eviction removes the current application record;
 - clean lifecycle shutdown.

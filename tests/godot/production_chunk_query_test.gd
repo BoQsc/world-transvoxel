@@ -93,12 +93,15 @@ func _run_test() -> void:
 	var second_bridge: RefCounted = terrain.call(
 		"query_chunk_state", Vector3i(1, 0, 0), 1
 	)
+	var second_generation := (
+		int(second_bridge.call("get_generation")) if second_bridge != null else 0
+	)
 	if not _is_ready_snapshot(second_bridge) or \
-			second_bridge.call("get_generation") != first_generation or \
+			second_generation <= first_generation or \
 			not _has_matching_applied_generations(second_bridge) or \
 			first_bridge.call("get_generation") != first_generation:
 		_fail(
-			"mask-only stable-generation snapshot mismatch first=%d current=%d render=%d staged=%d collision=%d staged_collision=%d ready=%s" %
+			"exact-mask replacement snapshot mismatch first=%d current=%d render=%d staged=%d collision=%d staged_collision=%d ready=%s" %
 			[
 				first_generation,
 				second_bridge.call("get_generation"),
@@ -127,7 +130,9 @@ func _run_test() -> void:
 			not await _wait_for_state(terrain, "stopped"):
 		_fail("query fixture did not stop cleanly")
 		return
-	print("PRODUCTION_GODOT_CHUNK_QUERY_PASS snapshots=5 enumeration=1 mask_stable=1")
+	print(
+		"PRODUCTION_GODOT_CHUNK_QUERY_PASS snapshots=5 enumeration=1 exact_mask_replacement=1"
+	)
 	terrain.queue_free()
 	await process_frame
 	quit(0)
