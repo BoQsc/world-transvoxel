@@ -1258,11 +1258,27 @@ void test_runtime_lifecycle(
 		"page runtime rejected sample job"
 	);
 	const auto loading = runtime.get_records();
+	wt::WtPageMeshingRuntimeRecordSnapshot loading_copy;
 	check(
 		loading.size() == 1 &&
 		loading[0].phase == wt::WtPageMeshingRuntimePhase::Loading &&
 		loading[0].dependency_count == kDependencyCount,
 		"runtime loading record mismatch"
+	);
+	check(
+		runtime.copy_record(
+			fixture.coarse_key,
+			sample.generation,
+			loading_copy
+		) &&
+		loading_copy.transition_mask == fixture.transition_mask &&
+		loading_copy.generation == sample.generation &&
+		!runtime.copy_record(
+			fixture.coarse_key,
+			{ sample.generation.value + 1 },
+			loading_copy
+		),
+		"runtime exact record copy mismatch"
 	);
 	check(
 		runtime.reprioritize_owned_chunk(

@@ -201,6 +201,11 @@ public:
 
 	std::vector<WtPageMeshingRuntimeRecordSnapshot>
 	get_records() const;
+	bool copy_record(
+		const WtChunkKey &key,
+		WtGenerationToken generation,
+		WtPageMeshingRuntimeRecordSnapshot &output
+	) const noexcept;
 	std::size_t record_count() const noexcept;
 	std::size_t record_capacity() const noexcept;
 	std::size_t pinned_page_count() const noexcept;

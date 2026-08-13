@@ -154,6 +154,34 @@ WtPageMeshingRuntimeService::get_records() const {
 	return snapshots;
 }
 
+bool WtPageMeshingRuntimeService::copy_record(
+	const WtChunkKey &key,
+	WtGenerationToken generation,
+	WtPageMeshingRuntimeRecordSnapshot &output
+) const noexcept {
+	const auto record = find_record(key);
+	if (record == records_.end() || record->generation != generation) {
+		return false;
+	}
+	std::size_t pins = 0;
+	for (const Dependency &dependency : record->dependencies) {
+		pins += dependency.page ? 1U : 0U;
+	}
+	output = {
+		record->key,
+		record->generation,
+		record->source_revision,
+		record->world_revision,
+		record->priority,
+		record->transition_mask,
+		record->cached_transition_mask,
+		record->phase,
+		record->dependencies.size(),
+		pins,
+	};
+	return true;
+}
+
 std::size_t WtPageMeshingRuntimeService::record_count() const noexcept {
 	return records_.size();
 }

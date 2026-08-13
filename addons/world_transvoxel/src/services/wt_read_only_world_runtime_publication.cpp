@@ -426,11 +426,16 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 		progressed = true;
 		const auto job_started = std::chrono::steady_clock::now();
 		const bool trace_enabled = causal_trace_.enabled();
-		const WtLodMapEntry *trace_plan_entry =
-			job.stage == WtChunkJobStage::Mesh ?
-				find_plan_entry(current_plan_.entries, job.key) : nullptr;
+		WtPageMeshingRuntimeRecordSnapshot trace_mesh_record;
+		const bool trace_mesh_record_found =
+			job.stage == WtChunkJobStage::Mesh &&
+			page_runtime_->copy_record(
+				job.key,
+				job.generation,
+				trace_mesh_record
+			);
 		const std::uint8_t trace_transition_mask =
-			trace_plan_entry != nullptr ? trace_plan_entry->transition_mask : 0;
+			trace_mesh_record_found ? trace_mesh_record.transition_mask : 0;
 		if (trace_enabled) {
 			causal_trace_.record(
 				job.stage == WtChunkJobStage::Sample ?
