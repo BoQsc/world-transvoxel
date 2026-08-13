@@ -125,6 +125,11 @@ struct WtReadOnlyPublication {
 	bool independently_publishable_replacement = false;
 };
 
+struct WtVisibilityCoveragePriorityRequest {
+	WtChunkKey key;
+	WtGenerationToken generation;
+};
+
 class WtReadOnlyWorldRuntime {
 public:
 	WtReadOnlyWorldRuntime(
@@ -160,9 +165,8 @@ public:
 	WtReadOnlyRuntimeStatus submit_edit(
 		const WtEditTransaction &transaction
 	);
-	WtReadOnlyRuntimeStatus request_visibility_coverage_priority(
-		const WtChunkKey &key,
-		WtGenerationToken generation
+	WtReadOnlyRuntimeStatus request_visibility_coverage_priority_batch(
+		const std::vector<WtVisibilityCoveragePriorityRequest> &requests
 	);
 	WtReadOnlyRuntimeStatus request_authoritative_sample(
 		const WtGridPoint &point,
@@ -245,8 +249,8 @@ private:
 		std::uint64_t request_id = 0;
 		std::filesystem::path output_directory;
 		std::uint64_t new_source_revision = 0;
-		WtChunkKey key;
-		WtGenerationToken generation;
+		std::vector<WtVisibilityCoveragePriorityRequest>
+			visibility_coverage_priority_requests;
 	};
 	struct EditLodRetentionZone {
 		double x = 0.0;

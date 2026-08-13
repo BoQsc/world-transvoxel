@@ -125,10 +125,11 @@ replacement sinks are then applied as one frame-thread operation. An open
 viewer-plan publication prevents all staged publication, so a plan cannot be
 observed halfway through its control-event sequence.
 
-If an exact component is incomplete, the facade requests interactive priority
-for each missing `(chunk key, generation)` once. The lifecycle runtime raises
-only matching scheduler, page-meshing, and queued storage work. A stale
-generation request is counted and ignored. Priority changes ordering only; they
+If an exact component is incomplete, the facade sends one bounded batch of all
+missing `(chunk key, generation)` pairs, with each exact pair requested once.
+The lifecycle runtime raises only matching scheduler, page-meshing, and queued
+storage work. A stale generation request is counted and ignored. Priority
+changes ordering only; they
 do not relax complete coverage, generation checks, 2:1 topology, transition
 ownership, or paired render/collision publication.
 

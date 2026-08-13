@@ -251,14 +251,18 @@ void test_visibility_coverage_priority_generation_contract() {
 		"priority fixture page did not publish");
 	check(
 		counts.first_expect_generation.value != 0 &&
-		runtime.request_visibility_coverage_priority(
-			counts.first_expect_key,
-			counts.first_expect_generation
-		) == wt::WtReadOnlyRuntimeStatus::Ok &&
-		runtime.request_visibility_coverage_priority(
-			counts.first_expect_key,
-			{ counts.first_expect_generation.value + 1U }
-		) == wt::WtReadOnlyRuntimeStatus::Ok,
+		runtime.request_visibility_coverage_priority_batch({
+			{
+				counts.first_expect_key,
+				counts.first_expect_generation,
+			},
+			{
+				counts.first_expect_key,
+				{ counts.first_expect_generation.value + 1U },
+			},
+		}) == wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.request_visibility_coverage_priority_batch({}) ==
+			wt::WtReadOnlyRuntimeStatus::InvalidEdit,
 		"visibility coverage priority requests were rejected"
 	);
 	const auto deadline = std::chrono::steady_clock::now() +

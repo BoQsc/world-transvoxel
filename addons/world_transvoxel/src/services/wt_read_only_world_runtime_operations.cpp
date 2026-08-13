@@ -56,17 +56,22 @@ bool WtReadOnlyWorldRuntime::has_pending_edit_operation() {
 }
 
 WtReadOnlyRuntimeStatus
-WtReadOnlyWorldRuntime::request_visibility_coverage_priority(
-	const WtChunkKey &key,
-	WtGenerationToken generation
+WtReadOnlyWorldRuntime::request_visibility_coverage_priority_batch(
+	const std::vector<WtVisibilityCoveragePriorityRequest> &requests
 ) {
-	if (!valid_ || !wt_is_valid_chunk_key(key) || generation.value == 0) {
+	if (!valid_ || requests.empty() ||
+		requests.size() > config_.active_chunk_capacity) {
 		return WtReadOnlyRuntimeStatus::InvalidEdit;
+	}
+	for (const WtVisibilityCoveragePriorityRequest &request : requests) {
+		if (!wt_is_valid_chunk_key(request.key) ||
+			request.generation.value == 0) {
+			return WtReadOnlyRuntimeStatus::InvalidEdit;
+		}
 	}
 	WorldOperation operation;
 	operation.kind = WorldOperationKind::VisibilityCoveragePriority;
-	operation.key = key;
-	operation.generation = generation;
+	operation.visibility_coverage_priority_requests = requests;
 	return enqueue_world_operation(operation) ? WtReadOnlyRuntimeStatus::Ok :
 		WtReadOnlyRuntimeStatus::OperationQueueFull;
 }
@@ -184,54 +189,59 @@ bool WtReadOnlyWorldRuntime::process_visibility_coverage_priority_operation(
 ) {
 	{
 		std::lock_guard<std::mutex> lock(metrics_mutex_);
-		++metrics_.visibility_coverage_priority_requests;
+		metrics_.visibility_coverage_priority_requests +=
+			operation.visibility_coverage_priority_requests.size();
 	}
-	const WtChunkRecord *record = scheduler_->find_record(operation.key);
-	if (record == nullptr || record->generation != operation.generation) {
-		std::lock_guard<std::mutex> lock(metrics_mutex_);
-		++metrics_.visibility_coverage_priority_stale;
+	for (const WtVisibilityCoveragePriorityRequest &request :
+			operation.visibility_coverage_priority_requests) {
+		const WtChunkRecord *record = scheduler_->find_record(request.key);
+		if (record == nullptr || record->generation != request.generation) {
+			std::lock_guard<std::mutex> lock(metrics_mutex_);
+			++metrics_.visibility_coverage_priority_stale;
+			causal_trace_.record(
+				WtCausalTraceEventKind::VisibilityCoveragePriorityApplied,
+				WtCausalTraceThreadRole::Runtime,
+				&request.key,
+				request.generation,
+				0,
+				0,
+				0,
+				1
+			);
+			continue;
+		}
+		const WtSchedulerStatus scheduler_status =
+			scheduler_->reprioritize_chunk(
+				request.key,
+				kWtInteractiveEditPriority
+			);
+		if (scheduler_status != WtSchedulerStatus::Ok &&
+			scheduler_status != WtSchedulerStatus::AlreadyCurrent) {
+			set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
+			return true;
+		}
+		const WtPageMeshingRuntimeOwnerStatus page_status =
+			page_runtime_->reprioritize_owned_chunk(
+				request.key,
+				request.generation,
+				kWtInteractiveEditPriority
+			);
+		if (page_status == WtPageMeshingRuntimeOwnerStatus::StaleGeneration) {
+			std::lock_guard<std::mutex> lock(metrics_mutex_);
+			++metrics_.visibility_coverage_priority_stale;
+			continue;
+		}
+		{
+			std::lock_guard<std::mutex> lock(metrics_mutex_);
+			++metrics_.visibility_coverage_priority_applied;
+		}
 		causal_trace_.record(
 			WtCausalTraceEventKind::VisibilityCoveragePriorityApplied,
 			WtCausalTraceThreadRole::Runtime,
-			&operation.key,
-			operation.generation,
-			0,
-			0,
-			0,
-			1
+			&request.key,
+			request.generation
 		);
-		return true;
 	}
-	const WtSchedulerStatus scheduler_status = scheduler_->reprioritize_chunk(
-		operation.key,
-		kWtInteractiveEditPriority
-	);
-	if (scheduler_status != WtSchedulerStatus::Ok &&
-		scheduler_status != WtSchedulerStatus::AlreadyCurrent) {
-		set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
-		return true;
-	}
-	const WtPageMeshingRuntimeOwnerStatus page_status =
-		page_runtime_->reprioritize_owned_chunk(
-			operation.key,
-			operation.generation,
-			kWtInteractiveEditPriority
-		);
-	if (page_status == WtPageMeshingRuntimeOwnerStatus::StaleGeneration) {
-		std::lock_guard<std::mutex> lock(metrics_mutex_);
-		++metrics_.visibility_coverage_priority_stale;
-		return true;
-	}
-	{
-		std::lock_guard<std::mutex> lock(metrics_mutex_);
-		++metrics_.visibility_coverage_priority_applied;
-	}
-	causal_trace_.record(
-		WtCausalTraceEventKind::VisibilityCoveragePriorityApplied,
-		WtCausalTraceThreadRole::Runtime,
-		&operation.key,
-		operation.generation
-	);
 	return true;
 }
 

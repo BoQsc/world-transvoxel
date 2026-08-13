@@ -24,40 +24,46 @@ void WorldTransvoxelTerrain::clear_visibility_coverage_priority_request(
 	);
 }
 
-void WorldTransvoxelTerrain::request_visibility_coverage_priority(
-	const WtChunkApplicationRecord &record,
+void WorldTransvoxelTerrain::request_visibility_coverage_priority_batch(
+	const std::vector<WtChunkApplicationRecord> &records,
 	std::size_t replacement_count,
 	std::size_t retirement_count
 ) {
-	const auto existing = std::find_if(
-		visibility_coverage_priority_requests_.begin(),
-		visibility_coverage_priority_requests_.end(),
-		[&record](const CoveragePriorityRequest &request) {
-			return request.key == record.key &&
-				request.generation == record.generation;
-		}
-	);
-	if (existing != visibility_coverage_priority_requests_.end()) return;
-	clear_visibility_coverage_priority_request(record.key);
-	if (!lifecycle_ || lifecycle_->request_visibility_coverage_priority(
-			record.key,
-			record.generation
-		) != WtReadOnlyRuntimeStatus::Ok) {
+	std::vector<WtVisibilityCoveragePriorityRequest> requests;
+	requests.reserve(records.size());
+	for (const WtChunkApplicationRecord &record : records) {
+		const auto existing = std::find_if(
+			visibility_coverage_priority_requests_.begin(),
+			visibility_coverage_priority_requests_.end(),
+			[&record](const CoveragePriorityRequest &request) {
+				return request.key == record.key &&
+					request.generation == record.generation;
+			}
+		);
+		if (existing != visibility_coverage_priority_requests_.end()) continue;
+		clear_visibility_coverage_priority_request(record.key);
+		requests.push_back({ record.key, record.generation });
+	}
+	if (requests.empty() || !lifecycle_ ||
+		lifecycle_->request_visibility_coverage_priority_batch(requests) !=
+			WtReadOnlyRuntimeStatus::Ok) {
 		return;
 	}
-	visibility_coverage_priority_requests_.push_back({
-		record.key,
-		record.generation,
-	});
-	if (cpu_causal_trace_active_) {
-		lifecycle_->record_frontend_visibility(
-			WtCausalTraceEventKind::VisibilityCoveragePriorityRequested,
-			&record.key,
-			record.generation,
-			replacement_count,
-			retirement_count,
-			0
-		);
+	for (const WtVisibilityCoveragePriorityRequest &request : requests) {
+		visibility_coverage_priority_requests_.push_back({
+			request.key,
+			request.generation,
+		});
+		if (cpu_causal_trace_active_) {
+			lifecycle_->record_frontend_visibility(
+				WtCausalTraceEventKind::VisibilityCoveragePriorityRequested,
+				&request.key,
+				request.generation,
+				replacement_count,
+				retirement_count,
+				0
+			);
+		}
 	}
 }
 
@@ -119,6 +125,8 @@ void WorldTransvoxelTerrain::flush_ready_independent_publication_regions() {
 			continue;
 		}
 		bool ready = true;
+		std::vector<WtChunkApplicationRecord> missing_records;
+		missing_records.reserve(region.replacements.size());
 		for (const WtChunkKey &replacement : region.replacements) {
 			WtChunkApplicationRecord record;
 			if (!application_->copy_record(replacement, record)) {
@@ -126,11 +134,7 @@ void WorldTransvoxelTerrain::flush_ready_independent_publication_regions() {
 				break;
 			}
 			if (!record.fully_ready()) {
-				request_visibility_coverage_priority(
-					record,
-					region.replacements.size(),
-					region.retirements.size()
-				);
+				missing_records.push_back(record);
 				ready = false;
 				continue;
 			}
@@ -148,6 +152,11 @@ void WorldTransvoxelTerrain::flush_ready_independent_publication_regions() {
 			}
 		}
 		if (!ready) {
+			request_visibility_coverage_priority_batch(
+				missing_records,
+				region.replacements.size(),
+				region.retirements.size()
+			);
 			return;
 		}
 		for (const WtChunkKey &retirement : region.retirements) {

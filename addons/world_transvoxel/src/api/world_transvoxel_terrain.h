@@ -241,8 +241,8 @@ private:
 	void stage_render_retirement(const WtChunkKey &key);
 	void cancel_render_retirement(const WtChunkKey &key);
 	void clear_visibility_coverage_priority_request(const WtChunkKey &key);
-	void request_visibility_coverage_priority(
-		const WtChunkApplicationRecord &record,
+	void request_visibility_coverage_priority_batch(
+		const std::vector<WtChunkApplicationRecord> &records,
 		std::size_t replacement_count,
 		std::size_t retirement_count
 	);
