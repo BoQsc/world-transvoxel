@@ -99,6 +99,23 @@ public:
 	WtAsyncStorageStatus last_storage_status() const noexcept;
 	WtReadOnlyRuntimeStatus last_runtime_status() const noexcept;
 	WtReadOnlyRuntimeMetrics runtime_metrics() const noexcept;
+	bool begin_causal_trace();
+	void end_causal_trace();
+	WtCausalTraceSnapshot causal_trace_snapshot(
+		std::uint64_t first_sequence,
+		std::size_t maximum_events
+	) const;
+	void record_frontend_publication(
+		const WtReadOnlyPublication &publication,
+		std::int64_t status
+	);
+	void record_frontend_sink(
+		bool collision,
+		const WtChunkKey &key,
+		WtGenerationToken generation,
+		std::uint64_t duration_ns,
+		bool applied
+	);
 	WtEditJournalStoreStatus last_edit_journal_status() const noexcept;
 	std::uint64_t source_revision() const noexcept;
 	std::uint64_t world_revision() const noexcept;

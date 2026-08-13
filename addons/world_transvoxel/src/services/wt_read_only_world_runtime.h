@@ -9,6 +9,7 @@
 #include "streaming/wt_balanced_lod_planner.h"
 #include "editing/wt_edit_transaction.h"
 #include "streaming/wt_multi_viewer_desired_set.h"
+#include "telemetry/wt_causal_trace.h"
 
 #include <atomic>
 #include <condition_variable>
@@ -181,6 +182,23 @@ public:
 	WtReadOnlyRuntimeStatus last_status() const noexcept;
 	WtReadOnlyRuntimeMetrics get_metrics() const noexcept;
 	std::uint64_t world_revision() const noexcept;
+	bool begin_causal_trace();
+	void end_causal_trace();
+	WtCausalTraceSnapshot causal_trace_snapshot(
+		std::uint64_t first_sequence,
+		std::size_t maximum_events
+	) const;
+	void record_frontend_publication(
+		const WtReadOnlyPublication &publication,
+		std::int64_t status
+	);
+	void record_frontend_sink(
+		bool collision,
+		const WtChunkKey &key,
+		WtGenerationToken generation,
+		std::uint64_t duration_ns,
+		bool applied
+	);
 
 private:
 	enum class ViewerEventKind : std::uint8_t {
@@ -351,6 +369,7 @@ private:
 	mutable std::mutex metrics_mutex_;
 	WtReadOnlyRuntimeMetrics metrics_;
 	WtReadOnlyRuntimeMetrics published_metrics_;
+	WtCausalTraceBuffer causal_trace_;
 };
 
 const char *wt_read_only_runtime_status_message(

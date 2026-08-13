@@ -189,6 +189,12 @@ public:
 	std::int64_t get_render_latency_frames_maximum() const noexcept;
 	std::int64_t get_collision_latency_frames_maximum() const noexcept;
 	godot::Dictionary get_runtime_metrics() const;
+	bool begin_cpu_causal_trace();
+	void end_cpu_causal_trace();
+	godot::Dictionary get_cpu_causal_trace_events(
+		std::int64_t first_sequence,
+		std::int64_t maximum_events
+	) const;
 
 	bool _m3_test_submit_generation(std::int64_t generation, bool collision_required);
 	bool _m3_test_submit_chunk_generation(

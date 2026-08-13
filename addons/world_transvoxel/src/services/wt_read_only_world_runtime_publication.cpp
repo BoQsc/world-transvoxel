@@ -384,6 +384,16 @@ bool WtReadOnlyWorldRuntime::process_storage_completions() {
 	WtPageLoadCompletion completion;
 	while (storage_.pop_completion(completion)) {
 		progressed = true;
+		causal_trace_.record(
+			WtCausalTraceEventKind::StorageCompletionConsumed,
+			WtCausalTraceThreadRole::Runtime,
+			&completion.key,
+			completion.generation,
+			0,
+			0,
+			0,
+			static_cast<std::int64_t>(completion.status)
+		);
 		const WtPageMeshingRuntimeStatus status =
 			page_runtime_->accept_storage_completion(
 				completion,
@@ -415,6 +425,21 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 		}
 		progressed = true;
 		const auto job_started = std::chrono::steady_clock::now();
+		const bool trace_enabled = causal_trace_.enabled();
+		if (trace_enabled) {
+			causal_trace_.record(
+				job.stage == WtChunkJobStage::Sample ?
+					WtCausalTraceEventKind::SampleStarted :
+					WtCausalTraceEventKind::MeshStarted,
+				WtCausalTraceThreadRole::Runtime,
+				&job.key,
+				job.generation,
+				job.world_revision,
+				job.sequence
+			);
+		}
+		const std::uint64_t traced_job_started_ns = trace_enabled ?
+			wt_causal_trace_now_ns() : 0;
 		WtPageMeshingRuntimeStatus status;
 		if (job.stage == WtChunkJobStage::Sample) {
 			const WtLodMapEntry *entry = find_plan_entry(
@@ -464,6 +489,20 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 					job_finished - job_started
 				).count()
 			);
+		if (trace_enabled) {
+			causal_trace_.record(
+				job.stage == WtChunkJobStage::Sample ?
+					WtCausalTraceEventKind::SampleFinished :
+					WtCausalTraceEventKind::MeshFinished,
+				WtCausalTraceThreadRole::Runtime,
+				&job.key,
+				job.generation,
+				job.world_revision,
+				job.sequence,
+				wt_causal_trace_now_ns() - traced_job_started_ns,
+				static_cast<std::int64_t>(status)
+			);
+		}
 		{
 			std::lock_guard<std::mutex> lock(metrics_mutex_);
 			if (job.stage == WtChunkJobStage::Sample) {

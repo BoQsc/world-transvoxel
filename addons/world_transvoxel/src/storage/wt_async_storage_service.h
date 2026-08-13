@@ -90,6 +90,20 @@ struct WtAsyncStorageMetrics {
 	std::uint64_t in_flight_generation = 0;
 };
 
+enum class WtAsyncStorageTraceEventKind : std::uint8_t {
+	Requested,
+	Started,
+	Finished,
+};
+
+using WtAsyncStorageTraceObserver = std::function<void(
+	WtAsyncStorageTraceEventKind,
+	const WtChunkKey &,
+	WtGenerationToken,
+	std::uint64_t,
+	WtPageLoadStatus
+)>;
+
 std::filesystem::path wt_page_object_path(
 	const std::filesystem::path &object_root,
 	const WtHash256 &content_hash
@@ -137,6 +151,7 @@ public:
 		std::chrono::milliseconds timeout
 	);
 	void set_completion_notifier(std::function<void()> notifier);
+	void set_trace_observer(WtAsyncStorageTraceObserver observer);
 
 	bool is_open() const noexcept;
 	bool is_procedural() const noexcept;
@@ -209,6 +224,7 @@ private:
 	bool procedural_ = false;
 	WtProceduralWorldDescriptor procedural_descriptor_;
 	std::function<void()> completion_notifier_;
+	WtAsyncStorageTraceObserver trace_observer_;
 	WtAsyncStorageMetrics metrics_;
 };
 

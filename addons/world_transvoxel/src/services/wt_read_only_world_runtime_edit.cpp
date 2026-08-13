@@ -37,15 +37,45 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::submit_edit(
 	WorldOperation operation;
 	operation.kind = WorldOperationKind::Edit;
 	operation.transaction = transaction;
-	return enqueue_world_operation(operation) ?
-		WtReadOnlyRuntimeStatus::Ok :
+	const bool accepted = enqueue_world_operation(operation);
+	causal_trace_.record(
+		WtCausalTraceEventKind::EditSubmitted,
+		WtCausalTraceThreadRole::Api,
+		nullptr,
+		{},
+		transaction.committed_revision,
+		transaction.commands.size(),
+		0,
+		accepted ? 0 : static_cast<std::int64_t>(
+			WtReadOnlyRuntimeStatus::EditQueueFull
+		)
+	);
+	return accepted ? WtReadOnlyRuntimeStatus::Ok :
 		WtReadOnlyRuntimeStatus::EditQueueFull;
 }
 
 bool WtReadOnlyWorldRuntime::process_edit_operation(
 	const WtEditTransaction &transaction
 ) {
+	causal_trace_.record(
+		WtCausalTraceEventKind::EditProcessingStarted,
+		WtCausalTraceThreadRole::Runtime,
+		nullptr,
+		{},
+		transaction.committed_revision,
+		transaction.commands.size()
+	);
 	const auto reject = [&](WtReadOnlyEditStatus status) {
+		causal_trace_.record(
+			WtCausalTraceEventKind::EditRejected,
+			WtCausalTraceThreadRole::Runtime,
+			nullptr,
+			{},
+			transaction.committed_revision,
+			0,
+			0,
+			static_cast<std::int64_t>(status)
+		);
 		{
 			std::lock_guard<std::mutex> lock(metrics_mutex_);
 			++metrics_.edit_rejections;
@@ -117,6 +147,14 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 	}
 	for (const WtEditRuntimeReplacementRecord &replacement :
 			edit_replacement_->get_last_replacements()) {
+		causal_trace_.record(
+			WtCausalTraceEventKind::ChunkDemandAccepted,
+			WtCausalTraceThreadRole::Runtime,
+			&replacement.key,
+			replacement.replacement_generation,
+			transaction.committed_revision,
+			1
+		);
 		WtReadOnlyPublication publication;
 		publication.kind = WtReadOnlyPublicationKind::ExpectChunk;
 		publication.key = replacement.key;
@@ -155,6 +193,14 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 		metrics_.edit_replacements +=
 			edit_replacement_->get_last_replacements().size();
 	}
+	causal_trace_.record(
+		WtCausalTraceEventKind::EditCommitted,
+		WtCausalTraceThreadRole::Runtime,
+		nullptr,
+		{},
+		transaction.committed_revision,
+		edit_replacement_->get_last_replacements().size()
+	);
 	return true;
 }
 

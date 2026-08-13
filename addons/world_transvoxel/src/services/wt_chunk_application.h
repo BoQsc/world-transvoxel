@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <vector>
 
@@ -58,6 +59,14 @@ struct WtApplicationBatchResult {
 	std::size_t collision_processed = 0;
 	bool collision_deadline_exhausted = false;
 };
+
+using WtApplicationTraceObserver = std::function<void(
+	bool,
+	const WtChunkKey &,
+	WtGenerationToken,
+	std::uint64_t,
+	bool
+)>;
 
 class WtChunkApplicationService {
 public:
@@ -114,6 +123,7 @@ public:
 	std::size_t queued_render_count() const noexcept;
 	std::size_t queued_collision_count() const noexcept;
 	std::size_t deferred_collision_count() const noexcept;
+	void set_trace_observer(WtApplicationTraceObserver observer);
 
 private:
 	WtChunkApplicationRecord *find_record_mutable(const WtChunkKey &key) noexcept;
@@ -154,6 +164,7 @@ private:
 	std::atomic<std::uint64_t> asynchronous_collision_submissions_{ 0 };
 	std::atomic<std::uint64_t> asynchronous_queue_rejections_{ 0 };
 	std::atomic<std::uint64_t> application_tick_{ 0 };
+	WtApplicationTraceObserver trace_observer_;
 };
 
 } // namespace world_transvoxel

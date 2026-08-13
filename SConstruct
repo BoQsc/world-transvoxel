@@ -549,6 +549,23 @@ m5_runtime_trace_test = native_test_env.Program(
     ],
 )
 
+causal_trace_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_causal_trace.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_causal_trace.cpp",
+		"addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/telemetry/wt_causal_trace.cpp",
+    ],
+)
+
 m5_soak_test = native_test_env.Program(
     os.path.join(
         "build",
@@ -867,6 +884,7 @@ production_read_only_runtime_sources = [
     "addons/world_transvoxel/src/streaming/wt_lod_map.cpp",
     "addons/world_transvoxel/src/streaming/wt_multi_viewer_desired_set.cpp",
     "addons/world_transvoxel/src/streaming/wt_stream_scheduler.cpp",
+	"addons/world_transvoxel/src/telemetry/wt_causal_trace.cpp",
     "addons/world_transvoxel/src/testing/wt_fault_injection.cpp",
 ]
 
@@ -1088,6 +1106,11 @@ if env["platform"] == "windows":
     )
 
     env.AddPostAction(
+        causal_trace_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
+    env.AddPostAction(
         m5_soak_test,
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
@@ -1173,6 +1196,7 @@ Default([
     m5_edit_replacement_test,
     m5_workload_test,
     m5_runtime_trace_test,
+    causal_trace_test,
     m5_soak_test,
     m5_pipeline_budget_test,
     m5_page_transition_test,

@@ -129,11 +129,99 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 }
 
 WtReadOnlyWorldRuntime::~WtReadOnlyWorldRuntime() {
+	storage_.set_trace_observer({});
 	request_stop();
 }
 
 bool WtReadOnlyWorldRuntime::valid() const noexcept {
 	return valid_;
+}
+
+bool WtReadOnlyWorldRuntime::begin_causal_trace() {
+	if (!valid_ || !causal_trace_.begin(static_cast<std::size_t>(
+			config_.trace_event_capacity
+		))) {
+		return false;
+	}
+	storage_.set_trace_observer(
+		[this](
+			WtAsyncStorageTraceEventKind kind,
+			const WtChunkKey &key,
+			WtGenerationToken generation,
+			std::uint64_t duration_ns,
+			WtPageLoadStatus status
+		) {
+			WtCausalTraceEventKind event_kind =
+				WtCausalTraceEventKind::StorageRequested;
+			if (kind == WtAsyncStorageTraceEventKind::Started) {
+				event_kind = WtCausalTraceEventKind::StorageStarted;
+			} else if (kind == WtAsyncStorageTraceEventKind::Finished) {
+				event_kind = WtCausalTraceEventKind::StorageFinished;
+			}
+			causal_trace_.record(
+				event_kind,
+				WtCausalTraceThreadRole::Storage,
+				&key,
+				generation,
+				0,
+				0,
+				duration_ns,
+				static_cast<std::int64_t>(status)
+			);
+		}
+	);
+	return true;
+}
+
+void WtReadOnlyWorldRuntime::end_causal_trace() {
+	storage_.set_trace_observer({});
+	causal_trace_.end();
+}
+
+WtCausalTraceSnapshot WtReadOnlyWorldRuntime::causal_trace_snapshot(
+	std::uint64_t first_sequence,
+	std::size_t maximum_events
+) const {
+	return causal_trace_.snapshot(first_sequence, maximum_events);
+}
+
+void WtReadOnlyWorldRuntime::record_frontend_publication(
+	const WtReadOnlyPublication &publication,
+	std::int64_t status
+) {
+	causal_trace_.record(
+		WtCausalTraceEventKind::FrontendPublicationProcessed,
+		WtCausalTraceThreadRole::Frontend,
+		static_cast<std::uint8_t>(publication.kind) <=
+			static_cast<std::uint8_t>(
+				WtReadOnlyPublicationKind::CollisionPayload
+			) ? &publication.key : nullptr,
+		publication.generation,
+		publication.world_revision,
+		static_cast<std::uint64_t>(publication.kind),
+		0,
+		status
+	);
+}
+
+void WtReadOnlyWorldRuntime::record_frontend_sink(
+	bool collision,
+	const WtChunkKey &key,
+	WtGenerationToken generation,
+	std::uint64_t duration_ns,
+	bool applied
+) {
+	causal_trace_.record(
+		collision ? WtCausalTraceEventKind::CollisionSinkApplied :
+			WtCausalTraceEventKind::RenderSinkApplied,
+		WtCausalTraceThreadRole::Frontend,
+		&key,
+		generation,
+		0,
+		0,
+		duration_ns,
+		applied ? 0 : 1
+	);
 }
 
 WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::update_viewer(

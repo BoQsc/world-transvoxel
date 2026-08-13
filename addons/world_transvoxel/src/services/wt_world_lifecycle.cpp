@@ -309,6 +309,53 @@ WtWorldLifecycleService::runtime_metrics() const noexcept {
 	return runtime_ ? runtime_->get_metrics() : WtReadOnlyRuntimeMetrics{};
 }
 
+bool WtWorldLifecycleService::begin_causal_trace() {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	return state_ == WtWorldLifecycleState::Running && runtime_ &&
+		runtime_->begin_causal_trace();
+}
+
+void WtWorldLifecycleService::end_causal_trace() {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	if (runtime_) runtime_->end_causal_trace();
+}
+
+WtCausalTraceSnapshot WtWorldLifecycleService::causal_trace_snapshot(
+	std::uint64_t first_sequence,
+	std::size_t maximum_events
+) const {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	return runtime_ ? runtime_->causal_trace_snapshot(
+		first_sequence,
+		maximum_events
+	) : WtCausalTraceSnapshot{};
+}
+
+void WtWorldLifecycleService::record_frontend_publication(
+	const WtReadOnlyPublication &publication,
+	std::int64_t status
+) {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	if (runtime_) runtime_->record_frontend_publication(publication, status);
+}
+
+void WtWorldLifecycleService::record_frontend_sink(
+	bool collision,
+	const WtChunkKey &key,
+	WtGenerationToken generation,
+	std::uint64_t duration_ns,
+	bool applied
+) {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	if (runtime_) runtime_->record_frontend_sink(
+		collision,
+		key,
+		generation,
+		duration_ns,
+		applied
+	);
+}
+
 WtEditJournalStoreStatus
 WtWorldLifecycleService::last_edit_journal_status() const noexcept {
 	std::lock_guard<std::mutex> lock(state_mutex_);

@@ -377,6 +377,19 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		event = viewer_events_.front();
 		viewer_events_.erase(viewer_events_.begin());
 	}
+	const bool trace_enabled = causal_trace_.enabled();
+	if (trace_enabled) {
+		causal_trace_.record(
+			WtCausalTraceEventKind::ViewerPlanStarted,
+			WtCausalTraceThreadRole::Runtime,
+			nullptr,
+			{},
+			event.snapshot.revision,
+			static_cast<std::uint64_t>(event.kind)
+		);
+	}
+	const std::uint64_t planning_started_ns = trace_enabled ?
+		wt_causal_trace_now_ns() : 0;
 	std::vector<WtLodPlannerViewer> candidate_viewers = planner_viewers_;
 	std::vector<CollisionViewer> candidate_collision_viewers =
 		collision_viewers_;
@@ -757,6 +770,21 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		set_failure(read_only_delta_failure_status(delta_status));
 		return true;
 	}
+	if (trace_enabled) {
+		for (const WtDesiredChunk &item : delta.added) {
+			const WtChunkRecord *record = scheduler_->find_record(item.key);
+			if (record != nullptr) {
+				causal_trace_.record(
+					WtCausalTraceEventKind::ChunkDemandAccepted,
+					WtCausalTraceThreadRole::Runtime,
+					&item.key,
+					record->generation,
+					event.snapshot.revision,
+					static_cast<std::uint64_t>(item.priority)
+				);
+			}
+		}
+	}
 	for (WtReadOnlyPublication &publication :
 		outgoing_collision_publications) {
 		if (!push_publication(std::move(publication))) {
@@ -790,6 +818,17 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		}
 	}
 	plan_revision_ = plan_snapshot.revision;
+	if (trace_enabled) {
+		causal_trace_.record(
+			WtCausalTraceEventKind::ViewerPlanApplied,
+			WtCausalTraceThreadRole::Runtime,
+			nullptr,
+			{},
+			event.snapshot.revision,
+			planned_demand_count,
+			wt_causal_trace_now_ns() - planning_started_ns
+		);
+	}
 	std::vector<WtChunkKey> active_keys;
 	active_keys.reserve(desired_->get_desired_chunks().size());
 	for (const WtDesiredChunk &item : desired_->get_desired_chunks()) {

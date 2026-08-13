@@ -423,6 +423,16 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 	requests_.insert(position, request);
 	active_requests_.push_back({ key, generation });
 	++metrics_.accepted_requests;
+	if (trace_observer_) {
+		const WtAsyncStorageTraceObserver observer = trace_observer_;
+		observer(
+			WtAsyncStorageTraceEventKind::Requested,
+			key,
+			generation,
+			0,
+			WtPageLoadStatus::Ok
+		);
+	}
 	work_available_.notify_one();
 	return WtAsyncStorageStatus::Ok;
 }
@@ -538,6 +548,7 @@ void WtAsyncStorageService::worker_main() noexcept {
 	for (;;) {
 		Request request;
 		std::chrono::steady_clock::time_point load_started;
+		WtAsyncStorageTraceObserver trace_observer;
 		{
 			std::unique_lock<std::mutex> lock(mutex_);
 			work_available_.wait(lock, [&]() {
@@ -558,18 +569,44 @@ void WtAsyncStorageService::worker_main() noexcept {
 				metrics_.maximum_in_flight_requests,
 				in_flight_requests_.size()
 			);
+			trace_observer = trace_observer_;
 		}
+		if (trace_observer) {
+			trace_observer(
+				WtAsyncStorageTraceEventKind::Started,
+				request.key,
+				request.generation,
+				0,
+				WtPageLoadStatus::Ok
+			);
+		}
+		const auto traced_load_started = std::chrono::steady_clock::now();
 
 		std::uint64_t bytes_read = 0;
 		WtPageLoadCompletion completion = load_page(request, bytes_read);
 		const auto load_finished = std::chrono::steady_clock::now();
-
-		std::unique_lock<std::mutex> lock(mutex_);
-		const std::uint64_t load_time_ns = static_cast<std::uint64_t>(
+		const std::uint64_t observed_load_time_ns = static_cast<std::uint64_t>(
 			std::chrono::duration_cast<std::chrono::nanoseconds>(
 				load_finished - load_started
 			).count()
 		);
+		const std::uint64_t traced_load_time_ns = static_cast<std::uint64_t>(
+			std::chrono::duration_cast<std::chrono::nanoseconds>(
+				load_finished - traced_load_started
+			).count()
+		);
+		if (trace_observer) {
+			trace_observer(
+				WtAsyncStorageTraceEventKind::Finished,
+				request.key,
+				request.generation,
+				traced_load_time_ns,
+				completion.status
+			);
+		}
+
+		std::unique_lock<std::mutex> lock(mutex_);
+		const std::uint64_t load_time_ns = observed_load_time_ns;
 		metrics_.load_time_ns_last = load_time_ns;
 		metrics_.load_time_ns_total += load_time_ns;
 		metrics_.load_time_ns_maximum =
@@ -693,6 +730,13 @@ void WtAsyncStorageService::set_completion_notifier(
 ) {
 	std::lock_guard<std::mutex> lock(mutex_);
 	completion_notifier_ = std::move(notifier);
+}
+
+void WtAsyncStorageService::set_trace_observer(
+	WtAsyncStorageTraceObserver observer
+) {
+	std::lock_guard<std::mutex> lock(mutex_);
+	trace_observer_ = std::move(observer);
 }
 
 bool WtAsyncStorageService::has_page(const WtChunkKey &key) const noexcept {

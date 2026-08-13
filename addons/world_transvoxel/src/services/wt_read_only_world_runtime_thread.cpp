@@ -85,8 +85,28 @@ bool WtReadOnlyWorldRuntime::push_publication(
 	});
 	if (stop_requested_.load()) return false;
 	const std::size_t tail = (head + count) % slots.size();
+	const bool trace_enabled = causal_trace_.enabled();
+	const WtChunkKey trace_key = trace_enabled ? publication.key : WtChunkKey{};
+	const WtGenerationToken trace_generation = trace_enabled ?
+		publication.generation : WtGenerationToken{};
+	const std::uint64_t trace_revision = trace_enabled ?
+		publication.world_revision : 0;
+	const std::uint64_t trace_kind = trace_enabled ?
+		static_cast<std::uint64_t>(publication.kind) : 0;
 	slots[tail] = std::move(publication);
 	++count;
+	if (trace_enabled) {
+		causal_trace_.record(
+			WtCausalTraceEventKind::PublicationQueued,
+			WtCausalTraceThreadRole::Runtime,
+			trace_kind <= static_cast<std::uint64_t>(
+				WtReadOnlyPublicationKind::CollisionPayload
+			) ? &trace_key : nullptr,
+			trace_generation,
+			trace_revision,
+			trace_kind
+		);
+	}
 	{
 		std::lock_guard<std::mutex> metrics_lock(metrics_mutex_);
 		++metrics_.published_events;
@@ -119,6 +139,19 @@ bool WtReadOnlyWorldRuntime::pop_publication(
 		++priority_publication_burst_;
 	}
 	publication_space_available_.notify_one();
+	if (causal_trace_.enabled()) {
+		const std::uint64_t kind = static_cast<std::uint64_t>(publication.kind);
+		causal_trace_.record(
+			WtCausalTraceEventKind::PublicationPopped,
+			WtCausalTraceThreadRole::Frontend,
+			kind <= static_cast<std::uint64_t>(
+				WtReadOnlyPublicationKind::CollisionPayload
+			) ? &publication.key : nullptr,
+			publication.generation,
+			publication.world_revision,
+			kind
+		);
+	}
 	return true;
 }
 

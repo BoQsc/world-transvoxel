@@ -118,6 +118,12 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 	WtPageMeshCompletion completion;
 	while (page_runtime_->pop_mesh_completion(completion)) {
 		progressed = true;
+		causal_trace_.record(
+			WtCausalTraceEventKind::MeshCompletionConsumed,
+			WtCausalTraceThreadRole::Runtime,
+			&completion.key,
+			completion.generation
+		);
 		const WtChunkRecord *record = scheduler_->find_record(completion.key);
 		if (record == nullptr || record->generation != completion.generation ||
 			!completion.mesh || !completion.water_mesh) {

@@ -426,6 +426,10 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 			synchronous_world_error_ =
 				"world publication application failed";
 		}
+		lifecycle_->record_frontend_publication(
+			publication,
+			static_cast<std::int64_t>(status)
+		);
 		if (collision_deadline_exhausted) {
 			break;
 		}

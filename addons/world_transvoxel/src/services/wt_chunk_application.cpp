@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <utility>
 
 namespace world_transvoxel {
 namespace {
@@ -293,7 +294,20 @@ std::size_t WtChunkApplicationService::apply_render(
 			++metrics_.stale_render;
 			continue;
 		}
-		if (!sink.apply_render(*payload)) {
+		const bool trace_enabled = static_cast<bool>(trace_observer_);
+		const Clock::time_point sink_started = trace_enabled ?
+			Clock::now() : Clock::time_point{};
+		const bool sink_applied = sink.apply_render(*payload);
+		if (trace_enabled) {
+			trace_observer_(
+				false,
+				payload->key,
+				payload->generation,
+				elapsed_ns(sink_started),
+				sink_applied
+			);
+		}
+		if (!sink_applied) {
 			++metrics_.sink_failures;
 			continue;
 		}
@@ -362,7 +376,20 @@ std::size_t WtChunkApplicationService::apply_deferred_collisions(
 		metrics_.collision_latency_frames_maximum = std::max(
 			metrics_.collision_latency_frames_maximum, latency
 		);
-		if (!sink.apply_collision(*payload)) {
+		const bool trace_enabled = static_cast<bool>(trace_observer_);
+		const Clock::time_point sink_started = trace_enabled ?
+			Clock::now() : Clock::time_point{};
+		const bool sink_applied = sink.apply_collision(*payload);
+		if (trace_enabled) {
+			trace_observer_(
+				true,
+				payload->key,
+				payload->generation,
+				elapsed_ns(sink_started),
+				sink_applied
+			);
+		}
+		if (!sink_applied) {
 			++metrics_.sink_failures;
 			iterator = deferred_collisions_.erase(iterator);
 			continue;
@@ -437,7 +464,20 @@ std::size_t WtChunkApplicationService::apply_collision(
 		metrics_.collision_latency_frames_maximum = std::max(
 			metrics_.collision_latency_frames_maximum, latency
 		);
-		if (!sink.apply_collision(*payload)) {
+		const bool trace_enabled = static_cast<bool>(trace_observer_);
+		const Clock::time_point sink_started = trace_enabled ?
+			Clock::now() : Clock::time_point{};
+		const bool sink_applied = sink.apply_collision(*payload);
+		if (trace_enabled) {
+			trace_observer_(
+				true,
+				payload->key,
+				payload->generation,
+				elapsed_ns(sink_started),
+				sink_applied
+			);
+		}
+		if (!sink_applied) {
 			++metrics_.sink_failures;
 			continue;
 		}
@@ -456,6 +496,13 @@ bool WtChunkApplicationService::should_defer_collision(
 ) const noexcept {
 	return record.staged_replacement && record.visual_required &&
 		!record.visual_ready;
+}
+
+void WtChunkApplicationService::set_trace_observer(
+	WtApplicationTraceObserver observer
+) {
+	std::lock_guard<std::mutex> lock(records_mutex_);
+	trace_observer_ = std::move(observer);
 }
 
 bool WtChunkApplicationService::defer_collision(
