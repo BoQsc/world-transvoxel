@@ -121,6 +121,14 @@ func _run_test() -> void:
 	if maximum_staged_collision_resources <= 0:
 		_fail("LOD edit atomicity route did not exercise collision staging")
 		return
+	var publication_metrics: Dictionary = terrain.call("get_runtime_metrics")
+	if (
+		int(publication_metrics.get("regional_visibility_publications", 0)) <= 0 or
+		int(publication_metrics.get("regional_visibility_replacements", 0)) <= 0 or
+		int(publication_metrics.get("regional_visibility_retirements", 0)) <= 0
+	):
+		_fail("LOD edit atomicity route did not exercise regional publication")
+		return
 
 	if (
 		not terrain.call("stop_world") or
@@ -132,8 +140,15 @@ func _run_test() -> void:
 		DirAccess.remove_absolute(journal_absolute)
 	print(
 		"PRODUCTION_GODOT_LOD_EDIT_ATOMICITY_PASS " +
-		"revision=14 mixed_ownership_frames=0 staged_collision=%d" %
-		maximum_staged_collision_resources
+		(
+			"revision=14 mixed_ownership_frames=0 staged_collision=%d " +
+			"regional_publications=%d replacements=%d retirements=%d"
+		) % [
+			maximum_staged_collision_resources,
+			int(publication_metrics.get("regional_visibility_publications", 0)),
+			int(publication_metrics.get("regional_visibility_replacements", 0)),
+			int(publication_metrics.get("regional_visibility_retirements", 0)),
+		]
 	)
 	terrain.queue_free()
 	await process_frame

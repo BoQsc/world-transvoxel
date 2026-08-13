@@ -219,6 +219,8 @@ bool WtReadOnlyWorldRuntime::is_priority_publication(
 		case WtReadOnlyPublicationKind::SetVisualRequired:
 		case WtReadOnlyPublicationKind::RemoveChunk:
 		case WtReadOnlyPublicationKind::CollisionPayload:
+		case WtReadOnlyPublicationKind::ViewerPlanStarted:
+		case WtReadOnlyPublicationKind::ViewerPlanCompleted:
 			return true;
 		case WtReadOnlyPublicationKind::RenderPayload:
 			return publication.staged_replacement;

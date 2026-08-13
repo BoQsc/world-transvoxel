@@ -187,6 +187,23 @@ bool WtGodotCollisionSink::has_staged_records() const noexcept {
 	return false;
 }
 
+bool WtGodotCollisionSink::can_publish_staged_record(
+	const WtChunkKey &key,
+	WtGenerationToken generation
+) const noexcept {
+	const auto iterator = records_.find(key);
+	if (iterator == records_.end()) return true;
+	const Record &record = iterator->second;
+	if (!record.staged) {
+		return record.active && record.generation == generation;
+	}
+	if (record.body == nullptr || record.shape == nullptr ||
+			record.staged_generation != generation) {
+		return false;
+	}
+	return record.staged_empty || record.staged_shape.is_valid();
+}
+
 bool WtGodotCollisionSink::publish_staged_record(
 	const WtChunkKey &key
 ) noexcept {

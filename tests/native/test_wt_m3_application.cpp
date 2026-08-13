@@ -504,6 +504,72 @@ void test_cross_lod_replacement_publication_policy() {
 		),
 		"negative-coordinate cross-LOD overlap was not detected"
 	);
+
+	const std::vector<wt::WtChunkKey> replacements {
+		{ 0, 0, 0, 0 },
+		{ 1, 0, 0, 0 },
+		{ 8, 0, 0, 0 },
+		{ 0, 1, 0, 0 },
+		{ 1, 1, 0, 0 },
+		{ 0, 0, 1, 0 },
+		{ 1, 0, 1, 0 },
+		{ 0, 1, 1, 0 },
+		{ 1, 1, 1, 0 },
+	};
+	const std::vector<wt::WtChunkKey> retirements {
+		{ 0, 0, 0, 1 },
+		{ 4, 0, 0, 1 },
+	};
+	wt::WtChunkPublicationRegion region;
+	check(
+		wt::wt_build_chunk_publication_region(
+			{ 0, 0, 0, 0 },
+			replacements,
+			retirements,
+			region
+		),
+		"cross-LOD publication region was not built"
+	);
+	check(region.replacements.size() == 8 &&
+		region.retirements.size() == 1 &&
+		std::find(
+			region.replacements.begin(),
+			region.replacements.end(),
+			wt::WtChunkKey { 8, 0, 0, 0 }
+		) == region.replacements.end(),
+		"publication region did not isolate the connected overlap component");
+	check(
+		wt::wt_chunk_publication_region_has_complete_coverage(region),
+		"complete fine replacement set did not cover its coarse retirement"
+	);
+	region.replacements.pop_back();
+	check(
+		!wt::wt_chunk_publication_region_has_complete_coverage(region),
+		"partial fine replacement set retired incomplete coarse coverage"
+	);
+	check(
+		!wt::wt_chunk_publication_region_has_complete_coverage({
+			{ { 0, 0, 0, 1 }, { 0, 0, 0, 0 } },
+			{ { 0, 0, 0, 1 } },
+		}),
+		"overlapping replacement ownership was accepted as complete coverage"
+	);
+	check(
+		!wt::wt_chunk_publication_region_has_complete_coverage({
+			{ { 0, 0, 0, 1 } },
+			{ { 0, 0, 0, 1 } },
+		}),
+		"one chunk was accepted as both replacement and retirement"
+	);
+	check(
+		!wt::wt_build_chunk_publication_region(
+			{ 7, 0, 0, 0 },
+			replacements,
+			retirements,
+			region
+		),
+		"publication region accepted a missing seed"
+	);
 }
 
 void test_collision_deadline_bounds_frame_work(

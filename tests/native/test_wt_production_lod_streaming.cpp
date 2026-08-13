@@ -352,6 +352,8 @@ bool is_control_publication(wt::WtReadOnlyPublicationKind kind) noexcept {
 		case wt::WtReadOnlyPublicationKind::SetVisualRequired:
 		case wt::WtReadOnlyPublicationKind::RemoveChunk:
 		case wt::WtReadOnlyPublicationKind::CollisionPayload:
+		case wt::WtReadOnlyPublicationKind::ViewerPlanStarted:
+		case wt::WtReadOnlyPublicationKind::ViewerPlanCompleted:
 			return true;
 		case wt::WtReadOnlyPublicationKind::RenderPayload:
 		case wt::WtReadOnlyPublicationKind::EditCommitted:
@@ -553,6 +555,8 @@ bool collect_until(
 				case wt::WtReadOnlyPublicationKind::AuthoritativeSampleRejected:
 				case wt::WtReadOnlyPublicationKind::WorldSnapshotReady:
 				case wt::WtReadOnlyPublicationKind::WorldSnapshotRejected:
+				case wt::WtReadOnlyPublicationKind::ViewerPlanStarted:
+				case wt::WtReadOnlyPublicationKind::ViewerPlanCompleted:
 					break;
 			}
 		}
@@ -907,6 +911,8 @@ bool run_replacement_collision_continuity_regression(
 			case wt::WtReadOnlyPublicationKind::AuthoritativeSampleBatchRejected:
 			case wt::WtReadOnlyPublicationKind::WorldSnapshotReady:
 			case wt::WtReadOnlyPublicationKind::WorldSnapshotRejected:
+			case wt::WtReadOnlyPublicationKind::ViewerPlanStarted:
+			case wt::WtReadOnlyPublicationKind::ViewerPlanCompleted:
 				break;
 		}
 	}

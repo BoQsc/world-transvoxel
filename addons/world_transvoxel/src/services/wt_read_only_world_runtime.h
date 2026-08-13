@@ -28,6 +28,7 @@ class WtAsyncStorageService;
 class WtChunkApplicationService;
 class WtChunkResourceCache;
 class WtDesiredSetRuntimeService;
+enum class WtDesiredSetRuntimeStatus : std::uint8_t;
 class WtEditJournalStore;
 class WtEditRuntimeReplacementService;
 class WtEditSpatialIndex;
@@ -85,6 +86,8 @@ enum class WtReadOnlyPublicationKind : std::uint8_t {
 	AuthoritativeSampleBatchRejected,
 	WorldSnapshotReady,
 	WorldSnapshotRejected,
+	ViewerPlanStarted,
+	ViewerPlanCompleted,
 };
 
 enum class WtReadOnlyEditStatus : std::uint8_t {
@@ -312,6 +315,9 @@ private:
 		std::size_t maximum_retention_viewers
 	) const;
 	void notify_work() noexcept;
+	static WtReadOnlyRuntimeStatus delta_failure_status(
+		WtDesiredSetRuntimeStatus status
+	) noexcept;
 	void set_failure(WtReadOnlyRuntimeStatus status) noexcept;
 	void refresh_metrics_snapshot() noexcept;
 

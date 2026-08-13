@@ -71,6 +71,7 @@ void WorldTransvoxelTerrain::_process(double delta) {
 	if (lifecycle_ && (drained_publications || applied.render_processed != 0)) {
 		lifecycle_->notify_application_progress();
 	}
+	flush_ready_independent_publication_regions();
 	flush_ready_chunk_retirements();
 	flush_ready_chunk_replacements();
 	flush_ready_render_retirements();
@@ -322,6 +323,17 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 					}
 				}
 				break;
+			case WtReadOnlyPublicationKind::ViewerPlanStarted:
+				if (open_viewer_plan_publications_ !=
+						std::numeric_limits<std::uint32_t>::max()) {
+					++open_viewer_plan_publications_;
+				}
+				break;
+			case WtReadOnlyPublicationKind::ViewerPlanCompleted:
+				if (open_viewer_plan_publications_ != 0) {
+					--open_viewer_plan_publications_;
+				}
+				break;
 			case WtReadOnlyPublicationKind::EditCommitted:
 				synchronous_world_error_ = "ok";
 				emit_signal(
@@ -469,6 +481,14 @@ void WorldTransvoxelTerrain::stage_chunk_replacement(
 	const WtChunkKey &key,
 	bool independently_publishable
 ) {
+	const auto ready = std::lower_bound(
+		ready_staged_chunk_replacements_.begin(),
+		ready_staged_chunk_replacements_.end(),
+		key
+	);
+	if (ready != ready_staged_chunk_replacements_.end() && *ready == key) {
+		ready_staged_chunk_replacements_.erase(ready);
+	}
 	const auto iterator = std::lower_bound(
 		pending_chunk_replacements_.begin(),
 		pending_chunk_replacements_.end(),
@@ -503,6 +523,14 @@ void WorldTransvoxelTerrain::cancel_chunk_replacement(
 	);
 	if (iterator != pending_chunk_replacements_.end() && *iterator == key) {
 		pending_chunk_replacements_.erase(iterator);
+	}
+	const auto ready = std::lower_bound(
+		ready_staged_chunk_replacements_.begin(),
+		ready_staged_chunk_replacements_.end(),
+		key
+	);
+	if (ready != ready_staged_chunk_replacements_.end() && *ready == key) {
+		ready_staged_chunk_replacements_.erase(ready);
 	}
 	const auto independent = std::lower_bound(
 		independently_publishable_chunk_replacements_.begin(),
@@ -543,6 +571,7 @@ void WorldTransvoxelTerrain::cancel_render_retirement(
 }
 
 void WorldTransvoxelTerrain::flush_ready_chunk_retirements() {
+	if (open_viewer_plan_publications_ != 0) return;
 	if (pending_chunk_retirements_.empty()) return;
 	if (!pending_chunk_replacements_.empty()) return;
 	for (const WtChunkApplicationRecord &record : application_->get_records()) {
@@ -565,6 +594,7 @@ void WorldTransvoxelTerrain::flush_ready_chunk_retirements() {
 }
 
 void WorldTransvoxelTerrain::flush_ready_render_retirements() {
+	if (open_viewer_plan_publications_ != 0) return;
 	if (!pending_chunk_replacements_.empty() ||
 		!pending_chunk_retirements_.empty()) {
 		return;
@@ -626,14 +656,37 @@ void WorldTransvoxelTerrain::flush_ready_chunk_replacements() {
 					*iterator,
 					pending_chunk_retirements_
 				);
-			if (!requires_regional_publication) {
-				if (!render_sink_->publish_staged_record(*iterator) ||
-						!collision_sink_->publish_staged_record(*iterator)) {
-					++iterator;
-					continue;
+			if (requires_regional_publication) {
+				const WtChunkKey key = *iterator;
+				const auto ready = std::lower_bound(
+					ready_staged_chunk_replacements_.begin(),
+					ready_staged_chunk_replacements_.end(),
+					key
+				);
+				if (ready == ready_staged_chunk_replacements_.end() ||
+						*ready != key) {
+					ready_staged_chunk_replacements_.insert(ready, key);
 				}
+				iterator = pending_chunk_replacements_.erase(iterator);
+				continue;
+			}
+			if (!render_sink_->publish_staged_record(*iterator) ||
+					!collision_sink_->publish_staged_record(*iterator)) {
+				++iterator;
+				continue;
 			}
 			independently_publishable_chunk_replacements_.erase(independent);
+		} else {
+			const WtChunkKey key = *iterator;
+			const auto ready = std::lower_bound(
+				ready_staged_chunk_replacements_.begin(),
+				ready_staged_chunk_replacements_.end(),
+				key
+			);
+			if (ready == ready_staged_chunk_replacements_.end() ||
+					*ready != key) {
+				ready_staged_chunk_replacements_.insert(ready, key);
+			}
 		}
 		iterator = pending_chunk_replacements_.erase(iterator);
 	}
@@ -657,6 +710,11 @@ void WorldTransvoxelTerrain::update_visibility_staging_state() {
 	);
 	references.insert(
 		references.end(),
+		ready_staged_chunk_replacements_.begin(),
+		ready_staged_chunk_replacements_.end()
+	);
+	references.insert(
+		references.end(),
 		pending_render_retirements_.begin(),
 		pending_render_retirements_.end()
 	);
@@ -672,6 +730,7 @@ void WorldTransvoxelTerrain::update_visibility_staging_state() {
 }
 
 void WorldTransvoxelTerrain::publish_staged_records_if_ready() {
+	if (open_viewer_plan_publications_ != 0) return;
 	if (cpu_causal_trace_active_ && lifecycle_ &&
 		(trace_pending_replacements_ != pending_chunk_replacements_.size() ||
 			trace_pending_retirements_ != pending_chunk_retirements_.size() ||
@@ -716,6 +775,7 @@ void WorldTransvoxelTerrain::publish_staged_records_if_ready() {
 	if (collision_sink_->has_staged_records()) {
 		collision_sink_->publish_staged_records();
 	}
+	ready_staged_chunk_replacements_.clear();
 	if (cpu_causal_trace_active_ && lifecycle_ &&
 		(staged_render_count != 0 || staged_collision_count != 0)) {
 		lifecycle_->record_frontend_visibility(
@@ -745,10 +805,16 @@ void WorldTransvoxelTerrain::reset_world_application(std::size_t capacity) {
 	pending_chunk_retirements_.reserve(staging_capacity);
 	pending_chunk_replacements_.clear();
 	pending_chunk_replacements_.reserve(staging_capacity);
+	ready_staged_chunk_replacements_.clear();
+	ready_staged_chunk_replacements_.reserve(staging_capacity);
 	independently_publishable_chunk_replacements_.clear();
 	independently_publishable_chunk_replacements_.reserve(staging_capacity);
 	pending_render_retirements_.clear();
 	pending_render_retirements_.reserve(staging_capacity);
+	open_viewer_plan_publications_ = 0;
+	regional_visibility_publications_ = 0;
+	regional_visibility_replacements_ = 0;
+	regional_visibility_retirements_ = 0;
 	application_ = std::make_unique<WtChunkApplicationService>(
 		staging_capacity,
 		capacity,

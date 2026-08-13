@@ -117,8 +117,12 @@ mutable vector.
   collision shape remain authoritative during that interval.
 - An edit-local replacement cannot publish independently while its positive
   volume overlaps a chunk waiting to retire. That cross-LOD region publishes
-  through the coordinated retirement path, so an edited fine collision cannot
-  become active beneath an unchanged coarse render.
+  as one transitive replacement/retirement overlap component after every
+  replacement in that component is fully ready, its exact render/collision
+  generation can publish, and a complete viewer-plan publication boundary has
+  arrived. Unrelated regions remain staged, so an
+  edited fine collision cannot become active beneath an unchanged coarse render
+  and a ready edit does not wait for unrelated world relocation work.
 - Collision application is bounded by both item count and a shared per-frame
   time deadline across publication draining and backlog application. One
   indivisible Godot shape publication may exceed the deadline; no second shape
@@ -137,7 +141,11 @@ distance hysteresis, bounded queues and records, independent readiness,
 pre-sink stale rejection, frame budgets, preserved-old-collision replacement
 generation synchronization, and 1,000 supersession cycles with bounded state
 in debug and optimized builds. It also locks positive-volume cross-LOD overlap
-classification, including touching and negative-coordinate cases.
+classification, including touching and negative-coordinate cases. It also locks
+deterministic transitive component construction and exclusion of disconnected
+replacement/retirement regions. Regional publication additionally requires a
+non-overlapping replacement set that completely covers every retiring volume
+and rejects any key present in both ownership sets.
 
 `tests/godot/m3_integration_test.gd` applies actual M2-generated spheres to
 Godot `ArrayMesh` and `ConcavePolygonShape3D` resources. It covers zero and

@@ -53,33 +53,6 @@ bool chunk_coordinate(double position, std::int32_t &coordinate) noexcept {
 	return true;
 }
 
-WtReadOnlyRuntimeStatus read_only_delta_failure_status(
-	WtDesiredSetRuntimeStatus status
-) noexcept {
-	switch (status) {
-		case WtDesiredSetRuntimeStatus::Ok:
-			return WtReadOnlyRuntimeStatus::Ok;
-		case WtDesiredSetRuntimeStatus::ChangeCapacityExceeded:
-			return WtReadOnlyRuntimeStatus::RuntimeDeltaChangeCapacityExceeded;
-		case WtDesiredSetRuntimeStatus::RuntimeStateMismatch:
-			return WtReadOnlyRuntimeStatus::RuntimeDeltaStateMismatch;
-		case WtDesiredSetRuntimeStatus::RecordCapacityExceeded:
-			return WtReadOnlyRuntimeStatus::RuntimeDeltaRecordCapacityExceeded;
-		case WtDesiredSetRuntimeStatus::JobQueueCapacityExceeded:
-			return WtReadOnlyRuntimeStatus::RuntimeDeltaJobQueueCapacityExceeded;
-		case WtDesiredSetRuntimeStatus::SchedulerFailure:
-			return WtReadOnlyRuntimeStatus::RuntimeDeltaSchedulerFailure;
-		case WtDesiredSetRuntimeStatus::ApplicationFailure:
-			return WtReadOnlyRuntimeStatus::RuntimeDeltaApplicationFailure;
-		case WtDesiredSetRuntimeStatus::PageMeshingRuntimeFailure:
-			return WtReadOnlyRuntimeStatus::RuntimeDeltaPageMeshingRuntimeFailure;
-		case WtDesiredSetRuntimeStatus::InvalidConfiguration:
-		case WtDesiredSetRuntimeStatus::InvalidDelta:
-			return WtReadOnlyRuntimeStatus::RuntimeDeltaFailure;
-	}
-	return WtReadOnlyRuntimeStatus::RuntimeDeltaFailure;
-}
-
 const WtLodMapEntry *find_plan_entry(
 	const std::vector<WtLodMapEntry> &entries,
 	const WtChunkKey &key
@@ -767,7 +740,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		return true;
 	}
 	if (delta_status != WtDesiredSetRuntimeStatus::Ok) {
-		set_failure(read_only_delta_failure_status(delta_status));
+		set_failure(delta_failure_status(delta_status));
 		return true;
 	}
 	if (trace_enabled) {
@@ -784,6 +757,15 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 				);
 			}
 		}
+	}
+	WtReadOnlyPublication plan_started;
+	plan_started.kind = WtReadOnlyPublicationKind::ViewerPlanStarted;
+	plan_started.world_revision = plan_snapshot.revision;
+	if (!push_publication(std::move(plan_started))) {
+		if (!stop_requested_.load()) {
+			set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
+		}
+		return true;
 	}
 	for (WtReadOnlyPublication &publication :
 		outgoing_collision_publications) {
@@ -816,6 +798,15 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			}
 			return true;
 		}
+	}
+	WtReadOnlyPublication plan_completed;
+	plan_completed.kind = WtReadOnlyPublicationKind::ViewerPlanCompleted;
+	plan_completed.world_revision = plan_snapshot.revision;
+	if (!push_publication(std::move(plan_completed))) {
+		if (!stop_requested_.load()) {
+			set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
+		}
+		return true;
 	}
 	plan_revision_ = plan_snapshot.revision;
 	if (trace_enabled) {

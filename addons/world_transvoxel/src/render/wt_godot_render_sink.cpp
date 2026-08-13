@@ -559,6 +559,23 @@ bool WtGodotRenderSink::has_staged_records() const noexcept {
 	return false;
 }
 
+bool WtGodotRenderSink::can_publish_staged_record(
+	const WtChunkKey &key,
+	WtGenerationToken generation
+) const noexcept {
+	const auto iterator = records_.find(key);
+	if (iterator == records_.end()) return true;
+	const Record &record = iterator->second;
+	if (!record.staged) return record.generation == generation;
+	if (record.instance == nullptr) return false;
+	if (record.staged_empty) return record.staged_generation == generation;
+	if (record.staged_mesh.is_valid()) {
+		return record.staged_generation == generation;
+	}
+	return record.generation == generation &&
+		record.instance->get_mesh().is_valid();
+}
+
 bool WtGodotRenderSink::publish_staged_record(
 	const WtChunkKey &key
 ) noexcept {

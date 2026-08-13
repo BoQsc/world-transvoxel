@@ -236,6 +236,7 @@ private:
 	void stage_render_retirement(const WtChunkKey &key);
 	void cancel_render_retirement(const WtChunkKey &key);
 	void flush_ready_chunk_retirements();
+	void flush_ready_independent_publication_regions();
 	void flush_ready_chunk_replacements();
 	void flush_ready_render_retirements();
 	void update_visibility_staging_state();
@@ -251,8 +252,13 @@ private:
 	bool has_deferred_publication_ = false;
 	std::vector<WtChunkKey> pending_chunk_retirements_;
 	std::vector<WtChunkKey> pending_chunk_replacements_;
+	std::vector<WtChunkKey> ready_staged_chunk_replacements_;
 	std::vector<WtChunkKey> independently_publishable_chunk_replacements_;
 	std::vector<WtChunkKey> pending_render_retirements_;
+	std::uint32_t open_viewer_plan_publications_ = 0;
+	std::uint64_t regional_visibility_publications_ = 0;
+	std::uint64_t regional_visibility_replacements_ = 0;
+	std::uint64_t regional_visibility_retirements_ = 0;
 	std::unique_ptr<WtChunkApplicationService> application_;
 	std::unique_ptr<WtGodotRenderSink> render_sink_;
 	std::unique_ptr<WtGodotCollisionSink> collision_sink_;

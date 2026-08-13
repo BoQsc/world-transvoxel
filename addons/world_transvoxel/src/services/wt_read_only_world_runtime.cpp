@@ -32,6 +32,33 @@ bool valid_radius(std::uint32_t radius, std::uint64_t capacity) noexcept {
 
 } // namespace
 
+WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::delta_failure_status(
+	WtDesiredSetRuntimeStatus status
+) noexcept {
+	switch (status) {
+		case WtDesiredSetRuntimeStatus::Ok:
+			return WtReadOnlyRuntimeStatus::Ok;
+		case WtDesiredSetRuntimeStatus::ChangeCapacityExceeded:
+			return WtReadOnlyRuntimeStatus::RuntimeDeltaChangeCapacityExceeded;
+		case WtDesiredSetRuntimeStatus::RuntimeStateMismatch:
+			return WtReadOnlyRuntimeStatus::RuntimeDeltaStateMismatch;
+		case WtDesiredSetRuntimeStatus::RecordCapacityExceeded:
+			return WtReadOnlyRuntimeStatus::RuntimeDeltaRecordCapacityExceeded;
+		case WtDesiredSetRuntimeStatus::JobQueueCapacityExceeded:
+			return WtReadOnlyRuntimeStatus::RuntimeDeltaJobQueueCapacityExceeded;
+		case WtDesiredSetRuntimeStatus::SchedulerFailure:
+			return WtReadOnlyRuntimeStatus::RuntimeDeltaSchedulerFailure;
+		case WtDesiredSetRuntimeStatus::ApplicationFailure:
+			return WtReadOnlyRuntimeStatus::RuntimeDeltaApplicationFailure;
+		case WtDesiredSetRuntimeStatus::PageMeshingRuntimeFailure:
+			return WtReadOnlyRuntimeStatus::RuntimeDeltaPageMeshingRuntimeFailure;
+		case WtDesiredSetRuntimeStatus::InvalidConfiguration:
+		case WtDesiredSetRuntimeStatus::InvalidDelta:
+			return WtReadOnlyRuntimeStatus::RuntimeDeltaFailure;
+	}
+	return WtReadOnlyRuntimeStatus::RuntimeDeltaFailure;
+}
+
 WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 	WtRuntimeConfig config,
 	WtAsyncStorageService &storage,

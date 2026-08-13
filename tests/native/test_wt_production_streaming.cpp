@@ -118,6 +118,8 @@ bool collect_until(
 				case wt::WtReadOnlyPublicationKind::AuthoritativeSampleBatchRejected:
 				case wt::WtReadOnlyPublicationKind::WorldSnapshotReady:
 				case wt::WtReadOnlyPublicationKind::WorldSnapshotRejected:
+				case wt::WtReadOnlyPublicationKind::ViewerPlanStarted:
+				case wt::WtReadOnlyPublicationKind::ViewerPlanCompleted:
 					break;
 			}
 		}
