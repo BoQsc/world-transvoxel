@@ -356,6 +356,25 @@ void WtWorldLifecycleService::record_frontend_sink(
 	);
 }
 
+void WtWorldLifecycleService::record_frontend_visibility(
+	WtCausalTraceEventKind kind,
+	const WtChunkKey *key,
+	WtGenerationToken generation,
+	std::uint64_t cause_id,
+	std::uint64_t auxiliary,
+	std::int64_t status
+) {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	if (runtime_) runtime_->record_frontend_visibility(
+		kind,
+		key,
+		generation,
+		cause_id,
+		auxiliary,
+		status
+	);
+}
+
 WtEditJournalStoreStatus
 WtWorldLifecycleService::last_edit_journal_status() const noexcept {
 	std::lock_guard<std::mutex> lock(state_mutex_);

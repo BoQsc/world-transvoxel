@@ -603,6 +603,16 @@ void WorldTransvoxelTerrain::flush_ready_chunk_replacements() {
 			++iterator;
 			continue;
 		}
+		if (cpu_causal_trace_active_ && lifecycle_) {
+			lifecycle_->record_frontend_visibility(
+				WtCausalTraceEventKind::VisibilityReplacementReady,
+				&record.key,
+				record.generation,
+				pending_chunk_replacements_.size(),
+				pending_chunk_retirements_.size(),
+				static_cast<std::int64_t>(pending_render_retirements_.size())
+			);
+		}
 		const auto independent = std::lower_bound(
 			independently_publishable_chunk_replacements_.begin(),
 			independently_publishable_chunk_replacements_.end(),
@@ -662,6 +672,29 @@ void WorldTransvoxelTerrain::update_visibility_staging_state() {
 }
 
 void WorldTransvoxelTerrain::publish_staged_records_if_ready() {
+	if (cpu_causal_trace_active_ && lifecycle_ &&
+		(trace_pending_replacements_ != pending_chunk_replacements_.size() ||
+			trace_pending_retirements_ != pending_chunk_retirements_.size() ||
+			trace_pending_render_retirements_ !=
+				pending_render_retirements_.size())) {
+		trace_pending_replacements_ = pending_chunk_replacements_.size();
+		trace_pending_retirements_ = pending_chunk_retirements_.size();
+		trace_pending_render_retirements_ = pending_render_retirements_.size();
+		if (trace_pending_replacements_ != 0 ||
+			trace_pending_retirements_ != 0 ||
+			trace_pending_render_retirements_ != 0) {
+			lifecycle_->record_frontend_visibility(
+				WtCausalTraceEventKind::VisibilityStagingBlocked,
+				nullptr,
+				{},
+				trace_pending_replacements_,
+				trace_pending_retirements_,
+				static_cast<std::int64_t>(
+					trace_pending_render_retirements_
+				)
+			);
+		}
+	}
 	if (!pending_chunk_retirements_.empty()) {
 		return;
 	}
@@ -675,11 +708,24 @@ void WorldTransvoxelTerrain::publish_staged_records_if_ready() {
 	render_sink_->set_visibility_staging_reference_chunks({});
 	collision_sink_->set_new_record_staging_enabled(false);
 	collision_sink_->set_staging_reference_chunks({});
+	const std::size_t staged_render_count = render_sink_->staged_count();
+	const std::size_t staged_collision_count = collision_sink_->staged_count();
 	if (render_sink_->has_staged_records()) {
 		render_sink_->publish_staged_records();
 	}
 	if (collision_sink_->has_staged_records()) {
 		collision_sink_->publish_staged_records();
+	}
+	if (cpu_causal_trace_active_ && lifecycle_ &&
+		(staged_render_count != 0 || staged_collision_count != 0)) {
+		lifecycle_->record_frontend_visibility(
+			WtCausalTraceEventKind::VisibilityBatchPublished,
+			nullptr,
+			{},
+			staged_render_count,
+			staged_collision_count,
+			0
+		);
 	}
 }
 

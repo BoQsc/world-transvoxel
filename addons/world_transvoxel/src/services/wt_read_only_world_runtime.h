@@ -199,6 +199,14 @@ public:
 		std::uint64_t duration_ns,
 		bool applied
 	);
+	void record_frontend_visibility(
+		WtCausalTraceEventKind kind,
+		const WtChunkKey *key,
+		WtGenerationToken generation,
+		std::uint64_t cause_id,
+		std::uint64_t auxiliary,
+		std::int64_t status
+	);
 
 private:
 	enum class ViewerEventKind : std::uint8_t {

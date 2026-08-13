@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 
 namespace world_transvoxel {
 namespace {
@@ -64,10 +65,15 @@ bool WorldTransvoxelTerrain::begin_cpu_causal_trace() {
 			);
 		}
 	);
+	cpu_causal_trace_active_ = true;
+	trace_pending_replacements_ = std::numeric_limits<std::size_t>::max();
+	trace_pending_retirements_ = std::numeric_limits<std::size_t>::max();
+	trace_pending_render_retirements_ = std::numeric_limits<std::size_t>::max();
 	return true;
 }
 
 void WorldTransvoxelTerrain::end_cpu_causal_trace() {
+	cpu_causal_trace_active_ = false;
 	application_->set_trace_observer({});
 	if (lifecycle_) lifecycle_->end_causal_trace();
 }

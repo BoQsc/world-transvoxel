@@ -267,6 +267,10 @@ private:
 	std::uint64_t collision_apply_frame_items_last_ = 0;
 	std::uint64_t collision_apply_frame_items_maximum_ = 0;
 	std::uint64_t collision_apply_frame_deadline_overruns_ = 0;
+	bool cpu_causal_trace_active_ = false;
+	std::size_t trace_pending_replacements_ = 0;
+	std::size_t trace_pending_retirements_ = 0;
+	std::size_t trace_pending_render_retirements_ = 0;
 };
 
 } // namespace world_transvoxel

@@ -116,6 +116,14 @@ public:
 		std::uint64_t duration_ns,
 		bool applied
 	);
+	void record_frontend_visibility(
+		WtCausalTraceEventKind kind,
+		const WtChunkKey *key,
+		WtGenerationToken generation,
+		std::uint64_t cause_id,
+		std::uint64_t auxiliary,
+		std::int64_t status
+	);
 	WtEditJournalStoreStatus last_edit_journal_status() const noexcept;
 	std::uint64_t source_revision() const noexcept;
 	std::uint64_t world_revision() const noexcept;

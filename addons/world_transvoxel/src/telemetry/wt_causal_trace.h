@@ -34,6 +34,9 @@ enum class WtCausalTraceEventKind : std::uint16_t {
 	FrontendPublicationProcessed,
 	RenderSinkApplied,
 	CollisionSinkApplied,
+	VisibilityReplacementReady,
+	VisibilityStagingBlocked,
+	VisibilityBatchPublished,
 };
 
 enum class WtCausalTraceThreadRole : std::uint8_t {

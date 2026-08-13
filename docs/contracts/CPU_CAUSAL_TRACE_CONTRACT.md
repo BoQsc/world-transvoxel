@@ -33,7 +33,15 @@ follow one generation through:
 3. sample and mesh execution;
 4. mesh completion and publication queue/pop;
 5. front-end publication processing; and
-6. actual Godot render or collision sink application.
+6. Godot render or collision sink application; and
+7. conservative visibility replacement readiness, global staging blockers,
+   and final staged-batch publication.
+
+Sink application means the payload was accepted by the Godot sink. A staged
+replacement is not active until `visibility_batch_published` or an independent
+per-record publication occurs. `visibility_staging_blocked` reports pending
+replacement count as `cause_id`, pending chunk retirement count as `auxiliary`,
+and pending render retirement count as `status` whenever that tuple changes.
 
 Every duration uses `std::chrono::steady_clock`. Event order is the serialized
 order in the thread-safe ring, while `elapsed_ns` records the observation time.

@@ -49,10 +49,14 @@ int main() {
 		900
 	);
 	trace.record(
-		wt::WtCausalTraceEventKind::PublicationQueued,
+		wt::WtCausalTraceEventKind::VisibilityStagingBlocked,
 		wt::WtCausalTraceThreadRole::Runtime,
-		&first_key,
-		{ 8 }
+		nullptr,
+		{},
+		720,
+		2532,
+		0,
+		0
 	);
 	const wt::WtCausalTraceSnapshot wrapped = trace.snapshot(0, 16);
 	check(wrapped.enabled && wrapped.capacity == 3 &&
@@ -65,7 +69,9 @@ int main() {
 		wrapped.events[0].sequence == 1 &&
 		wrapped.events[1].duration_ns == 900 &&
 		wrapped.events[2].kind ==
-			wt::WtCausalTraceEventKind::PublicationQueued &&
+			wt::WtCausalTraceEventKind::VisibilityStagingBlocked &&
+		wrapped.events[2].cause_id == 720 &&
+		wrapped.events[2].auxiliary == 2532 &&
 		wrapped.events[0].key == first_key &&
 		wrapped.events[0].generation.value == 8,
 		"wrapped trace event order or identity mismatch");

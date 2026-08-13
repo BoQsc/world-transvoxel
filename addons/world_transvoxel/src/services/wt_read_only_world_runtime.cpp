@@ -224,6 +224,26 @@ void WtReadOnlyWorldRuntime::record_frontend_sink(
 	);
 }
 
+void WtReadOnlyWorldRuntime::record_frontend_visibility(
+	WtCausalTraceEventKind kind,
+	const WtChunkKey *key,
+	WtGenerationToken generation,
+	std::uint64_t cause_id,
+	std::uint64_t auxiliary,
+	std::int64_t status
+) {
+	causal_trace_.record(
+		kind,
+		WtCausalTraceThreadRole::Frontend,
+		key,
+		generation,
+		cause_id,
+		auxiliary,
+		0,
+		status
+	);
+}
+
 WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::update_viewer(
 	const WtViewerSnapshot &snapshot,
 	std::uint32_t radius_chunks,
