@@ -102,6 +102,8 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 		publication.collision_required = item.collision_required;
 		publication.visual_required = item.visual_required;
 		publication.staged_replacement = addition_staged_replacement;
+		publication.independently_publishable_replacement =
+			addition_staged_replacement;
 		if (!push_publication(std::move(publication))) return false;
 		if (addition_staged_replacement) {
 			const WtApplicationStatus application_status =
@@ -176,6 +178,7 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 				expectation.collision_required = item.collision_required;
 				expectation.visual_required = true;
 				expectation.staged_replacement = true;
+				expectation.independently_publishable_replacement = true;
 				const WtApplicationStatus application_status =
 					application_->expect_chunk(
 						item.key,

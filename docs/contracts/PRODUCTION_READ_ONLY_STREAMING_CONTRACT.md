@@ -125,6 +125,12 @@ replacement sinks are then applied as one frame-thread operation. An open
 viewer-plan publication prevents all staged publication, so a plan cannot be
 observed halfway through its control-event sequence.
 
+Viewer LOD additions that replace retired coverage opt into this exact regional
+policy. Completed movement plans therefore publish each fully covered overlap
+component independently instead of accumulating unrelated components behind a
+world-wide readiness barrier. This changes publication granularity only: old
+coverage remains visible until every generation in its exact component is ready.
+
 If an exact component is incomplete, the facade sends one bounded batch of all
 missing `(chunk key, generation)` pairs, with each exact pair requested once.
 The lifecycle runtime raises only matching scheduler, page-meshing, and queued
