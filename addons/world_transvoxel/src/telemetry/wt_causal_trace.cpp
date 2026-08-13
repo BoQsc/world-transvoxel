@@ -165,6 +165,9 @@ const char *wt_causal_trace_event_kind_name(
 		case WtCausalTraceEventKind::MeshStarted: return "mesh_started";
 		case WtCausalTraceEventKind::MeshFinished: return "mesh_finished";
 		case WtCausalTraceEventKind::MeshCompletionConsumed: return "mesh_completion_consumed";
+		case WtCausalTraceEventKind::TransitionMeshStarted: return "transition_mesh_started";
+		case WtCausalTraceEventKind::TransitionMeshFinished: return "transition_mesh_finished";
+		case WtCausalTraceEventKind::TransitionMeshCompletionConsumed: return "transition_mesh_completion_consumed";
 		case WtCausalTraceEventKind::PublicationQueued: return "publication_queued";
 		case WtCausalTraceEventKind::PublicationPopped: return "publication_popped";
 		case WtCausalTraceEventKind::FrontendPublicationProcessed: return "frontend_publication_processed";

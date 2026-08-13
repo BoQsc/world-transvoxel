@@ -124,6 +124,16 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			&completion.key,
 			completion.generation
 		);
+		if (completion.mesh && completion.mesh->transition_mask != 0) {
+			causal_trace_.record(
+				WtCausalTraceEventKind::TransitionMeshCompletionConsumed,
+				WtCausalTraceThreadRole::Runtime,
+				&completion.key,
+				completion.generation,
+				0,
+				completion.mesh->transition_mask
+			);
+		}
 		const WtChunkRecord *record = scheduler_->find_record(completion.key);
 		if (record == nullptr || record->generation != completion.generation ||
 			!completion.mesh || !completion.water_mesh) {

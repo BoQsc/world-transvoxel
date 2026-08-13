@@ -58,22 +58,37 @@ int main() {
 		0,
 		0
 	);
+	trace.record(
+		wt::WtCausalTraceEventKind::TransitionMeshFinished,
+		wt::WtCausalTraceThreadRole::Runtime,
+		&first_key,
+		{ 8 },
+		1,
+		0x12,
+		700,
+		0
+	);
 	const wt::WtCausalTraceSnapshot wrapped = trace.snapshot(0, 16);
 	check(wrapped.enabled && wrapped.capacity == 3 &&
 		wrapped.retained_event_count == 3 &&
-		wrapped.dropped_event_count == 1 &&
-		wrapped.first_retained_sequence == 1 &&
-		wrapped.next_sequence == 4,
+		wrapped.dropped_event_count == 2 &&
+		wrapped.first_retained_sequence == 2 &&
+		wrapped.next_sequence == 5,
 		"wrapped trace metadata mismatch");
 	check(wrapped.events.size() == 3 &&
-		wrapped.events[0].sequence == 1 &&
-		wrapped.events[1].duration_ns == 900 &&
-		wrapped.events[2].kind ==
+		wrapped.events[0].sequence == 2 &&
+		wrapped.events[0].kind == wt::WtCausalTraceEventKind::StorageFinished &&
+		wrapped.events[0].duration_ns == 900 &&
+		wrapped.events[1].kind ==
 			wt::WtCausalTraceEventKind::VisibilityStagingBlocked &&
-		wrapped.events[2].cause_id == 720 &&
-		wrapped.events[2].auxiliary == 2532 &&
-		wrapped.events[0].key == first_key &&
-		wrapped.events[0].generation.value == 8,
+		wrapped.events[1].cause_id == 720 &&
+		wrapped.events[1].auxiliary == 2532 &&
+		wrapped.events[2].kind ==
+			wt::WtCausalTraceEventKind::TransitionMeshFinished &&
+		wrapped.events[2].auxiliary == 0x12 &&
+		wrapped.events[2].duration_ns == 700 &&
+		wrapped.events[2].key == first_key &&
+		wrapped.events[2].generation.value == 8,
 		"wrapped trace event order or identity mismatch");
 	const wt::WtCausalTraceSnapshot delta = trace.snapshot(3, 1);
 	check(delta.events.size() == 1 && delta.events[0].sequence == 3,
@@ -83,7 +98,7 @@ int main() {
 	trace.end();
 	check(!trace.enabled(), "trace did not disable");
 	const wt::WtCausalTraceSnapshot ended = trace.snapshot(0, 16);
-	check(ended.next_sequence == 5 &&
+	check(ended.next_sequence == 6 &&
 		ended.events.back().kind == wt::WtCausalTraceEventKind::TraceStopped,
 		"trace stop event was not retained");
 	if (failure_count != 0) {

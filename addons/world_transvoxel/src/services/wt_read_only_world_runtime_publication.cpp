@@ -426,6 +426,11 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 		progressed = true;
 		const auto job_started = std::chrono::steady_clock::now();
 		const bool trace_enabled = causal_trace_.enabled();
+		const WtLodMapEntry *trace_plan_entry =
+			job.stage == WtChunkJobStage::Mesh ?
+				find_plan_entry(current_plan_.entries, job.key) : nullptr;
+		const std::uint8_t trace_transition_mask =
+			trace_plan_entry != nullptr ? trace_plan_entry->transition_mask : 0;
 		if (trace_enabled) {
 			causal_trace_.record(
 				job.stage == WtChunkJobStage::Sample ?
@@ -437,6 +442,17 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 				job.world_revision,
 				job.sequence
 			);
+			if (job.stage == WtChunkJobStage::Mesh &&
+				trace_transition_mask != 0) {
+				causal_trace_.record(
+					WtCausalTraceEventKind::TransitionMeshStarted,
+					WtCausalTraceThreadRole::Runtime,
+					&job.key,
+					job.generation,
+					job.world_revision,
+					trace_transition_mask
+				);
+			}
 		}
 		const std::uint64_t traced_job_started_ns = trace_enabled ?
 			wt_causal_trace_now_ns() : 0;
@@ -502,6 +518,19 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 				wt_causal_trace_now_ns() - traced_job_started_ns,
 				static_cast<std::int64_t>(status)
 			);
+			if (job.stage == WtChunkJobStage::Mesh &&
+				trace_transition_mask != 0) {
+				causal_trace_.record(
+					WtCausalTraceEventKind::TransitionMeshFinished,
+					WtCausalTraceThreadRole::Runtime,
+					&job.key,
+					job.generation,
+					job.world_revision,
+					trace_transition_mask,
+					wt_causal_trace_now_ns() - traced_job_started_ns,
+					static_cast<std::int64_t>(status)
+				);
+			}
 		}
 		{
 			std::lock_guard<std::mutex> lock(metrics_mutex_);

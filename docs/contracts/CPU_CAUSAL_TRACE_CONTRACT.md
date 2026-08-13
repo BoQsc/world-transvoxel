@@ -30,7 +30,7 @@ follow one generation through:
 
 1. viewer plan or edit replacement demand;
 2. storage request, worker start, worker finish, and completion consumption;
-3. sample and mesh execution;
+3. sample and mesh execution, with transition-mask work explicitly identified;
 4. mesh completion and publication queue/pop;
 5. front-end publication processing; and
 6. Godot render or collision sink application; and
