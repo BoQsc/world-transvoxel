@@ -176,6 +176,10 @@ const char *wt_causal_trace_event_kind_name(
 		case WtCausalTraceEventKind::VisibilityReplacementReady: return "visibility_replacement_ready";
 		case WtCausalTraceEventKind::VisibilityStagingBlocked: return "visibility_staging_blocked";
 		case WtCausalTraceEventKind::VisibilityBatchPublished: return "visibility_batch_published";
+		case WtCausalTraceEventKind::VisibilityCoveragePriorityRequested:
+			return "visibility_coverage_priority_requested";
+		case WtCausalTraceEventKind::VisibilityCoveragePriorityApplied:
+			return "visibility_coverage_priority_applied";
 	}
 	return "unknown";
 }

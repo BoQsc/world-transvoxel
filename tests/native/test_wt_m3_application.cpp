@@ -570,6 +570,26 @@ void test_cross_lod_replacement_publication_policy() {
 		),
 		"publication region accepted a missing seed"
 	);
+
+	std::vector<wt::WtChunkKey> backlog_replacements = replacements;
+	std::vector<wt::WtChunkKey> backlog_retirements = retirements;
+	for (std::int32_t index = 0; index < 2048; ++index) {
+		backlog_replacements.push_back({ 10000 + index, 0, 0, 0 });
+		backlog_retirements.push_back({ 10000 + index, 8, 0, 0 });
+	}
+	std::sort(backlog_replacements.begin(), backlog_replacements.end());
+	std::sort(backlog_retirements.begin(), backlog_retirements.end());
+	check(
+		wt::wt_build_chunk_publication_region(
+			{ 0, 0, 0, 0 },
+			backlog_replacements,
+			backlog_retirements,
+			region
+		) && region.replacements.size() == 8 &&
+			region.retirements.size() == 1 &&
+			wt::wt_chunk_publication_region_has_complete_coverage(region),
+		"large unrelated backlog contaminated the publication region"
+	);
 }
 
 void test_collision_deadline_bounds_frame_work(

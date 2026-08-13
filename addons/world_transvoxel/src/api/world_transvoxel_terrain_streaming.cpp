@@ -516,6 +516,7 @@ void WorldTransvoxelTerrain::stage_chunk_replacement(
 void WorldTransvoxelTerrain::cancel_chunk_replacement(
 	const WtChunkKey &key
 ) {
+	clear_visibility_coverage_priority_request(key);
 	const auto iterator = std::lower_bound(
 		pending_chunk_replacements_.begin(),
 		pending_chunk_replacements_.end(),
@@ -633,6 +634,7 @@ void WorldTransvoxelTerrain::flush_ready_chunk_replacements() {
 			++iterator;
 			continue;
 		}
+		clear_visibility_coverage_priority_request(record.key);
 		if (cpu_causal_trace_active_ && lifecycle_) {
 			lifecycle_->record_frontend_visibility(
 				WtCausalTraceEventKind::VisibilityReplacementReady,
@@ -809,6 +811,8 @@ void WorldTransvoxelTerrain::reset_world_application(std::size_t capacity) {
 	ready_staged_chunk_replacements_.reserve(staging_capacity);
 	independently_publishable_chunk_replacements_.clear();
 	independently_publishable_chunk_replacements_.reserve(staging_capacity);
+	visibility_coverage_priority_requests_.clear();
+	visibility_coverage_priority_requests_.reserve(staging_capacity);
 	pending_render_retirements_.clear();
 	pending_render_retirements_.reserve(staging_capacity);
 	open_viewer_plan_publications_ = 0;

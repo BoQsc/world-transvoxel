@@ -1,7 +1,9 @@
 #include "services/wt_read_only_world_runtime.h"
 
+#include "services/wt_page_meshing_runtime.h"
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_edit_journal_store.h"
+#include "streaming/wt_stream_scheduler.h"
 
 #include <limits>
 #include <algorithm>
@@ -14,7 +16,10 @@ bool WtReadOnlyWorldRuntime::enqueue_world_operation(
 ) {
 	std::lock_guard<std::mutex> lock(input_mutex_);
 	if (world_operations_.size() >= world_operation_capacity_) return false;
-	if (operation.kind != WorldOperationKind::Edit) {
+	const bool edit = operation.kind == WorldOperationKind::Edit;
+	const bool coverage_priority =
+		operation.kind == WorldOperationKind::VisibilityCoveragePriority;
+	if (!edit && !coverage_priority) {
 		if (next_request_id_ ==
 			static_cast<std::uint64_t>(
 				std::numeric_limits<std::int64_t>::max()
@@ -23,16 +28,21 @@ bool WtReadOnlyWorldRuntime::enqueue_world_operation(
 		}
 		operation.request_id = ++next_request_id_;
 	}
-	if (operation.kind == WorldOperationKind::Edit) {
+	if (edit || coverage_priority) {
 		const auto insertion = std::find_if(
 			world_operations_.begin(),
 			world_operations_.end(),
-			[](const WorldOperation &queued) {
-				return queued.kind != WorldOperationKind::Edit;
+			[edit](const WorldOperation &queued) {
+				if (edit) return queued.kind != WorldOperationKind::Edit;
+				return queued.kind != WorldOperationKind::Edit &&
+					queued.kind !=
+						WorldOperationKind::VisibilityCoveragePriority;
 			}
 		);
 		world_operations_.insert(insertion, std::move(operation));
-		pending_edit_operation_.store(true, std::memory_order_release);
+		if (edit) {
+			pending_edit_operation_.store(true, std::memory_order_release);
+		}
 		notify_work();
 		return true;
 	}
@@ -43,6 +53,22 @@ bool WtReadOnlyWorldRuntime::enqueue_world_operation(
 
 bool WtReadOnlyWorldRuntime::has_pending_edit_operation() {
 	return pending_edit_operation_.load(std::memory_order_acquire);
+}
+
+WtReadOnlyRuntimeStatus
+WtReadOnlyWorldRuntime::request_visibility_coverage_priority(
+	const WtChunkKey &key,
+	WtGenerationToken generation
+) {
+	if (!valid_ || !wt_is_valid_chunk_key(key) || generation.value == 0) {
+		return WtReadOnlyRuntimeStatus::InvalidEdit;
+	}
+	WorldOperation operation;
+	operation.kind = WorldOperationKind::VisibilityCoveragePriority;
+	operation.key = key;
+	operation.generation = generation;
+	return enqueue_world_operation(operation) ? WtReadOnlyRuntimeStatus::Ok :
+		WtReadOnlyRuntimeStatus::OperationQueueFull;
 }
 
 WtReadOnlyRuntimeStatus
@@ -147,7 +173,65 @@ bool WtReadOnlyWorldRuntime::process_world_operation_event() {
 		case WorldOperationKind::CompactSnapshot:
 		case WorldOperationKind::MigrateSnapshot:
 			return process_snapshot_operation(operation);
+		case WorldOperationKind::VisibilityCoveragePriority:
+			return process_visibility_coverage_priority_operation(operation);
 	}
+	return true;
+}
+
+bool WtReadOnlyWorldRuntime::process_visibility_coverage_priority_operation(
+	const WorldOperation &operation
+) {
+	{
+		std::lock_guard<std::mutex> lock(metrics_mutex_);
+		++metrics_.visibility_coverage_priority_requests;
+	}
+	const WtChunkRecord *record = scheduler_->find_record(operation.key);
+	if (record == nullptr || record->generation != operation.generation) {
+		std::lock_guard<std::mutex> lock(metrics_mutex_);
+		++metrics_.visibility_coverage_priority_stale;
+		causal_trace_.record(
+			WtCausalTraceEventKind::VisibilityCoveragePriorityApplied,
+			WtCausalTraceThreadRole::Runtime,
+			&operation.key,
+			operation.generation,
+			0,
+			0,
+			0,
+			1
+		);
+		return true;
+	}
+	const WtSchedulerStatus scheduler_status = scheduler_->reprioritize_chunk(
+		operation.key,
+		kWtInteractiveEditPriority
+	);
+	if (scheduler_status != WtSchedulerStatus::Ok &&
+		scheduler_status != WtSchedulerStatus::AlreadyCurrent) {
+		set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
+		return true;
+	}
+	const WtPageMeshingRuntimeOwnerStatus page_status =
+		page_runtime_->reprioritize_owned_chunk(
+			operation.key,
+			operation.generation,
+			kWtInteractiveEditPriority
+		);
+	if (page_status == WtPageMeshingRuntimeOwnerStatus::StaleGeneration) {
+		std::lock_guard<std::mutex> lock(metrics_mutex_);
+		++metrics_.visibility_coverage_priority_stale;
+		return true;
+	}
+	{
+		std::lock_guard<std::mutex> lock(metrics_mutex_);
+		++metrics_.visibility_coverage_priority_applied;
+	}
+	causal_trace_.record(
+		WtCausalTraceEventKind::VisibilityCoveragePriorityApplied,
+		WtCausalTraceThreadRole::Runtime,
+		&operation.key,
+		operation.generation
+	);
 	return true;
 }
 

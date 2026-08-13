@@ -220,6 +220,11 @@ public:
 	std::int64_t _m5_benchmark_clear();
 
 private:
+	struct CoveragePriorityRequest {
+		WtChunkKey key;
+		WtGenerationToken generation;
+	};
+
 	void emit_lifecycle_state(WtWorldLifecycleState state);
 	void notify_lifecycle_state();
 	bool drain_world_publications(
@@ -235,6 +240,12 @@ private:
 	void cancel_chunk_replacement(const WtChunkKey &key);
 	void stage_render_retirement(const WtChunkKey &key);
 	void cancel_render_retirement(const WtChunkKey &key);
+	void clear_visibility_coverage_priority_request(const WtChunkKey &key);
+	void request_visibility_coverage_priority(
+		const WtChunkApplicationRecord &record,
+		std::size_t replacement_count,
+		std::size_t retirement_count
+	);
 	void flush_ready_chunk_retirements();
 	void flush_ready_independent_publication_regions();
 	void flush_ready_chunk_replacements();
@@ -254,6 +265,7 @@ private:
 	std::vector<WtChunkKey> pending_chunk_replacements_;
 	std::vector<WtChunkKey> ready_staged_chunk_replacements_;
 	std::vector<WtChunkKey> independently_publishable_chunk_replacements_;
+	std::vector<CoveragePriorityRequest> visibility_coverage_priority_requests_;
 	std::vector<WtChunkKey> pending_render_retirements_;
 	std::uint32_t open_viewer_plan_publications_ = 0;
 	std::uint64_t regional_visibility_publications_ = 0;

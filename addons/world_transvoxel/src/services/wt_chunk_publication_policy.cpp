@@ -30,6 +30,84 @@ bool insert_key(std::vector<WtChunkKey> &keys, const WtChunkKey &key) {
 	return true;
 }
 
+bool key_child(
+	const WtChunkKey &parent,
+	std::int32_t child_x,
+	std::int32_t child_y,
+	std::int32_t child_z,
+	WtChunkKey &child
+) noexcept;
+
+class ChunkHierarchyIndex {
+public:
+	ChunkHierarchyIndex(
+		const std::vector<WtChunkKey> &keys,
+		std::uint8_t maximum_lod
+	) : keys_(keys), maximum_lod_(maximum_lod) {
+		closure_.reserve(keys.size() * (maximum_lod_ + 1U));
+		for (const WtChunkKey &key : keys) {
+			if (!wt_is_valid_chunk_key(key)) continue;
+			WtChunkKey ancestor = key;
+			closure_.push_back(ancestor);
+			while (ancestor.lod < maximum_lod_) {
+				ancestor = wt_parent_chunk_key(ancestor);
+				closure_.push_back(ancestor);
+			}
+		}
+		std::sort(closure_.begin(), closure_.end());
+		closure_.erase(
+			std::unique(closure_.begin(), closure_.end()),
+			closure_.end()
+		);
+	}
+
+	void append_overlapping(
+		const WtChunkKey &key,
+		std::vector<WtChunkKey> &output
+	) const {
+		if (!wt_is_valid_chunk_key(key)) return;
+		WtChunkKey ancestor = key;
+		while (true) {
+			if (contains(keys_, ancestor)) insert_key(output, ancestor);
+			if (ancestor.lod == maximum_lod_) break;
+			ancestor = wt_parent_chunk_key(ancestor);
+		}
+		append_descendants(key, output);
+	}
+
+private:
+	static bool contains(
+		const std::vector<WtChunkKey> &keys,
+		const WtChunkKey &key
+	) noexcept {
+		return std::binary_search(keys.begin(), keys.end(), key);
+	}
+
+	void append_descendants(
+		const WtChunkKey &parent,
+		std::vector<WtChunkKey> &output
+	) const {
+		if (parent.lod == 0) return;
+		for (std::int32_t z = 0; z < 2; ++z) {
+			for (std::int32_t y = 0; y < 2; ++y) {
+				for (std::int32_t x = 0; x < 2; ++x) {
+					WtChunkKey child;
+					if (!key_child(parent, x, y, z, child) ||
+						!contains(closure_, child)) {
+						continue;
+					}
+					if (contains(keys_, child)) insert_key(output, child);
+					append_descendants(child, output);
+				}
+			}
+		}
+	}
+
+	const std::vector<WtChunkKey> &keys_;
+	std::vector<WtChunkKey> closure_;
+	std::uint8_t maximum_lod_ = 0;
+};
+
 bool overlaps_any(
 	const WtChunkKey &key,
 	const std::vector<WtChunkKey> &keys
@@ -135,18 +213,50 @@ bool wt_build_chunk_publication_region(
 			)) {
 		return false;
 	}
+	std::uint8_t maximum_lod = seed_replacement.lod;
+	for (const WtChunkKey &key : pending_replacements) {
+		maximum_lod = std::max(maximum_lod, key.lod);
+	}
+	for (const WtChunkKey &key : pending_retirements) {
+		maximum_lod = std::max(maximum_lod, key.lod);
+	}
+	const ChunkHierarchyIndex replacement_index(
+		pending_replacements,
+		maximum_lod
+	);
+	const ChunkHierarchyIndex retirement_index(
+		pending_retirements,
+		maximum_lod
+	);
+	std::vector<WtChunkKey> replacement_queue { seed_replacement };
+	std::vector<WtChunkKey> retirement_queue;
 	output.replacements.push_back(seed_replacement);
-	bool changed = true;
-	while (changed) {
-		changed = false;
-		for (const WtChunkKey &retirement : pending_retirements) {
-			if (overlaps_any(retirement, output.replacements)) {
-				changed = insert_key(output.retirements, retirement) || changed;
+	std::size_t replacement_cursor = 0;
+	std::size_t retirement_cursor = 0;
+	while (replacement_cursor < replacement_queue.size() ||
+		retirement_cursor < retirement_queue.size()) {
+		while (replacement_cursor < replacement_queue.size()) {
+			std::vector<WtChunkKey> overlapping;
+			retirement_index.append_overlapping(
+				replacement_queue[replacement_cursor++],
+				overlapping
+			);
+			for (const WtChunkKey &retirement : overlapping) {
+				if (insert_key(output.retirements, retirement)) {
+					retirement_queue.push_back(retirement);
+				}
 			}
 		}
-		for (const WtChunkKey &replacement : pending_replacements) {
-			if (overlaps_any(replacement, output.retirements)) {
-				changed = insert_key(output.replacements, replacement) || changed;
+		while (retirement_cursor < retirement_queue.size()) {
+			std::vector<WtChunkKey> overlapping;
+			replacement_index.append_overlapping(
+				retirement_queue[retirement_cursor++],
+				overlapping
+			);
+			for (const WtChunkKey &replacement : overlapping) {
+				if (insert_key(output.replacements, replacement)) {
+					replacement_queue.push_back(replacement);
+				}
 			}
 		}
 	}

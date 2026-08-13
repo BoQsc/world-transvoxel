@@ -34,14 +34,19 @@ follow one generation through:
 4. mesh completion and publication queue/pop;
 5. front-end publication processing; and
 6. Godot render or collision sink application; and
-7. conservative visibility replacement readiness, global staging blockers,
-   and final staged-batch publication.
+7. conservative visibility replacement readiness, coverage-priority requests,
+   global staging blockers, and final staged-batch publication.
 
 Sink application means the payload was accepted by the Godot sink. A staged
 replacement is not active until `visibility_batch_published` or an independent
 per-record publication occurs. `visibility_staging_blocked` reports pending
 replacement count as `cause_id`, pending chunk retirement count as `auxiliary`,
 and pending render retirement count as `status` whenever that tuple changes.
+`visibility_coverage_priority_requested` and
+`visibility_coverage_priority_applied` carry the exact chunk generation; a
+nonzero applied-event status identifies a stale request. A regional
+`visibility_batch_published` event reports replacement count as `cause_id`,
+retirement count as `auxiliary`, and status `1`.
 
 Every duration uses `std::chrono::steady_clock`. Event order is the serialized
 order in the thread-safe ring, while `elapsed_ns` records the observation time.

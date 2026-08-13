@@ -43,6 +43,9 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t edit_lod_retention_active_viewers = 0;
 	std::uint64_t edit_lod_retention_plans = 0;
 	std::uint64_t edit_lod_retention_fallbacks = 0;
+	std::uint64_t visibility_coverage_priority_requests = 0;
+	std::uint64_t visibility_coverage_priority_applied = 0;
+	std::uint64_t visibility_coverage_priority_stale = 0;
 	std::uint64_t sample_queries = 0;
 	std::uint64_t sample_query_rejections = 0;
 	std::uint64_t world_snapshots = 0;

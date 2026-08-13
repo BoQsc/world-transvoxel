@@ -904,6 +904,7 @@ production_lifecycle_test = native_test_env.Program(
         "addons/world_transvoxel/src/bake/wt_chunk_baker.cpp",
         "addons/world_transvoxel/src/meshing/wt_multiresolution_vertex_resolver.cpp",
         "addons/world_transvoxel/src/services/wt_world_lifecycle.cpp",
+        "addons/world_transvoxel/src/services/wt_world_lifecycle_priority.cpp",
     ] + production_read_only_runtime_sources,
 )
 

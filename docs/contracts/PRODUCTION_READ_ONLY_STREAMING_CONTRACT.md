@@ -111,6 +111,27 @@ render or collision stream.
 Godot objects and physics resources are created, replaced, and removed only on
 the frame thread.
 
+## Atomic cross-LOD publication
+
+A replacement that overlaps a pending ancestor or descendant retirement is not
+independently publishable. The frame facade builds the exact transitive overlap
+component from indexed dyadic ancestor/descendant lookups. Unrelated pending
+replacements and retirements do not join that component, even under a large
+streaming backlog.
+
+The component publishes only when every replacement generation has its visual
+payload and, when required, its collision payload staged. Retirements and both
+replacement sinks are then applied as one frame-thread operation. An open
+viewer-plan publication prevents all staged publication, so a plan cannot be
+observed halfway through its control-event sequence.
+
+If an exact component is incomplete, the facade requests interactive priority
+for each missing `(chunk key, generation)` once. The lifecycle runtime raises
+only matching scheduler, page-meshing, and queued storage work. A stale
+generation request is counted and ignored. Priority changes ordering only; they
+do not relax complete coverage, generation checks, 2:1 topology, transition
+ownership, or paired render/collision publication.
+
 Stopping wakes all waits, joins native ownership, discards deferred work, and
 clears every Godot render/collision resource.
 
@@ -147,6 +168,10 @@ The production_lod_edit_atomicity_test.gd fixture adds the movement-plus-edit
 case: an independently publishable edit that overlaps a pending cross-LOD
 retirement is promoted to regional publication. The Godot 4.7 debug and release
 route requires matched visible render/collision ownership throughout the swap.
+`test_wt_m3_application.cpp` additionally proves exact component discovery with
+2,048 unrelated replacements and 2,048 unrelated retirements. The production
+streaming fixture proves matching-generation priority application and stale
+generation rejection in an isolated runtime.
 
 ## PQ1 exit
 

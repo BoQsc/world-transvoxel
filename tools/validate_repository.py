@@ -172,6 +172,7 @@ REQUIRED_FILES = (
     "addons/world_transvoxel/src/services/wt_read_only_world_runtime_thread.cpp",
     "addons/world_transvoxel/src/services/wt_world_lifecycle.cpp",
     "addons/world_transvoxel/src/services/wt_world_lifecycle.h",
+    "addons/world_transvoxel/src/services/wt_world_lifecycle_priority.cpp",
     "addons/world_transvoxel/src/storage/wt_binary_io.cpp",
     "addons/world_transvoxel/src/storage/wt_binary_io.h",
     "addons/world_transvoxel/src/storage/wt_async_storage_service.cpp",

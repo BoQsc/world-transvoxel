@@ -75,6 +75,10 @@ public:
 	WtReadOnlyRuntimeStatus submit_edit(
 		const WtEditTransaction &transaction
 	);
+	WtReadOnlyRuntimeStatus request_visibility_coverage_priority(
+		const WtChunkKey &key,
+		WtGenerationToken generation
+	);
 	WtReadOnlyRuntimeStatus request_authoritative_sample(
 		const WtGridPoint &point,
 		std::uint8_t lod,

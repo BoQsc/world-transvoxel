@@ -65,6 +65,8 @@ struct PublicationCounts {
 	std::size_t render_indices = 0;
 	std::size_t collision_only_expects = 0;
 	bool collision_before_first_render = false;
+	wt::WtChunkKey first_expect_key;
+	wt::WtGenerationToken first_expect_generation;
 };
 
 bool collect_until(
@@ -84,6 +86,10 @@ bool collect_until(
 			switch (publication.kind) {
 				case wt::WtReadOnlyPublicationKind::ExpectChunk:
 					++counts.expects;
+					if (counts.first_expect_generation.value == 0) {
+						counts.first_expect_key = publication.key;
+						counts.first_expect_generation = publication.generation;
+					}
 					if (!publication.visual_required &&
 						publication.collision_required) {
 						++counts.collision_only_expects;
@@ -207,10 +213,84 @@ void test_g8_2000x2000_window_planning() {
 	);
 }
 
+void test_visibility_coverage_priority_generation_contract() {
+	FixtureRoot fixture;
+	std::filesystem::path world_path;
+	check(wtt::wt_write_production_streaming_fixture(
+		fixture.path, 7002, 12, world_path
+	), "priority fixture write failed");
+
+	wt::WtAsyncStorageService storage({ 16, 16, wt::kWtMaximumContainerSize });
+	check(storage.open(world_path, fixture.path) ==
+		wt::WtAsyncStorageStatus::Ok,
+		"priority fixture open failed");
+	wt::WtRuntimeConfig config;
+	config.active_chunk_capacity = 8;
+	config.viewer_capacity = 1;
+	config.demand_capacity_per_viewer = 125;
+	config.storage_request_capacity = 16;
+	config.storage_completion_capacity = 16;
+	config.encoded_page_entry_capacity = 8;
+	config.decoded_page_entry_capacity = 8;
+	config.mesh_entry_capacity = 8;
+	config.render_entry_capacity = 8;
+	config.collision_entry_capacity = 8;
+	wt::WtReadOnlyWorldRuntime runtime(config, storage);
+	check(runtime.valid(), "priority runtime configuration rejected");
+	std::atomic<wt::WtReadOnlyRuntimeStatus> run_status {
+		wt::WtReadOnlyRuntimeStatus::Ok
+	};
+	std::thread worker([&]() { run_status.store(runtime.run()); });
+
+	check(runtime.update_viewer(viewer(1, 1, 8.0, 8.0), 0) ==
+		wt::WtReadOnlyRuntimeStatus::Ok,
+		"priority viewer update rejected");
+	PublicationCounts counts;
+	std::vector<std::uint8_t> evidence;
+	check(collect_until(runtime, counts, 1, 1, evidence),
+		"priority fixture page did not publish");
+	check(
+		counts.first_expect_generation.value != 0 &&
+		runtime.request_visibility_coverage_priority(
+			counts.first_expect_key,
+			counts.first_expect_generation
+		) == wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.request_visibility_coverage_priority(
+			counts.first_expect_key,
+			{ counts.first_expect_generation.value + 1U }
+		) == wt::WtReadOnlyRuntimeStatus::Ok,
+		"visibility coverage priority requests were rejected"
+	);
+	const auto deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(2);
+	while (std::chrono::steady_clock::now() < deadline) {
+		const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+		if (metrics.visibility_coverage_priority_requests >= 2 &&
+			metrics.visibility_coverage_priority_applied >= 1 &&
+			metrics.visibility_coverage_priority_stale >= 1) {
+			break;
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+	check(
+		metrics.visibility_coverage_priority_requests == 2 &&
+		metrics.visibility_coverage_priority_applied == 1 &&
+		metrics.visibility_coverage_priority_stale == 1,
+		"visibility coverage priority generation contract failed"
+	);
+	runtime.request_stop();
+	worker.join();
+	storage.close();
+	check(run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok,
+		"priority runtime did not stop cleanly");
+}
+
 } // namespace
 
 int main() {
 	test_g8_2000x2000_window_planning();
+	test_visibility_coverage_priority_generation_contract();
 
 	FixtureRoot fixture;
 	std::filesystem::path world_path;
@@ -260,7 +340,6 @@ int main() {
 		counts.render_vertices != 0 &&
 		counts.render_indices != 0,
 		"initial page publication mismatch");
-
 	const std::size_t renders_before_collision_invoker = counts.renders;
 	const std::size_t collisions_before_collision_invoker = counts.collisions;
 	check(runtime.update_collision_viewer(

@@ -160,6 +160,10 @@ public:
 	WtReadOnlyRuntimeStatus submit_edit(
 		const WtEditTransaction &transaction
 	);
+	WtReadOnlyRuntimeStatus request_visibility_coverage_priority(
+		const WtChunkKey &key,
+		WtGenerationToken generation
+	);
 	WtReadOnlyRuntimeStatus request_authoritative_sample(
 		const WtGridPoint &point,
 		std::uint8_t lod,
@@ -230,6 +234,7 @@ private:
 		AuthoritativeSampleBatch,
 		CompactSnapshot,
 		MigrateSnapshot,
+		VisibilityCoveragePriority,
 	};
 	struct WorldOperation {
 		WorldOperationKind kind = WorldOperationKind::Edit;
@@ -240,6 +245,8 @@ private:
 		std::uint64_t request_id = 0;
 		std::filesystem::path output_directory;
 		std::uint64_t new_source_revision = 0;
+		WtChunkKey key;
+		WtGenerationToken generation;
 	};
 	struct EditLodRetentionZone {
 		double x = 0.0;
@@ -278,6 +285,9 @@ private:
 	bool process_sample_query_operation(const WorldOperation &operation);
 	bool process_sample_batch_query_operation(const WorldOperation &operation);
 	bool process_snapshot_operation(const WorldOperation &operation);
+	bool process_visibility_coverage_priority_operation(
+		const WorldOperation &operation
+	);
 	bool process_storage_completions();
 	bool process_pending_transition_remeshes();
 	bool process_scheduler_jobs();

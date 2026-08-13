@@ -226,6 +226,21 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	);
 	set_metric(
 		output,
+		"visibility_coverage_priority_requests",
+		runtime.visibility_coverage_priority_requests
+	);
+	set_metric(
+		output,
+		"visibility_coverage_priority_applied",
+		runtime.visibility_coverage_priority_applied
+	);
+	set_metric(
+		output,
+		"visibility_coverage_priority_stale",
+		runtime.visibility_coverage_priority_stale
+	);
+	set_metric(
+		output,
 		"edit_lod_retention_zones",
 		runtime.edit_lod_retention_zones
 	);
@@ -757,6 +772,10 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		"regional_visibility_retirements",
 		regional_visibility_retirements_
 	);
+	output["visibility_coverage_priority_pending"] =
+		static_cast<std::int64_t>(
+			visibility_coverage_priority_requests_.size()
+		);
 	set_metric(
 		output,
 		"blocked_pending_chunk_replacements",
