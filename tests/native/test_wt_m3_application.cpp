@@ -571,6 +571,43 @@ void test_cross_lod_replacement_publication_policy() {
 		"publication region accepted a missing seed"
 	);
 
+	std::vector<wt::WtChunkKey> balanced_replacements;
+	for (std::int32_t z = 0; z < 4; ++z) {
+		for (std::int32_t y = 0; y < 4; ++y) {
+			for (std::int32_t x = 0; x < 4; ++x) {
+				balanced_replacements.push_back({ x, y, z, 1 });
+			}
+		}
+	}
+	for (std::int32_t z = 0; z < 2; ++z) {
+		for (std::int32_t y = 0; y < 2; ++y) {
+			for (std::int32_t x = 2; x < 4; ++x) {
+				balanced_replacements.push_back({ x, y, z, 2 });
+			}
+		}
+	}
+	std::sort(balanced_replacements.begin(), balanced_replacements.end());
+	const std::vector<wt::WtChunkKey> balanced_retirements {
+		{ 0, 0, 0, 3 },
+		{ 1, 0, 0, 3 },
+	};
+	check(
+		wt::wt_build_chunk_publication_region(
+			{ 3, 0, 0, 1 },
+			balanced_replacements,
+			balanced_retirements,
+			region
+		) && region.replacements.size() == 72 &&
+		region.retirements.size() == 2 &&
+		std::find(
+			region.replacements.begin(),
+			region.replacements.end(),
+			wt::WtChunkKey { 2, 0, 0, 2 }
+		) != region.replacements.end() &&
+		wt::wt_chunk_publication_region_has_complete_coverage(region),
+		"publication region exposed an LOD1-to-LOD3 boundary without its LOD2 bridge"
+	);
+
 	std::vector<wt::WtChunkKey> backlog_replacements = replacements;
 	std::vector<wt::WtChunkKey> backlog_retirements = retirements;
 	for (std::int32_t index = 0; index < 2048; ++index) {

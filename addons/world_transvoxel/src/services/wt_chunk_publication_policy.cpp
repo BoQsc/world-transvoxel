@@ -23,6 +23,75 @@ bool bounds_overlap(
 		right_bounds.minimum.z < left_bounds.maximum.z;
 }
 
+bool bounds_share_face(
+	const WtChunkKey &left,
+	const WtChunkKey &right
+) noexcept {
+	if (!wt_is_valid_chunk_key(left) || !wt_is_valid_chunk_key(right) ||
+			bounds_overlap(left, right)) {
+		return false;
+	}
+	const WtChunkBounds left_bounds = wt_chunk_bounds(left);
+	const WtChunkBounds right_bounds = wt_chunk_bounds(right);
+	const auto positive_overlap = [](double left_minimum, double left_maximum,
+			double right_minimum, double right_maximum) noexcept {
+		return left_minimum < right_maximum &&
+			right_minimum < left_maximum;
+	};
+	const bool x_face =
+		(left_bounds.maximum.x == right_bounds.minimum.x ||
+			right_bounds.maximum.x == left_bounds.minimum.x) &&
+		positive_overlap(
+			left_bounds.minimum.y,
+			left_bounds.maximum.y,
+			right_bounds.minimum.y,
+			right_bounds.maximum.y
+		) && positive_overlap(
+			left_bounds.minimum.z,
+			left_bounds.maximum.z,
+			right_bounds.minimum.z,
+			right_bounds.maximum.z
+		);
+	const bool y_face =
+		(left_bounds.maximum.y == right_bounds.minimum.y ||
+			right_bounds.maximum.y == left_bounds.minimum.y) &&
+		positive_overlap(
+			left_bounds.minimum.x,
+			left_bounds.maximum.x,
+			right_bounds.minimum.x,
+			right_bounds.maximum.x
+		) && positive_overlap(
+			left_bounds.minimum.z,
+			left_bounds.maximum.z,
+			right_bounds.minimum.z,
+			right_bounds.maximum.z
+		);
+	const bool z_face =
+		(left_bounds.maximum.z == right_bounds.minimum.z ||
+			right_bounds.maximum.z == left_bounds.minimum.z) &&
+		positive_overlap(
+			left_bounds.minimum.x,
+			left_bounds.maximum.x,
+			right_bounds.minimum.x,
+			right_bounds.maximum.x
+		) && positive_overlap(
+			left_bounds.minimum.y,
+			left_bounds.maximum.y,
+			right_bounds.minimum.y,
+			right_bounds.maximum.y
+		);
+	return x_face || y_face || z_face;
+}
+
+bool unsafe_lod_boundary(
+	const WtChunkKey &replacement,
+	const WtChunkKey &retirement
+) noexcept {
+	const std::uint8_t lod_gap = replacement.lod > retirement.lod ?
+		replacement.lod - retirement.lod : retirement.lod - replacement.lod;
+	return lod_gap > 1U && bounds_share_face(replacement, retirement);
+}
+
 bool insert_key(std::vector<WtChunkKey> &keys, const WtChunkKey &key) {
 	const auto position = std::lower_bound(keys.begin(), keys.end(), key);
 	if (position != keys.end() && *position == key) return false;
@@ -233,8 +302,10 @@ bool wt_build_chunk_publication_region(
 	output.replacements.push_back(seed_replacement);
 	std::size_t replacement_cursor = 0;
 	std::size_t retirement_cursor = 0;
+	std::size_t boundary_cursor = 0;
 	while (replacement_cursor < replacement_queue.size() ||
-		retirement_cursor < retirement_queue.size()) {
+		retirement_cursor < retirement_queue.size() ||
+		boundary_cursor < output.replacements.size()) {
 		while (replacement_cursor < replacement_queue.size()) {
 			std::vector<WtChunkKey> overlapping;
 			retirement_index.append_overlapping(
@@ -256,6 +327,16 @@ bool wt_build_chunk_publication_region(
 			for (const WtChunkKey &replacement : overlapping) {
 				if (insert_key(output.replacements, replacement)) {
 					replacement_queue.push_back(replacement);
+				}
+			}
+		}
+		while (boundary_cursor < output.replacements.size()) {
+			const WtChunkKey replacement =
+				output.replacements[boundary_cursor++];
+			for (const WtChunkKey &retirement : pending_retirements) {
+				if (unsafe_lod_boundary(replacement, retirement) &&
+						insert_key(output.retirements, retirement)) {
+					retirement_queue.push_back(retirement);
 				}
 			}
 		}

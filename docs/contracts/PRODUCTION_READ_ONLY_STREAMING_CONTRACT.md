@@ -115,9 +115,11 @@ the frame thread.
 
 A replacement that overlaps a pending ancestor or descendant retirement is not
 independently publishable. The frame facade builds the exact transitive overlap
-component from indexed dyadic ancestor/descendant lookups. Unrelated pending
-replacements and retirements do not join that component, even under a large
-streaming backlog.
+component from indexed dyadic ancestor/descendant lookups. It also joins an
+adjacent replacement component when publishing without it would expose a face
+whose visible LOD levels differ by more than one. This preserves the 2:1
+transition topology while unrelated pending replacements and retirements remain
+outside the component, even under a large streaming backlog.
 
 The component publishes only when every replacement generation has its visual
 payload and, when required, its collision payload staged. Retirements and both
