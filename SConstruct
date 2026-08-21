@@ -36,7 +36,7 @@ env["AR"] = zig_command + " ar"
 env["RANLIB"] = zig_command + " ranlib"
 
 if sys.platform == "win32":
-    env["ARCOM"] = "$AR $ARFLAGS $TARGET ${TEMPFILE('$SOURCES')}"
+    env["ARCOM"] = "$AR $ARFLAGS $TARGET $SOURCES"
 
 zig_cache = os.path.join(PROJECT_ROOT, ".tools", "zig-cache")
 os.makedirs(zig_cache, exist_ok=True)

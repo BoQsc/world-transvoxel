@@ -613,6 +613,109 @@ void test_material_volume_placement() {
 	);
 }
 
+void test_static_water_placement() {
+	wt::WtChunkPage page = bake_page({ 0, 0, 0, 0 });
+	const std::size_t solid_index = sample_index(page, { 0, 0, 0 });
+	const std::size_t air_index = sample_index(page, { 1, 0, 0 });
+	const std::size_t outside_index = sample_index(page, { 3, 0, 0 });
+	page.samples[solid_index] = { -2.0F, 3 };
+	page.samples[solid_index].static_water_density = 5.0F;
+	page.samples[air_index] = { 2.0F, 1 };
+	page.samples[air_index].static_water_density = 4.0F;
+	const wt::WtScalarSample outside_before = page.samples[outside_index];
+	wt::WtChunkEditState state;
+	check(
+		state.initialize(page, 100, 0) == wt::WtChunkEditStatus::Ok,
+		"static water fixture initialization failed"
+	);
+	wt::WtEditCommand place = sphere(
+		95,
+		0,
+		1,
+		wt::WtEditOperation::PlaceStaticWater,
+		0,
+		2 * wt::kWtEditCoordinateScale,
+		0.0F
+	);
+	place.material = wt::kWtStaticWaterMaterialId;
+	check(
+		state.apply_command(place) == wt::WtChunkEditStatus::Ok,
+		"static water placement failed"
+	);
+	const wt::WtScalarSample &solid = state.page().samples[solid_index];
+	const wt::WtScalarSample &air = state.page().samples[air_index];
+	const wt::WtScalarSample &outside = state.page().samples[outside_index];
+	check(
+		solid.density == -2.0F && solid.material == 3 &&
+			solid.static_water_density < -1.99F &&
+			!solid.material_authored,
+		"static water did not persist beneath occluding terrain"
+	);
+	check(
+		air.density == 2.0F &&
+			air.material == wt::kWtStaticWaterMaterialId &&
+			air.material_authored && air.static_water_density < -0.99F,
+		"static water did not author exposed air and secondary density"
+	);
+	check(
+		outside.density == outside_before.density &&
+			outside.material == outside_before.material &&
+			outside.material_authored == outside_before.material_authored &&
+			outside.static_water_density == outside_before.static_water_density,
+		"static water placement changed a sample outside its brush"
+	);
+
+	wt::WtEditCommand carve = sphere(
+		96,
+		0,
+		2,
+		wt::WtEditOperation::SdfCarve,
+		0,
+		2 * wt::kWtEditCoordinateScale,
+		1.0F
+	);
+	wt::WtScalarSample revealed = solid;
+	bool changed = false;
+	check(
+		wt::wt_apply_edit_command_to_sample(
+			carve, { 0, 0, 0 }, revealed, changed
+		) && changed && revealed.density > 1.99F &&
+			revealed.material == wt::kWtStaticWaterMaterialId &&
+			revealed.material_authored,
+		"carving did not expose placed static water"
+	);
+
+	wt::WtEditCommand box;
+	box.command_id = id(97);
+	box.world_revision = 1;
+	box.operation = wt::WtEditOperation::PlaceStaticWater;
+	box.shape = wt::WtEditShape::AxisAlignedBox;
+	box.material = wt::kWtStaticWaterMaterialId;
+	box.box = {
+		-2 * wt::kWtEditCoordinateScale,
+		-2 * wt::kWtEditCoordinateScale,
+		-2 * wt::kWtEditCoordinateScale,
+		2 * wt::kWtEditCoordinateScale,
+		2 * wt::kWtEditCoordinateScale,
+		2 * wt::kWtEditCoordinateScale,
+	};
+	check(
+		wt::wt_edit_box_bounds(box.box, box.bounds),
+		"static water box bounds failed"
+	);
+	wt::WtScalarSample boxed = { 3.0F, 1 };
+	boxed.static_water_density = 6.0F;
+	changed = false;
+	check(
+		wt::wt_apply_edit_command_to_sample(
+			box, { 0, 0, 0 }, boxed, changed
+		) && changed && boxed.density == 3.0F &&
+			boxed.static_water_density < -1.99F &&
+			boxed.material == wt::kWtStaticWaterMaterialId,
+		"static water box did not author its secondary density"
+	);
+}
+
 void test_failures() {
 	std::vector<wt::WtChunkPage> pages = bake_pages();
 	if (pages.empty()) return;
@@ -796,6 +899,7 @@ int main() {
 	test_sdf_sphere_edits(evidence);
 	test_smooth_sdf_sphere_edits();
 	test_material_volume_placement();
+	test_static_water_placement();
 	test_failures();
 	test_bottom_boundary_edit_clipping();
 	if (failure_count != 0) {
@@ -805,7 +909,7 @@ int main() {
 	std::printf("M4_APPLY_HASH ");
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
-		"M4_APPLY_PASS pages=5 overlap_samples=1083 cross_lod_pointwise=1 sdf_sphere_edits=3 smooth_sdf=1 failure_cases=7 bottom_boundary_clipping=1\n"
+		"M4_APPLY_PASS pages=5 overlap_samples=1083 cross_lod_pointwise=1 sdf_sphere_edits=3 smooth_sdf=1 static_water=1 failure_cases=7 bottom_boundary_clipping=1\n"
 	);
 	return 0;
 }

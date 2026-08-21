@@ -211,13 +211,23 @@ Supported commands:
 - `add_density_sphere(center, radius, value)`
 - `set_density_sphere(center, radius, value)`
 - `paint_material_sphere(center, radius, material)`
+- `place_material_volume_sphere(center, radius, material)`
+- `place_static_water_sphere(center, radius)`
 - `add_density_box(minimum, maximum, value)`
 - `set_density_box(minimum, maximum, value)`
 - `paint_material_box(minimum, maximum, material)`
+- `place_material_volume_box(minimum, maximum, material)`
+- `place_static_water_box(minimum, maximum)`
 
 All return `bool`. Inspect `get_error()` after rejection. Transactions also
 expose base/committed revision, command count, and submitted state. A
 transaction is single-use and stale base revisions are rejected.
+
+Static-water placement unions the brush into the authoritative secondary water
+density field without changing terrain density. Exposed air samples receive
+material ID `9`; water authored beneath solid terrain remains depth-occluded and
+becomes visible if a later terrain edit exposes it. This is deterministic static
+volume editing, not fluid flow or pressure simulation.
 
 ## Immutable snapshots
 

@@ -1,5 +1,7 @@
 #include "api/world_transvoxel_edit_transaction.h"
 
+#include "core/wt_material_ids.h"
+
 #include <godot_cpp/core/class_db.hpp>
 
 #include <cmath>
@@ -103,10 +105,12 @@ void WorldTransvoxelEditTransaction::_bind_methods() {
 	);
 	WT_BIND_EDIT_METHOD(paint_material_sphere, "center", "radius", "material");
 	WT_BIND_EDIT_METHOD(place_material_volume_sphere, "center", "radius", "material");
+	WT_BIND_EDIT_METHOD(place_static_water_sphere, "center", "radius");
 	WT_BIND_EDIT_METHOD(add_density_box, "minimum", "maximum", "value");
 	WT_BIND_EDIT_METHOD(set_density_box, "minimum", "maximum", "value");
 	WT_BIND_EDIT_METHOD(paint_material_box, "minimum", "maximum", "material");
 	WT_BIND_EDIT_METHOD(place_material_volume_box, "minimum", "maximum", "material");
+	WT_BIND_EDIT_METHOD(place_static_water_box, "minimum", "maximum");
 #undef WT_BIND_EDIT_METHOD
 	godot::ClassDB::bind_method(
 		godot::D_METHOD("get_base_revision"),
@@ -359,6 +363,18 @@ bool WorldTransvoxelEditTransaction::place_material_volume_sphere(
 	);
 }
 
+bool WorldTransvoxelEditTransaction::place_static_water_sphere(
+	const godot::Vector3 &center, double radius
+) {
+	return append_sphere(
+		WtEditOperation::PlaceStaticWater,
+		center,
+		radius,
+		0.0,
+		kWtStaticWaterMaterialId
+	);
+}
+
 bool WorldTransvoxelEditTransaction::add_density_box(
 	const godot::Vector3 &minimum,
 	const godot::Vector3 &maximum,
@@ -404,6 +420,19 @@ bool WorldTransvoxelEditTransaction::place_material_volume_box(
 		maximum,
 		0.0,
 		material
+	);
+}
+
+bool WorldTransvoxelEditTransaction::place_static_water_box(
+	const godot::Vector3 &minimum,
+	const godot::Vector3 &maximum
+) {
+	return append_box(
+		WtEditOperation::PlaceStaticWater,
+		minimum,
+		maximum,
+		0.0,
+		kWtStaticWaterMaterialId
 	);
 }
 

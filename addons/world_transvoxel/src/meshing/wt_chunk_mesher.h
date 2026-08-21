@@ -2,6 +2,7 @@
 
 #include "backend/wt_meshing_backend.h"
 #include "core/wt_chunk_key.h"
+#include "core/wt_material_ids.h"
 
 #include <array>
 #include <cstddef>

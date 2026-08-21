@@ -11,7 +11,7 @@
 namespace world_transvoxel {
 
 constexpr std::uint16_t kWtEditSchemaMajor = 1;
-constexpr std::uint16_t kWtEditSchemaMinor = 2;
+constexpr std::uint16_t kWtEditSchemaMinor = 3;
 constexpr std::size_t kWtEditHeaderSize = 64;
 constexpr std::size_t kWtEditCommitSize = 68;
 constexpr std::size_t kWtEditCommandSectionHeaderSize = 8;
@@ -35,6 +35,7 @@ enum class WtEditOperation : std::uint16_t {
 	SdfCarve = 4,
 	SdfConstruct = 5,
 	PlaceMaterialVolume = 6,
+	PlaceStaticWater = 7,
 };
 
 enum class WtEditShape : std::uint16_t {

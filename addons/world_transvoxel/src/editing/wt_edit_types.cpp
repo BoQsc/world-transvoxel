@@ -1,5 +1,7 @@
 #include "editing/wt_edit_transaction.h"
 
+#include "core/wt_material_ids.h"
+
 #include <cmath>
 #include <limits>
 
@@ -64,7 +66,8 @@ bool valid_operation(WtEditOperation operation) noexcept {
 		operation == WtEditOperation::PaintMaterial ||
 		operation == WtEditOperation::SdfCarve ||
 		operation == WtEditOperation::SdfConstruct ||
-		operation == WtEditOperation::PlaceMaterialVolume;
+		operation == WtEditOperation::PlaceMaterialVolume ||
+		operation == WtEditOperation::PlaceStaticWater;
 }
 
 bool valid_shape(WtEditShape shape) noexcept {
@@ -178,12 +181,17 @@ bool wt_is_valid_edit_command(const WtEditCommand &command) noexcept {
 		return false;
 	}
 	if ((command.operation == WtEditOperation::PaintMaterial ||
-			command.operation == WtEditOperation::PlaceMaterialVolume) &&
+			command.operation == WtEditOperation::PlaceMaterialVolume ||
+			command.operation == WtEditOperation::PlaceStaticWater) &&
 		command.density_value != 0.0F) {
 		return false;
 	}
 	if (command.operation == WtEditOperation::PlaceMaterialVolume &&
 		command.material == 0) {
+		return false;
+	}
+	if (command.operation == WtEditOperation::PlaceStaticWater &&
+		command.material != kWtStaticWaterMaterialId) {
 		return false;
 	}
 	WtEditBounds expected;

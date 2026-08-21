@@ -183,6 +183,60 @@ bool sphere_sdf_brush_density(
 	return std::isfinite(output);
 }
 
+bool static_water_brush_density(
+	const WtEditCommand &command,
+	const WtGridPoint &point,
+	float &output
+) noexcept {
+	if (command.shape == WtEditShape::Sphere) {
+		float interior_density = 0.0F;
+		if (!sphere_sdf_brush_density(
+				point, command.sphere, 1, 1.0F, interior_density
+			)) {
+			return false;
+		}
+		output = -interior_density;
+		return std::isfinite(output);
+	}
+	const long double coordinates[3] = {
+		static_cast<long double>(point.x) * kWtEditCoordinateScale,
+		static_cast<long double>(point.y) * kWtEditCoordinateScale,
+		static_cast<long double>(point.z) * kWtEditCoordinateScale,
+	};
+	const long double minimums[3] = {
+		static_cast<long double>(command.box.minimum_x_q16),
+		static_cast<long double>(command.box.minimum_y_q16),
+		static_cast<long double>(command.box.minimum_z_q16),
+	};
+	const long double maximums[3] = {
+		static_cast<long double>(command.box.maximum_x_q16),
+		static_cast<long double>(command.box.maximum_y_q16),
+		static_cast<long double>(command.box.maximum_z_q16),
+	};
+	long double interior_depth = std::numeric_limits<long double>::max();
+	for (std::size_t axis = 0; axis < 3; ++axis) {
+		interior_depth = std::min(
+			interior_depth,
+			std::min(
+				coordinates[axis] - minimums[axis],
+				maximums[axis] - coordinates[axis]
+			)
+		);
+	}
+	long double density = -interior_depth /
+		static_cast<long double>(kWtEditCoordinateScale);
+	if (std::abs(density) < static_cast<long double>(kWtSdfEditBoundaryEpsilon)) {
+		density = -static_cast<long double>(kWtSdfEditBoundaryEpsilon);
+	}
+	if (!(std::abs(density) <= static_cast<long double>(
+			std::numeric_limits<float>::max()
+		))) {
+		return false;
+	}
+	output = static_cast<float>(density);
+	return std::isfinite(output);
+}
+
 bool contains(
 	const WtEditCommand &command,
 	const WtGridPoint &point,
@@ -216,6 +270,7 @@ bool apply_valid_command_to_sample(
 	const float previous_density = sample.density;
 	const std::uint16_t previous_material = sample.material;
 	const bool previous_material_authored = sample.material_authored;
+	const float previous_static_water_density = sample.static_water_density;
 	if (command.operation == WtEditOperation::AddDensity) {
 		const float result = sample.density + command.density_value;
 		if (!std::isfinite(result)) {
@@ -245,6 +300,11 @@ bool apply_valid_command_to_sample(
 			);
 			if (sample.density < result) {
 				sample.density = result;
+				if (result >= 0.0F &&
+					sample.static_water_density < 0.0F) {
+					sample.material = kWtStaticWaterMaterialId;
+					sample.material_authored = true;
+				}
 			}
 		} else {
 			const float solid_density = -brush_density;
@@ -262,6 +322,18 @@ bool apply_valid_command_to_sample(
 				}
 			}
 		}
+	} else if (command.operation == WtEditOperation::PlaceStaticWater) {
+		float water_density = 0.0F;
+		if (!static_water_brush_density(command, point, water_density)) {
+			return false;
+		}
+		sample.static_water_density = std::min(
+			sample.static_water_density, water_density
+		);
+		if (sample.density >= 0.0F) {
+			sample.material = kWtStaticWaterMaterialId;
+			sample.material_authored = true;
+		}
 	} else if (command.operation == WtEditOperation::PlaceMaterialVolume) {
 		if (sample.density >= 0.0F) {
 			sample.material = command.material;
@@ -273,8 +345,10 @@ bool apply_valid_command_to_sample(
 	}
 	changed = sample.density != previous_density ||
 		sample.material != previous_material ||
-		sample.material_authored != previous_material_authored;
-	return std::isfinite(sample.density);
+		sample.material_authored != previous_material_authored ||
+		sample.static_water_density != previous_static_water_density;
+	return std::isfinite(sample.density) &&
+		std::isfinite(sample.static_water_density);
 }
 
 WtGridPoint sample_point(
@@ -328,7 +402,10 @@ bool density_result_is_finite(
 	const bool additive = command.operation == WtEditOperation::AddDensity;
 	const bool sdf = command.operation == WtEditOperation::SdfCarve ||
 		command.operation == WtEditOperation::SdfConstruct;
-	if ((!additive && !sdf) || !may_intersect_page(page.metadata, command.bounds)) {
+	const bool static_water =
+		command.operation == WtEditOperation::PlaceStaticWater;
+	if ((!additive && !sdf && !static_water) ||
+		!may_intersect_page(page.metadata, command.bounds)) {
 		return true;
 	}
 	std::size_t index = 0;

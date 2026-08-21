@@ -481,6 +481,11 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 						sample.static_water_density < 0.0F;
 					explicit_water_outside = explicit_water_outside ||
 						sample.static_water_density >= 0.0F;
+					water_present = water_present ||
+						(sample.static_water_density < 0.0F &&
+							WtMaterialVolumeSampleSource::is_occupied(
+								sample, kWtStaticWaterMaterialId
+							));
 				} else if (WtMaterialVolumeSampleSource::is_occupied(
 						sample,
 						kWtStaticWaterMaterialId

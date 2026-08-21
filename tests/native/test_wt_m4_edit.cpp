@@ -1,4 +1,5 @@
 #include "editing/wt_edit_transaction.h"
+#include "core/wt_material_ids.h"
 #include "storage/wt_hash256.h"
 
 #include <algorithm>
@@ -256,6 +257,37 @@ void test_sdf_operations() {
 	);
 }
 
+void test_static_water_operation() {
+	wt::WtEditTransaction transaction = make_transaction();
+	transaction.commands = {
+		sphere_command(0, wt::WtEditOperation::PlaceStaticWater, 0.0F),
+	};
+	transaction.commands[0].material = wt::kWtStaticWaterMaterialId;
+	std::vector<std::uint8_t> bytes;
+	wt::WtEditTransactionDocument document;
+	check(
+		wt::wt_write_edit_transaction(transaction, bytes) ==
+				wt::WtEditTransactionStatus::Ok &&
+			wt::wt_open_edit_transaction(
+				{ bytes.data(), bytes.size() }, document
+			) == wt::WtEditTransactionStatus::Ok,
+		"static water edit transaction failed"
+	);
+	check(
+		document.transaction.commands.size() == 1 &&
+			document.transaction.commands[0].operation ==
+				wt::WtEditOperation::PlaceStaticWater &&
+			document.transaction.commands[0].material ==
+				wt::kWtStaticWaterMaterialId,
+		"static water edit operation round trip mismatch"
+	);
+	transaction.commands[0].material = 8;
+	check(
+		!wt::wt_is_valid_edit_command(transaction.commands[0]),
+		"static water operation accepted a non-water material"
+	);
+}
+
 void expect_invalid(
 	wt::WtEditTransaction transaction,
 	const char *message
@@ -457,6 +489,7 @@ void test_read_failures(const std::vector<std::uint8_t> &valid_bytes) {
 int main() {
 	test_bounds();
 	test_sdf_operations();
+	test_static_water_operation();
 	std::vector<std::uint8_t> bytes;
 	test_round_trip(bytes);
 	test_write_failures();
@@ -467,6 +500,6 @@ int main() {
 	}
 	std::printf("M4_EDIT_HASH ");
 	print_hash(wt::wt_sha256(bytes.data(), bytes.size()));
-	std::printf("M4_EDIT_PASS commands=3 sdf_commands=2 smooth_sdf=1 failure_cases=19\n");
+	std::printf("M4_EDIT_PASS commands=3 sdf_commands=2 smooth_sdf=1 static_water=1 failure_cases=19\n");
 	return 0;
 }

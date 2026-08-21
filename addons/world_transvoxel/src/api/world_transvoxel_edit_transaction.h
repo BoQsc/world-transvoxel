@@ -74,6 +74,10 @@ public:
 		double radius,
 		std::int64_t material
 	);
+	bool place_static_water_sphere(
+		const godot::Vector3 &center,
+		double radius
+	);
 	bool add_density_box(
 		const godot::Vector3 &minimum,
 		const godot::Vector3 &maximum,
@@ -93,6 +97,10 @@ public:
 		const godot::Vector3 &minimum,
 		const godot::Vector3 &maximum,
 		std::int64_t material
+	);
+	bool place_static_water_box(
+		const godot::Vector3 &minimum,
+		const godot::Vector3 &maximum
 	);
 
 	std::int64_t get_base_revision() const noexcept;

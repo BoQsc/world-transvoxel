@@ -22,7 +22,7 @@ def build(configuration: str = "all", jobs: int = 0, skip_bootstrap: bool = Fals
     if not skip_bootstrap:
         bootstrap()
     if jobs <= 0:
-        jobs = max(1, os.cpu_count() or 1)
+        jobs = min(3, max(1, os.cpu_count() or 1))
     host = host_platform()
     for target in TARGETS[configuration]:
         print(

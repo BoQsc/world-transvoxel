@@ -6,8 +6,6 @@
 
 namespace world_transvoxel {
 
-constexpr std::uint16_t kWtStaticWaterMaterialId = 9;
-
 class WtMaterialVolumeSampleSource final : public WtChunkSampleSource {
 public:
 	WtMaterialVolumeSampleSource(
