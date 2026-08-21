@@ -1160,8 +1160,9 @@ void test_four_biome_lake_world() {
 	wt::WtScalarSample contained_shore;
 	check(
 		wt::wt_sample_procedural_world(
-			descriptor, { 868, 15, 1387 }, exposed_wall_repro
-		) && exposed_wall_repro.static_water_density > 0.0F &&
+			descriptor, { 868, 17, 1387 }, exposed_wall_repro
+		) && exposed_wall_repro.density > 0.0F &&
+			exposed_wall_repro.static_water_density > 0.0F &&
 			exposed_wall_repro.material != 9,
 		"gravel lake retained the exposed high-water wall"
 	);
