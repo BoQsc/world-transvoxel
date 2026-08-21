@@ -116,9 +116,9 @@ void test_render_builder(wt::WtRenderPayload &render) {
 	);
 	add_triangle(
 		water.regular,
-		{ { 6.0F, 0.0F, 4.0F }, { 0.0F, 1.0F, 0.0F }, 9, 0, 0 },
-		{ { 6.0F, 1.0F, 4.0F }, { 0.0F, 1.0F, 0.0F }, 9, 0, 0 },
-		{ { 6.0F, 0.0F, 5.0F }, { 0.0F, 1.0F, 0.0F }, 9, 0, 0 }
+		{ { 6.0F, 0.0F, 4.0F }, { 1.0F, 0.0F, 0.0F }, 9, true, 0, 0 },
+		{ { 6.0F, 1.0F, 4.0F }, { 1.0F, 0.0F, 0.0F }, 9, true, 0, 0 },
+		{ { 6.0F, 0.0F, 5.0F }, { 1.0F, 0.0F, 0.0F }, 9, true, 0, 0 }
 	);
 	add_triangle(
 		water.regular,
@@ -135,10 +135,15 @@ void test_render_builder(wt::WtRenderPayload &render) {
 	check(wt::wt_build_render_payload(mesh, water, { 7 }, render) ==
 		wt::WtRenderBuildStatus::Ok, "water render payload failed");
 	check(render.vertices.size() == 6 && render.indices.size() == 6 &&
-		render.water_vertices.size() == 12 && render.water_indices.size() == 9,
-		"water heightfield did not reject vertical closure geometry");
+		render.water_vertices.size() == 12 && render.water_indices.size() == 12,
+		"authored water did not retain its volumetric boundary geometry");
 	check(render.water_vertices[0].material == 9,
 		"water render surface lost its material identity");
+	check(render.water_vertices[0].normal.y == 1.0F &&
+		render.water_vertices[3].normal.x == 1.0F &&
+		render.water_vertices[3].position.y == 0.0F &&
+		render.water_vertices[4].position.y == 1.0F,
+		"authored water boundary was flattened into a free-surface cap");
 	check(render.water_vertices[0].normal.y == 1.0F,
 		"water free surface did not receive the authoritative gravity normal");
 	check(render.water_vertices[7].position.y == 1.0F &&

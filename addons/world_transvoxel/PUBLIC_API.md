@@ -229,6 +229,12 @@ material ID `9`; water authored beneath solid terrain remains depth-occluded and
 becomes visible if a later terrain edit exposes it. This is deterministic static
 volume editing, not fluid flow or pressure simulation.
 
+Rendering preserves that distinction. Non-authored procedural lakes expose a
+gravity-aligned, LOD-stable free surface. Water created or exposed by an edit
+retains the complete authored Transvoxel boundary, including side and lower
+surfaces; solid terrain depth-occludes the portions embedded in terrain. The
+render path does not collapse an authored sphere or box into a top-only cap.
+
 ## Immutable snapshots
 
 `WorldTransvoxelChunkState` exposes presence, chunk coordinate, LOD,

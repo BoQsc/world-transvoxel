@@ -117,7 +117,10 @@ and release it proves:
   transition coverage and winding valid at a protected LOD seam corner. Extra
   protected-corner contour edges are tracked as evidence; they are not treated
   as a native missing-fine-edge failure by this contract. Godot-side visibility
-  of this case is owned by the integration terrain material/visual gates.
+  of this case is owned by the integration terrain material/visual gates;
+- procedural lake surfaces retain their locked footprint across LOD0 through
+  LOD3, while an authored spherical static-water field retains its complete
+  Transvoxel boundary, including side and downward-facing geometry.
 
 The workload and edit-replacement tests additionally prove desired-set
 release/repriority and edit-replacement cancellation calls through the narrow
@@ -126,7 +129,7 @@ owner interface.
 The locked aggregate hash is:
 
 ```text
-ea428b532f85d6b1abb751856e27532c49acff9f2d320a5756a1723165908ad7
+094ec5d88b56acaffd0465efee4b93c2053e46472552b176bff5c12027155a97
 ```
 
 This completes native support-page scheduling, pinning, cancellation, and

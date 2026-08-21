@@ -98,12 +98,14 @@ bool WtMaterialVolumeSampleSource::sample(
 		// fields here would make the visible shoreline depend on the terrain LOD.
 		output.density = source_sample.static_water_density;
 		output.material = material_;
-		output.material_authored = source_sample.material_authored;
+		output.material_authored = source_sample.material_authored &&
+			source_sample.material == material_;
 		return std::isfinite(output.density);
 	}
 	output.density = free_surface_density(point, source_sample);
 	output.material = material_;
-	output.material_authored = source_sample.material_authored;
+	output.material_authored = source_sample.material_authored &&
+		source_sample.material == material_;
 	return true;
 }
 

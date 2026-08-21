@@ -20,6 +20,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <map>
 #include <set>
 #include <string>
@@ -180,6 +181,45 @@ public:
 
 private:
 	wt::WtProceduralWorldDescriptor descriptor_;
+};
+
+class AuthoredWaterSphereSource final : public wt::WtChunkSampleSource {
+public:
+	bool sample(
+		const wt::WtGridPoint &point,
+		wt::WtScalarSample &output
+	) const noexcept override {
+		const double x = static_cast<double>(point.x) - 8.0;
+		const double y = static_cast<double>(point.y) - 8.0;
+		const double z = static_cast<double>(point.z) - 8.0;
+		const float water_density = static_cast<float>(
+			std::sqrt(x * x + y * y + z * z) - 4.0
+		);
+		output = { 1.0F, 0, false, water_density };
+		if (water_density <= 0.0F) {
+			output.material = wt::kWtStaticWaterMaterialId;
+			output.material_authored = true;
+		}
+		return true;
+	}
+};
+
+class ExplicitWaterProvenanceSource final : public wt::WtChunkSampleSource {
+public:
+	bool sample(
+		const wt::WtGridPoint &point,
+		wt::WtScalarSample &output
+	) const noexcept override {
+		output = {
+			1.0F,
+			static_cast<std::uint16_t>(
+				point.x == 0 ? wt::kWtStaticWaterMaterialId : 1
+			),
+			true,
+			point.x == 0 ? -0.5F : 0.5F,
+		};
+		return true;
+	}
 };
 
 struct ReproSphereEdit {
@@ -406,6 +446,16 @@ void test_material_volume_continuous_distance(
 			sample.density == 0.5F * static_cast<float>(spacing),
 			"material volume lost the free surface above a coarse page sample");
 	}
+	const ExplicitWaterProvenanceSource provenance_source;
+	const wt::WtMaterialVolumeSampleSource provenance_water(
+		provenance_source, wt::kWtStaticWaterMaterialId
+	);
+	check(provenance_water.sample({ 0, 0, 0 }, sample) &&
+		sample.material_authored,
+		"authored static water lost its rendering provenance");
+	check(provenance_water.sample({ 1, 0, 0 }, sample) &&
+		!sample.material_authored,
+		"authored terrain material leaked into water rendering provenance");
 	append_u64(evidence, 1);
 }
 
@@ -519,6 +569,56 @@ void test_four_biome_water_free_surface(
 			*footprint_range.second * 0.002,
 		"four-biome lake shoreline footprint moved between LODs"
 	);
+}
+
+void test_authored_water_volume_boundary(
+	std::vector<std::uint8_t> &evidence
+) {
+	const AuthoredWaterSphereSource terrain;
+	const wt::WtMaterialVolumeSampleSource water(
+		terrain, wt::kWtStaticWaterMaterialId
+	);
+	const wt::WtChunkMesher mesher(wt::wt_get_transvoxel_mit_backend());
+	wt::WtChunkMeshingScratch scratch;
+	const wt::WtChunkKey key = { 0, 0, 0, 0 };
+	wt::WtChunkMeshResult water_mesh;
+	check(mesher.mesh(
+			{ key, 0, 0, 0.0F, 0.25F }, water, water_mesh, scratch
+		) == wt::WtChunkMeshingStatus::Ok,
+		"authored water sphere meshing failed");
+	wt::WtRenderPayload unfiltered;
+	check(wt::wt_build_render_payload(
+			water_mesh, { 1 }, unfiltered
+		) == wt::WtRenderBuildStatus::Ok,
+		"authored water sphere reference payload failed");
+
+	wt::WtChunkMeshResult terrain_mesh;
+	terrain_mesh.key = key;
+	terrain_mesh.world_origin = wt::wt_chunk_bounds(key).minimum;
+	terrain_mesh.transition_width_ratio = 0.25F;
+	wt::WtRenderPayload render;
+	check(wt::wt_build_render_payload(
+			terrain_mesh, water_mesh, { 2 }, render
+		) == wt::WtRenderBuildStatus::Ok,
+		"authored water sphere combined payload failed");
+	check(!render.water_indices.empty() &&
+		render.water_indices.size() == unfiltered.indices.size(),
+		"authored water sphere lost boundary triangles");
+	float minimum_y = std::numeric_limits<float>::infinity();
+	float maximum_y = -std::numeric_limits<float>::infinity();
+	bool has_side_normal = false;
+	bool has_down_normal = false;
+	for (const std::uint32_t index : render.water_indices) {
+		const wt::WtRenderVertex &vertex = render.water_vertices[index];
+		minimum_y = std::min(minimum_y, vertex.position.y);
+		maximum_y = std::max(maximum_y, vertex.position.y);
+		has_side_normal = has_side_normal || std::abs(vertex.normal.y) < 0.75F;
+		has_down_normal = has_down_normal || vertex.normal.y < -0.25F;
+	}
+	check(minimum_y < 5.0F && maximum_y > 11.0F &&
+		has_side_normal && has_down_normal,
+		"authored water sphere was reduced to an upward free surface");
+	append_u64(evidence, render.water_indices.size());
 }
 
 Edge make_test_edge(QuantizedPoint a, QuantizedPoint b) {
@@ -2104,6 +2204,7 @@ int main() {
 	test_representable_sphere_difference_topology(evidence);
 	test_material_volume_continuous_distance(evidence);
 	test_four_biome_water_free_surface(evidence);
+	test_authored_water_volume_boundary(evidence);
 	test_human_boundary_edit_repro(evidence);
 	test_streaming_pixel_transition_repro(evidence);
 	test_large_rolling_hills_cave_lod2_transition_masks();
@@ -2129,7 +2230,8 @@ int main() {
 		"large_rolling_hills_cave_lod2_mask_regression=1 "
 		"human_boundary_repro=1 edited_coarse_rebuild=1 "
 		"sphere_difference_topology=1 smooth_sphere_difference=1 "
-		"material_volume_distance=1 water_lod_footprint=1\n"
+		"material_volume_distance=1 water_lod_footprint=1 "
+		"authored_water_volume=1\n"
 	);
 	return 0;
 }

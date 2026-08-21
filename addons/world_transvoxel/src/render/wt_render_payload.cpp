@@ -253,9 +253,12 @@ double projected_triangle_area_twice(
 	);
 }
 
-void keep_static_water_heightfield(WtRenderPayload &water) {
+void reconcile_static_water_rendering(WtRenderPayload &water) {
 	constexpr float kMinimumAverageUpNormal = 0.01F;
+	constexpr std::uint32_t kUnmappedVertex =
+		std::numeric_limits<std::uint32_t>::max();
 	const std::size_t triangle_count = water.indices.size() / 3U;
+	std::vector<bool> authored_volume(triangle_count, false);
 	std::vector<bool> upward_coverage(triangle_count, false);
 	std::vector<std::size_t> parent(water.vertices.size());
 	for (std::size_t index = 0; index < parent.size(); ++index) {
@@ -285,6 +288,15 @@ void keep_static_water_heightfield(WtRenderPayload &water) {
 		const std::uint32_t a = water.indices[first];
 		const std::uint32_t b = water.indices[first + 1U];
 		const std::uint32_t c = water.indices[first + 2U];
+		// Edited water is a deliberate static volume. Procedural lake geometry
+		// retains the established gravity-aligned free-surface policy.
+		authored_volume[triangle] =
+			water.vertices[a].material_authored ||
+			water.vertices[b].material_authored ||
+			water.vertices[c].material_authored;
+		if (authored_volume[triangle]) {
+			continue;
+		}
 		const float average_up = (
 			water.vertices[a].normal.y +
 			water.vertices[b].normal.y +
@@ -312,39 +324,68 @@ void keep_static_water_heightfield(WtRenderPayload &water) {
 			);
 		}
 	}
+	std::vector<WtRenderVertex> resolved_vertices;
+	std::vector<std::uint32_t> resolved_indices;
+	resolved_vertices.reserve(water.vertices.size());
+	resolved_indices.reserve(water.indices.size());
+	std::vector<std::uint32_t> authored_remap(
+		water.vertices.size(), kUnmappedVertex
+	);
+	std::vector<std::uint32_t> free_surface_remap(
+		water.vertices.size(), kUnmappedVertex
+	);
+	auto append_vertex = [
+		&water,
+		&resolved_vertices,
+		&resolved_indices
+	](
+		std::uint32_t source_index,
+		std::vector<std::uint32_t> &remap,
+		bool flatten,
+		float surface_y
+	) {
+		if (remap[source_index] == kUnmappedVertex) {
+			WtRenderVertex vertex = water.vertices[source_index];
+			if (flatten) {
+				vertex.position.y = surface_y;
+				vertex.normal = { 0.0F, 1.0F, 0.0F };
+			}
+			remap[source_index] = static_cast<std::uint32_t>(
+				resolved_vertices.size()
+			);
+			resolved_vertices.push_back(vertex);
+		}
+		resolved_indices.push_back(remap[source_index]);
+	};
 	for (std::size_t triangle = 0; triangle < triangle_count; ++triangle) {
-		if (!upward_coverage[triangle]) {
-			continue;
-		}
-		const std::size_t first = triangle * 3U;
-		for (unsigned int corner = 0; corner < 3; ++corner) {
-			const std::uint32_t vertex = water.indices[first + corner];
-			water.vertices[vertex].position.y =
-				surface_level[find_root(vertex)];
-			water.vertices[vertex].normal = { 0.0F, 1.0F, 0.0F };
-		}
-	}
-	std::vector<std::uint32_t> free_surface;
-	free_surface.reserve(water.indices.size());
-	for (std::size_t triangle = 0; triangle < triangle_count; ++triangle) {
-		if (!upward_coverage[triangle]) {
-			continue;
-		}
 		const std::size_t first = triangle * 3U;
 		const std::uint32_t a = water.indices[first];
 		const std::uint32_t b = water.indices[first + 1U];
 		const std::uint32_t c = water.indices[first + 2U];
-		if (projected_triangle_area_twice(
-				water.vertices[a].position,
-				water.vertices[b].position,
-				water.vertices[c].position
-			) > 1.0e-8) {
-			free_surface.push_back(a);
-			free_surface.push_back(b);
-			free_surface.push_back(c);
+		if (authored_volume[triangle]) {
+			append_vertex(a, authored_remap, false, 0.0F);
+			append_vertex(b, authored_remap, false, 0.0F);
+			append_vertex(c, authored_remap, false, 0.0F);
+			continue;
+		}
+		if (!upward_coverage[triangle]) {
+			continue;
+		}
+		const float surface_y = surface_level[find_root(a)];
+		WtVec3 flat_a = water.vertices[a].position;
+		WtVec3 flat_b = water.vertices[b].position;
+		WtVec3 flat_c = water.vertices[c].position;
+		flat_a.y = surface_y;
+		flat_b.y = surface_y;
+		flat_c.y = surface_y;
+		if (projected_triangle_area_twice(flat_a, flat_b, flat_c) > 1.0e-8) {
+			append_vertex(a, free_surface_remap, true, surface_y);
+			append_vertex(b, free_surface_remap, true, surface_y);
+			append_vertex(c, free_surface_remap, true, surface_y);
 		}
 	}
-	water.indices = std::move(free_surface);
+	water.vertices = std::move(resolved_vertices);
+	water.indices = std::move(resolved_indices);
 	if (water.indices.empty()) {
 		water.vertices.clear();
 	}
@@ -519,7 +560,7 @@ WtRenderBuildStatus wt_build_render_payload(
 		output.clear();
 		return status;
 	}
-	keep_static_water_heightfield(water);
+	reconcile_static_water_rendering(water);
 	output.water_vertices = std::move(water.vertices);
 	output.water_indices = std::move(water.indices);
 	return WtRenderBuildStatus::Ok;
