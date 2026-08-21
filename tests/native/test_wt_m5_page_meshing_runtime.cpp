@@ -459,7 +459,34 @@ void test_material_volume_continuous_distance(
 	append_u64(evidence, 1);
 }
 
-void test_four_biome_water_free_surface(
+void check_unmodified_water_payload(
+	const wt::WtRenderPayload &combined,
+	const wt::WtRenderPayload &water_only
+) {
+	check(
+		combined.water_indices == water_only.indices &&
+		combined.water_vertices.size() == water_only.vertices.size(),
+		"combined render payload changed canonical water topology"
+	);
+	if (combined.water_vertices.size() != water_only.vertices.size()) return;
+	for (std::size_t index = 0; index < water_only.vertices.size(); ++index) {
+		const wt::WtRenderVertex &actual = combined.water_vertices[index];
+		const wt::WtRenderVertex &expected = water_only.vertices[index];
+		check(
+			actual.position.x == expected.position.x &&
+			actual.position.y == expected.position.y &&
+			actual.position.z == expected.position.z &&
+			actual.normal.x == expected.normal.x &&
+			actual.normal.y == expected.normal.y &&
+			actual.normal.z == expected.normal.z &&
+			actual.material == expected.material &&
+			actual.material_authored == expected.material_authored,
+			"combined render payload changed a canonical water vertex"
+		);
+	}
+}
+
+void test_four_biome_water_volume(
 	std::vector<std::uint8_t> &evidence
 ) {
 	const FourBiomeProceduralSource terrain;
@@ -492,8 +519,14 @@ void test_four_biome_water_free_surface(
 				terrain_mesh, water_mesh, { 1 }, render
 			) == wt::WtRenderBuildStatus::Ok,
 			"four-biome lake render payload failed");
+		wt::WtRenderPayload water_only;
+		check(wt::wt_build_render_payload(
+				water_mesh, { 1 }, water_only
+			) == wt::WtRenderBuildStatus::Ok,
+			"four-biome lake canonical water payload failed");
+		check_unmodified_water_payload(render, water_only);
 		check(!render.water_indices.empty(),
-			"four-biome lake free surface was filtered out");
+			"four-biome lake top boundary was filtered out");
 		const float expected_local_level = 23.5F -
 			static_cast<float>(wt::wt_chunk_bounds(key).minimum.y);
 		for (const std::uint32_t index : render.water_indices) {
@@ -501,11 +534,12 @@ void test_four_biome_water_free_surface(
 					render.water_vertices[index].position.y -
 					expected_local_level
 				) <= 0.011F,
-				"four-biome lake free surface moved between LODs");
+				"four-biome lake top boundary moved between LODs");
 		}
 		append_u64(evidence, render.water_indices.size());
 	}
 	std::array<double, 4> shoreline_area{};
+	std::array<std::size_t, 4> shoreline_boundary_triangles{};
 	for (std::uint8_t lod = 0; lod <= 3; ++lod) {
 		const std::int64_t extent = wt::wt_chunk_extent(lod);
 		const std::int32_t chunk_min_x = static_cast<std::int32_t>(768 / extent);
@@ -536,29 +570,50 @@ void test_four_biome_water_free_surface(
 						terrain_mesh, water_mesh, { 1 }, render
 					) == wt::WtRenderBuildStatus::Ok,
 					"four-biome shoreline render payload failed");
+				wt::WtRenderPayload water_only;
+				check(wt::wt_build_render_payload(
+						water_mesh, { 1 }, water_only
+					) == wt::WtRenderBuildStatus::Ok,
+					"four-biome shoreline canonical water payload failed");
+				check_unmodified_water_payload(render, water_only);
 				for (std::size_t triangle = 0;
 					triangle < render.water_indices.size(); triangle += 3U) {
-					const wt::WtVec3 &a = render.water_vertices[
+					const wt::WtRenderVertex &a = render.water_vertices[
 						render.water_indices[triangle]
-					].position;
-					const wt::WtVec3 &b = render.water_vertices[
+					];
+					const wt::WtRenderVertex &b = render.water_vertices[
 						render.water_indices[triangle + 1U]
-					].position;
-					const wt::WtVec3 &c = render.water_vertices[
+					];
+					const wt::WtRenderVertex &c = render.water_vertices[
 						render.water_indices[triangle + 2U]
-					].position;
-					shoreline_area[lod] += 0.5 * std::abs(
-						static_cast<double>(b.x - a.x) * (c.z - a.z) -
-						static_cast<double>(b.z - a.z) * (c.x - a.x)
-					);
+					];
+					const float average_up =
+						(a.normal.y + b.normal.y + c.normal.y) / 3.0F;
+					if (average_up > 0.01F) {
+						shoreline_area[lod] += 0.5 * std::abs(
+							static_cast<double>(b.position.x - a.position.x) *
+								(c.position.z - a.position.z) -
+							static_cast<double>(b.position.z - a.position.z) *
+								(c.position.x - a.position.x)
+						);
+					} else {
+						++shoreline_boundary_triangles[lod];
+					}
 				}
 			}
 		}
+		check(
+			shoreline_boundary_triangles[lod] > 0U,
+			"four-biome lake lost its vertical shoreline boundary"
+		);
 	}
 	std::printf(
-		"M5_WATER_SHORELINE_AREA %.3f %.3f %.3f %.3f\n",
+		"M5_WATER_TOP_AREA %.3f %.3f %.3f %.3f "
+		"BOUNDARY_TRIANGLES %zu %zu %zu %zu\n",
 		shoreline_area[0], shoreline_area[1],
-		shoreline_area[2], shoreline_area[3]
+		shoreline_area[2], shoreline_area[3],
+		shoreline_boundary_triangles[0], shoreline_boundary_triangles[1],
+		shoreline_boundary_triangles[2], shoreline_boundary_triangles[3]
 	);
 	const auto footprint_range = std::minmax_element(
 		shoreline_area.begin(), shoreline_area.end()
@@ -567,7 +622,7 @@ void test_four_biome_water_free_surface(
 		*footprint_range.first > 0.0 &&
 		(*footprint_range.second - *footprint_range.first) <=
 			*footprint_range.second * 0.002,
-		"four-biome lake shoreline footprint moved between LODs"
+		"four-biome lake top footprint moved between LODs"
 	);
 }
 
@@ -2268,7 +2323,7 @@ int main() {
 	std::vector<std::uint8_t> evidence;
 	test_representable_sphere_difference_topology(evidence);
 	test_material_volume_continuous_distance(evidence);
-	test_four_biome_water_free_surface(evidence);
+	test_four_biome_water_volume(evidence);
 	test_authored_water_volume_boundary(evidence);
 	test_human_boundary_edit_repro(evidence);
 	test_streaming_pixel_transition_repro(evidence);
@@ -2295,7 +2350,7 @@ int main() {
 		"large_rolling_hills_cave_lod2_mask_regression=1 "
 		"human_boundary_repro=1 edited_coarse_rebuild=1 "
 		"sphere_difference_topology=1 smooth_sphere_difference=1 "
-		"material_volume_distance=1 water_lod_footprint=1 "
+		"material_volume_distance=1 procedural_water_volume=1 "
 		"authored_water_volume=1\n"
 	);
 	return 0;

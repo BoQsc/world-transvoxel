@@ -136,7 +136,7 @@ void test_render_builder(wt::WtRenderPayload &render) {
 		wt::WtRenderBuildStatus::Ok, "water render payload failed");
 	check(render.vertices.size() == 6 && render.indices.size() == 6 &&
 		render.water_vertices.size() == 12 && render.water_indices.size() == 12,
-		"authored water did not retain its volumetric boundary geometry");
+		"water payload did not retain its volumetric boundary geometry");
 	check(render.water_vertices[0].material == 9,
 		"water render surface lost its material identity");
 	check(render.water_vertices[0].normal.y == 1.0F &&
@@ -146,9 +146,11 @@ void test_render_builder(wt::WtRenderPayload &render) {
 		"authored water boundary was flattened into a free-surface cap");
 	check(render.water_vertices[0].normal.y == 1.0F,
 		"water free surface did not receive the authoritative gravity normal");
-	check(render.water_vertices[7].position.y == 1.0F &&
-		render.water_vertices[10].position.y == 4.0F,
-		"water shoreline coverage was not flattened to its gravity level");
+	check(render.water_vertices[7].position.y == 0.0F &&
+		render.water_vertices[10].position.y == 0.0F &&
+		!render.water_vertices[6].material_authored &&
+		!render.water_vertices[9].material_authored,
+		"generated water boundary was modified by render-payload construction");
 }
 
 void test_collision_builder() {

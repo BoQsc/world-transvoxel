@@ -40,6 +40,7 @@ For every included sample, commands apply in journal order:
 | paint material | `material = value` |
 | SDF carve sphere | `density = max(density, brush_sdf)` |
 | SDF construct sphere | `density = min(density, -brush_sdf)`; when the brush wins inside/on the surface and carries a nonzero material, that constructed solid takes the material |
+| place static water | union the brush into the secondary static-water density; exposed terrain-air samples receive the static-water material |
 
 Add/set/paint brushes are hard inclusive shapes. SDF sphere operations use a
 one-base-grid-unit support band so the signed field remains continuous across
@@ -52,6 +53,12 @@ followed by a paint command. It assigns the selected categorical material only
 where the construct brush supplies the winning solid field. A denser
 pre-existing solid and its material remain authoritative. Density-only legacy
 construct commands with material zero retain their previous behavior.
+
+Terrain edits do not delete static-water density. Construction masks water with
+solid terrain. A later carve that wins at the same sample exposes the preserved
+water and assigns its material to the newly empty terrain sample. This ordered
+cover/reveal behavior is static volume composition, not fluid flow; the
+normative details are in `STATIC_LAKE_AUTHORITY_CONTRACT.md`.
 
 ## Terrain standard brush boundary
 
@@ -134,6 +141,7 @@ The test covers:
 - world revision and sequence gaps;
 - invalid command bounds;
 - non-finite additive results with atomic sample/revision preservation.
+- static-water construction/excavation order and secondary-density retention;
 
 Snapshot compaction now turns replayed samples into a new source revision,
 retains previous-world and journal audit identities, and persists the next

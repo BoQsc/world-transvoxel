@@ -118,9 +118,10 @@ and release it proves:
   protected-corner contour edges are tracked as evidence; they are not treated
   as a native missing-fine-edge failure by this contract. Godot-side visibility
   of this case is owned by the integration terrain material/visual gates;
-- procedural lake surfaces retain their locked footprint across LOD0 through
-  LOD3, while an authored spherical static-water field retains its complete
-  Transvoxel boundary, including side and downward-facing geometry.
+- procedural lakes retain both their locked top footprint and their vertical
+  shoreline boundary across LOD0 through LOD3; generated and authored static
+  water pass through render-payload construction as complete, unmodified
+  Transvoxel geometry.
 
 The workload and edit-replacement tests additionally prove desired-set
 release/repriority and edit-replacement cancellation calls through the narrow

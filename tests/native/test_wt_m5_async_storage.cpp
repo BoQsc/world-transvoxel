@@ -1135,8 +1135,39 @@ void test_four_biome_lake_world() {
 	check(
 		wt::wt_sample_procedural_world(
 			descriptor, { 650, 0, 700 }, lake_floor
-		) && lake_floor.density < 0.0F && lake_floor.material != 9,
+		) && lake_floor.density < 0.0F && lake_floor.material != 9 &&
+			lake_floor.static_water_density < 0.0F,
 		"four-biome lake replaced its solid basin floor"
+	);
+	wt::WtScalarSample above_lake;
+	wt::WtScalarSample outside_lake;
+	check(
+		wt::wt_sample_procedural_world(
+			descriptor, { 650, 24, 700 }, above_lake
+		) && above_lake.density > 0.0F &&
+			above_lake.static_water_density > 0.0F &&
+			above_lake.material != 9,
+		"four-biome lake extended above its fixed water level"
+	);
+	check(
+		wt::wt_sample_procedural_world(
+			descriptor, { 881, 20, 700 }, outside_lake
+		) && outside_lake.static_water_density > 0.0F &&
+			outside_lake.material != 9,
+		"four-biome lake extended beyond its elliptical footprint"
+	);
+
+	// The expansive road's asphalt corridor remains outside every lake. Its
+	// shoulder approaches the gravel lake and can author solid terrain over the
+	// independent water field without deleting that hidden water authority.
+	wt::WtScalarSample road_shoulder_lake;
+	check(
+		wt::wt_sample_procedural_world(
+			descriptor, { 864, 20, 1340 }, road_shoulder_lake
+		) && road_shoulder_lake.density < 0.0F &&
+			road_shoulder_lake.material != 9 &&
+			road_shoulder_lake.static_water_density < 0.0F,
+		"near-road terrain did not occlude the independent lake field"
 	);
 
 	wt::WtScalarSample road_surface;

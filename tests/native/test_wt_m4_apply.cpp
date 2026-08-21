@@ -716,6 +716,79 @@ void test_static_water_placement() {
 	);
 }
 
+void test_static_water_terrain_interaction_order() {
+	wt::WtScalarSample initial;
+	initial.density = -2.0F;
+	initial.material = 2;
+	initial.static_water_density = -4.0F;
+
+	wt::WtEditCommand carve = sphere(
+		98,
+		0,
+		1,
+		wt::WtEditOperation::SdfCarve,
+		0,
+		2 * wt::kWtEditCoordinateScale,
+		1.0F
+	);
+	wt::WtEditCommand construct = sphere(
+		99,
+		1,
+		1,
+		wt::WtEditOperation::SdfConstruct,
+		0,
+		3 * wt::kWtEditCoordinateScale,
+		1.0F
+	);
+	construct.material = 10;
+
+	wt::WtScalarSample construct_then_carve = initial;
+	bool changed = false;
+	check(
+		wt::wt_apply_edit_command_to_sample(
+			construct, { 0, 0, 0 }, construct_then_carve, changed
+		) && changed && construct_then_carve.density < -2.99F &&
+			construct_then_carve.material == 10 &&
+			construct_then_carve.static_water_density == -4.0F,
+		"construction did not mask static water without deleting it"
+	);
+	changed = false;
+	check(
+		wt::wt_apply_edit_command_to_sample(
+			carve, { 0, 0, 0 }, construct_then_carve, changed
+		) && changed && construct_then_carve.density > 1.99F &&
+			construct_then_carve.material == wt::kWtStaticWaterMaterialId &&
+			construct_then_carve.material_authored &&
+			construct_then_carve.static_water_density == -4.0F,
+		"excavation did not re-expose preserved static water"
+	);
+
+	wt::WtScalarSample carve_then_construct = initial;
+	changed = false;
+	check(
+		wt::wt_apply_edit_command_to_sample(
+			carve, { 0, 0, 0 }, carve_then_construct, changed
+		) && changed && carve_then_construct.density > 1.99F &&
+			carve_then_construct.material == wt::kWtStaticWaterMaterialId &&
+			carve_then_construct.static_water_density == -4.0F,
+		"initial excavation did not expose static water"
+	);
+	changed = false;
+	check(
+		wt::wt_apply_edit_command_to_sample(
+			construct, { 0, 0, 0 }, carve_then_construct, changed
+		) && changed && carve_then_construct.density < -2.99F &&
+			carve_then_construct.material == 10 &&
+			carve_then_construct.static_water_density == -4.0F,
+		"later construction did not deterministically cover static water"
+	);
+	check(
+		construct_then_carve.density > 0.0F &&
+		carve_then_construct.density < 0.0F,
+		"static-water terrain interaction ignored edit order"
+	);
+}
+
 void test_failures() {
 	std::vector<wt::WtChunkPage> pages = bake_pages();
 	if (pages.empty()) return;
@@ -900,6 +973,7 @@ int main() {
 	test_smooth_sdf_sphere_edits();
 	test_material_volume_placement();
 	test_static_water_placement();
+	test_static_water_terrain_interaction_order();
 	test_failures();
 	test_bottom_boundary_edit_clipping();
 	if (failure_count != 0) {
@@ -909,7 +983,7 @@ int main() {
 	std::printf("M4_APPLY_HASH ");
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
-		"M4_APPLY_PASS pages=5 overlap_samples=1083 cross_lod_pointwise=1 sdf_sphere_edits=3 smooth_sdf=1 static_water=1 failure_cases=7 bottom_boundary_clipping=1\n"
+		"M4_APPLY_PASS pages=5 overlap_samples=1083 cross_lod_pointwise=1 sdf_sphere_edits=3 smooth_sdf=1 static_water=1 static_water_order=1 failure_cases=7 bottom_boundary_clipping=1\n"
 	);
 	return 0;
 }

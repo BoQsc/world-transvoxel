@@ -84,10 +84,8 @@ on terrain LOD. A categorical material ID alone is not sufficient geometry for
 a stable free surface. Dynamic fluid simulation remains a later system layered
 on the same volume authority.
 
-The render payload distinguishes procedural and authored static water without
-creating another geometry authority. Procedural lakes retain their
-gravity-aligned, LOD-stable free surface. Edited water retains the complete
-Transvoxel boundary represented by the secondary scalar field, including
-non-upward surfaces when exposed. Shared vertices are resolved separately for
-the two policies so procedural flattening cannot deform adjacent authored
-geometry.
+The render payload does not distinguish generated and edited static water for
+geometry construction. Both retain the complete Transvoxel boundary represented
+by the secondary scalar field, including non-upward surfaces when exposed.
+Terrain controls visibility through depth occlusion; render-payload code must
+not flatten, clip, or replace either source with separate presentation geometry.
