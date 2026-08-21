@@ -618,6 +618,71 @@ void test_authored_water_volume_boundary(
 	check(minimum_y < 5.0F && maximum_y > 11.0F &&
 		has_side_normal && has_down_normal,
 		"authored water sphere was reduced to an upward free surface");
+	std::size_t normal_aligned_faces = 0;
+	std::size_t normal_opposed_faces = 0;
+	std::size_t outward_faces = 0;
+	std::size_t inward_faces = 0;
+	for (std::size_t first = 0; first < render.water_indices.size(); first += 3U) {
+		const wt::WtRenderVertex &a = render.water_vertices[
+			render.water_indices[first]
+		];
+		const wt::WtRenderVertex &b = render.water_vertices[
+			render.water_indices[first + 1U]
+		];
+		const wt::WtRenderVertex &c = render.water_vertices[
+			render.water_indices[first + 2U]
+		];
+		const double edge_ab_x = static_cast<double>(b.position.x) - a.position.x;
+		const double edge_ab_y = static_cast<double>(b.position.y) - a.position.y;
+		const double edge_ab_z = static_cast<double>(b.position.z) - a.position.z;
+		const double edge_ac_x = static_cast<double>(c.position.x) - a.position.x;
+		const double edge_ac_y = static_cast<double>(c.position.y) - a.position.y;
+		const double edge_ac_z = static_cast<double>(c.position.z) - a.position.z;
+		const double face_x = edge_ab_y * edge_ac_z - edge_ab_z * edge_ac_y;
+		const double face_y = edge_ab_z * edge_ac_x - edge_ab_x * edge_ac_z;
+		const double face_z = edge_ab_x * edge_ac_y - edge_ab_y * edge_ac_x;
+		const double average_normal_x =
+			(static_cast<double>(a.normal.x) + b.normal.x + c.normal.x) / 3.0;
+		const double average_normal_y =
+			(static_cast<double>(a.normal.y) + b.normal.y + c.normal.y) / 3.0;
+		const double average_normal_z =
+			(static_cast<double>(a.normal.z) + b.normal.z + c.normal.z) / 3.0;
+		const double normal_orientation =
+			face_x * average_normal_x + face_y * average_normal_y +
+			face_z * average_normal_z;
+		if (normal_orientation > 1.0e-8) {
+			++normal_aligned_faces;
+		} else if (normal_orientation < -1.0e-8) {
+			++normal_opposed_faces;
+		}
+		const double radial_x =
+			(static_cast<double>(a.position.x) + b.position.x + c.position.x) /
+				3.0 - 8.0;
+		const double radial_y =
+			(static_cast<double>(a.position.y) + b.position.y + c.position.y) /
+				3.0 - 8.0;
+		const double radial_z =
+			(static_cast<double>(a.position.z) + b.position.z + c.position.z) /
+				3.0 - 8.0;
+		const double radial_orientation =
+			face_x * radial_x + face_y * radial_y + face_z * radial_z;
+		if (radial_orientation > 1.0e-8) {
+			++outward_faces;
+		} else if (radial_orientation < -1.0e-8) {
+			++inward_faces;
+		}
+	}
+	check(normal_aligned_faces == 0U || normal_opposed_faces == 0U,
+		"authored water sphere has mixed triangle winding relative to normals");
+	check(outward_faces == 0U || inward_faces == 0U,
+		"authored water sphere has mixed radial triangle winding");
+	std::printf(
+		"AUTHORED_WATER_ORIENTATION aligned=%zu opposed=%zu outward=%zu inward=%zu\n",
+		normal_aligned_faces,
+		normal_opposed_faces,
+		outward_faces,
+		inward_faces
+	);
 	append_u64(evidence, render.water_indices.size());
 }
 
