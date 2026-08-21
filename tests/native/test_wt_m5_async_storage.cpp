@@ -1122,7 +1122,7 @@ void test_four_biome_lake_world() {
 	}
 
 	for (const wt::WtGridPoint &point : std::array<wt::WtGridPoint, 3>{{
-		{ 650, 20, 700 }, { 1400, 20, 700 }, { 650, 20, 1370 }
+		{ 650, 20, 700 }, { 1400, 20, 700 }, { 650, 10, 1370 }
 	}}) {
 		wt::WtScalarSample water;
 		check(
@@ -1156,6 +1156,23 @@ void test_four_biome_lake_world() {
 			outside_lake.material != 9,
 		"four-biome lake extended beyond its elliptical footprint"
 	);
+	wt::WtScalarSample exposed_wall_repro;
+	wt::WtScalarSample contained_shore;
+	check(
+		wt::wt_sample_procedural_world(
+			descriptor, { 868, 15, 1387 }, exposed_wall_repro
+		) && exposed_wall_repro.static_water_density > 0.0F &&
+			exposed_wall_repro.material != 9,
+		"gravel lake retained the exposed high-water wall"
+	);
+	check(
+		wt::wt_sample_procedural_world(
+			descriptor, { 868, 14, 1387 }, contained_shore
+		) && contained_shore.density < 0.0F &&
+			contained_shore.material != 9 &&
+			contained_shore.static_water_density < 0.0F,
+		"gravel lake lateral closure is not contained by solid shoreline terrain"
+	);
 
 	// The expansive road's asphalt corridor remains outside every lake. Its
 	// shoulder approaches the gravel lake and can author solid terrain over the
@@ -1163,7 +1180,7 @@ void test_four_biome_lake_world() {
 	wt::WtScalarSample road_shoulder_lake;
 	check(
 		wt::wt_sample_procedural_world(
-			descriptor, { 864, 20, 1340 }, road_shoulder_lake
+			descriptor, { 864, 14, 1340 }, road_shoulder_lake
 		) && road_shoulder_lake.density < 0.0F &&
 			road_shoulder_lake.material != 9 &&
 			road_shoulder_lake.static_water_density < 0.0F,

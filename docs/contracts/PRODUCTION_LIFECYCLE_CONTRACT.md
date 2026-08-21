@@ -81,7 +81,10 @@ the intended catchment. The water field is meshed independently of terrain LOD;
 the terrain surface depth-occludes portions beneath solid ground, while material
 ID `9` labels occupied terrain-air samples for queries and presentation. This
 separation prevents categorical material sampling or a terrain-LOD boolean
-intersection from moving the lake surface or shoreline. Material ID `10`
+intersection from moving the lake surface or shoreline. Reference basin levels
+keep each lateral water closure under solid terrain, so the visible shoreline
+is a gradual terrain/free-surface intersection rather than an exposed water
+wall. Material ID `10`
 remains a shallow solid asphalt layer. These fields are independent of chunk
 decomposition and viewer LOD.
 

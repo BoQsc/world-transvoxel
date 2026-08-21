@@ -22,6 +22,10 @@ gravity-aligned elliptical lake fields. Each has a fixed horizontal footprint
 and water level. The terrain generator authors a matching smooth basin
 depression, then applies road grading and cave subtraction to terrain. The
 secondary water field is sampled separately from that final terrain density.
+In the untouched reference world, the basin must rise above the water level
+before the water field reaches its lateral closure. The visible shoreline is
+therefore the gradual terrain/free-surface intersection; the complete hidden
+water boundary must not appear as a vertical wall in open air.
 
 ## Ordered terrain interaction
 
@@ -71,6 +75,8 @@ The native suite must prove:
   deterministic final terrain state;
 - procedural free-surface elevation and footprint remain stable across LODs;
 - procedural shoreline volume survives render-payload construction across LODs;
+- procedural lateral closure remains occluded by solid terrain in the untouched
+  reference world;
 - rendered generated water is the unmodified Transvoxel water payload.
 
 Dynamic hydrology is a separate future system. It must not be inferred from

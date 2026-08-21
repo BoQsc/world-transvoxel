@@ -125,7 +125,7 @@ struct WtProceduralLake {
 constexpr std::array<WtProceduralLake, 3> kFourBiomeLakes = {{
 	{ 650.0, 700.0, 230.0, 170.0, 23.5, 34.0 },
 	{ 1400.0, 700.0, 240.0, 170.0, 21.5, 36.0 },
-	{ 650.0, 1370.0, 220.0, 160.0, 27.5, 38.0 },
+	{ 650.0, 1370.0, 220.0, 160.0, 14.5, 38.0 },
 }};
 
 double four_biome_lake_depression(double x, double z) noexcept {
