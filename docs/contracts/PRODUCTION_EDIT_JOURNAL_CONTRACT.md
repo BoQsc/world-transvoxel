@@ -81,7 +81,7 @@ final PQ2 unit.
 `test_wt_production_edit_journal` locks this debug/release hash:
 
 ```text
-PRODUCTION_EDIT_JOURNAL_HASH 9ef203c834035827a3cf6bddac1aea50935089bc839d2bc5252a928576588a20
+PRODUCTION_EDIT_JOURNAL_HASH 9152d9422e2d0a9a04214f7a9447e6d3b475f13bdb90efc395a764b25ed71ac1
 ```
 
 It proves two durable commits, restart loading, physical truncated-tail

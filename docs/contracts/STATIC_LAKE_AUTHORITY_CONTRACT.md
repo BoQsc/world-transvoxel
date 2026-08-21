@@ -32,6 +32,8 @@ interaction follows these deterministic rules:
 - excavation into a negative static-water sample exposes water and assigns the
   static-water material to the newly empty terrain sample;
 - placing static water unions the brush into the existing water field;
+- removing static water subtracts the brush from the water field without
+  changing terrain density or material;
 - later construction and excavation repeat the same cover/reveal behavior;
 - no operation implies drainage, displacement, pressure, connectivity, flow,
   evaporation, or automatic basin refilling.

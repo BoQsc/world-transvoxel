@@ -86,7 +86,7 @@ snapshot and swap it only after success.
 `tests/native/test_wt_m4_journal.cpp` locks the debug/release journal hash:
 
 ```text
-7f448a317d6cf22038b276f29700822752abe17c8f56b83a86018fe7ebd5d063
+3c45936ac7e05e0736e0ae4b432e634cc4b587a9c498f4b2eebb7942532508d8
 ```
 
 The test covers:

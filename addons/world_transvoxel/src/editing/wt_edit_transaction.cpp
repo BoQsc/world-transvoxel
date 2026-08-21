@@ -267,6 +267,8 @@ bool decode_command(WtByteView bytes, WtEditCommand &command) {
 	if (record_size != bytes.size ||
 		major != kWtEditSchemaMajor ||
 		minor > kWtEditSchemaMinor ||
+		(minor < 4 &&
+			command.operation == WtEditOperation::RemoveStaticWater) ||
 		(minor == 0 && command.operation == WtEditOperation::SdfConstruct &&
 			command.material != 0) ||
 		reserved_short != 0 || (minor < 2 && smooth_radius_q16 != 0) ||

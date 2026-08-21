@@ -213,11 +213,13 @@ Supported commands:
 - `paint_material_sphere(center, radius, material)`
 - `place_material_volume_sphere(center, radius, material)`
 - `place_static_water_sphere(center, radius)`
+- `remove_static_water_sphere(center, radius)`
 - `add_density_box(minimum, maximum, value)`
 - `set_density_box(minimum, maximum, value)`
 - `paint_material_box(minimum, maximum, material)`
 - `place_material_volume_box(minimum, maximum, material)`
 - `place_static_water_box(minimum, maximum)`
+- `remove_static_water_box(minimum, maximum)`
 
 All return `bool`. Inspect `get_error()` after rejection. Transactions also
 expose base/committed revision, command count, and submitted state. A
@@ -229,11 +231,15 @@ material ID `9`; water authored beneath solid terrain remains depth-occluded and
 becomes visible if a later terrain edit exposes it. This is deterministic static
 volume editing, not fluid flow or pressure simulation.
 
-Rendering preserves that distinction. Non-authored procedural lakes expose a
-gravity-aligned, LOD-stable free surface. Water created or exposed by an edit
-retains the complete authored Transvoxel boundary, including side and lower
-surfaces; solid terrain depth-occludes the portions embedded in terrain. The
-render path does not collapse an authored sphere or box into a top-only cap.
+Static-water removal subtracts the brush from that same secondary density field
+without changing terrain density or material. Placement and removal are ordered
+and persisted in the edit journal, so the later operation wins where their
+brushes overlap.
+
+Rendering preserves the complete Transvoxel boundary of generated and edited
+water, including side and lower surfaces. Solid terrain depth-occludes the
+portions embedded in terrain. The render path does not collapse any water field
+into a top-only cap or separate presentation mesh.
 
 ## Immutable snapshots
 

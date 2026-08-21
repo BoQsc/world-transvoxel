@@ -124,7 +124,7 @@ entries, and a 40-byte descriptor index on Windows x86-64.
 `test_wt_production_snapshot_query` locks this debug/release hash:
 
 ```text
-PRODUCTION_SNAPSHOT_QUERY_HASH 2b3da9885262e7548e95192e698eb00eebe57fadc82e05aa05b5da83dbc2c689
+PRODUCTION_SNAPSHOT_QUERY_HASH 85405130738a0b3c38a69d1ed7f146379c7e3e470c090ff40690aec66aede7c7
 ```
 
 It proves base and edited sample values, overlap agreement and disagreement,

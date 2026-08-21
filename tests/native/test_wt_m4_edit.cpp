@@ -261,8 +261,10 @@ void test_static_water_operation() {
 	wt::WtEditTransaction transaction = make_transaction();
 	transaction.commands = {
 		sphere_command(0, wt::WtEditOperation::PlaceStaticWater, 0.0F),
+		sphere_command(1, wt::WtEditOperation::RemoveStaticWater, 0.0F),
 	};
 	transaction.commands[0].material = wt::kWtStaticWaterMaterialId;
+	transaction.commands[1].material = wt::kWtStaticWaterMaterialId;
 	std::vector<std::uint8_t> bytes;
 	wt::WtEditTransactionDocument document;
 	check(
@@ -274,17 +276,21 @@ void test_static_water_operation() {
 		"static water edit transaction failed"
 	);
 	check(
-		document.transaction.commands.size() == 1 &&
+		document.transaction.commands.size() == 2 &&
 			document.transaction.commands[0].operation ==
 				wt::WtEditOperation::PlaceStaticWater &&
+			document.transaction.commands[1].operation ==
+				wt::WtEditOperation::RemoveStaticWater &&
 			document.transaction.commands[0].material ==
+				wt::kWtStaticWaterMaterialId &&
+			document.transaction.commands[1].material ==
 				wt::kWtStaticWaterMaterialId,
 		"static water edit operation round trip mismatch"
 	);
-	transaction.commands[0].material = 8;
+	transaction.commands[1].material = 8;
 	check(
-		!wt::wt_is_valid_edit_command(transaction.commands[0]),
-		"static water operation accepted a non-water material"
+		!wt::wt_is_valid_edit_command(transaction.commands[1]),
+		"static water removal accepted a non-water material"
 	);
 }
 
@@ -500,6 +506,6 @@ int main() {
 	}
 	std::printf("M4_EDIT_HASH ");
 	print_hash(wt::wt_sha256(bytes.data(), bytes.size()));
-	std::printf("M4_EDIT_PASS commands=3 sdf_commands=2 smooth_sdf=1 static_water=1 failure_cases=19\n");
+	std::printf("M4_EDIT_PASS commands=3 sdf_commands=2 smooth_sdf=1 static_water_operations=2 failure_cases=19\n");
 	return 0;
 }

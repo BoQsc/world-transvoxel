@@ -716,6 +716,110 @@ void test_static_water_placement() {
 	);
 }
 
+void test_static_water_removal() {
+	wt::WtEditCommand remove = sphere(
+		98,
+		0,
+		1,
+		wt::WtEditOperation::RemoveStaticWater,
+		0,
+		2 * wt::kWtEditCoordinateScale,
+		0.0F
+	);
+	remove.material = wt::kWtStaticWaterMaterialId;
+	wt::WtScalarSample water = { 3.0F, wt::kWtStaticWaterMaterialId };
+	water.material_authored = true;
+	water.static_water_density = -5.0F;
+	bool changed = false;
+	check(
+		wt::wt_apply_edit_command_to_sample(
+			remove, { 0, 0, 0 }, water, changed
+		) && changed && water.density == 3.0F &&
+			water.material == wt::kWtStaticWaterMaterialId &&
+			water.material_authored && water.static_water_density > 1.99F,
+		"static water sphere removal changed terrain or retained water"
+	);
+
+	wt::WtScalarSample outside = { 3.0F, 4 };
+	outside.static_water_density = -5.0F;
+	const wt::WtScalarSample outside_before = outside;
+	changed = false;
+	check(
+		wt::wt_apply_edit_command_to_sample(
+			remove, { 3, 0, 0 }, outside, changed
+		) && !changed && outside.density == outside_before.density &&
+			outside.material == outside_before.material &&
+			outside.material_authored == outside_before.material_authored &&
+			outside.static_water_density ==
+				outside_before.static_water_density,
+		"static water sphere removal changed an outside sample"
+	);
+
+	wt::WtEditCommand box;
+	box.command_id = id(99);
+	box.world_revision = 1;
+	box.operation = wt::WtEditOperation::RemoveStaticWater;
+	box.shape = wt::WtEditShape::AxisAlignedBox;
+	box.material = wt::kWtStaticWaterMaterialId;
+	box.box = {
+		-2 * wt::kWtEditCoordinateScale,
+		-2 * wt::kWtEditCoordinateScale,
+		-2 * wt::kWtEditCoordinateScale,
+		2 * wt::kWtEditCoordinateScale,
+		2 * wt::kWtEditCoordinateScale,
+		2 * wt::kWtEditCoordinateScale,
+	};
+	check(
+		wt::wt_edit_box_bounds(box.box, box.bounds),
+		"static water removal box bounds failed"
+	);
+	wt::WtScalarSample boxed = { -3.0F, 7 };
+	boxed.static_water_density = -6.0F;
+	changed = false;
+	check(
+		wt::wt_apply_edit_command_to_sample(
+			box, { 0, 0, 0 }, boxed, changed
+		) && changed && boxed.density == -3.0F && boxed.material == 7 &&
+			boxed.static_water_density > 1.99F,
+		"static water box removal changed terrain or retained water"
+	);
+
+	wt::WtEditCommand place = sphere(
+		100,
+		0,
+		1,
+		wt::WtEditOperation::PlaceStaticWater,
+		0,
+		3 * wt::kWtEditCoordinateScale,
+		0.0F
+	);
+	place.material = wt::kWtStaticWaterMaterialId;
+	wt::WtScalarSample remove_then_place = { 4.0F, 1 };
+	remove_then_place.static_water_density = -5.0F;
+	changed = false;
+	check(
+		wt::wt_apply_edit_command_to_sample(
+			remove, { 0, 0, 0 }, remove_then_place, changed
+		) && changed &&
+		wt::wt_apply_edit_command_to_sample(
+			place, { 0, 0, 0 }, remove_then_place, changed
+		) && changed && remove_then_place.static_water_density < -2.99F,
+		"later static water placement did not win ordered composition"
+	);
+	wt::WtScalarSample place_then_remove = { 4.0F, 1 };
+	place_then_remove.static_water_density = -5.0F;
+	changed = false;
+	check(
+		wt::wt_apply_edit_command_to_sample(
+			place, { 0, 0, 0 }, place_then_remove, changed
+		) && changed &&
+		wt::wt_apply_edit_command_to_sample(
+			remove, { 0, 0, 0 }, place_then_remove, changed
+		) && changed && place_then_remove.static_water_density > 1.99F,
+		"later static water removal did not win ordered composition"
+	);
+}
+
 void test_static_water_terrain_interaction_order() {
 	wt::WtScalarSample initial;
 	initial.density = -2.0F;
@@ -973,6 +1077,7 @@ int main() {
 	test_smooth_sdf_sphere_edits();
 	test_material_volume_placement();
 	test_static_water_placement();
+	test_static_water_removal();
 	test_static_water_terrain_interaction_order();
 	test_failures();
 	test_bottom_boundary_edit_clipping();
@@ -983,7 +1088,7 @@ int main() {
 	std::printf("M4_APPLY_HASH ");
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
-		"M4_APPLY_PASS pages=5 overlap_samples=1083 cross_lod_pointwise=1 sdf_sphere_edits=3 smooth_sdf=1 static_water=1 static_water_order=1 failure_cases=7 bottom_boundary_clipping=1\n"
+		"M4_APPLY_PASS pages=5 overlap_samples=1083 cross_lod_pointwise=1 sdf_sphere_edits=3 smooth_sdf=1 static_water_place=1 static_water_remove=1 static_water_order=1 failure_cases=7 bottom_boundary_clipping=1\n"
 	);
 	return 0;
 }

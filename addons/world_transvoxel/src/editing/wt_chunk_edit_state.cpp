@@ -322,17 +322,24 @@ bool apply_valid_command_to_sample(
 				}
 			}
 		}
-	} else if (command.operation == WtEditOperation::PlaceStaticWater) {
+	} else if (command.operation == WtEditOperation::PlaceStaticWater ||
+		command.operation == WtEditOperation::RemoveStaticWater) {
 		float water_density = 0.0F;
 		if (!static_water_brush_density(command, point, water_density)) {
 			return false;
 		}
-		sample.static_water_density = std::min(
-			sample.static_water_density, water_density
-		);
-		if (sample.density >= 0.0F) {
-			sample.material = kWtStaticWaterMaterialId;
-			sample.material_authored = true;
+		if (command.operation == WtEditOperation::PlaceStaticWater) {
+			sample.static_water_density = std::min(
+				sample.static_water_density, water_density
+			);
+			if (sample.density >= 0.0F) {
+				sample.material = kWtStaticWaterMaterialId;
+				sample.material_authored = true;
+			}
+		} else {
+			sample.static_water_density = std::max(
+				sample.static_water_density, -water_density
+			);
 		}
 	} else if (command.operation == WtEditOperation::PlaceMaterialVolume) {
 		if (sample.density >= 0.0F) {
@@ -403,7 +410,8 @@ bool density_result_is_finite(
 	const bool sdf = command.operation == WtEditOperation::SdfCarve ||
 		command.operation == WtEditOperation::SdfConstruct;
 	const bool static_water =
-		command.operation == WtEditOperation::PlaceStaticWater;
+		command.operation == WtEditOperation::PlaceStaticWater ||
+		command.operation == WtEditOperation::RemoveStaticWater;
 	if ((!additive && !sdf && !static_water) ||
 		!may_intersect_page(page.metadata, command.bounds)) {
 		return true;

@@ -30,6 +30,9 @@ Schema 1 operations are:
 | 3 | paint material | density zero; material is the target |
 | 4 | SDF carve sphere | finite positive strength; material zero |
 | 5 | SDF construct sphere | finite positive strength; material zero for legacy density-only construction or the categorical material owned by newly constructed solid |
+| 6 | place material volume | density zero; positive categorical material |
+| 7 | place static water | density zero; material is static-water ID `9` |
+| 8 | remove static water | density zero; material is static-water ID `9` |
 
 Schema 1 shapes are:
 
@@ -56,14 +59,14 @@ codec-`none`, flag-zero sections are required:
 
 The common source revision must equal `EHDR.source_revision`.
 
-## `EHDR` schema 1.1
+## `EHDR` schema 1.4
 
 `EHDR` is exactly 64 bytes:
 
 | Offset | Type | Meaning |
 | ---: | --- | --- |
 | 0 | `u16` | schema major, `1` |
-| 2 | `u16` | schema minor, `1` |
+| 2 | `u16` | schema minor, `4` |
 | 4 | `u8[16]` | nonzero transaction ID |
 | 20 | `u64` | baked source revision |
 | 28 | `u64` | base world edit revision |
@@ -75,8 +78,10 @@ The common source revision must equal `EHDR.source_revision`.
 
 The committed revision must equal `base_revision + 1`, without overflow.
 Readers continue to accept schema 1.0 transactions. Schema 1.1 adds the
-material-aware form of SDF construct operation 5 without changing record sizes;
-schema 1.0 construct commands always carry material zero.
+material-aware form of SDF construct operation 5, schema 1.2 adds smooth SDF
+radius metadata, schema 1.3 adds static-water placement, and schema 1.4 adds
+static-water removal. None changes the record sizes. Schema 1.0 construct
+commands always carry material zero, and operation 8 is invalid before 1.4.
 
 ## `CMDS` records
 
@@ -138,10 +143,10 @@ commands therefore cannot commit.
 `tests/native/test_wt_m4_edit.cpp` locks this debug/release transaction hash:
 
 ```text
-8ecb3f387478877235fef366805b9e72b6cdb927126e5fa9b545f5a957779f60
+b6486070db6d6d3083dc5858d72bbfeebf3b4c005167cc568ac22cff2261c19c
 ```
 
-The test covers both shapes, all five operations, material-aware SDF
+The test covers both shapes, all eight operations, material-aware SDF
 construction, negative fractional
 coordinates, exact conservative bounds, input-order independence,
 byte-identical round-trip, revision and sequence rules, duplicate IDs,

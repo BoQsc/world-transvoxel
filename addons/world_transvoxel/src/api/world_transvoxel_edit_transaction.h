@@ -78,6 +78,10 @@ public:
 		const godot::Vector3 &center,
 		double radius
 	);
+	bool remove_static_water_sphere(
+		const godot::Vector3 &center,
+		double radius
+	);
 	bool add_density_box(
 		const godot::Vector3 &minimum,
 		const godot::Vector3 &maximum,
@@ -99,6 +103,10 @@ public:
 		std::int64_t material
 	);
 	bool place_static_water_box(
+		const godot::Vector3 &minimum,
+		const godot::Vector3 &maximum
+	);
+	bool remove_static_water_box(
 		const godot::Vector3 &minimum,
 		const godot::Vector3 &maximum
 	);

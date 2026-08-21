@@ -20,7 +20,7 @@ DEFAULT_EXECUTABLE = (
     / "native-tests"
     / "test_wt_production_snapshot_query.template_debug.x86_64.exe"
 )
-EXPECTED_HASH = "2b3da9885262e7548e95192e698eb00eebe57fadc82e05aa05b5da83dbc2c689"
+EXPECTED_HASH = "85405130738a0b3c38a69d1ed7f146379c7e3e470c090ff40690aec66aede7c7"
 KEY_VALUE = re.compile(r"(?P<key>[a-zA-Z0-9_]+)=(?P<value>[^ ]+)")
 
 

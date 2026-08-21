@@ -67,7 +67,8 @@ bool valid_operation(WtEditOperation operation) noexcept {
 		operation == WtEditOperation::SdfCarve ||
 		operation == WtEditOperation::SdfConstruct ||
 		operation == WtEditOperation::PlaceMaterialVolume ||
-		operation == WtEditOperation::PlaceStaticWater;
+		operation == WtEditOperation::PlaceStaticWater ||
+		operation == WtEditOperation::RemoveStaticWater;
 }
 
 bool valid_shape(WtEditShape shape) noexcept {
@@ -182,7 +183,8 @@ bool wt_is_valid_edit_command(const WtEditCommand &command) noexcept {
 	}
 	if ((command.operation == WtEditOperation::PaintMaterial ||
 			command.operation == WtEditOperation::PlaceMaterialVolume ||
-			command.operation == WtEditOperation::PlaceStaticWater) &&
+			command.operation == WtEditOperation::PlaceStaticWater ||
+			command.operation == WtEditOperation::RemoveStaticWater) &&
 		command.density_value != 0.0F) {
 		return false;
 	}
@@ -190,7 +192,8 @@ bool wt_is_valid_edit_command(const WtEditCommand &command) noexcept {
 		command.material == 0) {
 		return false;
 	}
-	if (command.operation == WtEditOperation::PlaceStaticWater &&
+	if ((command.operation == WtEditOperation::PlaceStaticWater ||
+			command.operation == WtEditOperation::RemoveStaticWater) &&
 		command.material != kWtStaticWaterMaterialId) {
 		return false;
 	}
