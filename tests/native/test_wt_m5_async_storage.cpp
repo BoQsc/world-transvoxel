@@ -3,6 +3,7 @@
 #include "storage/wt_chunk_page.h"
 #include "storage/wt_hash256.h"
 #include "storage/wt_procedural_cave_field.h"
+#include "storage/wt_procedural_snapshot_descriptor.h"
 #include "storage/wt_procedural_world_source.h"
 
 #include <chrono>
@@ -1177,6 +1178,72 @@ void test_four_biome_lake_world() {
 	);
 }
 
+void test_procedural_bottom_boundary() {
+	wt::WtProceduralWorldDescriptor descriptor;
+	descriptor.chunk_count_x = 128;
+	descriptor.chunk_count_y = 16;
+	descriptor.chunk_count_z = 128;
+	descriptor.chunk_y = -8;
+	descriptor.source_revision = 190326;
+	descriptor.seed = 19023;
+	descriptor.mode = wt::WtProceduralWorldMode::FourBiomesLakesCavesRoads;
+	descriptor.bottom_boundary_policy =
+		wt::WtProceduralBottomBoundaryPolicy::Bedrock;
+	descriptor.bottom_boundary_thickness_cells = 16;
+
+	wt::WtScalarSample protected_sample;
+	wt::WtScalarSample boundary_surface;
+	wt::WtScalarSample ordinary_stone;
+	check(
+		wt::wt_valid_procedural_descriptor(descriptor) &&
+		wt::wt_sample_procedural_world(
+			descriptor, { 100, -113, 100 }, protected_sample
+		) && protected_sample.density < 0.0F &&
+			protected_sample.material == wt::kWtProceduralBedrockMaterial &&
+		wt::wt_sample_procedural_world(
+			descriptor, { 100, -112, 100 }, boundary_surface
+		) && boundary_surface.density < 0.0F &&
+			boundary_surface.material == wt::kWtProceduralBedrockMaterial &&
+		wt::wt_sample_procedural_world(
+			descriptor, { 100, -111, 100 }, ordinary_stone
+		) && ordinary_stone.density < 0.0F &&
+			ordinary_stone.material == 1,
+		"procedural bedrock density or material boundary mismatch"
+	);
+
+	wt::WtProceduralSnapshotDescriptor snapshot;
+	snapshot.world = descriptor;
+	snapshot.overlay_manifest_hash.fill(0x5aU);
+	std::vector<std::uint8_t> bytes;
+	wt::WtProceduralSnapshotDescriptor reopened;
+	check(
+		wt::wt_write_procedural_snapshot_descriptor(snapshot, bytes) ==
+			wt::WtProceduralSnapshotDescriptorStatus::Ok &&
+		wt::wt_open_procedural_snapshot_descriptor(
+			{ bytes.data(), bytes.size() }, reopened
+		) == wt::WtProceduralSnapshotDescriptorStatus::Ok &&
+		reopened.world.bottom_boundary_policy ==
+			wt::WtProceduralBottomBoundaryPolicy::Bedrock &&
+		reopened.world.bottom_boundary_thickness_cells == 16 &&
+		wt::wt_same_procedural_world_geometry(descriptor, reopened.world),
+		"procedural bedrock snapshot round trip mismatch"
+	);
+
+	wt::WtProceduralWorldDescriptor invalid = descriptor;
+	invalid.bottom_boundary_thickness_cells = 0;
+	check(
+		!wt::wt_valid_procedural_descriptor(invalid),
+		"zero-thickness bedrock descriptor was accepted"
+	);
+	invalid = descriptor;
+	invalid.bottom_boundary_policy =
+		wt::WtProceduralBottomBoundaryPolicy::Open;
+	check(
+		!wt::wt_valid_procedural_descriptor(invalid),
+		"open descriptor with protected thickness was accepted"
+	);
+}
+
 } // namespace
 
 int main() {
@@ -1195,6 +1262,7 @@ int main() {
 	test_procedural_cave_portal();
 	test_procedural_road_network();
 	test_four_biome_lake_world();
+	test_procedural_bottom_boundary();
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M5_ASYNC_STORAGE_FAIL failures=%d\n", failure_count);
 		return 1;
@@ -1206,7 +1274,7 @@ int main() {
 		"queue_rejections=1 procedural_strata=1 procedural_lod3=1 "
 		"parallel_procedural_generation=1 "
 		"procedural_cave_portal=1 procedural_roads=1 "
-		"four_biome_lake_world=1\n"
+		"four_biome_lake_world=1 procedural_bottom_boundary=1\n"
 	);
 	return 0;
 }

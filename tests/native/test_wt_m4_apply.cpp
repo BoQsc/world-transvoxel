@@ -691,6 +691,102 @@ void test_failures() {
 	);
 }
 
+void test_bottom_boundary_edit_clipping() {
+	wt::WtProceduralWorldDescriptor descriptor;
+	descriptor.chunk_count_x = 1;
+	descriptor.chunk_count_y = 16;
+	descriptor.chunk_count_z = 1;
+	descriptor.chunk_y = -8;
+	descriptor.source_revision = 100;
+	descriptor.bottom_boundary_policy =
+		wt::WtProceduralBottomBoundaryPolicy::Bedrock;
+	descriptor.bottom_boundary_thickness_cells = 16;
+
+	wt::WtEditCommand carve;
+	carve.command_id = id(90);
+	carve.world_revision = 1;
+	carve.operation = wt::WtEditOperation::SdfCarve;
+	carve.shape = wt::WtEditShape::Sphere;
+	carve.density_value = 1.0F;
+	carve.sphere = {
+		0,
+		-120 * wt::kWtEditCoordinateScale,
+		0,
+		32 * wt::kWtEditCoordinateScale,
+	};
+	check(
+		wt::wt_edit_sphere_bounds(carve.sphere, carve.bounds),
+		"bottom boundary carve bounds failed"
+	);
+
+	wt::WtScalarSample protected_sample;
+	protected_sample.density = -8.0F;
+	protected_sample.material = wt::kWtProceduralBedrockMaterial;
+	bool protected_changed = true;
+	check(
+		wt::wt_apply_edit_command_to_sample(
+			carve,
+			{ 0, -120, 0 },
+			protected_sample,
+			protected_changed,
+			&descriptor
+		) && !protected_changed && protected_sample.density == -8.0F &&
+			protected_sample.material == wt::kWtProceduralBedrockMaterial,
+		"bedrock sample was changed by carve replay"
+	);
+
+	wt::WtScalarSample editable_sample;
+	editable_sample.density = -8.0F;
+	editable_sample.material = 1;
+	bool editable_changed = false;
+	check(
+		wt::wt_apply_edit_command_to_sample(
+			carve,
+			{ 0, -100, 0 },
+			editable_sample,
+			editable_changed,
+			&descriptor
+		) && editable_changed && editable_sample.density > 0.0F,
+		"edit clipping blocked terrain above bedrock"
+	);
+
+	const IntegerSource source;
+	wt::WtChunkBaker baker(1);
+	std::vector<wt::WtBakedChunkPage> baked;
+	check(
+		baker.bake(
+			{ { 0, -8, 0, 0 } }, descriptor.source_revision, source, baked
+		) == wt::WtChunkBakeStatus::Ok && baked.size() == 1,
+		"bottom boundary edit-state fixture bake failed"
+	);
+	if (baked.size() != 1) return;
+	wt::WtChunkPageView view;
+	wt::WtChunkPage page;
+	check(
+		wt::wt_open_chunk_page(
+			{ baked[0].bytes.data(), baked[0].bytes.size() }, view
+		) == wt::WtChunkPageStatus::Ok &&
+		wt::wt_decode_chunk_page(view, page) == wt::WtChunkPageStatus::Ok,
+		"bottom boundary edit-state fixture decode failed"
+	);
+	wt::WtChunkEditState state;
+	check(
+		state.initialize(
+			std::move(page), descriptor.source_revision, 0, &descriptor
+		) == wt::WtChunkEditStatus::Ok &&
+		state.apply_command(carve) == wt::WtChunkEditStatus::Ok &&
+		state.changed_sample_count() > 0,
+		"bottom boundary edit-state replay failed"
+	);
+	const std::size_t protected_index = sample_index(
+		state.page(), { 0, -120, 0 }
+	);
+	check(
+		state.page().samples[protected_index].density == -120.0F,
+		"chunk edit replay changed a protected bedrock-band sample"
+	);
+}
+
 } // namespace
 
 int main() {
@@ -701,6 +797,7 @@ int main() {
 	test_smooth_sdf_sphere_edits();
 	test_material_volume_placement();
 	test_failures();
+	test_bottom_boundary_edit_clipping();
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M4_APPLY_FAIL failures=%d\n", failure_count);
 		return 1;
@@ -708,7 +805,7 @@ int main() {
 	std::printf("M4_APPLY_HASH ");
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
-		"M4_APPLY_PASS pages=5 overlap_samples=1083 cross_lod_pointwise=1 sdf_sphere_edits=3 smooth_sdf=1 failure_cases=7\n"
+		"M4_APPLY_PASS pages=5 overlap_samples=1083 cross_lod_pointwise=1 sdf_sphere_edits=3 smooth_sdf=1 failure_cases=7 bottom_boundary_clipping=1\n"
 	);
 	return 0;
 }

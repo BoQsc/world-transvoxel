@@ -114,11 +114,16 @@ WtAuthoritativeSampleQueryStatus load_edited_page(
 		wt_decode_chunk_page(view, page) != WtChunkPageStatus::Ok) {
 		return WtAuthoritativeSampleQueryStatus::PageFailure;
 	}
+	WtProceduralWorldDescriptor procedural_descriptor;
+	const WtProceduralWorldDescriptor *procedural_descriptor_pointer =
+		storage.procedural_descriptor(procedural_descriptor) ?
+			&procedural_descriptor : nullptr;
 	WtChunkEditState edit_state;
 	if (edit_state.initialize(
 			std::move(page),
 			storage.source_revision(),
-			initial_world_revision
+			initial_world_revision,
+			procedural_descriptor_pointer
 		) != WtChunkEditStatus::Ok ||
 		journal.replay(edit_state) != WtEditJournalStatus::Ok ||
 		edit_state.current_world_revision() != journal.current_world_revision()) {
@@ -152,6 +157,10 @@ WtAuthoritativeSampleQueryStatus wt_query_authoritative_sample(
 	bool found = false;
 	WtScalarSample selected;
 	std::size_t agreeing_pages = 0;
+	WtProceduralWorldDescriptor procedural_descriptor;
+	const WtProceduralWorldDescriptor *procedural_descriptor_pointer =
+		storage.procedural_descriptor(procedural_descriptor) ?
+			&procedural_descriptor : nullptr;
 	for (const WtChunkKey &key : keys) {
 		if (!storage.has_page(key)) continue;
 		std::shared_ptr<const std::vector<std::uint8_t>> bytes;
@@ -172,7 +181,8 @@ WtAuthoritativeSampleQueryStatus wt_query_authoritative_sample(
 		if (edit_state.initialize(
 				std::move(page),
 				storage.source_revision(),
-				initial_world_revision
+				initial_world_revision,
+				procedural_descriptor_pointer
 			) != WtChunkEditStatus::Ok ||
 			journal.replay(edit_state) != WtEditJournalStatus::Ok ||
 			edit_state.current_world_revision() !=

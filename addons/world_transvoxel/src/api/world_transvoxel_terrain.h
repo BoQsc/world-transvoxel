@@ -101,6 +101,18 @@ public:
 		const godot::String &preset_id,
 		const godot::String &object_root
 	);
+	bool start_procedural_world_preset_with_vertical_origin_and_bottom_boundary(
+		std::int64_t chunk_count_x,
+		std::int64_t chunk_count_y,
+		std::int64_t chunk_origin_y,
+		std::int64_t chunk_count_z,
+		std::int64_t seed,
+		std::int64_t source_revision,
+		const godot::String &preset_id,
+		std::int64_t bottom_boundary_policy,
+		std::int64_t bottom_boundary_thickness_cells,
+		const godot::String &object_root
+	);
 	bool start_flat_world(
 		std::int64_t chunk_count_x,
 		std::int64_t chunk_count_z,

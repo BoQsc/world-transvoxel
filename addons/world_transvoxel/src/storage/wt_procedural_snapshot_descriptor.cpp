@@ -30,6 +30,15 @@ WtHash256 wt_procedural_configuration_hash(
 ) {
 	WtBinaryWriter writer(32);
 	if (!encode_geometry(descriptor, writer)) return {};
+	if (descriptor.bottom_boundary_policy !=
+			WtProceduralBottomBoundaryPolicy::Open &&
+		(writer.write_u8(static_cast<std::uint8_t>(
+			descriptor.bottom_boundary_policy
+		)) != WtBinaryStatus::Ok ||
+		writer.write_u16(descriptor.bottom_boundary_thickness_cells) !=
+			WtBinaryStatus::Ok)) {
+		return {};
+	}
 	const std::vector<std::uint8_t> bytes = writer.take_bytes();
 	return wt_sha256(bytes.data(), bytes.size());
 }
@@ -44,13 +53,21 @@ WtProceduralSnapshotDescriptorStatus wt_write_procedural_snapshot_descriptor(
 		return WtProceduralSnapshotDescriptorStatus::InvalidInput;
 	}
 	WtBinaryWriter writer(kMetadataSize);
+	const std::uint16_t schema_minor =
+		descriptor.world.bottom_boundary_policy ==
+			WtProceduralBottomBoundaryPolicy::Open ?
+			0 : kWtProceduralSnapshotSchemaMinor;
 	if (writer.write_u16(kWtProceduralSnapshotSchemaMajor) !=
 			WtBinaryStatus::Ok ||
-		writer.write_u16(kWtProceduralSnapshotSchemaMinor) !=
+		writer.write_u16(schema_minor) !=
 			WtBinaryStatus::Ok ||
 		!encode_geometry(descriptor.world, writer) ||
-		writer.write_u8(0) != WtBinaryStatus::Ok ||
-		writer.write_u16(0) != WtBinaryStatus::Ok ||
+		writer.write_u8(static_cast<std::uint8_t>(
+			descriptor.world.bottom_boundary_policy
+		)) != WtBinaryStatus::Ok ||
+		writer.write_u16(
+			descriptor.world.bottom_boundary_thickness_cells
+		) != WtBinaryStatus::Ok ||
 		writer.write_u64(descriptor.world.source_revision) !=
 			WtBinaryStatus::Ok ||
 		writer.write_u64(descriptor.world.world_revision) !=
@@ -98,8 +115,8 @@ WtProceduralSnapshotDescriptorStatus wt_open_procedural_snapshot_descriptor(
 	std::uint16_t major = 0;
 	std::uint16_t minor = 0;
 	std::uint8_t mode = 0;
-	std::uint8_t reserved_byte = 0;
-	std::uint16_t reserved = 0;
+	std::uint8_t boundary_policy = 0;
+	std::uint16_t boundary_thickness = 0;
 	WtByteView manifest_hash;
 	if (reader.read_u16(major) != WtBinaryStatus::Ok ||
 		reader.read_u16(minor) != WtBinaryStatus::Ok ||
@@ -109,19 +126,23 @@ WtProceduralSnapshotDescriptorStatus wt_open_procedural_snapshot_descriptor(
 		reader.read_i32(output.world.chunk_y) != WtBinaryStatus::Ok ||
 		reader.read_u32(output.world.seed) != WtBinaryStatus::Ok ||
 		reader.read_u8(mode) != WtBinaryStatus::Ok ||
-		reader.read_u8(reserved_byte) != WtBinaryStatus::Ok ||
-		reader.read_u16(reserved) != WtBinaryStatus::Ok ||
+		reader.read_u8(boundary_policy) != WtBinaryStatus::Ok ||
+		reader.read_u16(boundary_thickness) != WtBinaryStatus::Ok ||
 		reader.read_u64(output.world.source_revision) != WtBinaryStatus::Ok ||
 		reader.read_u64(output.world.world_revision) != WtBinaryStatus::Ok ||
 		reader.read_bytes(output.overlay_manifest_hash.size(), manifest_hash) !=
 			WtBinaryStatus::Ok ||
 		major != kWtProceduralSnapshotSchemaMajor ||
 		minor > kWtProceduralSnapshotSchemaMinor ||
-		reserved_byte != 0 || reserved != 0 || reader.remaining() != 0) {
+		(minor == 0 && (boundary_policy != 0 || boundary_thickness != 0)) ||
+		reader.remaining() != 0) {
 		output = {};
 		return WtProceduralSnapshotDescriptorStatus::InvalidDescriptor;
 	}
 	output.world.mode = static_cast<WtProceduralWorldMode>(mode);
+	output.world.bottom_boundary_policy =
+		static_cast<WtProceduralBottomBoundaryPolicy>(boundary_policy);
+	output.world.bottom_boundary_thickness_cells = boundary_thickness;
 	std::copy(
 		manifest_hash.data,
 		manifest_hash.data + manifest_hash.size,

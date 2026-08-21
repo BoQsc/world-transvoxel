@@ -177,6 +177,23 @@ void WorldTransvoxelTerrain::_bind_methods() {
 	);
 	godot::ClassDB::bind_method(
 		godot::D_METHOD(
+			"start_procedural_world_preset_with_vertical_origin_and_bottom_boundary",
+			"chunk_count_x",
+			"chunk_count_y",
+			"chunk_origin_y",
+			"chunk_count_z",
+			"seed",
+			"source_revision",
+			"preset_id",
+			"bottom_boundary_policy",
+			"bottom_boundary_thickness_cells",
+			"object_root"
+		),
+		&WorldTransvoxelTerrain::
+			start_procedural_world_preset_with_vertical_origin_and_bottom_boundary
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
 			"start_flat_world",
 			"chunk_count_x",
 			"chunk_count_z",

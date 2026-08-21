@@ -239,20 +239,25 @@ class PointEditReplaySink final : public WtEditReplaySink {
 public:
 	PointEditReplaySink(
 		const WtGridPoint &point,
-		WtScalarSample &sample
-	) noexcept : point_(point), sample_(sample) {
+		WtScalarSample &sample,
+		const WtProceduralWorldDescriptor *procedural_descriptor
+	) noexcept :
+			point_(point),
+			sample_(sample),
+			procedural_descriptor_(procedural_descriptor) {
 	}
 
 	bool apply(const WtEditCommand &command) noexcept override {
 		bool changed = false;
 		return wt_apply_edit_command_to_sample(
-			command, point_, sample_, changed
+			command, point_, sample_, changed, procedural_descriptor_
 		);
 	}
 
 private:
 	const WtGridPoint &point_;
 	WtScalarSample &sample_;
+	const WtProceduralWorldDescriptor *procedural_descriptor_ = nullptr;
 };
 
 class ProceduralCompactionLod0Source final : public WtChunkSampleSource {
@@ -265,6 +270,7 @@ public:
 			storage_(storage),
 			journal_(journal),
 			initial_world_revision_(initial_world_revision) {
+		valid_ = storage_.procedural_descriptor(procedural_descriptor_);
 		cache_.reserve(kCacheCapacity);
 	}
 
@@ -305,8 +311,10 @@ public:
 				return true;
 			}
 		}
-		if (!storage_.sample_procedural_base(point, output)) return false;
-		PointEditReplaySink sink(point, output);
+		if (!valid_ || !storage_.sample_procedural_base(point, output)) {
+			return false;
+		}
+		PointEditReplaySink sink(point, output, &procedural_descriptor_);
 		return journal_.replay(sink) == WtEditJournalStatus::Ok;
 	}
 
@@ -335,7 +343,10 @@ private:
 		}
 		WtChunkEditState edit_state;
 		if (edit_state.initialize(
-				std::move(page), storage_.source_revision(), initial_world_revision_
+				std::move(page),
+				storage_.source_revision(),
+				initial_world_revision_,
+				&procedural_descriptor_
 			) != WtChunkEditStatus::Ok ||
 			journal_.replay(edit_state) != WtEditJournalStatus::Ok ||
 			edit_state.current_world_revision() !=
@@ -351,6 +362,8 @@ private:
 	WtAsyncStorageService &storage_;
 	const WtEditJournal &journal_;
 	std::uint64_t initial_world_revision_ = 0;
+	WtProceduralWorldDescriptor procedural_descriptor_;
+	bool valid_ = false;
 	mutable std::vector<CacheEntry> cache_;
 };
 
@@ -603,6 +616,10 @@ WtWorldSnapshotStoreStatus encode_overlay_pages(
 	ProceduralCompactionLod0Source lod0_source(
 		storage, journal, storage.world_revision()
 	);
+	WtProceduralWorldDescriptor procedural_descriptor;
+	if (!storage.procedural_descriptor(procedural_descriptor)) {
+		return WtWorldSnapshotStoreStatus::InvalidInput;
+	}
 	WtMultiresolutionVertexScratch surface_shift_scratch;
 	for (const WtChunkKey &key : keys) {
 		std::shared_ptr<const std::vector<std::uint8_t>> source_bytes;
@@ -623,7 +640,8 @@ WtWorldSnapshotStoreStatus encode_overlay_pages(
 			if (edit_state.initialize(
 					std::move(page),
 					storage.source_revision(),
-					storage.world_revision()
+					storage.world_revision(),
+					&procedural_descriptor
 				) != WtChunkEditStatus::Ok ||
 				journal.replay(edit_state) != WtEditJournalStatus::Ok ||
 				edit_state.current_world_revision() !=

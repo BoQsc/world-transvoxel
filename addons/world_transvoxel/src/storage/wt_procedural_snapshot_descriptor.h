@@ -9,7 +9,7 @@
 namespace world_transvoxel {
 
 constexpr std::uint16_t kWtProceduralSnapshotSchemaMajor = 1;
-constexpr std::uint16_t kWtProceduralSnapshotSchemaMinor = 0;
+constexpr std::uint16_t kWtProceduralSnapshotSchemaMinor = 1;
 constexpr std::size_t kWtMaximumProceduralOverlayPageCount = 65536;
 constexpr std::uint32_t kWtProceduralSnapshotMetadataSection =
 	wt_fourcc('P', 'R', 'O', 'C');

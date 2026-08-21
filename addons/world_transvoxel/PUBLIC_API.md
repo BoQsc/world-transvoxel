@@ -28,6 +28,7 @@ Configuration and lifecycle:
 - `start_world(world_manifest_path, object_root) -> bool`
 - `start_procedural_world(chunk_count_x, chunk_count_z, seed, source_revision, object_root) -> bool`
 - `start_procedural_world_preset_with_vertical_origin(chunk_count_x, chunk_count_y, chunk_origin_y, chunk_count_z, seed, source_revision, preset_id, object_root) -> bool`
+- `start_procedural_world_preset_with_vertical_origin_and_bottom_boundary(chunk_count_x, chunk_count_y, chunk_origin_y, chunk_count_z, seed, source_revision, preset_id, bottom_boundary_policy, bottom_boundary_thickness_cells, object_root) -> bool`
 - `start_flat_world(chunk_count_x, chunk_count_z, source_revision, object_root) -> bool`
 - `stop_world() -> bool`
 - `get_world_state() -> int`
@@ -76,6 +77,16 @@ preset. Supported preset IDs are:
   used as the lake's geometry. Lake, cave, terrain, and road fields are evaluated
   from world coordinates by the native source, so chunk and LOD boundaries do
   not redefine them.
+
+`start_procedural_world_preset_with_vertical_origin_and_bottom_boundary()` adds
+an authoritative bottom-boundary policy to that descriptor. Policy values are
+`0 OPEN`, `1 SEALED`, and `2 BEDROCK`. `OPEN` requires zero thickness. The two
+closed policies require a positive thickness no larger than the vertical world
+volume. Protected samples cannot be changed by carve, construction, paint, or
+restore commands. `BEDROCK` assigns material ID `7`; `SEALED` preserves the
+procedural material. Policy and thickness are part of the procedural geometry
+identity and snapshot descriptor, so persistence and multiplayer peers cannot
+silently disagree about the boundary.
 
 `start_flat_world()` starts the same native procedural/storage/streaming path
 with a flat surface at y=8. It is intended for baseline playtests and games

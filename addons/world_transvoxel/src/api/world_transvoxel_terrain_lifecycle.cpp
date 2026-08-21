@@ -239,6 +239,35 @@ bool WorldTransvoxelTerrain::start_procedural_world_preset_with_vertical_origin(
 	const godot::String &preset_id,
 	const godot::String &object_root
 ) {
+	return start_procedural_world_preset_with_vertical_origin_and_bottom_boundary(
+		chunk_count_x,
+		chunk_count_y,
+		chunk_origin_y,
+		chunk_count_z,
+		seed,
+		source_revision,
+		preset_id,
+		static_cast<std::int64_t>(
+			WtProceduralBottomBoundaryPolicy::Open
+		),
+		0,
+		object_root
+	);
+}
+
+bool WorldTransvoxelTerrain::
+		start_procedural_world_preset_with_vertical_origin_and_bottom_boundary(
+	std::int64_t chunk_count_x,
+	std::int64_t chunk_count_y,
+	std::int64_t chunk_origin_y,
+	std::int64_t chunk_count_z,
+	std::int64_t seed,
+	std::int64_t source_revision,
+	const godot::String &preset_id,
+	std::int64_t bottom_boundary_policy,
+	std::int64_t bottom_boundary_thickness_cells,
+	const godot::String &object_root
+) {
 	if (!is_configuration_valid()) {
 		synchronous_world_error_ = get_configuration_error();
 		return false;
@@ -252,6 +281,12 @@ bool WorldTransvoxelTerrain::start_procedural_world_preset_with_vertical_origin(
 	if (chunk_count_x <= 0 || chunk_count_y <= 0 || chunk_count_z <= 0 ||
 		chunk_count_x > 4096 || chunk_count_y > 4096 || chunk_count_z > 4096 ||
 		chunk_origin_y < -4096 || chunk_origin_y > 4096 ||
+		bottom_boundary_policy < static_cast<std::int64_t>(
+			WtProceduralBottomBoundaryPolicy::Open
+		) || bottom_boundary_policy > static_cast<std::int64_t>(
+			WtProceduralBottomBoundaryPolicy::Bedrock
+		) || bottom_boundary_thickness_cells < 0 ||
+		bottom_boundary_thickness_cells > 65535 ||
 		source_revision <= 0 || object_root.is_empty()) {
 		synchronous_world_error_ =
 			"procedural world descriptor is invalid";
@@ -272,6 +307,16 @@ bool WorldTransvoxelTerrain::start_procedural_world_preset_with_vertical_origin(
 	descriptor.world_revision = 0;
 	descriptor.seed = compact_seed(seed);
 	descriptor.mode = mode;
+	descriptor.bottom_boundary_policy =
+		static_cast<WtProceduralBottomBoundaryPolicy>(bottom_boundary_policy);
+	descriptor.bottom_boundary_thickness_cells = static_cast<std::uint16_t>(
+		bottom_boundary_thickness_cells
+	);
+	if (!wt_valid_procedural_descriptor(descriptor)) {
+		synchronous_world_error_ =
+			"procedural bottom boundary descriptor is invalid";
+		return false;
+	}
 	const std::uint64_t page_count = wt_procedural_page_count(descriptor);
 	if (page_count == 0 || page_count > kWtMaximumProceduralPageCount) {
 		synchronous_world_error_ =

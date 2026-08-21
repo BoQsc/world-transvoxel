@@ -322,7 +322,8 @@ bool may_intersect_page(
 
 bool density_result_is_finite(
 	const WtChunkPage &page,
-	const WtEditCommand &command
+	const WtEditCommand &command,
+	const WtProceduralWorldDescriptor *procedural_descriptor
 ) noexcept {
 	const bool additive = command.operation == WtEditOperation::AddDensity;
 	const bool sdf = command.operation == WtEditOperation::SdfCarve ||
@@ -335,6 +336,12 @@ bool density_result_is_finite(
 		for (int y = -1; y <= 17; ++y) {
 			for (int x = -1; x <= 17; ++x, ++index) {
 				const WtGridPoint point = sample_point(page.metadata, x, y, z);
+				if (procedural_descriptor != nullptr &&
+					wt_procedural_bottom_boundary_protects_sample(
+						*procedural_descriptor, point
+					)) {
+					continue;
+				}
 				WtScalarSample sample = page.samples[index];
 				bool changed = false;
 				if (!apply_valid_command_to_sample(
@@ -350,7 +357,8 @@ bool density_result_is_finite(
 
 std::size_t apply_values(
 	WtChunkPage &page,
-	const WtEditCommand &command
+	const WtEditCommand &command,
+	const WtProceduralWorldDescriptor *procedural_descriptor
 ) noexcept {
 	if (!may_intersect_page(page.metadata, command.bounds)) {
 		return 0;
@@ -361,6 +369,12 @@ std::size_t apply_values(
 		for (int y = -1; y <= 17; ++y) {
 			for (int x = -1; x <= 17; ++x, ++index) {
 				const WtGridPoint point = sample_point(page.metadata, x, y, z);
+				if (procedural_descriptor != nullptr &&
+					wt_procedural_bottom_boundary_protects_sample(
+						*procedural_descriptor, point
+					)) {
+					continue;
+				}
 				WtScalarSample &sample = page.samples[index];
 				bool sample_changed = false;
 				if (apply_valid_command_to_sample(
@@ -380,24 +394,35 @@ bool wt_apply_edit_command_to_sample(
 	const WtEditCommand &command,
 	const WtGridPoint &point,
 	WtScalarSample &sample,
-	bool &changed
+	bool &changed,
+	const WtProceduralWorldDescriptor *procedural_descriptor
 ) noexcept {
 	changed = false;
-	return wt_is_valid_edit_command(command) &&
-		std::isfinite(sample.density) &&
-		apply_valid_command_to_sample(command, point, sample, changed);
+	if (!wt_is_valid_edit_command(command) || !std::isfinite(sample.density)) {
+		return false;
+	}
+	if (procedural_descriptor != nullptr &&
+		wt_procedural_bottom_boundary_protects_sample(
+			*procedural_descriptor, point
+		)) {
+		return true;
+	}
+	return apply_valid_command_to_sample(command, point, sample, changed);
 }
 
 WtChunkEditStatus WtChunkEditState::initialize(
 	WtChunkPage page,
 	std::uint64_t expected_source_revision,
-	std::uint64_t initial_world_revision
+	std::uint64_t initial_world_revision,
+	const WtProceduralWorldDescriptor *procedural_descriptor
 ) {
 	initialized_ = false;
 	page_ = {};
 	current_world_revision_ = 0;
 	next_sequence_ = 0;
 	changed_sample_count_ = 0;
+	procedural_descriptor_ = {};
+	has_procedural_descriptor_ = false;
 	if (!valid_page(page)) {
 		last_status_ = WtChunkEditStatus::InvalidPage;
 		return last_status_;
@@ -411,6 +436,14 @@ WtChunkEditStatus WtChunkEditState::initialize(
 	if (page.metadata.source_revision != expected_source_revision) {
 		last_status_ = WtChunkEditStatus::SourceRevisionMismatch;
 		return last_status_;
+	}
+	if (procedural_descriptor != nullptr) {
+		if (procedural_descriptor->source_revision != expected_source_revision) {
+			last_status_ = WtChunkEditStatus::InvalidPage;
+			return last_status_;
+		}
+		procedural_descriptor_ = *procedural_descriptor;
+		has_procedural_descriptor_ = true;
 	}
 	page_ = std::move(page);
 	initialized_ = true;
@@ -445,7 +478,9 @@ WtChunkEditStatus WtChunkEditState::apply_command(
 		last_status_ = WtChunkEditStatus::WorldRevisionMismatch;
 		return last_status_;
 	}
-	if (!density_result_is_finite(page_, command)) {
+	const WtProceduralWorldDescriptor *procedural_descriptor =
+		has_procedural_descriptor_ ? &procedural_descriptor_ : nullptr;
+	if (!density_result_is_finite(page_, command, procedural_descriptor)) {
 		last_status_ = WtChunkEditStatus::NonFiniteResult;
 		return last_status_;
 	}
@@ -456,7 +491,9 @@ WtChunkEditStatus WtChunkEditState::apply_command(
 		current_world_revision_ = command.world_revision;
 		next_sequence_ = 0;
 	}
-	changed_sample_count_ += apply_values(page_, command);
+	changed_sample_count_ += apply_values(
+		page_, command, procedural_descriptor
+	);
 	if (invalidates_surface_shift) {
 		page_.surface_shift_valid = false;
 	}

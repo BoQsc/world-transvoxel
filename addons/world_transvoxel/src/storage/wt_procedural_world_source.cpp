@@ -264,6 +264,27 @@ public:
 			output.static_water_density < 0.0F) {
 			output.material = 9;
 		}
+		const std::int64_t bottom_boundary_top =
+			static_cast<std::int64_t>(descriptor_.chunk_y) *
+				static_cast<std::int64_t>(kWtChunkCellsPerAxis) +
+			static_cast<std::int64_t>(
+				descriptor_.bottom_boundary_thickness_cells
+			);
+		if (descriptor_.bottom_boundary_policy !=
+				WtProceduralBottomBoundaryPolicy::Open &&
+			point.y <= bottom_boundary_top) {
+			output.density = std::min(
+				output.density,
+				regularized_density(
+					static_cast<double>(point.y - bottom_boundary_top)
+				)
+			);
+			output.static_water_density = kWtNoStaticWaterDensity;
+			if (descriptor_.bottom_boundary_policy ==
+					WtProceduralBottomBoundaryPolicy::Bedrock) {
+				output.material = kWtProceduralBedrockMaterial;
+			}
+		}
 		output.material_authored = false;
 		return std::isfinite(output.density);
 	}
@@ -556,7 +577,10 @@ bool wt_same_procedural_world_geometry(
 		left.chunk_count_y == right.chunk_count_y &&
 		left.chunk_count_z == right.chunk_count_z &&
 		left.chunk_y == right.chunk_y &&
-		left.seed == right.seed && left.mode == right.mode;
+		left.seed == right.seed && left.mode == right.mode &&
+		left.bottom_boundary_policy == right.bottom_boundary_policy &&
+		left.bottom_boundary_thickness_cells ==
+			right.bottom_boundary_thickness_cells;
 }
 
 bool wt_sample_procedural_world(
@@ -575,10 +599,27 @@ bool wt_valid_procedural_descriptor(
 	const WtProceduralWorldDescriptor &descriptor
 ) noexcept {
 	const std::uint64_t page_count = wt_procedural_page_count(descriptor);
+	const bool valid_boundary_policy =
+		descriptor.bottom_boundary_policy ==
+			WtProceduralBottomBoundaryPolicy::Open ||
+		descriptor.bottom_boundary_policy ==
+			WtProceduralBottomBoundaryPolicy::Sealed ||
+		descriptor.bottom_boundary_policy ==
+			WtProceduralBottomBoundaryPolicy::Bedrock;
+	const std::uint64_t vertical_cells =
+		static_cast<std::uint64_t>(descriptor.chunk_count_y) *
+		static_cast<std::uint64_t>(kWtChunkCellsPerAxis);
+	const bool valid_boundary = valid_boundary_policy &&
+		(descriptor.bottom_boundary_policy ==
+			WtProceduralBottomBoundaryPolicy::Open ?
+			descriptor.bottom_boundary_thickness_cells == 0 :
+			descriptor.bottom_boundary_thickness_cells != 0 &&
+				descriptor.bottom_boundary_thickness_cells <= vertical_cells);
 	return descriptor.chunk_count_x != 0 &&
 		descriptor.chunk_count_y != 0 &&
 		descriptor.chunk_count_z != 0 &&
 		descriptor.source_revision != 0 &&
+		valid_boundary &&
 		page_count != 0 &&
 		page_count <= kWtMaximumProceduralPageCount;
 }

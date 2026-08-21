@@ -2,6 +2,7 @@
 
 #include "editing/wt_edit_journal.h"
 #include "storage/wt_chunk_page.h"
+#include "storage/wt_procedural_world_descriptor.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -23,7 +24,8 @@ bool wt_apply_edit_command_to_sample(
 	const WtEditCommand &command,
 	const WtGridPoint &point,
 	WtScalarSample &sample,
-	bool &changed
+	bool &changed,
+	const WtProceduralWorldDescriptor *procedural_descriptor = nullptr
 ) noexcept;
 
 class WtChunkEditState final : public WtEditReplaySink {
@@ -31,7 +33,8 @@ public:
 	WtChunkEditStatus initialize(
 		WtChunkPage page,
 		std::uint64_t expected_source_revision,
-		std::uint64_t initial_world_revision
+		std::uint64_t initial_world_revision,
+		const WtProceduralWorldDescriptor *procedural_descriptor = nullptr
 	);
 
 	WtChunkEditStatus apply_command(
@@ -53,6 +56,8 @@ private:
 	std::uint64_t current_world_revision_ = 0;
 	std::uint32_t next_sequence_ = 0;
 	std::size_t changed_sample_count_ = 0;
+	WtProceduralWorldDescriptor procedural_descriptor_;
+	bool has_procedural_descriptor_ = false;
 	WtChunkEditStatus last_status_ = WtChunkEditStatus::NotInitialized;
 };
 

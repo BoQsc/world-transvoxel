@@ -493,6 +493,9 @@ void run_sparse_procedural_snapshot_contract(
 	descriptor.world_revision = 0;
 	descriptor.seed = 19021;
 	descriptor.mode = wt::WtProceduralWorldMode::RollingHillsCave;
+	descriptor.bottom_boundary_policy =
+		wt::WtProceduralBottomBoundaryPolicy::Bedrock;
+	descriptor.bottom_boundary_thickness_cells = 16;
 	run_sparse_hierarchy_lookup_contract(descriptor);
 
 	wt::WtAsyncStorageService storage({
@@ -542,8 +545,10 @@ void run_sparse_procedural_snapshot_contract(
 	check(wt::wt_query_authoritative_sample(
 		boundary_point, 0, storage, journal.journal(), 0, sample
 	) == wt::WtAuthoritativeSampleQueryStatus::Ok &&
-		sample.sample.density == 10.0F && sample.world_revision == 1,
-		"large procedural boundary edited query failed");
+		sample.sample.density < 0.0F &&
+		sample.sample.material == wt::kWtProceduralBedrockMaterial &&
+		sample.world_revision == 1,
+		"large procedural protected boundary edit was not clipped");
 	const auto first_invalidated_query_finished = std::chrono::steady_clock::now();
 	wt::WtWorldSnapshotStoreResult result;
 	const auto first_compaction_started = std::chrono::steady_clock::now();
@@ -645,8 +650,9 @@ void run_sparse_procedural_snapshot_contract(
 	check(wt::wt_query_authoritative_sample(
 		boundary_point, 0, final_storage, final_journal.journal(), 2, sample
 	) == wt::WtAuthoritativeSampleQueryStatus::Ok &&
-		sample.sample.density == 10.0F,
-		"large procedural retained boundary overlay failed");
+		sample.sample.density < 0.0F &&
+		sample.sample.material == wt::kWtProceduralBedrockMaterial,
+		"large procedural compacted boundary protection failed");
 	wt::WtWorldSnapshotStoreResult migrated_result;
 	const auto migration_started = std::chrono::steady_clock::now();
 	const wt::WtWorldSnapshotStoreStatus migration_status =
@@ -690,8 +696,9 @@ void run_sparse_procedural_snapshot_contract(
 	check(wt::wt_query_authoritative_sample(
 		boundary_point, 0, migrated_storage, migrated_journal.journal(), 2, sample
 	) == wt::WtAuthoritativeSampleQueryStatus::Ok &&
-		sample.sample.density == 10.0F,
-		"large procedural migrated boundary overlay failed");
+		sample.sample.density < 0.0F &&
+		sample.sample.material == wt::kWtProceduralBedrockMaterial,
+		"large procedural migrated boundary protection failed");
 
 	const std::filesystem::path corrupt = root / "snapshot-corrupt";
 	std::filesystem::create_directories(corrupt);

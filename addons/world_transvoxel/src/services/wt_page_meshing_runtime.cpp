@@ -81,22 +81,25 @@ class PointEditReplaySink final : public WtEditReplaySink {
 public:
 	PointEditReplaySink(
 		const WtGridPoint &point,
-		WtScalarSample &sample
+		WtScalarSample &sample,
+		const WtProceduralWorldDescriptor *procedural_descriptor
 	) noexcept :
 			point_(point),
-			sample_(sample) {
+			sample_(sample),
+			procedural_descriptor_(procedural_descriptor) {
 	}
 
 	bool apply(const WtEditCommand &command) noexcept override {
 		bool changed = false;
 		return wt_apply_edit_command_to_sample(
-			command, point_, sample_, changed
+			command, point_, sample_, changed, procedural_descriptor_
 		);
 	}
 
 private:
 	WtGridPoint point_;
 	WtScalarSample &sample_;
+	const WtProceduralWorldDescriptor *procedural_descriptor_ = nullptr;
 };
 
 class EditedProceduralSampleSource final : public WtChunkSampleSource {
@@ -111,7 +114,8 @@ public:
 			storage_(storage),
 			journal_(journal),
 			world_revision_(world_revision),
-			valid_(journal.initialized() &&
+			valid_(storage.procedural_descriptor(procedural_descriptor_) &&
+				journal.initialized() &&
 				journal.source_revision() == source_revision &&
 				journal.initial_world_revision() == initial_world_revision &&
 				world_revision >= initial_world_revision &&
@@ -125,7 +129,7 @@ public:
 		if (!valid_ || !storage_.sample_procedural_base(point, output)) {
 			return false;
 		}
-		PointEditReplaySink sink(point, output);
+		PointEditReplaySink sink(point, output, &procedural_descriptor_);
 		return journal_.replay_until(world_revision_, sink) ==
 			WtEditJournalStatus::Ok;
 	}
@@ -138,6 +142,7 @@ private:
 	WtAsyncStorageService &storage_;
 	const WtEditJournal &journal_;
 	std::uint64_t world_revision_ = 0;
+	WtProceduralWorldDescriptor procedural_descriptor_;
 	bool valid_ = false;
 };
 
@@ -352,6 +357,12 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 		primary->key == record->key &&
 		static_cast<bool>(primary->page);
 	if (source_valid && edit_journal != nullptr) {
+		WtProceduralWorldDescriptor procedural_descriptor;
+		const WtProceduralWorldDescriptor *procedural_descriptor_pointer =
+			authoritative_storage != nullptr &&
+				authoritative_storage->procedural_descriptor(
+					procedural_descriptor
+				) ? &procedural_descriptor : nullptr;
 		std::unique_ptr<EditedProceduralSampleSource> edited_source;
 		if (authoritative_storage != nullptr) {
 			edited_source = std::make_unique<EditedProceduralSampleSource>(
@@ -369,7 +380,8 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 				edit_state.initialize(
 					*dependency.page,
 					record->source_revision,
-					initial_world_revision
+					initial_world_revision,
+					procedural_descriptor_pointer
 				) != WtChunkEditStatus::Ok ||
 				edit_journal->replay_until(
 					record->world_revision,
