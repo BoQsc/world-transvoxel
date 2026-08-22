@@ -21,6 +21,7 @@ namespace world_transvoxel {
 constexpr std::size_t kWtMaximumStorageQueueCapacity = 65536;
 constexpr std::size_t kWtMaximumProceduralGenerationWorkerCount = 8;
 
+class WtCpuWorkBudget;
 struct WtScalarSample;
 
 struct WtAsyncStorageLimits {
@@ -111,7 +112,10 @@ std::filesystem::path wt_page_object_path(
 
 class WtAsyncStorageService {
 public:
-	explicit WtAsyncStorageService(WtAsyncStorageLimits limits);
+	explicit WtAsyncStorageService(
+		WtAsyncStorageLimits limits,
+		std::shared_ptr<WtCpuWorkBudget> cpu_work_budget = {}
+	);
 	~WtAsyncStorageService();
 
 	WtAsyncStorageService(const WtAsyncStorageService &) = delete;
@@ -204,6 +208,7 @@ private:
 	) const;
 
 	WtAsyncStorageLimits limits_;
+	std::shared_ptr<WtCpuWorkBudget> cpu_work_budget_;
 	mutable std::mutex mutex_;
 	std::condition_variable work_available_;
 	std::condition_variable completion_available_;

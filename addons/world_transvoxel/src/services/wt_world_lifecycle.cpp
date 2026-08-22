@@ -43,6 +43,10 @@ WtWorldLifecycleStatus WtWorldLifecycleService::start(
 		procedural_ = false;
 		procedural_snapshot_ = false;
 		procedural_descriptor_ = {};
+		cpu_work_budget_ = config_.shared_cpu_work_budget == 0 ? nullptr :
+			std::make_shared<WtCpuWorkBudget>(static_cast<std::size_t>(
+				config_.shared_cpu_work_budget
+			));
 		storage_ = std::make_unique<WtAsyncStorageService>(
 			WtAsyncStorageLimits {
 				static_cast<std::size_t>(config_.storage_request_capacity),
@@ -51,7 +55,8 @@ WtWorldLifecycleStatus WtWorldLifecycleService::start(
 				static_cast<std::size_t>(
 					config_.procedural_generation_worker_count
 				),
-			}
+			},
+			cpu_work_budget_
 		);
 		last_storage_status_ = WtAsyncStorageStatus::Ok;
 		last_runtime_status_ = WtReadOnlyRuntimeStatus::Ok;
@@ -97,6 +102,10 @@ WtWorldLifecycleStatus WtWorldLifecycleService::start_procedural(
 		procedural_ = true;
 		procedural_snapshot_ = false;
 		procedural_descriptor_ = descriptor;
+		cpu_work_budget_ = config_.shared_cpu_work_budget == 0 ? nullptr :
+			std::make_shared<WtCpuWorkBudget>(static_cast<std::size_t>(
+				config_.shared_cpu_work_budget
+			));
 		storage_ = std::make_unique<WtAsyncStorageService>(
 			WtAsyncStorageLimits {
 				static_cast<std::size_t>(config_.storage_request_capacity),
@@ -105,7 +114,8 @@ WtWorldLifecycleStatus WtWorldLifecycleService::start_procedural(
 				static_cast<std::size_t>(
 					config_.procedural_generation_worker_count
 				),
-			}
+			},
+			cpu_work_budget_
 		);
 		last_storage_status_ = WtAsyncStorageStatus::Ok;
 		last_runtime_status_ = WtReadOnlyRuntimeStatus::Ok;
@@ -149,6 +159,10 @@ WtWorldLifecycleStatus WtWorldLifecycleService::start_procedural_snapshot(
 		procedural_ = true;
 		procedural_snapshot_ = true;
 		procedural_descriptor_ = {};
+		cpu_work_budget_ = config_.shared_cpu_work_budget == 0 ? nullptr :
+			std::make_shared<WtCpuWorkBudget>(static_cast<std::size_t>(
+				config_.shared_cpu_work_budget
+			));
 		storage_ = std::make_unique<WtAsyncStorageService>(
 			WtAsyncStorageLimits {
 				static_cast<std::size_t>(config_.storage_request_capacity),
@@ -157,7 +171,8 @@ WtWorldLifecycleStatus WtWorldLifecycleService::start_procedural_snapshot(
 				static_cast<std::size_t>(
 					config_.procedural_generation_worker_count
 				),
-			}
+			},
+			cpu_work_budget_
 		);
 		last_storage_status_ = WtAsyncStorageStatus::Ok;
 		last_runtime_status_ = WtReadOnlyRuntimeStatus::Ok;
@@ -233,7 +248,8 @@ void WtWorldLifecycleService::control_main() noexcept {
 			runtime_ = std::make_unique<WtReadOnlyWorldRuntime>(
 				config_,
 				*storage_,
-				edit_journal_store_.get()
+				edit_journal_store_.get(),
+				cpu_work_budget_
 			);
 			if (runtime_->valid()) {
 				state_ = WtWorldLifecycleState::Running;
@@ -272,6 +288,7 @@ void WtWorldLifecycleService::control_main() noexcept {
 		runtime_.reset();
 		storage_.reset();
 		edit_journal_store_.reset();
+		cpu_work_budget_.reset();
 		world_manifest_path_.clear();
 		object_root_.clear();
 		procedural_ = false;

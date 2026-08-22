@@ -252,6 +252,46 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		"mesh_worker_queue_wait_ns_maximum",
 		runtime.mesh_worker_queue_wait_ns_maximum
 	);
+	set_metric(
+		output,
+		"shared_cpu_work_budget_capacity",
+		runtime.shared_cpu_work_budget_capacity
+	);
+	set_metric(
+		output,
+		"shared_cpu_work_budget_active",
+		runtime.shared_cpu_work_budget_active
+	);
+	set_metric(
+		output,
+		"shared_cpu_work_budget_waiting",
+		runtime.shared_cpu_work_budget_waiting
+	);
+	set_metric(
+		output,
+		"shared_cpu_work_budget_maximum_active",
+		runtime.shared_cpu_work_budget_maximum_active
+	);
+	set_metric(
+		output,
+		"shared_cpu_work_budget_grants",
+		runtime.shared_cpu_work_budget_grants
+	);
+	set_metric(
+		output,
+		"shared_cpu_work_budget_wait_time_ns_last",
+		runtime.shared_cpu_work_budget_wait_time_ns_last
+	);
+	set_metric(
+		output,
+		"shared_cpu_work_budget_wait_time_ns_total",
+		runtime.shared_cpu_work_budget_wait_time_ns_total
+	);
+	set_metric(
+		output,
+		"shared_cpu_work_budget_wait_time_ns_maximum",
+		runtime.shared_cpu_work_budget_wait_time_ns_maximum
+	);
 	set_metric(output, "storage_completions", runtime.storage_completions);
 	set_metric(output, "mesh_completions", runtime.mesh_completions);
 	set_metric(

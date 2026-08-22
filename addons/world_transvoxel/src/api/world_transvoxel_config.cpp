@@ -58,6 +58,7 @@ void WorldTransvoxelConfig::_bind_methods() {
 	WT_BIND_INT_PROPERTY(lod_refinement_radius_chunks, "0,65536,1");
 	WT_BIND_INT_PROPERTY(procedural_generation_worker_count, "1,8,1");
 	WT_BIND_INT_PROPERTY(meshing_worker_count, "0,8,1");
+	WT_BIND_INT_PROPERTY(shared_cpu_work_budget, "0,8,1");
 	WT_BIND_INT_PROPERTY(storage_request_capacity, "1,65536,1");
 	WT_BIND_INT_PROPERTY(storage_completion_capacity, "1,65536,1");
 	WT_BIND_INT_PROPERTY(encoded_page_entry_capacity, "1,65536,1");
@@ -141,6 +142,7 @@ WtRuntimeConfig WorldTransvoxelConfig::to_native() const noexcept {
 	result.procedural_generation_worker_count =
 		procedural_generation_worker_count_;
 	result.meshing_worker_count = meshing_worker_count_;
+	result.shared_cpu_work_budget = shared_cpu_work_budget_;
 	result.storage_request_capacity = storage_request_capacity_;
 	result.storage_completion_capacity = storage_completion_capacity_;
 	result.encoded_page_entry_capacity = encoded_page_entry_capacity_;
@@ -178,6 +180,7 @@ WT_CONFIG_INT_ACCESSORS(demand_capacity_per_viewer)
 WT_CONFIG_INT_ACCESSORS(lod_refinement_radius_chunks)
 WT_CONFIG_INT_ACCESSORS(procedural_generation_worker_count)
 WT_CONFIG_INT_ACCESSORS(meshing_worker_count)
+WT_CONFIG_INT_ACCESSORS(shared_cpu_work_budget)
 WT_CONFIG_INT_ACCESSORS(storage_request_capacity)
 WT_CONFIG_INT_ACCESSORS(storage_completion_capacity)
 WT_CONFIG_INT_ACCESSORS(encoded_page_entry_capacity)

@@ -33,6 +33,8 @@ public:
 	std::int64_t get_procedural_generation_worker_count() const noexcept;
 	void set_meshing_worker_count(std::int64_t value);
 	std::int64_t get_meshing_worker_count() const noexcept;
+	void set_shared_cpu_work_budget(std::int64_t value);
+	std::int64_t get_shared_cpu_work_budget() const noexcept;
 	void set_storage_request_capacity(std::int64_t value);
 	std::int64_t get_storage_request_capacity() const noexcept;
 	void set_storage_completion_capacity(std::int64_t value);
@@ -83,6 +85,7 @@ private:
 	std::int64_t lod_refinement_radius_chunks_ = 0;
 	std::int64_t procedural_generation_worker_count_ = 2;
 	std::int64_t meshing_worker_count_ = 0;
+	std::int64_t shared_cpu_work_budget_ = 0;
 	std::int64_t storage_request_capacity_ = 256;
 	std::int64_t storage_completion_capacity_ = 256;
 	std::int64_t encoded_page_entry_capacity_ = 256;

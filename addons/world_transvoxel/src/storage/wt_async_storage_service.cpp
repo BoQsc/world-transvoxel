@@ -1,5 +1,6 @@
 #include "storage/wt_async_storage_service.h"
 
+#include "core/wt_cpu_work_budget.h"
 #include "storage/wt_procedural_snapshot_descriptor.h"
 #include "storage/wt_procedural_world_source.h"
 #include "testing/wt_fault_injection.h"
@@ -78,8 +79,12 @@ std::filesystem::path wt_page_object_path(
 	return object_root / filename;
 }
 
-WtAsyncStorageService::WtAsyncStorageService(WtAsyncStorageLimits limits) :
-		limits_(limits) {
+WtAsyncStorageService::WtAsyncStorageService(
+	WtAsyncStorageLimits limits,
+	std::shared_ptr<WtCpuWorkBudget> cpu_work_budget
+) :
+		limits_(limits),
+		cpu_work_budget_(std::move(cpu_work_budget)) {
 }
 
 WtAsyncStorageService::~WtAsyncStorageService() {
@@ -549,6 +554,7 @@ void WtAsyncStorageService::worker_main() noexcept {
 		Request request;
 		std::chrono::steady_clock::time_point load_started;
 		WtAsyncStorageTraceObserver trace_observer;
+		WtCpuWorkBudget::Lease work_lease;
 		{
 			std::unique_lock<std::mutex> lock(mutex_);
 			work_available_.wait(lock, [&]() {
@@ -556,6 +562,14 @@ void WtAsyncStorageService::worker_main() noexcept {
 			});
 			if (stop_requested_) {
 				return;
+			}
+			if (cpu_work_budget_) {
+				const std::int32_t priority = requests_.front().priority;
+				lock.unlock();
+				work_lease = cpu_work_budget_->acquire(priority);
+				lock.lock();
+				if (stop_requested_) return;
+				if (requests_.empty()) continue;
 			}
 			request = requests_.front();
 			requests_.erase(requests_.begin());
@@ -604,6 +618,7 @@ void WtAsyncStorageService::worker_main() noexcept {
 				completion.status
 			);
 		}
+		work_lease.reset();
 
 		std::unique_lock<std::mutex> lock(mutex_);
 		const std::uint64_t load_time_ns = observed_load_time_ns;

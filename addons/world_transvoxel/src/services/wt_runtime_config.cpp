@@ -52,6 +52,10 @@ WtRuntimeConfigStatus wt_validate_runtime_config(
 	if (config.meshing_worker_count > kWtMaximumRuntimeMeshingWorkerCount) {
 		return WtRuntimeConfigStatus::InvalidMeshingWorkerCount;
 	}
+	if (config.shared_cpu_work_budget >
+		kWtMaximumRuntimeSharedCpuWorkBudget) {
+		return WtRuntimeConfigStatus::InvalidSharedCpuWorkBudget;
+	}
 	if (config.viewer_capacity >
 		kWtMaximumDesiredChunkCount / config.demand_capacity_per_viewer) {
 		return WtRuntimeConfigStatus::InvalidTotalDemandCapacity;
@@ -130,6 +134,8 @@ const char *wt_runtime_config_status_message(
 			return "procedural generation worker count must be between 1 and 8";
 		case WtRuntimeConfigStatus::InvalidMeshingWorkerCount:
 			return "meshing worker count must be between 0 and 8";
+		case WtRuntimeConfigStatus::InvalidSharedCpuWorkBudget:
+			return "shared CPU work budget must be between 0 and 8";
 		case WtRuntimeConfigStatus::InvalidTotalDemandCapacity:
 			return "viewer and demand capacities exceed 65536 total demands";
 		case WtRuntimeConfigStatus::InvalidStorageQueueCapacity:

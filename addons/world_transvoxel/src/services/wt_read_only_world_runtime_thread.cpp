@@ -310,6 +310,20 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 		snapshot.edit_cancelled_page_meshing_generations =
 			edit.cancelled_page_meshing_generations;
 	}
+	if (cpu_work_budget_) {
+		const WtCpuWorkBudgetMetrics budget = cpu_work_budget_->get_metrics();
+		snapshot.shared_cpu_work_budget_capacity = budget.capacity;
+		snapshot.shared_cpu_work_budget_active = budget.active;
+		snapshot.shared_cpu_work_budget_waiting = budget.waiting;
+		snapshot.shared_cpu_work_budget_maximum_active = budget.maximum_active;
+		snapshot.shared_cpu_work_budget_grants = budget.grants;
+		snapshot.shared_cpu_work_budget_wait_time_ns_last =
+			budget.wait_time_ns_last;
+		snapshot.shared_cpu_work_budget_wait_time_ns_total =
+			budget.wait_time_ns_total;
+		snapshot.shared_cpu_work_budget_wait_time_ns_maximum =
+			budget.wait_time_ns_maximum;
+	}
 	const WtAsyncStorageMetrics storage = storage_.get_metrics();
 	snapshot.storage_queued_requests = storage_.queued_request_count();
 	snapshot.storage_queued_completions = storage_.queued_completion_count();
