@@ -127,12 +127,15 @@ void WorldTransvoxelTerrain::flush_ready_independent_publication_regions() {
 		bool ready = true;
 		std::vector<WtChunkApplicationRecord> missing_records;
 		missing_records.reserve(region.replacements.size());
+		std::vector<WtGenerationToken> replacement_generations;
+		replacement_generations.reserve(region.replacements.size());
 		for (const WtChunkKey &replacement : region.replacements) {
 			WtChunkApplicationRecord record;
 			if (!application_->copy_record(replacement, record)) {
 				ready = false;
 				break;
 			}
+			replacement_generations.push_back(record.generation);
 			if (!record.fully_ready()) {
 				missing_records.push_back(record);
 				ready = false;
@@ -175,6 +178,31 @@ void WorldTransvoxelTerrain::flush_ready_independent_publication_regions() {
 			synchronous_world_error_ =
 				"regional visibility publication failed";
 			return;
+		}
+		const std::uint64_t publication_cohort =
+			regional_visibility_publications_ + 1U;
+		if (cpu_causal_trace_active_ && lifecycle_) {
+			for (std::size_t member = 0;
+					member < region.replacements.size(); ++member) {
+				lifecycle_->record_frontend_visibility(
+					WtCausalTraceEventKind::VisibilityRegionReplacementMember,
+					&region.replacements[member],
+					replacement_generations[member],
+					publication_cohort,
+					region.replacements.size(),
+					static_cast<std::int64_t>(region.retirements.size())
+				);
+			}
+			for (const WtChunkKey &retirement : region.retirements) {
+				lifecycle_->record_frontend_visibility(
+					WtCausalTraceEventKind::VisibilityRegionRetirementMember,
+					&retirement,
+					{},
+					publication_cohort,
+					region.replacements.size(),
+					static_cast<std::int64_t>(region.retirements.size())
+				);
+			}
 		}
 		for (const WtChunkKey &retirement : region.retirements) {
 			const auto position = std::lower_bound(
@@ -224,7 +252,7 @@ void WorldTransvoxelTerrain::flush_ready_independent_publication_regions() {
 			lifecycle_->record_frontend_visibility(
 				WtCausalTraceEventKind::VisibilityBatchPublished,
 				nullptr,
-				{},
+				{ publication_cohort },
 				region.replacements.size(),
 				region.retirements.size(),
 				1

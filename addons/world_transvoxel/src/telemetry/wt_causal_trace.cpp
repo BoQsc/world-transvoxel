@@ -180,6 +180,10 @@ const char *wt_causal_trace_event_kind_name(
 			return "visibility_coverage_priority_requested";
 		case WtCausalTraceEventKind::VisibilityCoveragePriorityApplied:
 			return "visibility_coverage_priority_applied";
+		case WtCausalTraceEventKind::VisibilityRegionReplacementMember:
+			return "visibility_region_replacement_member";
+		case WtCausalTraceEventKind::VisibilityRegionRetirementMember:
+			return "visibility_region_retirement_member";
 	}
 	return "unknown";
 }

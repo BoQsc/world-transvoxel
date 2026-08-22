@@ -42,6 +42,8 @@ enum class WtCausalTraceEventKind : std::uint16_t {
 	VisibilityBatchPublished,
 	VisibilityCoveragePriorityRequested,
 	VisibilityCoveragePriorityApplied,
+	VisibilityRegionReplacementMember,
+	VisibilityRegionRetirementMember,
 };
 
 enum class WtCausalTraceThreadRole : std::uint8_t {
