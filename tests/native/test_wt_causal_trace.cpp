@@ -27,6 +27,18 @@ int main() {
 		)) == "visibility_region_desired_snapshot",
 		"desired ownership snapshot event name mismatch"
 	);
+	check(
+		std::string_view(wt::wt_causal_trace_event_kind_name(
+			wt::WtCausalTraceEventKind::TransitionRemeshGenerationCreated
+		)) == "transition_remesh_generation_created" &&
+		std::string_view(wt::wt_causal_trace_event_kind_name(
+			wt::WtCausalTraceEventKind::ReadinessRepairGenerationCreated
+		)) == "readiness_repair_generation_created" &&
+		std::string_view(wt::wt_causal_trace_event_kind_name(
+			wt::WtCausalTraceEventKind::VisibilityCoveragePriorityOutcome
+		)) == "visibility_coverage_priority_outcome",
+		"generation-origin or priority-outcome event name mismatch"
+	);
 	check(!trace.enabled(), "trace must be disabled by default");
 	trace.record(
 		wt::WtCausalTraceEventKind::StorageStarted,

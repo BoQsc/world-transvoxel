@@ -475,6 +475,16 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 					return RepairResult::Failed;
 				}
 				record = scheduler_->find_record(item.key);
+				if (record != nullptr) {
+					causal_trace_.record(
+						WtCausalTraceEventKind::ReadinessRepairGenerationCreated,
+						WtCausalTraceThreadRole::Runtime,
+						&item.key,
+						record->generation,
+						world_revision_.load(),
+						1
+					);
+				}
 				const WtApplicationStatus application_status =
 					record == nullptr ? WtApplicationStatus::NotFound :
 					application_->expect_chunk(
@@ -553,6 +563,16 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 			return RepairResult::Failed;
 		}
 		record = scheduler_->find_record(item.key);
+		if (record != nullptr) {
+			causal_trace_.record(
+				WtCausalTraceEventKind::ReadinessRepairGenerationCreated,
+				WtCausalTraceThreadRole::Runtime,
+				&item.key,
+				record->generation,
+				world_revision_.load(),
+				0
+			);
+		}
 		const WtApplicationStatus application_status =
 			record == nullptr ? WtApplicationStatus::NotFound :
 			application_->expect_chunk(

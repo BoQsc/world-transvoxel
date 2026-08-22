@@ -194,6 +194,20 @@ bool WtReadOnlyWorldRuntime::process_visibility_coverage_priority_operation(
 	}
 	for (const WtVisibilityCoveragePriorityRequest &request :
 			operation.visibility_coverage_priority_requests) {
+		const auto record_outcome = [this, &request](
+			WtVisibilityCoveragePriorityOutcome outcome
+		) {
+			causal_trace_.record(
+				WtCausalTraceEventKind::VisibilityCoveragePriorityOutcome,
+				WtCausalTraceThreadRole::Runtime,
+				&request.key,
+				request.generation,
+				0,
+				0,
+				0,
+				static_cast<std::int64_t>(outcome)
+			);
+		};
 		const WtChunkRecord *record = scheduler_->find_record(request.key);
 		if (record == nullptr || record->generation != request.generation) {
 			std::lock_guard<std::mutex> lock(metrics_mutex_);
@@ -208,6 +222,9 @@ bool WtReadOnlyWorldRuntime::process_visibility_coverage_priority_operation(
 				0,
 				1
 			);
+			record_outcome(
+				WtVisibilityCoveragePriorityOutcome::SchedulerGenerationStale
+			);
 			continue;
 		}
 		const WtSchedulerStatus scheduler_status =
@@ -217,6 +234,9 @@ bool WtReadOnlyWorldRuntime::process_visibility_coverage_priority_operation(
 			);
 		if (scheduler_status != WtSchedulerStatus::Ok &&
 			scheduler_status != WtSchedulerStatus::AlreadyCurrent) {
+			record_outcome(
+				WtVisibilityCoveragePriorityOutcome::SchedulerReprioritizeFailed
+			);
 			set_failure(WtReadOnlyRuntimeStatus::PipelineFailure);
 			return true;
 		}
@@ -229,6 +249,9 @@ bool WtReadOnlyWorldRuntime::process_visibility_coverage_priority_operation(
 		if (page_status == WtPageMeshingRuntimeOwnerStatus::StaleGeneration) {
 			std::lock_guard<std::mutex> lock(metrics_mutex_);
 			++metrics_.visibility_coverage_priority_stale;
+			record_outcome(
+				WtVisibilityCoveragePriorityOutcome::PageGenerationStale
+			);
 			continue;
 		}
 		{
@@ -240,6 +263,12 @@ bool WtReadOnlyWorldRuntime::process_visibility_coverage_priority_operation(
 			WtCausalTraceThreadRole::Runtime,
 			&request.key,
 			request.generation
+		);
+		record_outcome(
+			page_status == WtPageMeshingRuntimeOwnerStatus::NotFound ?
+				WtVisibilityCoveragePriorityOutcome::
+					SchedulerAppliedPageRecordNotFound :
+				WtVisibilityCoveragePriorityOutcome::Applied
 		);
 	}
 	return true;

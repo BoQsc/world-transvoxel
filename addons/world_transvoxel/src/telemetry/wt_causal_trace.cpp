@@ -186,6 +186,12 @@ const char *wt_causal_trace_event_kind_name(
 			return "visibility_region_retirement_member";
 		case WtCausalTraceEventKind::VisibilityRegionDesiredSnapshot:
 			return "visibility_region_desired_snapshot";
+		case WtCausalTraceEventKind::TransitionRemeshGenerationCreated:
+			return "transition_remesh_generation_created";
+		case WtCausalTraceEventKind::ReadinessRepairGenerationCreated:
+			return "readiness_repair_generation_created";
+		case WtCausalTraceEventKind::VisibilityCoveragePriorityOutcome:
+			return "visibility_coverage_priority_outcome";
 	}
 	return "unknown";
 }

@@ -237,6 +237,7 @@ void test_visibility_coverage_priority_generation_contract() {
 	config.collision_entry_capacity = 8;
 	wt::WtReadOnlyWorldRuntime runtime(config, storage);
 	check(runtime.valid(), "priority runtime configuration rejected");
+	check(runtime.begin_causal_trace(), "priority causal trace start failed");
 	std::atomic<wt::WtReadOnlyRuntimeStatus> run_status {
 		wt::WtReadOnlyRuntimeStatus::Ok
 	};
@@ -282,6 +283,31 @@ void test_visibility_coverage_priority_generation_contract() {
 		metrics.visibility_coverage_priority_applied == 1 &&
 		metrics.visibility_coverage_priority_stale == 1,
 		"visibility coverage priority generation contract failed"
+	);
+	runtime.end_causal_trace();
+	const wt::WtCausalTraceSnapshot trace = runtime.causal_trace_snapshot(0, 256);
+	std::size_t applied_outcomes = 0;
+	std::size_t stale_outcomes = 0;
+	for (const wt::WtCausalTraceEvent &event : trace.events) {
+		if (event.kind !=
+				wt::WtCausalTraceEventKind::VisibilityCoveragePriorityOutcome) {
+			continue;
+		}
+		if (event.status == static_cast<std::int64_t>(
+				wt::WtVisibilityCoveragePriorityOutcome::Applied) ||
+			event.status == static_cast<std::int64_t>(
+				wt::WtVisibilityCoveragePriorityOutcome::
+					SchedulerAppliedPageRecordNotFound)) {
+			++applied_outcomes;
+		} else if (event.status == static_cast<std::int64_t>(
+				wt::WtVisibilityCoveragePriorityOutcome::
+					SchedulerGenerationStale)) {
+			++stale_outcomes;
+		}
+	}
+	check(
+		applied_outcomes == 1 && stale_outcomes == 1,
+		"visibility coverage priority outcomes were not exhaustive"
 	);
 	runtime.request_stop();
 	worker.join();

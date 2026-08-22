@@ -342,6 +342,15 @@ bool WtReadOnlyWorldRuntime::process_pending_transition_remeshes() {
 			return true;
 		}
 		record = scheduler_->find_record(item.key);
+		if (record != nullptr) {
+			causal_trace_.record(
+				WtCausalTraceEventKind::TransitionRemeshGenerationCreated,
+				WtCausalTraceThreadRole::Runtime,
+				&item.key,
+				record->generation,
+				world_revision_.load()
+			);
+		}
 		const WtApplicationStatus application_status =
 			record == nullptr ? WtApplicationStatus::NotFound :
 			application_->expect_chunk(

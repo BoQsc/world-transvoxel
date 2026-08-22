@@ -45,6 +45,17 @@ enum class WtCausalTraceEventKind : std::uint16_t {
 	VisibilityRegionReplacementMember,
 	VisibilityRegionRetirementMember,
 	VisibilityRegionDesiredSnapshot,
+	TransitionRemeshGenerationCreated,
+	ReadinessRepairGenerationCreated,
+	VisibilityCoveragePriorityOutcome,
+};
+
+enum class WtVisibilityCoveragePriorityOutcome : std::int64_t {
+	Applied = 0,
+	SchedulerGenerationStale,
+	SchedulerReprioritizeFailed,
+	PageGenerationStale,
+	SchedulerAppliedPageRecordNotFound,
 };
 
 enum class WtCausalTraceThreadRole : std::uint8_t {

@@ -44,8 +44,18 @@ replacement count as `cause_id`, pending chunk retirement count as `auxiliary`,
 and pending render retirement count as `status` whenever that tuple changes.
 `visibility_coverage_priority_requested` and
 `visibility_coverage_priority_applied` carry the exact chunk generation; a
-nonzero applied-event status identifies a stale request. A regional
-`visibility_batch_published` event reports replacement count as `cause_id`,
+nonzero applied-event status identifies a stale request.
+`visibility_coverage_priority_outcome` is emitted exactly once per processed
+request and uses status `0` for full application, `1` for a stale scheduler
+generation, `2` for scheduler reprioritization failure, `3` for a stale
+page-runtime generation, and `4` when scheduler priority was applied before a
+page-runtime record existed.
+`transition_remesh_generation_created` and
+`readiness_repair_generation_created` identify generations created outside a
+normal viewer/edit demand. The repair event uses auxiliary `1` for a staged
+replacement and `0` for an unstaged repair. Both events carry the current world
+revision as `cause_id`. A regional `visibility_batch_published` event reports
+replacement count as `cause_id`,
 retirement count as `auxiliary`, and status `1`.
 
 Every duration uses `std::chrono::steady_clock`. Event order is the serialized
