@@ -112,31 +112,6 @@ bool WorldTransvoxelTerrain::update_viewer(
 	return status == WtReadOnlyRuntimeStatus::Ok;
 }
 
-bool WorldTransvoxelTerrain::request_relocation_visibility_prewarm(
-	const godot::Vector3 &position,
-	std::int64_t maximum_records
-) {
-	if (!is_world_running() || maximum_records <= 0 ||
-		maximum_records > static_cast<std::int64_t>(
-			kWtMaximumRelocationVisibilityPrewarmRecords
-		) || !std::isfinite(static_cast<double>(position.x)) ||
-		!std::isfinite(static_cast<double>(position.y)) ||
-		!std::isfinite(static_cast<double>(position.z))) {
-		synchronous_world_error_ = "relocation visibility prewarm is invalid";
-		return false;
-	}
-	if (relocation_visibility_prewarm_pending_) {
-		++relocation_visibility_prewarm_coalesced_;
-	}
-	relocation_visibility_prewarm_pending_ = true;
-	relocation_visibility_prewarm_position_ = position;
-	relocation_visibility_prewarm_maximum_records_ =
-		static_cast<std::size_t>(maximum_records);
-	++relocation_visibility_prewarm_requests_;
-	synchronous_world_error_ = "ok";
-	return true;
-}
-
 bool WorldTransvoxelTerrain::remove_viewer(
 	std::int64_t viewer_id,
 	std::int64_t revision
@@ -362,9 +337,6 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 					latest_completed_viewer_plan_revision_,
 					publication.world_revision
 				);
-				if (open_viewer_plan_publications_ == 0) {
-					consume_relocation_visibility_prewarm();
-				}
 				break;
 			case WtReadOnlyPublicationKind::EditCommitted:
 				synchronous_world_error_ = "ok";
@@ -852,14 +824,6 @@ void WorldTransvoxelTerrain::reset_world_application(std::size_t capacity) {
 	regional_visibility_publications_ = 0;
 	regional_visibility_replacements_ = 0;
 	regional_visibility_retirements_ = 0;
-	relocation_visibility_prewarm_pending_ = false;
-	relocation_visibility_prewarm_position_ = godot::Vector3();
-	relocation_visibility_prewarm_maximum_records_ = 0;
-	relocation_visibility_prewarm_requests_ = 0;
-	relocation_visibility_prewarm_coalesced_ = 0;
-	relocation_visibility_prewarm_attempts_ = 0;
-	relocation_visibility_prewarm_batches_ = 0;
-	relocation_visibility_prewarm_records_ = 0;
 	application_ = std::make_unique<WtChunkApplicationService>(
 		staging_capacity,
 		capacity,

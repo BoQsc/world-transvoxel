@@ -8,25 +8,6 @@
 #include <algorithm>
 
 namespace world_transvoxel {
-namespace {
-
-double squared_distance_to_chunk(
-	const godot::Vector3 &position,
-	const WtChunkKey &key
-) noexcept {
-	const WtChunkBounds bounds = wt_chunk_bounds(key);
-	const auto axis_distance = [](double value, double minimum, double maximum) {
-		if (value < minimum) return minimum - value;
-		if (value > maximum) return value - maximum;
-		return 0.0;
-	};
-	const double dx = axis_distance(position.x, bounds.minimum.x, bounds.maximum.x);
-	const double dy = axis_distance(position.y, bounds.minimum.y, bounds.maximum.y);
-	const double dz = axis_distance(position.z, bounds.minimum.z, bounds.maximum.z);
-	return dx * dx + dy * dy + dz * dz;
-}
-
-} // namespace
 
 void WorldTransvoxelTerrain::clear_visibility_coverage_priority_request(
 	const WtChunkKey &key
@@ -43,12 +24,10 @@ void WorldTransvoxelTerrain::clear_visibility_coverage_priority_request(
 	);
 }
 
-std::size_t WorldTransvoxelTerrain::request_visibility_coverage_priority_batch(
+void WorldTransvoxelTerrain::request_visibility_coverage_priority_batch(
 	const std::vector<WtChunkApplicationRecord> &records,
 	std::size_t replacement_count,
-	std::size_t retirement_count,
-	std::int32_t priority,
-	std::int64_t reason
+	std::size_t retirement_count
 ) {
 	std::vector<WtVisibilityCoveragePriorityRequest> requests;
 	requests.reserve(records.size());
@@ -61,23 +40,19 @@ std::size_t WorldTransvoxelTerrain::request_visibility_coverage_priority_batch(
 					request.generation == record.generation;
 			}
 		);
-		if (existing != visibility_coverage_priority_requests_.end() &&
-			existing->priority >= priority) {
-			continue;
-		}
+		if (existing != visibility_coverage_priority_requests_.end()) continue;
 		clear_visibility_coverage_priority_request(record.key);
-		requests.push_back({ record.key, record.generation, priority });
+		requests.push_back({ record.key, record.generation });
 	}
 	if (requests.empty() || !lifecycle_ ||
 		lifecycle_->request_visibility_coverage_priority_batch(requests) !=
 			WtReadOnlyRuntimeStatus::Ok) {
-		return 0;
+		return;
 	}
 	for (const WtVisibilityCoveragePriorityRequest &request : requests) {
 		visibility_coverage_priority_requests_.push_back({
 			request.key,
 			request.generation,
-			request.priority,
 		});
 		if (cpu_causal_trace_active_) {
 			lifecycle_->record_frontend_visibility(
@@ -86,110 +61,8 @@ std::size_t WorldTransvoxelTerrain::request_visibility_coverage_priority_batch(
 				request.generation,
 				replacement_count,
 				retirement_count,
-				reason
+				0
 			);
-		}
-	}
-	return requests.size();
-}
-
-void WorldTransvoxelTerrain::consume_relocation_visibility_prewarm() {
-	if (!relocation_visibility_prewarm_pending_ ||
-		open_viewer_plan_publications_ != 0) {
-		return;
-	}
-	const godot::Vector3 position = relocation_visibility_prewarm_position_;
-	const std::size_t maximum_records = std::min(
-		relocation_visibility_prewarm_maximum_records_,
-		kWtMaximumRelocationVisibilityPrewarmRecords
-	);
-	relocation_visibility_prewarm_pending_ = false;
-	relocation_visibility_prewarm_maximum_records_ = 0;
-	++relocation_visibility_prewarm_attempts_;
-	if (maximum_records == 0 || pending_chunk_replacements_.empty() ||
-		pending_chunk_retirements_.empty()) {
-		return;
-	}
-
-	std::vector<WtChunkKey> candidates = pending_chunk_replacements_;
-	candidates.insert(
-		candidates.end(),
-		ready_staged_chunk_replacements_.begin(),
-		ready_staged_chunk_replacements_.end()
-	);
-	std::sort(candidates.begin(), candidates.end());
-	candidates.erase(
-		std::unique(candidates.begin(), candidates.end()),
-		candidates.end()
-	);
-	std::vector<WtChunkKey> seeds;
-	seeds.reserve(pending_chunk_replacements_.size());
-	for (const WtChunkKey &key : pending_chunk_replacements_) {
-		if (wt_chunk_replacement_requires_regional_publication(
-				key,
-				pending_chunk_retirements_
-			)) {
-			seeds.push_back(key);
-		}
-	}
-	std::sort(seeds.begin(), seeds.end(), [&](const auto &left, const auto &right) {
-		const double left_distance = squared_distance_to_chunk(position, left);
-		const double right_distance = squared_distance_to_chunk(position, right);
-		return left_distance != right_distance ? left_distance < right_distance :
-			left < right;
-	});
-
-	const std::size_t attempts = std::min(
-		seeds.size(),
-		kWtMaximumRelocationVisibilityPrewarmRegionAttempts
-	);
-	for (std::size_t index = 0; index < attempts; ++index) {
-		WtChunkPublicationRegion region;
-		if (!wt_build_chunk_publication_region(
-				seeds[index],
-				candidates,
-				pending_chunk_retirements_,
-				region
-			) || !wt_chunk_publication_region_has_complete_coverage(region)) {
-			continue;
-		}
-		std::vector<WtChunkApplicationRecord> missing_records;
-		missing_records.reserve(region.replacements.size());
-		for (const WtChunkKey &key : region.replacements) {
-			WtChunkApplicationRecord record;
-			if (application_->copy_record(key, record) && !record.fully_ready()) {
-				missing_records.push_back(record);
-			}
-		}
-		std::sort(
-			missing_records.begin(),
-			missing_records.end(),
-			[&](const auto &left, const auto &right) {
-				const double left_distance = squared_distance_to_chunk(
-					position, left.key
-				);
-				const double right_distance = squared_distance_to_chunk(
-					position, right.key
-				);
-				return left_distance != right_distance ?
-					left_distance < right_distance : left.key < right.key;
-			}
-		);
-		if (missing_records.size() > maximum_records) {
-			missing_records.resize(maximum_records);
-		}
-		const std::size_t requested =
-			request_visibility_coverage_priority_batch(
-				missing_records,
-				region.replacements.size(),
-				region.retirements.size(),
-				kWtRelocationVisibilityPrewarmPriority,
-				1
-			);
-		if (requested != 0) {
-			++relocation_visibility_prewarm_batches_;
-			relocation_visibility_prewarm_records_ += requested;
-			return;
 		}
 	}
 }

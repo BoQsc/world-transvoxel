@@ -255,28 +255,12 @@ void test_visibility_coverage_priority_generation_contract() {
 			{
 				counts.first_expect_key,
 				counts.first_expect_generation,
-				wt::kWtRelocationVisibilityPrewarmPriority,
 			},
 			{
 				counts.first_expect_key,
 				{ counts.first_expect_generation.value + 1U },
-				wt::kWtRelocationVisibilityPrewarmPriority,
 			},
 		}) == wt::WtReadOnlyRuntimeStatus::Ok &&
-		runtime.request_visibility_coverage_priority_batch({
-			{
-				counts.first_expect_key,
-				counts.first_expect_generation,
-				wt::kWtInteractiveEditPriority,
-			},
-		}) == wt::WtReadOnlyRuntimeStatus::Ok &&
-		runtime.request_visibility_coverage_priority_batch({
-			{
-				counts.first_expect_key,
-				counts.first_expect_generation,
-				0,
-			},
-		}) == wt::WtReadOnlyRuntimeStatus::InvalidEdit &&
 		runtime.request_visibility_coverage_priority_batch({}) ==
 			wt::WtReadOnlyRuntimeStatus::InvalidEdit,
 		"visibility coverage priority requests were rejected"
@@ -285,8 +269,8 @@ void test_visibility_coverage_priority_generation_contract() {
 		std::chrono::seconds(2);
 	while (std::chrono::steady_clock::now() < deadline) {
 		const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
-		if (metrics.visibility_coverage_priority_requests >= 3 &&
-			metrics.visibility_coverage_priority_applied >= 2 &&
+		if (metrics.visibility_coverage_priority_requests >= 2 &&
+			metrics.visibility_coverage_priority_applied >= 1 &&
 			metrics.visibility_coverage_priority_stale >= 1) {
 			break;
 		}
@@ -294,8 +278,8 @@ void test_visibility_coverage_priority_generation_contract() {
 	}
 	const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
 	check(
-		metrics.visibility_coverage_priority_requests == 3 &&
-			metrics.visibility_coverage_priority_applied == 2 &&
+		metrics.visibility_coverage_priority_requests == 2 &&
+		metrics.visibility_coverage_priority_applied == 1 &&
 		metrics.visibility_coverage_priority_stale == 1,
 		"visibility coverage priority generation contract failed"
 	);

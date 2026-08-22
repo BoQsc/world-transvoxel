@@ -269,16 +269,6 @@ void WorldTransvoxelTerrain::_bind_methods() {
 		DEFVAL(0)
 	);
 	godot::ClassDB::bind_method(
-		godot::D_METHOD(
-			"request_relocation_visibility_prewarm", "position",
-			"maximum_records"
-		),
-		&WorldTransvoxelTerrain::request_relocation_visibility_prewarm,
-		DEFVAL(static_cast<std::int64_t>(
-			kWtMaximumRelocationVisibilityPrewarmRecords
-		))
-	);
-	godot::ClassDB::bind_method(
 		godot::D_METHOD("remove_viewer", "viewer_id", "revision"),
 		&WorldTransvoxelTerrain::remove_viewer
 	);

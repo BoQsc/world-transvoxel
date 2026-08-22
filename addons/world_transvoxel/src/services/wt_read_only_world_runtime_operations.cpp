@@ -65,8 +65,7 @@ WtReadOnlyWorldRuntime::request_visibility_coverage_priority_batch(
 	}
 	for (const WtVisibilityCoveragePriorityRequest &request : requests) {
 		if (!wt_is_valid_chunk_key(request.key) ||
-			request.generation.value == 0 || request.priority <= 0 ||
-			request.priority > kWtInteractiveEditPriority) {
+			request.generation.value == 0) {
 			return WtReadOnlyRuntimeStatus::InvalidEdit;
 		}
 	}
@@ -211,14 +210,10 @@ bool WtReadOnlyWorldRuntime::process_visibility_coverage_priority_operation(
 			);
 			continue;
 		}
-		const std::int32_t effective_priority = std::max(
-			record->priority,
-			request.priority
-		);
 		const WtSchedulerStatus scheduler_status =
 			scheduler_->reprioritize_chunk(
 				request.key,
-				effective_priority
+				kWtInteractiveEditPriority
 			);
 		if (scheduler_status != WtSchedulerStatus::Ok &&
 			scheduler_status != WtSchedulerStatus::AlreadyCurrent) {
@@ -229,7 +224,7 @@ bool WtReadOnlyWorldRuntime::process_visibility_coverage_priority_operation(
 			page_runtime_->reprioritize_owned_chunk(
 				request.key,
 				request.generation,
-				effective_priority
+				kWtInteractiveEditPriority
 			);
 		if (page_status == WtPageMeshingRuntimeOwnerStatus::StaleGeneration) {
 			std::lock_guard<std::mutex> lock(metrics_mutex_);
@@ -244,9 +239,7 @@ bool WtReadOnlyWorldRuntime::process_visibility_coverage_priority_operation(
 			WtCausalTraceEventKind::VisibilityCoveragePriorityApplied,
 			WtCausalTraceThreadRole::Runtime,
 			&request.key,
-			request.generation,
-			static_cast<std::uint64_t>(effective_priority),
-			static_cast<std::uint64_t>(request.priority)
+			request.generation
 		);
 	}
 	return true;

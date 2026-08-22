@@ -2,7 +2,6 @@
 
 #include "services/wt_runtime_config.h"
 #include "storage/wt_world_manifest.h"
-#include "streaming/wt_stream_scheduler.h"
 
 #include <algorithm>
 #include <cmath>
@@ -15,17 +14,16 @@ namespace {
 constexpr std::int32_t kWtLodPriorityBand = 100000000;
 constexpr std::int32_t kWtDistancePriorityMaximum =
 	kWtLodPriorityBand - 1;
+constexpr std::int32_t kWtCollisionPriorityMaximum =
+	std::numeric_limits<std::int32_t>::max() - 1;
+constexpr std::int32_t kWtCollisionPriorityDistanceLimit = 1000000;
 constexpr std::int32_t kWtMaximumVisualPriority =
 	static_cast<std::int32_t>(kWtMaximumLod) * kWtLodPriorityBand +
 	kWtDistancePriorityMaximum;
 static_assert(
-	kWtMinimumCollisionPriority > kWtMaximumVisualPriority,
+	kWtCollisionPriorityMaximum - kWtCollisionPriorityDistanceLimit >
+		kWtMaximumVisualPriority,
 	"collision priority band must outrank every visual LOD priority"
-);
-static_assert(
-	kWtRelocationVisibilityPrewarmPriority > kWtMaximumVisualPriority &&
-		kWtRelocationVisibilityPrewarmPriority < kWtMinimumCollisionPriority,
-	"relocation prewarm must remain between visual and collision priority"
 );
 
 bool intervals_overlap(

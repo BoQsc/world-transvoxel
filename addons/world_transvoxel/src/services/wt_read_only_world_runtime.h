@@ -9,7 +9,6 @@
 #include "streaming/wt_balanced_lod_planner.h"
 #include "editing/wt_edit_transaction.h"
 #include "streaming/wt_multi_viewer_desired_set.h"
-#include "streaming/wt_stream_scheduler.h"
 #include "telemetry/wt_causal_trace.h"
 
 #include <atomic>
@@ -129,7 +128,6 @@ struct WtReadOnlyPublication {
 struct WtVisibilityCoveragePriorityRequest {
 	WtChunkKey key;
 	WtGenerationToken generation;
-	std::int32_t priority = kWtInteractiveEditPriority;
 };
 
 class WtReadOnlyWorldRuntime {
