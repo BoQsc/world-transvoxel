@@ -122,6 +122,11 @@ void test_scheduler_priority_and_lifecycle() {
 		"middle-priority request failed");
 
 	wt::WtChunkJob job;
+	check(
+		scheduler.peek_job(job) && job.key == high &&
+			scheduler.queued_job_count() == 3,
+		"scheduler peek changed or misreported the priority queue"
+	);
 	check(scheduler.pop_job(job) && job.key == high, "highest priority did not run first");
 	check(scheduler.pop_job(job) && job.key == middle, "middle priority did not run second");
 	check(scheduler.pop_job(job) && job.key == low, "lowest priority did not run last");
@@ -199,14 +204,6 @@ void test_scheduler_queue_trace_observer() {
 		events.back().job.priority == wt::kWtInteractiveEditPriority &&
 		events.back().jobs_ahead == 0,
 		"mesh queue admission lost effective priority");
-	check(
-		scheduler.pop_job_stage(wt::WtChunkJobStage::Sample, job) &&
-			job.key == high && job.stage == wt::WtChunkJobStage::Sample &&
-			events.size() == 8 && events.back().jobs_ahead == 1 &&
-			events.back().queue_depth_before == 3 &&
-			events.back().queue_depth_after == 2,
-		"stage-aware dequeue did not bypass a blocked mesh exactly"
-	);
 
 	const std::size_t observed_count = events.size();
 	scheduler.set_queue_trace_observer({});

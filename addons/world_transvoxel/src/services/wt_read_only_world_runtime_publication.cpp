@@ -434,10 +434,13 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 		}
 		if (page_runtime_->asynchronous_meshing_enabled() &&
 			!page_runtime_->asynchronous_mesh_admission_available()) {
-			if (!scheduler_->pop_job_stage(WtChunkJobStage::Sample, job)) {
+			WtChunkJob next_job;
+			if (!scheduler_->peek_job(next_job) ||
+				next_job.stage == WtChunkJobStage::Mesh) {
 				break;
 			}
-		} else if (!scheduler_->pop_job(job)) {
+		}
+		if (!scheduler_->pop_job(job)) {
 			break;
 		}
 		progressed = true;
