@@ -337,6 +337,9 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 					latest_completed_viewer_plan_revision_,
 					publication.world_revision
 				);
+				if (open_viewer_plan_publications_ == 0) {
+					request_pending_regional_visibility_priority();
+				}
 				break;
 			case WtReadOnlyPublicationKind::EditCommitted:
 				synchronous_world_error_ = "ok";
@@ -824,6 +827,8 @@ void WorldTransvoxelTerrain::reset_world_application(std::size_t capacity) {
 	regional_visibility_publications_ = 0;
 	regional_visibility_replacements_ = 0;
 	regional_visibility_retirements_ = 0;
+	regional_visibility_prewarm_batches_ = 0;
+	regional_visibility_prewarm_requests_ = 0;
 	application_ = std::make_unique<WtChunkApplicationService>(
 		staging_capacity,
 		capacity,
