@@ -13,7 +13,6 @@
 namespace world_transvoxel {
 
 class WtAsyncStorageService;
-class WtCpuWorkBudget;
 class WtEditJournal;
 struct WtChunkPage;
 class WtStoragePageCache;
@@ -163,8 +162,7 @@ class WtPageMeshingRuntimeService final : public WtPageMeshingRuntimeOwner {
 public:
 	explicit WtPageMeshingRuntimeService(
 		std::size_t record_capacity,
-		std::size_t meshing_worker_count = 0,
-		std::shared_ptr<WtCpuWorkBudget> cpu_work_budget = {}
+		std::size_t meshing_worker_count = 0
 	);
 	~WtPageMeshingRuntimeService();
 

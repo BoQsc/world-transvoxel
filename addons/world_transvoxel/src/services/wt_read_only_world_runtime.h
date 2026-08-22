@@ -1,6 +1,5 @@
 #pragma once
 
-#include "core/wt_cpu_work_budget.h"
 #include "physics/wt_collision_apply_queue.h"
 #include "render/wt_render_apply_queue.h"
 #include "services/wt_authoritative_sample_query.h"
@@ -136,8 +135,7 @@ public:
 	WtReadOnlyWorldRuntime(
 		WtRuntimeConfig config,
 		WtAsyncStorageService &storage,
-		WtEditJournalStore *edit_journal_store = nullptr,
-		std::shared_ptr<WtCpuWorkBudget> cpu_work_budget = {}
+		WtEditJournalStore *edit_journal_store = nullptr
 	);
 	~WtReadOnlyWorldRuntime();
 
@@ -341,7 +339,6 @@ private:
 	WtRuntimeConfig config_;
 	WtAsyncStorageService &storage_;
 	WtEditJournalStore *edit_journal_store_ = nullptr;
-	std::shared_ptr<WtCpuWorkBudget> cpu_work_budget_;
 	std::uint64_t initial_world_revision_ = 0;
 	std::atomic<std::uint64_t> world_revision_{ 0 };
 	bool valid_ = false;

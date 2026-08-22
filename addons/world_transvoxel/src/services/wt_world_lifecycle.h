@@ -1,6 +1,5 @@
 #pragma once
 
-#include "core/wt_cpu_work_budget.h"
 #include "services/wt_runtime_config.h"
 #include "services/wt_read_only_world_runtime.h"
 #include "storage/wt_async_storage_service.h"
@@ -159,7 +158,6 @@ private:
 	bool procedural_ = false;
 	bool procedural_snapshot_ = false;
 	WtProceduralWorldDescriptor procedural_descriptor_;
-	std::shared_ptr<WtCpuWorkBudget> cpu_work_budget_;
 	std::unique_ptr<WtAsyncStorageService> storage_;
 	std::unique_ptr<WtEditJournalStore> edit_journal_store_;
 	std::unique_ptr<WtReadOnlyWorldRuntime> runtime_;

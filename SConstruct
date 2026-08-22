@@ -735,19 +735,6 @@ production_config_test = native_test_env.Program(
     ],
 )
 
-cpu_work_budget_test = native_test_env.Program(
-    os.path.join(
-        "build",
-        "native-tests",
-        "test_wt_cpu_work_budget.{}.{}{}".format(
-            env["target"],
-            env["arch"],
-            ".exe" if env["platform"] == "windows" else "",
-        ),
-    ),
-    source=["tests/native/test_wt_cpu_work_budget.cpp"],
-)
-
 production_edit_journal_test = native_test_env.Program(
     os.path.join(
         "build",
@@ -1164,11 +1151,6 @@ if env["platform"] == "windows":
     )
 
     env.AddPostAction(
-        cpu_work_budget_test,
-        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
-    )
-
-    env.AddPostAction(
         production_edit_journal_test,
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
@@ -1235,7 +1217,6 @@ Default([
     m5_page_transition_test,
     m5_page_meshing_runtime_test,
     production_config_test,
-    cpu_work_budget_test,
     production_edit_journal_test,
     production_snapshot_query_test,
     fault_order_determinism_test,

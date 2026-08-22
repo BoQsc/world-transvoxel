@@ -11,7 +11,6 @@ constexpr std::uint64_t kWtMaximumRuntimeActiveChunks = 65536;
 constexpr std::uint64_t kWtMaximumRuntimeApplyBudget = 128;
 constexpr std::uint64_t kWtMaximumRuntimeProceduralGenerationWorkerCount = 8;
 constexpr std::uint64_t kWtMaximumRuntimeMeshingWorkerCount = 8;
-constexpr std::uint64_t kWtMaximumRuntimeSharedCpuWorkBudget = 8;
 
 struct WtRuntimeConfig {
 	std::uint32_t schema = kWtRuntimeConfigSchema;
@@ -21,7 +20,6 @@ struct WtRuntimeConfig {
 	std::uint64_t lod_refinement_radius_chunks = 0;
 	std::uint64_t procedural_generation_worker_count = 2;
 	std::uint64_t meshing_worker_count = 0;
-	std::uint64_t shared_cpu_work_budget = 0;
 	std::uint64_t storage_request_capacity = 256;
 	std::uint64_t storage_completion_capacity = 256;
 	std::uint64_t encoded_page_entry_capacity = 256;
@@ -51,7 +49,6 @@ enum class WtRuntimeConfigStatus : std::uint8_t {
 	InvalidLodRefinementRadius,
 	InvalidProceduralGenerationWorkerCount,
 	InvalidMeshingWorkerCount,
-	InvalidSharedCpuWorkBudget,
 	InvalidTotalDemandCapacity,
 	InvalidStorageQueueCapacity,
 	InvalidStorageCacheCapacity,

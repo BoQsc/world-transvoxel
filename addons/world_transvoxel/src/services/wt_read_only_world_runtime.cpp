@@ -62,19 +62,13 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::delta_failure_status(
 WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 	WtRuntimeConfig config,
 	WtAsyncStorageService &storage,
-	WtEditJournalStore *edit_journal_store,
-	std::shared_ptr<WtCpuWorkBudget> cpu_work_budget
+	WtEditJournalStore *edit_journal_store
 ) :
 		config_(config),
 		storage_(storage),
-		edit_journal_store_(edit_journal_store),
-		cpu_work_budget_(std::move(cpu_work_budget)) {
+		edit_journal_store_(edit_journal_store) {
 	if (wt_validate_runtime_config(config_) != WtRuntimeConfigStatus::Ok ||
-		!storage_.is_open() ||
-		(config_.shared_cpu_work_budget != 0 &&
-			(!cpu_work_budget_ ||
-				cpu_work_budget_->capacity() !=
-					config_.shared_cpu_work_budget))) {
+		!storage_.is_open()) {
 		last_status_.store(WtReadOnlyRuntimeStatus::InvalidConfiguration);
 		return;
 	}
@@ -140,8 +134,7 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 		std::make_unique<WtEditRuntimeReplacementService>(active);
 	page_runtime_ = std::make_unique<WtPageMeshingRuntimeService>(
 		active,
-		static_cast<std::size_t>(config_.meshing_worker_count),
-		cpu_work_budget_
+		static_cast<std::size_t>(config_.meshing_worker_count)
 	);
 	mesher_ = std::make_unique<WtChunkMesher>(
 		wt_get_transvoxel_mit_backend()

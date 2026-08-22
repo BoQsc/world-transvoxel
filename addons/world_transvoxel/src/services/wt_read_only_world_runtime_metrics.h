@@ -39,14 +39,6 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t mesh_worker_queue_wait_ns_last = 0;
 	std::uint64_t mesh_worker_queue_wait_ns_total = 0;
 	std::uint64_t mesh_worker_queue_wait_ns_maximum = 0;
-	std::uint64_t shared_cpu_work_budget_capacity = 0;
-	std::uint64_t shared_cpu_work_budget_active = 0;
-	std::uint64_t shared_cpu_work_budget_waiting = 0;
-	std::uint64_t shared_cpu_work_budget_maximum_active = 0;
-	std::uint64_t shared_cpu_work_budget_grants = 0;
-	std::uint64_t shared_cpu_work_budget_wait_time_ns_last = 0;
-	std::uint64_t shared_cpu_work_budget_wait_time_ns_total = 0;
-	std::uint64_t shared_cpu_work_budget_wait_time_ns_maximum = 0;
 	std::uint64_t storage_completions = 0;
 	std::uint64_t mesh_completions = 0;
 	std::uint64_t transition_mesh_completions = 0;

@@ -1,7 +1,6 @@
 #include "services/wt_page_meshing_runtime.h"
 
 #include "backend/wt_transvoxel_mit_backend.h"
-#include "core/wt_cpu_work_budget.h"
 #include "bake/wt_chunk_baker.h"
 #include "editing/wt_chunk_edit_state.h"
 #include "meshing/wt_material_volume_sample_source.h"
@@ -192,13 +191,11 @@ struct WtPageMeshingRuntimeService::PreparedMeshCompletion {
 struct WtPageMeshingRuntimeService::AsyncState {
 	explicit AsyncState(
 		std::size_t requested_worker_count,
-		std::size_t requested_queue_capacity,
-		std::shared_ptr<WtCpuWorkBudget> requested_cpu_work_budget
+		std::size_t requested_queue_capacity
 	) :
 			worker_count(requested_worker_count),
 			queue_capacity(requested_queue_capacity),
-			completion_capacity(requested_queue_capacity),
-			cpu_work_budget(std::move(requested_cpu_work_budget)) {
+			completion_capacity(requested_queue_capacity) {
 		workers.reserve(worker_count);
 		for (std::size_t index = 0; index < worker_count; ++index) {
 			workers.emplace_back([this]() { worker_main(); });
@@ -318,7 +315,6 @@ struct WtPageMeshingRuntimeService::AsyncState {
 		while (true) {
 			PreparedMeshJob prepared;
 			std::size_t queued_after_pop = 0;
-			WtCpuWorkBudget::Lease work_lease;
 			{
 				std::unique_lock<std::mutex> lock(work_mutex);
 				work_available.wait(lock, [this]() {
@@ -327,27 +323,6 @@ struct WtPageMeshingRuntimeService::AsyncState {
 				});
 				if (stopping.load(std::memory_order_acquire) && work.empty()) {
 					return;
-				}
-				if (cpu_work_budget) {
-					const auto candidate = std::max_element(
-						work.begin(),
-						work.end(),
-						[](const PreparedMeshJob &left,
-							const PreparedMeshJob &right) {
-							if (left.job.priority != right.job.priority) {
-								return left.job.priority < right.job.priority;
-							}
-							return left.job.sequence > right.job.sequence;
-						}
-					);
-					const std::int32_t priority = candidate->job.priority;
-					lock.unlock();
-					work_lease = cpu_work_budget->acquire(priority);
-					lock.lock();
-					if (stopping.load(std::memory_order_acquire) && work.empty()) {
-						return;
-					}
-					if (work.empty()) continue;
 				}
 				const auto selected = std::max_element(
 					work.begin(),
@@ -419,7 +394,6 @@ struct WtPageMeshingRuntimeService::AsyncState {
 					completion.execute_time_ns
 				);
 			}
-			work_lease.reset();
 			{
 				std::unique_lock<std::mutex> lock(completion_mutex);
 				completion_space.wait(lock, [this]() {
@@ -446,7 +420,6 @@ struct WtPageMeshingRuntimeService::AsyncState {
 	std::size_t worker_count = 0;
 	std::size_t queue_capacity = 0;
 	std::size_t completion_capacity = 0;
-	std::shared_ptr<WtCpuWorkBudget> cpu_work_budget;
 	std::vector<std::thread> workers;
 	mutable std::mutex work_mutex;
 	std::condition_variable work_available;
@@ -463,8 +436,7 @@ struct WtPageMeshingRuntimeService::AsyncState {
 
 WtPageMeshingRuntimeService::WtPageMeshingRuntimeService(
 	std::size_t record_capacity,
-	std::size_t meshing_worker_count,
-	std::shared_ptr<WtCpuWorkBudget> cpu_work_budget
+	std::size_t meshing_worker_count
 ) :
 		record_capacity_(record_capacity),
 		valid_(record_capacity > 0 &&
@@ -479,8 +451,7 @@ WtPageMeshingRuntimeService::WtPageMeshingRuntimeService(
 		if (meshing_worker_count != 0) {
 			async_ = std::make_unique<AsyncState>(
 				meshing_worker_count,
-				record_capacity,
-				std::move(cpu_work_budget)
+				record_capacity
 			);
 		}
 	}
