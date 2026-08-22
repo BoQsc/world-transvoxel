@@ -445,7 +445,10 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			);
 		const std::uint8_t trace_transition_mask =
 			trace_mesh_record_found ? trace_mesh_record.transition_mask : 0;
-		if (trace_enabled) {
+		const bool asynchronous_mesh =
+			job.stage == WtChunkJobStage::Mesh &&
+			page_runtime_->asynchronous_meshing_enabled();
+		if (trace_enabled && !asynchronous_mesh) {
 			causal_trace_.record(
 				job.stage == WtChunkJobStage::Sample ?
 					WtCausalTraceEventKind::SampleStarted :
@@ -525,18 +528,64 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 						return process_terrain_mesh_completion(completion);
 					};
 			}
-			status = page_runtime_->execute_mesh_job(
-				job,
-				*mesher_,
-				*meshing_scratch_,
-				*scheduler_,
-				edit_journal_store_ != nullptr ?
-					&edit_journal_store_->journal() : nullptr,
-				initial_world_revision_,
-				&storage_,
-				terrain_mesh_ready,
-				application_record.visual_required
-			);
+			if (asynchronous_mesh) {
+				const WtMeshExecutionCallback execution_callback =
+					[this](const WtMeshExecutionEvent &event) {
+						if (!causal_trace_.enabled()) return;
+						causal_trace_.record(
+							event.started ?
+								WtCausalTraceEventKind::MeshStarted :
+								WtCausalTraceEventKind::MeshFinished,
+							WtCausalTraceThreadRole::Meshing,
+							&event.job.key,
+							event.job.generation,
+							event.job.world_revision,
+							event.job.sequence,
+							event.duration_ns,
+							static_cast<std::int64_t>(event.status)
+						);
+						if (event.transition_mask != 0) {
+							causal_trace_.record(
+								event.started ?
+									WtCausalTraceEventKind::
+										TransitionMeshStarted :
+									WtCausalTraceEventKind::
+										TransitionMeshFinished,
+								WtCausalTraceThreadRole::Meshing,
+								&event.job.key,
+								event.job.generation,
+								event.job.world_revision,
+								event.transition_mask,
+								event.duration_ns,
+								static_cast<std::int64_t>(event.status)
+							);
+						}
+					};
+				status = page_runtime_->dispatch_mesh_job(
+					job,
+					*scheduler_,
+					edit_journal_store_ != nullptr ?
+						&edit_journal_store_->journal() : nullptr,
+					initial_world_revision_,
+					&storage_,
+					terrain_mesh_ready,
+					application_record.visual_required,
+					execution_callback
+				);
+			} else {
+				status = page_runtime_->execute_mesh_job(
+					job,
+					*mesher_,
+					*meshing_scratch_,
+					*scheduler_,
+					edit_journal_store_ != nullptr ?
+						&edit_journal_store_->journal() : nullptr,
+					initial_world_revision_,
+					&storage_,
+					terrain_mesh_ready,
+					application_record.visual_required
+				);
+			}
 		}
 		const auto job_finished = std::chrono::steady_clock::now();
 		const std::uint64_t job_time_ns =
@@ -545,7 +594,7 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 					job_finished - job_started
 				).count()
 			);
-		if (trace_enabled) {
+		if (trace_enabled && !asynchronous_mesh) {
 			causal_trace_.record(
 				job.stage == WtChunkJobStage::Sample ?
 					WtCausalTraceEventKind::SampleFinished :
@@ -584,12 +633,14 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 				);
 			} else {
 				++metrics_.mesh_jobs;
-				metrics_.mesh_job_time_ns_last = job_time_ns;
-				metrics_.mesh_job_time_ns_total += job_time_ns;
-				metrics_.mesh_job_time_ns_maximum = std::max(
-					metrics_.mesh_job_time_ns_maximum,
-					job_time_ns
-				);
+				if (!asynchronous_mesh) {
+					metrics_.mesh_job_time_ns_last = job_time_ns;
+					metrics_.mesh_job_time_ns_total += job_time_ns;
+					metrics_.mesh_job_time_ns_maximum = std::max(
+						metrics_.mesh_job_time_ns_maximum,
+						job_time_ns
+					);
+				}
 			}
 		}
 		if (status ==
@@ -611,5 +662,20 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 		}
 	}
 	return progressed;
+}
+
+bool WtReadOnlyWorldRuntime::process_async_mesh_completions() {
+	if (!page_runtime_->asynchronous_meshing_enabled()) return false;
+	std::size_t processed = 0;
+	const WtPageMeshingRuntimeStatus status =
+		page_runtime_->process_async_mesh_completions(
+			*scheduler_,
+			static_cast<std::size_t>(config_.active_chunk_capacity),
+			processed
+		);
+	if (status != WtPageMeshingRuntimeStatus::Ok) {
+		set_failure(WtReadOnlyRuntimeStatus::PipelineSchedulerJobFailure);
+	}
+	return processed != 0;
 }
 } // namespace world_transvoxel

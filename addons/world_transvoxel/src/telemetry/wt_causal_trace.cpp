@@ -213,6 +213,7 @@ const char *wt_causal_trace_thread_role_name(
 	switch (role) {
 		case WtCausalTraceThreadRole::Api: return "api";
 		case WtCausalTraceThreadRole::Runtime: return "runtime";
+		case WtCausalTraceThreadRole::Meshing: return "meshing";
 		case WtCausalTraceThreadRole::Storage: return "storage";
 		case WtCausalTraceThreadRole::Frontend: return "frontend";
 	}

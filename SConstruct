@@ -36,7 +36,21 @@ env["AR"] = zig_command + " ar"
 env["RANLIB"] = zig_command + " ranlib"
 
 if sys.platform == "win32":
-    env["ARCOM"] = "$AR $ARFLAGS $TARGET $SOURCES"
+    def archive_in_batches(target, source, env):
+        archive = os.path.abspath(str(target[0]))
+        if os.path.exists(archive):
+            os.remove(archive)
+        source_paths = [os.path.abspath(str(item)) for item in source]
+        for index in range(0, len(source_paths), 80):
+            flags = "qcs" if index == 0 else "q"
+            subprocess.check_call(
+                [ZIG_EXE, "ar", flags, archive]
+                + source_paths[index:index + 80]
+            )
+        subprocess.check_call([ZIG_EXE, "ranlib", archive])
+        return 0
+
+    env["ARCOM"] = archive_in_batches
 
 zig_cache = os.path.join(PROJECT_ROOT, ".tools", "zig-cache")
 os.makedirs(zig_cache, exist_ok=True)

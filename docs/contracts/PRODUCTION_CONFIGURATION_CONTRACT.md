@@ -24,6 +24,7 @@ consume them.
 | `storage_request_capacity` | 256 | 1..65,536 |
 | `storage_completion_capacity` | 256 | 1..65,536 |
 | `procedural_generation_worker_count` | 2 | 1..8 |
+| `meshing_worker_count` | 0 | 0..8; 0 preserves synchronous control-thread meshing |
 | `encoded_page_entry_capacity` | 256 | 1..65,536 |
 | `encoded_page_byte_capacity` | 67,108,864 | 1..1,073,741,824 |
 | `decoded_page_entry_capacity` | 128 | 1..65,536 |

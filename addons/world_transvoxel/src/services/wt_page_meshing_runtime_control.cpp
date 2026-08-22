@@ -16,6 +16,7 @@ WtPageMeshingRuntimeService::cancel_generation(
 	if (record->generation != generation) {
 		return WtPageMeshingRuntimeStatus::StaleCompletion;
 	}
+	cancel_async_work(key, generation);
 	if (record->mesh) {
 		++metrics_.discarded_mesh_completions;
 	}
@@ -34,6 +35,7 @@ WtPageMeshingRuntimeStatus WtPageMeshingRuntimeService::release_chunk(
 	if (record->mesh) {
 		++metrics_.discarded_mesh_completions;
 	}
+	cancel_async_work(key, record->generation);
 	records_.erase(record);
 	++metrics_.cancellations;
 	return WtPageMeshingRuntimeStatus::Ok;
@@ -52,6 +54,7 @@ WtPageMeshingRuntimeStatus WtPageMeshingRuntimeService::reprioritize(
 		return WtPageMeshingRuntimeStatus::StaleCompletion;
 	}
 	record->priority = priority;
+	reprioritize_async_work(key, generation, priority);
 	return WtPageMeshingRuntimeStatus::Ok;
 }
 
@@ -80,6 +83,7 @@ WtPageMeshingRuntimeService::invalidate_dependency(
 			continue;
 		}
 		invalidated.push_back({ record->key, record->generation });
+		cancel_async_work(record->key, record->generation);
 		if (record->mesh) {
 			++metrics_.discarded_mesh_completions;
 		}
@@ -203,6 +207,7 @@ std::size_t WtPageMeshingRuntimeService::pinned_page_count() const noexcept {
 WtPageMeshingRuntimeMetrics
 WtPageMeshingRuntimeService::get_metrics() const noexcept {
 	WtPageMeshingRuntimeMetrics snapshot = metrics_;
+	merge_async_metrics(snapshot);
 	for (const Record &record : records_) {
 		switch (record.phase) {
 			case WtPageMeshingRuntimePhase::Loading:
@@ -214,6 +219,9 @@ WtPageMeshingRuntimeService::get_metrics() const noexcept {
 				break;
 			case WtPageMeshingRuntimePhase::AwaitingMesh:
 				++snapshot.awaiting_mesh_records;
+				break;
+			case WtPageMeshingRuntimePhase::Meshing:
+				++snapshot.meshing_records;
 				break;
 			case WtPageMeshingRuntimePhase::MeshReady:
 			case WtPageMeshingRuntimePhase::MeshFailedReady:

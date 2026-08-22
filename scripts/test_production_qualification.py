@@ -23,7 +23,7 @@ from wt_script_common import REPO_ROOT, addon_binary_path, native_test_path
 
 ARTIFACT_ROOT = REPO_ROOT / "artifacts" / "production-qualification"
 EXPECTED_CONFIG_HASH = (
-    "b33757b2e7736bcd44b9884f5cf1c606dd7b1bd8e6809089617b41d40f712780"
+    "4660a397afc2f73e9309eb8357d9b8c4ee1609eba6e51eaff223b751afd21e62"
 )
 EXPECTED_EDIT_JOURNAL_HASH = (
     "9152d9422e2d0a9a04214f7a9447e6d3b475f13bdb90efc395a764b25ed71ac1"

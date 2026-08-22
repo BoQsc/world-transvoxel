@@ -342,6 +342,7 @@ int main() {
 	config.active_chunk_capacity = 8;
 	config.viewer_capacity = 2;
 	config.demand_capacity_per_viewer = 125;
+	config.meshing_worker_count = 2;
 	config.storage_request_capacity = 16;
 	config.storage_completion_capacity = 16;
 	config.encoded_page_entry_capacity = 8;
@@ -351,6 +352,7 @@ int main() {
 	config.collision_entry_capacity = 8;
 	wt::WtReadOnlyWorldRuntime runtime(config, storage);
 	check(runtime.valid(), "read-only runtime configuration rejected");
+	check(runtime.begin_causal_trace(), "parallel causal trace start failed");
 	std::atomic<wt::WtReadOnlyRuntimeStatus> run_status {
 		wt::WtReadOnlyRuntimeStatus::Ok
 	};
@@ -427,8 +429,29 @@ int main() {
 
 	runtime.request_stop();
 	worker.join();
+	runtime.end_causal_trace();
 	storage.close();
 	const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+	const wt::WtCausalTraceSnapshot trace = runtime.causal_trace_snapshot(
+		0,
+		config.trace_event_capacity
+	);
+	std::size_t worker_mesh_starts = 0;
+	std::size_t worker_mesh_finishes = 0;
+	std::size_t incorrectly_attributed_mesh_events = 0;
+	for (const wt::WtCausalTraceEvent &event : trace.events) {
+		if (event.kind != wt::WtCausalTraceEventKind::MeshStarted &&
+			event.kind != wt::WtCausalTraceEventKind::MeshFinished) {
+			continue;
+		}
+		if (event.thread_role != wt::WtCausalTraceThreadRole::Meshing) {
+			++incorrectly_attributed_mesh_events;
+		} else if (event.kind == wt::WtCausalTraceEventKind::MeshStarted) {
+			++worker_mesh_starts;
+		} else {
+			++worker_mesh_finishes;
+		}
+	}
 	check(run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
 		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok,
 		"read-only runtime did not stop cleanly");
@@ -436,7 +459,17 @@ int main() {
 		metrics.collision_viewer_updates == 1 &&
 		metrics.collision_viewer_removals == 1 &&
 		metrics.sample_jobs >= 4 && metrics.mesh_jobs >= 4 &&
-		metrics.storage_completions >= 4 && metrics.mesh_completions >= 4,
+		metrics.storage_completions >= 4 && metrics.mesh_completions >= 4 &&
+		metrics.mesh_worker_count == 2 &&
+		metrics.mesh_worker_accepted_jobs == metrics.mesh_jobs &&
+		metrics.mesh_worker_started_jobs == metrics.mesh_worker_completed_jobs &&
+		metrics.mesh_worker_maximum_active_jobs == 2 &&
+		metrics.mesh_worker_queue_rejections == 0 &&
+		metrics.mesh_job_time_ns_total != 0 &&
+		worker_mesh_starts == metrics.mesh_worker_started_jobs &&
+		worker_mesh_finishes == metrics.mesh_worker_completed_jobs &&
+		worker_mesh_starts == worker_mesh_finishes &&
+		incorrectly_attributed_mesh_events == 0,
 		"read-only runtime metrics mismatch");
 	append_u64(evidence, metrics.viewer_updates);
 	append_u64(evidence, metrics.viewer_removals);
@@ -450,7 +483,8 @@ int main() {
 	std::printf("PRODUCTION_STREAMING_HASH ");
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
-		"PRODUCTION_STREAMING_PASS pages=4 viewers=2 movement=4 backend=MIT\n"
+		"PRODUCTION_STREAMING_PASS pages=4 viewers=2 movement=4 backend=MIT "
+		"meshing_workers=2\n"
 	);
 	return 0;
 }

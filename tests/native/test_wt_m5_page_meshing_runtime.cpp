@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -1727,6 +1728,275 @@ void test_runtime_lifecycle(
 	storage.close();
 }
 
+struct FixtureMeshRun {
+	std::uint64_t hash = 14695981039346656037ULL;
+	wt::WtPageMeshingRuntimeMetrics metrics;
+	std::uint64_t execution_starts = 0;
+	std::uint64_t execution_finishes = 0;
+};
+
+FixtureMeshRun run_fixture_mesh(
+	const RuntimeFixture &fixture,
+	std::size_t meshing_worker_count
+) {
+	FixtureMeshRun result;
+	wt::WtAsyncStorageService storage({ 32, 32, wt::kWtMaximumContainerSize });
+	check(
+		storage.open(fixture.world_path, fixture.root) ==
+			wt::WtAsyncStorageStatus::Ok,
+		"equivalence runtime storage open failed"
+	);
+	wt::WtStoragePageCache cache({
+		32,
+		wt::kWtMaximumContainerSize,
+		32,
+		wt::kWtMaximumContainerSize,
+	});
+	wt::WtStreamScheduler scheduler(8, 8, 2, 1);
+	wt::WtPageMeshingRuntimeService runtime(8, meshing_worker_count);
+	const wt::WtChunkJob sample = request_sample_job(
+		scheduler,
+		fixture.coarse_key,
+		kWorldRevision,
+		7
+	);
+	check(
+		runtime.begin_sample_job(
+			sample,
+			fixture.transition_mask,
+			storage,
+			cache,
+			scheduler
+		) == wt::WtPageMeshingRuntimeStatus::Ok,
+		"equivalence sample job was rejected"
+	);
+	for (std::size_t index = 0; index < kDependencyCount; ++index) {
+		wt::WtPageLoadCompletion completion;
+		if (!wait_completion(storage, completion)) break;
+		check(
+			runtime.accept_storage_completion(completion, cache, scheduler) ==
+				wt::WtPageMeshingRuntimeStatus::Ok,
+			"equivalence storage completion was rejected"
+		);
+	}
+	check(
+		scheduler.apply_completions(1) == 1,
+		"equivalence sample completion was not applied"
+	);
+	wt::WtChunkJob mesh_job;
+	check(
+		scheduler.pop_job(mesh_job) &&
+			mesh_job.stage == wt::WtChunkJobStage::Mesh,
+		"equivalence mesh job was not scheduled"
+	);
+	if (meshing_worker_count == 0) {
+		const wt::WtChunkMesher mesher(wt::wt_get_transvoxel_mit_backend());
+		wt::WtChunkMeshingScratch scratch;
+		check(
+			runtime.execute_mesh_job(
+				mesh_job,
+				mesher,
+				scratch,
+				scheduler
+			) == wt::WtPageMeshingRuntimeStatus::Ok,
+			"serial equivalence mesh failed"
+		);
+	} else {
+		const wt::WtMeshExecutionCallback execution =
+			[&](const wt::WtMeshExecutionEvent &event) {
+				if (event.started) {
+					++result.execution_starts;
+				} else {
+					++result.execution_finishes;
+				}
+			};
+		check(
+			runtime.dispatch_mesh_job(
+				mesh_job,
+				scheduler,
+				nullptr,
+				0,
+				nullptr,
+				{},
+				true,
+				execution
+			) == wt::WtPageMeshingRuntimeStatus::Ok,
+			"parallel equivalence mesh dispatch failed"
+		);
+		const auto deadline = std::chrono::steady_clock::now() +
+			std::chrono::seconds(3);
+		std::size_t processed = 0;
+		while (processed == 0 && std::chrono::steady_clock::now() < deadline) {
+			check(
+				runtime.process_async_mesh_completions(
+					scheduler, 1, processed
+				) == wt::WtPageMeshingRuntimeStatus::Ok,
+				"parallel equivalence completion failed"
+			);
+			if (processed == 0) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			}
+		}
+		check(processed == 1, "parallel equivalence mesh timed out");
+	}
+	check(
+		scheduler.apply_completions(1) == 1,
+		"equivalence mesh completion was not applied"
+	);
+	wt::WtPageMeshCompletion completion;
+	check(
+		runtime.pop_mesh_completion(completion) && completion.mesh &&
+			completion.water_mesh,
+		"equivalence mesh completion payload is missing"
+	);
+	if (completion.mesh) hash_result(result.hash, *completion.mesh);
+	if (completion.water_mesh) hash_result(result.hash, *completion.water_mesh);
+	result.metrics = runtime.get_metrics();
+	storage.close();
+	return result;
+}
+
+void test_parallel_mesh_equivalence_and_stale_rejection(
+	const RuntimeFixture &fixture,
+	std::vector<std::uint8_t> &evidence
+) {
+	const FixtureMeshRun serial = run_fixture_mesh(fixture, 0);
+	const FixtureMeshRun parallel = run_fixture_mesh(fixture, 2);
+	check(
+		serial.hash == parallel.hash &&
+		serial.metrics.mesh_worker_count == 0 &&
+		parallel.metrics.mesh_worker_count == 2 &&
+		parallel.metrics.mesh_worker_accepted_jobs == 1 &&
+		parallel.metrics.mesh_worker_started_jobs == 1 &&
+		parallel.metrics.mesh_worker_completed_jobs == 1 &&
+		parallel.metrics.mesh_worker_queue_rejections == 0 &&
+		parallel.execution_starts == 1 &&
+		parallel.execution_finishes == 1,
+		"parallel meshing changed deterministic output or worker accounting"
+	);
+
+	wt::WtAsyncStorageService storage({ 32, 32, wt::kWtMaximumContainerSize });
+	check(
+		storage.open(fixture.world_path, fixture.root) ==
+			wt::WtAsyncStorageStatus::Ok,
+		"stale rejection storage open failed"
+	);
+	wt::WtStoragePageCache cache({
+		32,
+		wt::kWtMaximumContainerSize,
+		32,
+		wt::kWtMaximumContainerSize,
+	});
+	wt::WtStreamScheduler scheduler(8, 8, 2, 1);
+	wt::WtPageMeshingRuntimeService runtime(8, 1);
+	const wt::WtChunkJob sample = request_sample_job(
+		scheduler,
+		fixture.coarse_key,
+		kWorldRevision + 1,
+		7
+	);
+	check(
+		runtime.begin_sample_job(
+			sample,
+			fixture.transition_mask,
+			storage,
+			cache,
+			scheduler
+		) == wt::WtPageMeshingRuntimeStatus::Ok,
+		"stale rejection sample job was rejected"
+	);
+	for (std::size_t index = 0; index < kDependencyCount; ++index) {
+		wt::WtPageLoadCompletion completion;
+		if (!wait_completion(storage, completion)) break;
+		check(
+			runtime.accept_storage_completion(completion, cache, scheduler) ==
+				wt::WtPageMeshingRuntimeStatus::Ok,
+			"stale rejection storage completion was rejected"
+		);
+	}
+	check(
+		scheduler.apply_completions(1) == 1,
+		"stale rejection sample completion was not applied"
+	);
+	wt::WtChunkJob mesh_job;
+	check(
+		scheduler.pop_job(mesh_job) &&
+			mesh_job.stage == wt::WtChunkJobStage::Mesh,
+		"stale rejection mesh job was not scheduled"
+	);
+	std::atomic<bool> execution_started{ false };
+	std::atomic<bool> release_execution{ false };
+	const wt::WtMeshExecutionCallback execution =
+		[&](const wt::WtMeshExecutionEvent &event) {
+			if (!event.started) return;
+			execution_started.store(true, std::memory_order_release);
+			while (!release_execution.load(std::memory_order_acquire)) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			}
+		};
+	check(
+		runtime.dispatch_mesh_job(
+			mesh_job,
+			scheduler,
+			nullptr,
+			0,
+			nullptr,
+			{},
+			true,
+			execution
+		) == wt::WtPageMeshingRuntimeStatus::Ok,
+		"stale rejection mesh dispatch failed"
+	);
+	const auto start_deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(3);
+	while (!execution_started.load(std::memory_order_acquire) &&
+		std::chrono::steady_clock::now() < start_deadline) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	check(
+		execution_started.load(std::memory_order_acquire),
+		"stale rejection worker did not start"
+	);
+	check(
+		runtime.cancel_generation(fixture.coarse_key, sample.generation) ==
+			wt::WtPageMeshingRuntimeStatus::Ok &&
+		scheduler.cancel_chunk(fixture.coarse_key) ==
+			wt::WtSchedulerStatus::Ok &&
+		scheduler.forget_chunk(fixture.coarse_key) ==
+			wt::WtSchedulerStatus::Ok,
+		"active mesh cancellation failed"
+	);
+	release_execution.store(true, std::memory_order_release);
+	std::size_t processed = 0;
+	const auto completion_deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(3);
+	while (processed == 0 &&
+		std::chrono::steady_clock::now() < completion_deadline) {
+		check(
+			runtime.process_async_mesh_completions(
+				scheduler, 1, processed
+			) == wt::WtPageMeshingRuntimeStatus::Ok,
+			"stale mesh completion processing failed"
+		);
+		if (processed == 0) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+	}
+	wt::WtPageMeshCompletion stale_completion;
+	const wt::WtPageMeshingRuntimeMetrics stale_metrics = runtime.get_metrics();
+	check(
+		processed == 1 && runtime.record_count() == 0 &&
+		!runtime.pop_mesh_completion(stale_completion) &&
+		stale_metrics.discarded_mesh_completions == 1 &&
+		stale_metrics.mesh_worker_completed_jobs == 1,
+		"cancelled active worker result escaped stale rejection"
+	);
+	append_u64(evidence, serial.hash);
+	append_u64(evidence, parallel.hash);
+	append_u64(evidence, stale_metrics.discarded_mesh_completions);
+	storage.close();
+}
+
 void test_edited_coarse_procedural_rebuild(
 	std::vector<std::uint8_t> &evidence
 ) {
@@ -2329,6 +2599,7 @@ int main() {
 	test_streaming_pixel_transition_repro(evidence);
 	test_large_rolling_hills_cave_lod2_transition_masks();
 	test_runtime_lifecycle(fixture, evidence);
+	test_parallel_mesh_equivalence_and_stale_rejection(fixture, evidence);
 	test_edited_coarse_procedural_rebuild(evidence);
 	test_storage_backpressure_retry(fixture);
 	test_priority_ordered_loading_retry(fixture);

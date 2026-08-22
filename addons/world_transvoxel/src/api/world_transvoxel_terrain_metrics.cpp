@@ -180,6 +180,78 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	set_metric(
 		output, "mesh_job_time_ns_maximum", runtime.mesh_job_time_ns_maximum
 	);
+	set_metric(output, "mesh_prepare_time_ns_last", runtime.mesh_prepare_time_ns_last);
+	set_metric(output, "mesh_prepare_time_ns_total", runtime.mesh_prepare_time_ns_total);
+	set_metric(
+		output,
+		"mesh_prepare_time_ns_maximum",
+		runtime.mesh_prepare_time_ns_maximum
+	);
+	set_metric(
+		output,
+		"mesh_completion_time_ns_last",
+		runtime.mesh_completion_time_ns_last
+	);
+	set_metric(
+		output,
+		"mesh_completion_time_ns_total",
+		runtime.mesh_completion_time_ns_total
+	);
+	set_metric(
+		output,
+		"mesh_completion_time_ns_maximum",
+		runtime.mesh_completion_time_ns_maximum
+	);
+	set_metric(output, "mesh_worker_count", runtime.mesh_worker_count);
+	set_metric(
+		output, "mesh_worker_accepted_jobs", runtime.mesh_worker_accepted_jobs
+	);
+	set_metric(output, "mesh_worker_started_jobs", runtime.mesh_worker_started_jobs);
+	set_metric(
+		output, "mesh_worker_completed_jobs", runtime.mesh_worker_completed_jobs
+	);
+	set_metric(
+		output,
+		"mesh_worker_queue_rejections",
+		runtime.mesh_worker_queue_rejections
+	);
+	set_metric(
+		output,
+		"mesh_worker_cancelled_queued_jobs",
+		runtime.mesh_worker_cancelled_queued_jobs
+	);
+	set_metric(
+		output,
+		"mesh_worker_reprioritized_queued_jobs",
+		runtime.mesh_worker_reprioritized_queued_jobs
+	);
+	set_metric(output, "mesh_worker_queued_jobs", runtime.mesh_worker_queued_jobs);
+	set_metric(
+		output,
+		"mesh_worker_queued_completions",
+		runtime.mesh_worker_queued_completions
+	);
+	set_metric(output, "mesh_worker_active_jobs", runtime.mesh_worker_active_jobs);
+	set_metric(
+		output,
+		"mesh_worker_maximum_active_jobs",
+		runtime.mesh_worker_maximum_active_jobs
+	);
+	set_metric(
+		output,
+		"mesh_worker_queue_wait_ns_last",
+		runtime.mesh_worker_queue_wait_ns_last
+	);
+	set_metric(
+		output,
+		"mesh_worker_queue_wait_ns_total",
+		runtime.mesh_worker_queue_wait_ns_total
+	);
+	set_metric(
+		output,
+		"mesh_worker_queue_wait_ns_maximum",
+		runtime.mesh_worker_queue_wait_ns_maximum
+	);
 	set_metric(output, "storage_completions", runtime.storage_completions);
 	set_metric(output, "mesh_completions", runtime.mesh_completions);
 	set_metric(
@@ -562,6 +634,7 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		"page_awaiting_mesh_records",
 		runtime.page_awaiting_mesh_records
 	);
+	set_metric(output, "page_meshing_records", runtime.page_meshing_records);
 	set_metric(output, "page_mesh_ready_records", runtime.page_mesh_ready_records);
 	set_metric(output, "page_ready_records", runtime.page_ready_records);
 	set_metric(

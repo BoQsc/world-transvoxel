@@ -132,7 +132,10 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 	);
 	edit_replacement_ =
 		std::make_unique<WtEditRuntimeReplacementService>(active);
-	page_runtime_ = std::make_unique<WtPageMeshingRuntimeService>(active);
+	page_runtime_ = std::make_unique<WtPageMeshingRuntimeService>(
+		active,
+		static_cast<std::size_t>(config_.meshing_worker_count)
+	);
 	mesher_ = std::make_unique<WtChunkMesher>(
 		wt_get_transvoxel_mit_backend()
 	);
@@ -159,6 +162,10 @@ WtReadOnlyWorldRuntime::~WtReadOnlyWorldRuntime() {
 	storage_.set_trace_observer({});
 	if (scheduler_) scheduler_->set_queue_trace_observer({});
 	request_stop();
+	if (page_runtime_) {
+		page_runtime_->set_mesh_completion_notifier({});
+		page_runtime_.reset();
+	}
 }
 
 bool WtReadOnlyWorldRuntime::valid() const noexcept {

@@ -67,6 +67,7 @@ enum class WtCausalTraceThreadRole : std::uint8_t {
 	Runtime,
 	Storage,
 	Frontend,
+	Meshing,
 };
 
 enum class WtCausalTraceJobStage : std::uint8_t {

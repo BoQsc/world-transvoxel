@@ -26,6 +26,7 @@ enum class WtPageMeshingRuntimePhase : std::uint8_t {
 	SampleReady,
 	SampleFailedReady,
 	AwaitingMesh,
+	Meshing,
 	MeshReady,
 	MeshFailedReady,
 	Ready,
@@ -86,6 +87,17 @@ struct WtTerrainMeshCompletion {
 using WtTerrainMeshReadyCallback =
 	std::function<bool(const WtTerrainMeshCompletion &)>;
 
+struct WtMeshExecutionEvent {
+	WtChunkJob job;
+	std::uint8_t transition_mask = 0;
+	bool started = false;
+	std::uint64_t duration_ns = 0;
+	WtPageMeshingRuntimeStatus status = WtPageMeshingRuntimeStatus::Ok;
+};
+
+using WtMeshExecutionCallback =
+	std::function<void(const WtMeshExecutionEvent &)>;
+
 struct WtPageMeshingRuntimeMetrics {
 	std::uint64_t sample_jobs = 0;
 	std::uint64_t mesh_jobs = 0;
@@ -107,10 +119,34 @@ struct WtPageMeshingRuntimeMetrics {
 	std::uint64_t cancellations = 0;
 	std::uint64_t invalidated_records = 0;
 	std::uint64_t discarded_mesh_completions = 0;
+	std::uint64_t mesh_prepare_time_ns_last = 0;
+	std::uint64_t mesh_prepare_time_ns_total = 0;
+	std::uint64_t mesh_prepare_time_ns_maximum = 0;
+	std::uint64_t mesh_completion_time_ns_last = 0;
+	std::uint64_t mesh_completion_time_ns_total = 0;
+	std::uint64_t mesh_completion_time_ns_maximum = 0;
+	std::uint64_t mesh_worker_count = 0;
+	std::uint64_t mesh_worker_accepted_jobs = 0;
+	std::uint64_t mesh_worker_started_jobs = 0;
+	std::uint64_t mesh_worker_completed_jobs = 0;
+	std::uint64_t mesh_worker_queue_rejections = 0;
+	std::uint64_t mesh_worker_cancelled_queued_jobs = 0;
+	std::uint64_t mesh_worker_reprioritized_queued_jobs = 0;
+	std::uint64_t mesh_worker_queued_jobs = 0;
+	std::uint64_t mesh_worker_queued_completions = 0;
+	std::uint64_t mesh_worker_active_jobs = 0;
+	std::uint64_t mesh_worker_maximum_active_jobs = 0;
+	std::uint64_t mesh_worker_queue_wait_ns_last = 0;
+	std::uint64_t mesh_worker_queue_wait_ns_total = 0;
+	std::uint64_t mesh_worker_queue_wait_ns_maximum = 0;
+	std::uint64_t mesh_worker_execute_time_ns_last = 0;
+	std::uint64_t mesh_worker_execute_time_ns_total = 0;
+	std::uint64_t mesh_worker_execute_time_ns_maximum = 0;
 	std::size_t maximum_pinned_pages = 0;
 	std::uint64_t loading_records = 0;
 	std::uint64_t sample_ready_records = 0;
 	std::uint64_t awaiting_mesh_records = 0;
+	std::uint64_t meshing_records = 0;
 	std::uint64_t mesh_ready_records = 0;
 	std::uint64_t ready_records = 0;
 	std::uint64_t unresolved_dependencies = 0;
@@ -125,8 +161,10 @@ struct WtPageMeshingRuntimeMetrics {
 class WtPageMeshingRuntimeService final : public WtPageMeshingRuntimeOwner {
 public:
 	explicit WtPageMeshingRuntimeService(
-		std::size_t record_capacity
+		std::size_t record_capacity,
+		std::size_t meshing_worker_count = 0
 	);
+	~WtPageMeshingRuntimeService();
 
 	bool valid() const noexcept;
 	WtPageMeshingRuntimeStatus begin_sample_job(
@@ -160,6 +198,23 @@ public:
 		const WtTerrainMeshReadyCallback &terrain_mesh_ready = {},
 		bool visual_required = true
 	);
+	WtPageMeshingRuntimeStatus dispatch_mesh_job(
+		const WtChunkJob &job,
+		WtStreamScheduler &scheduler,
+		const WtEditJournal *edit_journal = nullptr,
+		std::uint64_t initial_world_revision = 0,
+		WtAsyncStorageService *authoritative_storage = nullptr,
+		const WtTerrainMeshReadyCallback &terrain_mesh_ready = {},
+		bool visual_required = true,
+		const WtMeshExecutionCallback &execution_callback = {}
+	);
+	WtPageMeshingRuntimeStatus process_async_mesh_completions(
+		WtStreamScheduler &scheduler,
+		std::size_t maximum_count,
+		std::size_t &processed
+	);
+	void set_mesh_completion_notifier(std::function<void()> notifier);
+	bool asynchronous_meshing_enabled() const noexcept;
 
 	std::size_t flush_scheduler_results(
 		WtStreamScheduler &scheduler
@@ -212,6 +267,10 @@ public:
 	WtPageMeshingRuntimeMetrics get_metrics() const noexcept;
 
 private:
+	struct PreparedDependency;
+	struct PreparedMeshJob;
+	struct PreparedMeshCompletion;
+	struct AsyncState;
 	struct Dependency {
 		WtChunkKey key;
 		std::shared_ptr<const WtChunkPage> page;
@@ -267,6 +326,37 @@ private:
 		std::size_t record_index,
 		WtStreamScheduler &scheduler
 	);
+	WtPageMeshingRuntimeStatus prepare_mesh_job(
+		const WtChunkJob &job,
+		WtStreamScheduler &scheduler,
+		const WtEditJournal *edit_journal,
+		std::uint64_t initial_world_revision,
+		WtAsyncStorageService *authoritative_storage,
+		const WtTerrainMeshReadyCallback &terrain_mesh_ready,
+		bool visual_required,
+		const WtMeshExecutionCallback &execution_callback,
+		PreparedMeshJob &prepared
+	);
+	static PreparedMeshCompletion execute_prepared_mesh_job(
+		PreparedMeshJob prepared,
+		const WtChunkMesher &mesher,
+		WtChunkMeshingScratch &scratch
+	);
+	WtPageMeshingRuntimeStatus accept_prepared_mesh_completion(
+		PreparedMeshCompletion completion,
+		WtStreamScheduler &scheduler,
+		bool synchronous_compatibility = false
+	);
+	void merge_async_metrics(WtPageMeshingRuntimeMetrics &metrics) const noexcept;
+	std::size_t cancel_async_work(
+		const WtChunkKey &key,
+		WtGenerationToken generation
+	) noexcept;
+	bool reprioritize_async_work(
+		const WtChunkKey &key,
+		WtGenerationToken generation,
+		std::int32_t priority
+	) noexcept;
 	void update_maximum_pins() noexcept;
 
 	std::size_t record_capacity_ = 0;
@@ -274,6 +364,8 @@ private:
 	std::vector<Record> records_;
 	std::vector<LoadingRetryCandidate> loading_retry_candidates_;
 	WtPageMeshingRuntimeMetrics metrics_;
+	WtChunkMeshingScratch preparation_scratch_;
+	std::unique_ptr<AsyncState> async_;
 };
 
 } // namespace world_transvoxel

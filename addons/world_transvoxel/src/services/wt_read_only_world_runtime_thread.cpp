@@ -18,6 +18,7 @@ constexpr std::size_t kWtPublicationPriorityBurstLimit = 16;
 WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 	if (!valid_) return WtReadOnlyRuntimeStatus::InvalidConfiguration;
 	storage_.set_completion_notifier([this]() { notify_work(); });
+	page_runtime_->set_mesh_completion_notifier([this]() { notify_work(); });
 	std::uint64_t observed_wake = 0;
 	while (!stop_requested_.load()) {
 		// Foreground edits must not sit behind a potentially large viewer-plan
@@ -32,6 +33,7 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 			*scheduler_,
 			4
 		) != 0 || progressed;
+		progressed = process_async_mesh_completions() || progressed;
 		progressed = page_runtime_->flush_scheduler_results(*scheduler_) != 0 ||
 			progressed;
 		progressed = scheduler_->apply_completions(
@@ -39,6 +41,7 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 		) != 0 || progressed;
 		progressed = process_pending_transition_remeshes() || progressed;
 		progressed = process_scheduler_jobs() || progressed;
+		progressed = process_async_mesh_completions() || progressed;
 		progressed = scheduler_->apply_completions(
 			static_cast<std::size_t>(config_.active_chunk_capacity)
 		) != 0 || progressed;
@@ -57,6 +60,7 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 			});
 		}
 	}
+	page_runtime_->set_mesh_completion_notifier({});
 	storage_.set_completion_notifier({});
 	refresh_metrics_snapshot();
 	return last_status_.load();
@@ -369,6 +373,7 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 		snapshot.page_loading_records = page.loading_records;
 		snapshot.page_sample_ready_records = page.sample_ready_records;
 		snapshot.page_awaiting_mesh_records = page.awaiting_mesh_records;
+		snapshot.page_meshing_records = page.meshing_records;
 		snapshot.page_mesh_ready_records = page.mesh_ready_records;
 		snapshot.page_ready_records = page.ready_records;
 		snapshot.page_unresolved_dependencies =
@@ -380,6 +385,46 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 		snapshot.page_last_failure_key_y = page.last_failure_key_y;
 		snapshot.page_last_failure_key_z = page.last_failure_key_z;
 		snapshot.page_last_failure_key_lod = page.last_failure_key_lod;
+		snapshot.mesh_prepare_time_ns_last = page.mesh_prepare_time_ns_last;
+		snapshot.mesh_prepare_time_ns_total = page.mesh_prepare_time_ns_total;
+		snapshot.mesh_prepare_time_ns_maximum =
+			page.mesh_prepare_time_ns_maximum;
+		snapshot.mesh_completion_time_ns_last =
+			page.mesh_completion_time_ns_last;
+		snapshot.mesh_completion_time_ns_total =
+			page.mesh_completion_time_ns_total;
+		snapshot.mesh_completion_time_ns_maximum =
+			page.mesh_completion_time_ns_maximum;
+		snapshot.mesh_worker_count = page.mesh_worker_count;
+		snapshot.mesh_worker_accepted_jobs = page.mesh_worker_accepted_jobs;
+		snapshot.mesh_worker_started_jobs = page.mesh_worker_started_jobs;
+		snapshot.mesh_worker_completed_jobs = page.mesh_worker_completed_jobs;
+		snapshot.mesh_worker_queue_rejections =
+			page.mesh_worker_queue_rejections;
+		snapshot.mesh_worker_cancelled_queued_jobs =
+			page.mesh_worker_cancelled_queued_jobs;
+		snapshot.mesh_worker_reprioritized_queued_jobs =
+			page.mesh_worker_reprioritized_queued_jobs;
+		snapshot.mesh_worker_queued_jobs = page.mesh_worker_queued_jobs;
+		snapshot.mesh_worker_queued_completions =
+			page.mesh_worker_queued_completions;
+		snapshot.mesh_worker_active_jobs = page.mesh_worker_active_jobs;
+		snapshot.mesh_worker_maximum_active_jobs =
+			page.mesh_worker_maximum_active_jobs;
+		snapshot.mesh_worker_queue_wait_ns_last =
+			page.mesh_worker_queue_wait_ns_last;
+		snapshot.mesh_worker_queue_wait_ns_total =
+			page.mesh_worker_queue_wait_ns_total;
+		snapshot.mesh_worker_queue_wait_ns_maximum =
+			page.mesh_worker_queue_wait_ns_maximum;
+		if (page.mesh_worker_count != 0) {
+			snapshot.mesh_job_time_ns_last =
+				page.mesh_worker_execute_time_ns_last;
+			snapshot.mesh_job_time_ns_total =
+				page.mesh_worker_execute_time_ns_total;
+			snapshot.mesh_job_time_ns_maximum =
+				page.mesh_worker_execute_time_ns_maximum;
+		}
 	}
 	if (page_cache_) {
 		const WtStoragePageCacheMetrics cache = page_cache_->get_metrics();

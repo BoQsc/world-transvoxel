@@ -10,10 +10,12 @@ source, and official MIT mesher. It owns only page-backed meshing work. Desired
 sets, scheduler records, application readiness, and persistent page bytes keep
 their existing owners.
 
-The service is constructed with a fixed record capacity. The hard production
-limits are 65,536 records and 25 page dependencies per record: one primary page
-plus four LOD-minus-one support pages for each of six transition faces. Shared
-support keys are canonicalized and requested once.
+The service is constructed with a fixed record capacity and an optional fixed
+meshing-worker count. The hard production limits are 65,536 records, eight
+meshing workers, and 25 page dependencies per record: one primary page plus
+four LOD-minus-one support pages for each of six transition faces. Shared
+support keys are canonicalized and requested once. Zero meshing workers is the
+normative default and preserves serialized control-thread meshing.
 
 ## Job and dependency lifecycle
 
@@ -32,23 +34,26 @@ For every accepted job the service:
    records waiting for that page key;
 5. submits one sample result to `WtStreamScheduler` when every page is pinned;
 6. constructs `WtChunkPageSampleSource` from the primary and support pages;
-7. runs `WtChunkMesher` with the official MIT backend supplied by the caller;
+7. prepares immutable page snapshots and runs `WtChunkMesher` with the official
+   MIT backend, either synchronously or on the configured bounded workers;
 8. releases every decoded page pin immediately after meshing succeeds or
    fails;
 9. submits the mesh result to the scheduler and publishes immutable mesh
    ownership once through `pop_mesh_completion`.
 
 The phases are `Loading`, pending sample success/failure, `AwaitingMesh`,
-pending mesh success/failure, and `Ready`. A bounded record retains canonical
-dependency keys after meshing so later support-page invalidation can still find
-the dependent coarse generation. It retains no decoded-page pins after mesh
-execution.
+`Meshing`, pending mesh success/failure, and `Ready`. `Meshing` is used only
+while an opt-in worker owns a prepared immutable job. A bounded record retains
+canonical dependency keys after meshing so later support-page invalidation can
+still find the dependent coarse generation. It retains no decoded-page pins
+after mesh execution.
 
 ## Backpressure and ownership
 
-The service has no hidden unbounded output queue. If the scheduler completion
-queue is full, the result remains in its bounded record and
-`flush_scheduler_results` retries it after the owner drains scheduler
+The service has no hidden unbounded output queue. The worker input and
+completion queues are each bounded by the page-meshing record capacity. If the
+scheduler completion queue is full, the result remains in its bounded record
+and `flush_scheduler_results` retries it after the owner drains scheduler
 completions. Mesh output likewise stays in the bounded record until consumed.
 
 Decoded pages are immutable `shared_ptr` handles. These handles remain valid
@@ -88,15 +93,23 @@ Invalid jobs, masks, capacities, missing manifest entries, load failures,
 stale completions, cache failures, scheduler backpressure, and meshing failures
 have distinct status values. Missing support fails the sample generation.
 Revision disagreement or conflicting overlap in decoded support fails source
-construction/meshing and never publishes partial geometry. Metrics expose
-requests, cache hits/misses, accepted/stale completions, failures,
-backpressure, cancellations, invalidations, discarded output, and maximum
-simultaneous pins.
+construction/meshing and never publishes partial geometry. A worker completion
+must still match the page record and scheduler key, generation, source
+revision, world revision, phase, and lifecycle before callbacks or publication.
+Cancellation removes queued work immediately; already-running work may finish
+but is discarded as stale. Priority changes update queued work but never mutate
+an active immutable job. Metrics expose requests, cache hits/misses,
+accepted/stale completions, failures, backpressure, cancellations,
+invalidations, discarded output, preparation/completion time, worker queue
+residency, execution time, active workers, and maximum simultaneous pins.
 
-The service itself is single-owner and serialized. Filesystem work remains on
-the asynchronous storage worker; immutable completion/page/mesh handles cross
-the boundary. Scheduler and cache APIs retain their existing thread-safety
-contracts.
+Preparation, edit replay, scheduler mutation, completion acceptance, and
+publication remain single-owner and serialized. Only mesh extraction from an
+immutable prepared snapshot may cross to a bounded meshing worker. Filesystem
+work remains on the asynchronous storage worker. Scheduler and cache APIs are
+never called by a meshing worker and retain their existing thread-safety
+contracts. Causal trace mesh start/finish events identify the `meshing` role
+when workers are enabled.
 
 ## Locked evidence
 
@@ -110,6 +123,10 @@ and release it proves:
 - official MIT page-backed transition meshing and post-mesh pin release;
 - invalidation through a support key after meshing;
 - generation cancellation and rejection of thirteen late completions;
+- exact terrain-and-water mesh-hash equality between serial execution and two
+  meshing workers;
+- exactly paired worker start/finish events and `meshing` causal-trace roles;
+- rejection of an active worker completion cancelled before publication;
 - typed failure when one required support key is absent from the manifest;
 - the captured human boundary edit repro keeps same-LOD chunk seams matched
   after multiple small sphere carves;
@@ -131,7 +148,7 @@ owner interface.
 The locked aggregate hash is:
 
 ```text
-094ec5d88b56acaffd0465efee4b93c2053e46472552b176bff5c12027155a97
+7137658efbcc48bdb81bfa52d4e23e18acfd39d106595dfd5a136f33a01ee80b
 ```
 
 This completes native support-page scheduling, pinning, cancellation, and
