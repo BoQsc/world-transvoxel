@@ -4,8 +4,6 @@
 #include "render/wt_godot_render_sink.h"
 #include "services/wt_chunk_application.h"
 
-#include <godot_cpp/core/class_db.hpp>
-
 #include <algorithm>
 #include <cstdint>
 #include <limits>
@@ -22,29 +20,6 @@ void set_metric(
 }
 
 } // namespace
-
-void WorldTransvoxelTerrain::bind_metrics_methods() {
-	godot::ClassDB::bind_method(
-		godot::D_METHOD("get_runtime_metrics"),
-		&WorldTransvoxelTerrain::get_runtime_metrics
-	);
-	godot::ClassDB::bind_method(
-		godot::D_METHOD("begin_cpu_causal_trace"),
-		&WorldTransvoxelTerrain::begin_cpu_causal_trace
-	);
-	godot::ClassDB::bind_method(
-		godot::D_METHOD("end_cpu_causal_trace"),
-		&WorldTransvoxelTerrain::end_cpu_causal_trace
-	);
-	godot::ClassDB::bind_method(
-		godot::D_METHOD(
-			"get_cpu_causal_trace_events",
-			"first_sequence",
-			"maximum_events"
-		),
-		&WorldTransvoxelTerrain::get_cpu_causal_trace_events
-	);
-}
 
 godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	const WtReadOnlyRuntimeMetrics runtime = lifecycle_ ?
@@ -148,45 +123,21 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	output["world_running"] = is_world_running();
 	set_metric(output, "viewer_updates", runtime.viewer_updates);
 	set_metric(output, "viewer_removals", runtime.viewer_removals);
-	set_metric(
-		output,
-		"collision_viewer_updates",
-		runtime.collision_viewer_updates
-	);
-	set_metric(
-		output,
-		"collision_viewer_removals",
-		runtime.collision_viewer_removals
-	);
-	set_metric(
-		output, "coalesced_viewer_events", runtime.coalesced_viewer_events
-	);
+	set_metric(output, "collision_viewer_updates", runtime.collision_viewer_updates);
+	set_metric(output, "collision_viewer_removals", runtime.collision_viewer_removals);
+	set_metric(output, "coalesced_viewer_events", runtime.coalesced_viewer_events);
 	set_metric(output, "planned_demands", runtime.planned_demands);
 	set_metric(output, "sample_jobs", runtime.sample_jobs);
 	set_metric(output, "mesh_jobs", runtime.mesh_jobs);
-	set_metric(
-		output, "sample_job_time_ns_last", runtime.sample_job_time_ns_last
-	);
-	set_metric(
-		output, "sample_job_time_ns_total", runtime.sample_job_time_ns_total
-	);
-	set_metric(
-		output,
-		"sample_job_time_ns_maximum",
-		runtime.sample_job_time_ns_maximum
-	);
+	set_metric(output, "sample_job_time_ns_last", runtime.sample_job_time_ns_last);
+	set_metric(output, "sample_job_time_ns_total", runtime.sample_job_time_ns_total);
+	set_metric(output, "sample_job_time_ns_maximum", runtime.sample_job_time_ns_maximum);
 	set_metric(output, "mesh_job_time_ns_last", runtime.mesh_job_time_ns_last);
 	set_metric(output, "mesh_job_time_ns_total", runtime.mesh_job_time_ns_total);
-	set_metric(
-		output, "mesh_job_time_ns_maximum", runtime.mesh_job_time_ns_maximum
-	);
+	set_metric(output, "mesh_job_time_ns_maximum", runtime.mesh_job_time_ns_maximum);
 	set_metric(output, "mesh_prepare_time_ns_last", runtime.mesh_prepare_time_ns_last);
 	set_metric(output, "mesh_prepare_time_ns_total", runtime.mesh_prepare_time_ns_total);
-	set_metric(
-		output,
-		"mesh_prepare_time_ns_maximum",
-		runtime.mesh_prepare_time_ns_maximum
-	);
+	set_metric(output, "mesh_prepare_time_ns_maximum", runtime.mesh_prepare_time_ns_maximum);
 	set_metric(
 		output,
 		"mesh_completion_time_ns_last",
@@ -203,9 +154,7 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		runtime.mesh_completion_time_ns_maximum
 	);
 	set_metric(output, "mesh_worker_count", runtime.mesh_worker_count);
-	set_metric(
-		output, "mesh_worker_accepted_jobs", runtime.mesh_worker_accepted_jobs
-	);
+	set_metric(output, "mesh_worker_accepted_jobs", runtime.mesh_worker_accepted_jobs);
 	set_metric(output, "mesh_worker_started_jobs", runtime.mesh_worker_started_jobs);
 	set_metric(
 		output, "mesh_worker_completed_jobs", runtime.mesh_worker_completed_jobs
@@ -573,11 +522,17 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		"page_cache_encoded_entries",
 		runtime.page_cache_encoded_entries
 	);
+	set_metric(output, "page_cache_encoded_entry_capacity", runtime.page_cache_encoded_entry_capacity);
+	set_metric(output, "page_cache_encoded_resident_bytes", runtime.page_cache_encoded_resident_bytes);
+	set_metric(output, "page_cache_encoded_byte_capacity", runtime.page_cache_encoded_byte_capacity);
 	set_metric(
 		output,
 		"page_cache_decoded_entries",
 		runtime.page_cache_decoded_entries
 	);
+	set_metric(output, "page_cache_decoded_entry_capacity", runtime.page_cache_decoded_entry_capacity);
+	set_metric(output, "page_cache_decoded_resident_bytes", runtime.page_cache_decoded_resident_bytes);
+	set_metric(output, "page_cache_decoded_byte_capacity", runtime.page_cache_decoded_byte_capacity);
 	set_metric(
 		output,
 		"page_cache_encoded_hits",
@@ -623,6 +578,18 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		"page_cache_decoded_evictions",
 		runtime.page_cache_decoded_evictions
 	);
+	set_metric(output, "resource_cache_mesh_entries", runtime.resource_cache_mesh_entries);
+	set_metric(output, "resource_cache_mesh_entry_capacity", runtime.resource_cache_mesh_entry_capacity);
+	set_metric(output, "resource_cache_mesh_resident_bytes", runtime.resource_cache_mesh_resident_bytes);
+	set_metric(output, "resource_cache_mesh_byte_capacity", runtime.resource_cache_mesh_byte_capacity);
+	set_metric(output, "resource_cache_render_entries", runtime.resource_cache_render_entries);
+	set_metric(output, "resource_cache_render_entry_capacity", runtime.resource_cache_render_entry_capacity);
+	set_metric(output, "resource_cache_render_resident_bytes", runtime.resource_cache_render_resident_bytes);
+	set_metric(output, "resource_cache_render_byte_capacity", runtime.resource_cache_render_byte_capacity);
+	set_metric(output, "resource_cache_collision_entries", runtime.resource_cache_collision_entries);
+	set_metric(output, "resource_cache_collision_entry_capacity", runtime.resource_cache_collision_entry_capacity);
+	set_metric(output, "resource_cache_collision_resident_bytes", runtime.resource_cache_collision_resident_bytes);
+	set_metric(output, "resource_cache_collision_byte_capacity", runtime.resource_cache_collision_byte_capacity);
 	set_metric(output, "page_loading_records", runtime.page_loading_records);
 	set_metric(
 		output,

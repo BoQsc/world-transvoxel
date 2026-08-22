@@ -372,6 +372,36 @@ int main() {
 		counts.render_vertices != 0 &&
 		counts.render_indices != 0,
 		"initial page publication mismatch");
+	const wt::WtReadOnlyRuntimeMetrics initial_metrics = runtime.get_metrics();
+	check(
+		initial_metrics.page_cache_encoded_entries <=
+			config.encoded_page_entry_capacity &&
+		initial_metrics.page_cache_encoded_resident_bytes <=
+			config.encoded_page_byte_capacity &&
+		initial_metrics.page_cache_decoded_entries <=
+			config.decoded_page_entry_capacity &&
+		initial_metrics.page_cache_decoded_resident_bytes <=
+			config.decoded_page_byte_capacity &&
+		initial_metrics.resource_cache_mesh_entries > 0 &&
+		initial_metrics.resource_cache_mesh_entries <=
+			config.mesh_entry_capacity &&
+		initial_metrics.resource_cache_mesh_resident_bytes > 0 &&
+		initial_metrics.resource_cache_mesh_resident_bytes <=
+			config.mesh_byte_capacity &&
+		initial_metrics.resource_cache_render_entries > 0 &&
+		initial_metrics.resource_cache_render_entries <=
+			config.render_entry_capacity &&
+		initial_metrics.resource_cache_render_resident_bytes > 0 &&
+		initial_metrics.resource_cache_render_resident_bytes <=
+			config.render_byte_capacity &&
+		initial_metrics.resource_cache_collision_entries > 0 &&
+		initial_metrics.resource_cache_collision_entries <=
+			config.collision_entry_capacity &&
+		initial_metrics.resource_cache_collision_resident_bytes > 0 &&
+		initial_metrics.resource_cache_collision_resident_bytes <=
+			config.collision_byte_capacity,
+		"runtime cache residency exceeded configured limits"
+	);
 	const std::size_t renders_before_collision_invoker = counts.renders;
 	const std::size_t collisions_before_collision_invoker = counts.collisions;
 	check(runtime.update_collision_viewer(

@@ -1,5 +1,6 @@
 #include "services/wt_read_only_world_runtime.h"
 
+#include "services/wt_chunk_resource_cache.h"
 #include "services/wt_edit_runtime_replacement.h"
 #include "services/wt_page_meshing_runtime.h"
 #include "storage/wt_async_storage_service.h"
@@ -278,6 +279,22 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 		std::lock_guard<std::mutex> lock(metrics_mutex_);
 		snapshot = metrics_;
 	}
+	snapshot.page_cache_encoded_entry_capacity =
+		config_.encoded_page_entry_capacity;
+	snapshot.page_cache_encoded_byte_capacity =
+		config_.encoded_page_byte_capacity;
+	snapshot.page_cache_decoded_entry_capacity =
+		config_.decoded_page_entry_capacity;
+	snapshot.page_cache_decoded_byte_capacity =
+		config_.decoded_page_byte_capacity;
+	snapshot.resource_cache_mesh_entry_capacity = config_.mesh_entry_capacity;
+	snapshot.resource_cache_mesh_byte_capacity = config_.mesh_byte_capacity;
+	snapshot.resource_cache_render_entry_capacity = config_.render_entry_capacity;
+	snapshot.resource_cache_render_byte_capacity = config_.render_byte_capacity;
+	snapshot.resource_cache_collision_entry_capacity =
+		config_.collision_entry_capacity;
+	snapshot.resource_cache_collision_byte_capacity =
+		config_.collision_byte_capacity;
 	if (scheduler_) {
 		const WtSchedulerMetrics scheduler = scheduler_->get_metrics();
 		snapshot.scheduler_requested_records = scheduler.requested_records;
@@ -429,7 +446,11 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 	if (page_cache_) {
 		const WtStoragePageCacheMetrics cache = page_cache_->get_metrics();
 		snapshot.page_cache_encoded_entries = page_cache_->encoded_entry_count();
+		snapshot.page_cache_encoded_resident_bytes =
+			page_cache_->encoded_resident_bytes();
 		snapshot.page_cache_decoded_entries = page_cache_->decoded_entry_count();
+		snapshot.page_cache_decoded_resident_bytes =
+			page_cache_->decoded_resident_bytes();
 		snapshot.page_cache_encoded_hits = cache.encoded_hits;
 		snapshot.page_cache_encoded_misses = cache.encoded_misses;
 		snapshot.page_cache_encoded_insertions = cache.encoded_insertions;
@@ -439,6 +460,20 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 		snapshot.page_cache_decoded_misses = cache.decoded_misses;
 		snapshot.page_cache_decoded_insertions = cache.decoded_insertions;
 		snapshot.page_cache_decoded_evictions = cache.decoded_evictions;
+	}
+	if (resource_cache_) {
+		snapshot.resource_cache_mesh_entries =
+			resource_cache_->mesh_entry_count();
+		snapshot.resource_cache_mesh_resident_bytes =
+			resource_cache_->mesh_resident_bytes();
+		snapshot.resource_cache_render_entries =
+			resource_cache_->render_entry_count();
+		snapshot.resource_cache_render_resident_bytes =
+			resource_cache_->render_resident_bytes();
+		snapshot.resource_cache_collision_entries =
+			resource_cache_->collision_entry_count();
+		snapshot.resource_cache_collision_resident_bytes =
+			resource_cache_->collision_resident_bytes();
 	}
 	{
 		std::lock_guard<std::mutex> lock(metrics_mutex_);
