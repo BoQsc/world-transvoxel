@@ -110,8 +110,8 @@ public:
 		const WtChunkKey &key,
 		std::int32_t priority
 	);
-	bool peek_job(WtChunkJob &job) const;
 	bool pop_job(WtChunkJob &job);
+	bool pop_job_stage(WtChunkJobStage stage, WtChunkJob &job);
 	WtSchedulerStatus submit_completion(const WtChunkJobResult &result);
 	std::size_t apply_completions(std::size_t maximum_count);
 	WtSchedulerStatus update_viewer(const WtViewerSnapshot &snapshot);
@@ -139,7 +139,11 @@ private:
 			WtChunkJob &job,
 			WtSchedulerQueueTraceEvent *trace_event = nullptr
 		);
-		bool peek(WtChunkJob &job) const;
+		bool pop_stage(
+			WtChunkJobStage stage,
+			WtChunkJob &job,
+			WtSchedulerQueueTraceEvent *trace_event = nullptr
+		);
 		bool reprioritize(
 			const WtChunkKey &key,
 			WtGenerationToken generation,

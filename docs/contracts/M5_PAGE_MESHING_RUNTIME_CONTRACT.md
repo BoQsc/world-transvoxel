@@ -114,8 +114,11 @@ when workers are enabled.
 The asynchronous waiting queue admits at most one prepared mesh per configured
 worker. When that waiting capacity is full, the next mesh remains in the
 authoritative scheduler, where cancellation and interactive reprioritization
-still apply. A sample job at the front of the scheduler is not blocked by mesh
-admission pressure. This bound is separate from the immutable record capacity.
+still apply. The runtime control thread may dequeue the scheduler's highest-
+priority sample job while mesh admission is full. This stage-aware dispatch is
+work-conserving across separate executors; it does not reorder mesh work inside
+the worker queue or weaken job priority within either stage. This bound is
+separate from the immutable record capacity.
 
 ## Locked evidence
 
