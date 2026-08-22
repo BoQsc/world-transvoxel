@@ -10,11 +10,11 @@
 #include "storage/wt_procedural_snapshot_descriptor.h"
 #include "storage/wt_procedural_world_source.h"
 #include "storage/wt_world_manifest.h"
+#include "storage/wt_world_snapshot_store_io.h"
 #include "testing/wt_fault_injection.h"
 
 #include <algorithm>
 #include <array>
-#include <cstdio>
 #include <limits>
 #include <set>
 #include <string>
@@ -22,45 +22,8 @@
 #include <utility>
 #include <vector>
 
-#if defined(_WIN32)
-#include <io.h>
-#else
-#include <fcntl.h>
-#include <unistd.h>
-#endif
-
 namespace world_transvoxel {
 namespace {
-
-bool flush_durable(FILE *file) noexcept {
-	if (file == nullptr || std::fflush(file) != 0) return false;
-#if defined(_WIN32)
-	return _commit(_fileno(file)) == 0;
-#else
-	return fsync(fileno(file)) == 0;
-#endif
-}
-
-FILE *open_write(const std::filesystem::path &path) {
-#if defined(_WIN32)
-	return _wfopen(path.c_str(), L"wb");
-#else
-	return std::fopen(path.c_str(), "wb");
-#endif
-}
-
-bool write_file(
-	const std::filesystem::path &path,
-	const std::vector<std::uint8_t> &bytes
-) {
-	FILE *file = open_write(path);
-	if (file == nullptr) return false;
-	const bool written = bytes.empty() ||
-		std::fwrite(bytes.data(), 1, bytes.size(), file) == bytes.size();
-	const bool durable = written && flush_durable(file);
-	const bool closed = std::fclose(file) == 0;
-	return durable && closed;
-}
 
 WtHash256 hash_text(const char *text) {
 	const std::string value(text);
@@ -367,29 +330,6 @@ private:
 	mutable std::vector<CacheEntry> cache_;
 };
 
-bool sync_directory(const std::filesystem::path &path) noexcept {
-#if defined(_WIN32)
-	(void)path;
-	return true;
-#else
-	const int descriptor = open(path.c_str(), O_RDONLY | O_DIRECTORY);
-	if (descriptor < 0) return false;
-	const bool ok = fsync(descriptor) == 0;
-	close(descriptor);
-	return ok;
-#endif
-}
-
-std::string hash_hex(const WtHash256 &hash) {
-	constexpr char digits[] = "0123456789abcdef";
-	std::string output(hash.size() * 2, '0');
-	for (std::size_t index = 0; index < hash.size(); ++index) {
-		output[index * 2] = digits[hash[index] >> 4];
-		output[index * 2 + 1] = digits[hash[index] & 0x0fU];
-	}
-	return output;
-}
-
 WtWorldSnapshotStoreStatus read_source(
 	WtAsyncStorageService &storage,
 	std::vector<std::uint8_t> &world_bytes,
@@ -466,14 +406,16 @@ WtWorldSnapshotStoreStatus publish(
 		!std::filesystem::create_directory(temporary, error) || error) {
 		return WtWorldSnapshotStoreStatus::IoFailure;
 	}
-	bool wrote_all = write_file(temporary / "world.wtworld", world_bytes);
+	bool wrote_all = wt_snapshot_write_file(
+		temporary / "world.wtworld", world_bytes
+	);
 	for (const WtBakedChunkPage &page : pages) {
-		wrote_all = wrote_all && write_file(
-			temporary / (hash_hex(page.content_hash) + ".wtchunk"),
+		wrote_all = wrote_all && wt_snapshot_write_file(
+			temporary / (wt_snapshot_hash_hex(page.content_hash) + ".wtchunk"),
 			page.bytes
 		);
 	}
-	if (wrote_all) wrote_all = sync_directory(temporary);
+	if (wrote_all) wrote_all = wt_snapshot_sync_directory(temporary);
 	if (!wrote_all) {
 		std::filesystem::remove_all(temporary, error);
 		return WtWorldSnapshotStoreStatus::IoFailure;
@@ -483,7 +425,7 @@ WtWorldSnapshotStoreStatus publish(
 		std::filesystem::remove_all(temporary, error);
 		return WtWorldSnapshotStoreStatus::PublishFailure;
 	}
-	if (!sync_directory(parent)) {
+	if (!wt_snapshot_sync_directory(parent)) {
 		std::filesystem::remove_all(output_directory, error);
 		return WtWorldSnapshotStoreStatus::PublishFailure;
 	}
@@ -551,18 +493,20 @@ WtWorldSnapshotStoreStatus publish_procedural(
 		!std::filesystem::create_directory(temporary, error) || error) {
 		return WtWorldSnapshotStoreStatus::IoFailure;
 	}
-	bool wrote_all = write_file(temporary / "world.wtworld", world_bytes);
+	bool wrote_all = wt_snapshot_write_file(
+		temporary / "world.wtworld", world_bytes
+	);
 	for (const WtBakedChunkPage &page : pages) {
-		wrote_all = wrote_all && write_file(
-			temporary / (hash_hex(page.content_hash) + ".wtchunk"),
+		wrote_all = wrote_all && wt_snapshot_write_file(
+			temporary / (wt_snapshot_hash_hex(page.content_hash) + ".wtchunk"),
 			page.bytes
 		);
 	}
 	// Write the entry-point descriptor only after staging its complete overlay.
-	wrote_all = wrote_all && write_file(
+	wrote_all = wrote_all && wt_snapshot_write_file(
 		temporary / "world.wtproc", descriptor_bytes
 	);
-	if (wrote_all) wrote_all = sync_directory(temporary);
+	if (wrote_all) wrote_all = wt_snapshot_sync_directory(temporary);
 	if (!wrote_all) {
 		std::filesystem::remove_all(temporary, error);
 		return WtWorldSnapshotStoreStatus::IoFailure;
@@ -572,7 +516,7 @@ WtWorldSnapshotStoreStatus publish_procedural(
 		std::filesystem::remove_all(temporary, error);
 		return WtWorldSnapshotStoreStatus::PublishFailure;
 	}
-	if (!sync_directory(parent)) {
+	if (!wt_snapshot_sync_directory(parent)) {
 		std::filesystem::remove_all(output_directory, error);
 		return WtWorldSnapshotStoreStatus::PublishFailure;
 	}
