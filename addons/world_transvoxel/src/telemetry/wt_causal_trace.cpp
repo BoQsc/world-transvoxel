@@ -184,6 +184,8 @@ const char *wt_causal_trace_event_kind_name(
 			return "visibility_region_replacement_member";
 		case WtCausalTraceEventKind::VisibilityRegionRetirementMember:
 			return "visibility_region_retirement_member";
+		case WtCausalTraceEventKind::VisibilityRegionDesiredSnapshot:
+			return "visibility_region_desired_snapshot";
 	}
 	return "unknown";
 }

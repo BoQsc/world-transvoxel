@@ -333,6 +333,10 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 				if (open_viewer_plan_publications_ != 0) {
 					--open_viewer_plan_publications_;
 				}
+				latest_completed_viewer_plan_revision_ = std::max(
+					latest_completed_viewer_plan_revision_,
+					publication.world_revision
+				);
 				break;
 			case WtReadOnlyPublicationKind::EditCommitted:
 				synchronous_world_error_ = "ok";
@@ -816,6 +820,7 @@ void WorldTransvoxelTerrain::reset_world_application(std::size_t capacity) {
 	pending_render_retirements_.clear();
 	pending_render_retirements_.reserve(staging_capacity);
 	open_viewer_plan_publications_ = 0;
+	latest_completed_viewer_plan_revision_ = 0;
 	regional_visibility_publications_ = 0;
 	regional_visibility_replacements_ = 0;
 	regional_visibility_retirements_ = 0;

@@ -1,6 +1,7 @@
 #include "telemetry/wt_causal_trace.h"
 
 #include <cstdio>
+#include <string_view>
 
 namespace wt = world_transvoxel;
 
@@ -20,6 +21,12 @@ void check(bool condition, const char *message) {
 int main() {
 	wt::WtCausalTraceBuffer trace;
 	const wt::WtChunkKey first_key{ 4, -2, 7, 1 };
+	check(
+		std::string_view(wt::wt_causal_trace_event_kind_name(
+			wt::WtCausalTraceEventKind::VisibilityRegionDesiredSnapshot
+		)) == "visibility_region_desired_snapshot",
+		"desired ownership snapshot event name mismatch"
+	);
 	check(!trace.enabled(), "trace must be disabled by default");
 	trace.record(
 		wt::WtCausalTraceEventKind::StorageStarted,

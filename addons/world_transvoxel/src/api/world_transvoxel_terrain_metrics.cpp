@@ -759,6 +759,16 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	);
 	set_metric(
 		output,
+		"open_viewer_plan_publications",
+		open_viewer_plan_publications_
+	);
+	set_metric(
+		output,
+		"latest_completed_viewer_plan_revision",
+		latest_completed_viewer_plan_revision_
+	);
+	set_metric(
+		output,
 		"regional_visibility_publications",
 		regional_visibility_publications_
 	);

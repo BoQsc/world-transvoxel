@@ -127,15 +127,15 @@ void WorldTransvoxelTerrain::flush_ready_independent_publication_regions() {
 		bool ready = true;
 		std::vector<WtChunkApplicationRecord> missing_records;
 		missing_records.reserve(region.replacements.size());
-		std::vector<WtGenerationToken> replacement_generations;
-		replacement_generations.reserve(region.replacements.size());
+		std::vector<WtChunkApplicationRecord> replacement_records;
+		replacement_records.reserve(region.replacements.size());
 		for (const WtChunkKey &replacement : region.replacements) {
 			WtChunkApplicationRecord record;
 			if (!application_->copy_record(replacement, record)) {
 				ready = false;
 				break;
 			}
-			replacement_generations.push_back(record.generation);
+			replacement_records.push_back(record);
 			if (!record.fully_ready()) {
 				missing_records.push_back(record);
 				ready = false;
@@ -182,15 +182,30 @@ void WorldTransvoxelTerrain::flush_ready_independent_publication_regions() {
 		const std::uint64_t publication_cohort =
 			regional_visibility_publications_ + 1U;
 		if (cpu_causal_trace_active_ && lifecycle_) {
+			lifecycle_->record_frontend_visibility(
+				WtCausalTraceEventKind::VisibilityRegionDesiredSnapshot,
+				nullptr,
+				{ publication_cohort },
+				latest_completed_viewer_plan_revision_,
+				open_viewer_plan_publications_,
+				0
+			);
 			for (std::size_t member = 0;
 					member < region.replacements.size(); ++member) {
+				const WtChunkApplicationRecord &record =
+					replacement_records[member];
+				const std::int64_t desired_roles =
+					(record.visual_required ? 1 : 0) |
+					(record.collision_required ? 2 : 0) |
+					(record.staged_replacement ? 4 : 0) |
+					(record.fully_ready() ? 8 : 0);
 				lifecycle_->record_frontend_visibility(
 					WtCausalTraceEventKind::VisibilityRegionReplacementMember,
 					&region.replacements[member],
-					replacement_generations[member],
+					record.generation,
 					publication_cohort,
-					region.replacements.size(),
-					static_cast<std::int64_t>(region.retirements.size())
+					0,
+					desired_roles
 				);
 			}
 			for (const WtChunkKey &retirement : region.retirements) {

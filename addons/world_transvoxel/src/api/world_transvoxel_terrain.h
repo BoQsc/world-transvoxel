@@ -280,6 +280,7 @@ private:
 	std::vector<CoveragePriorityRequest> visibility_coverage_priority_requests_;
 	std::vector<WtChunkKey> pending_render_retirements_;
 	std::uint32_t open_viewer_plan_publications_ = 0;
+	std::uint64_t latest_completed_viewer_plan_revision_ = 0;
 	std::uint64_t regional_visibility_publications_ = 0;
 	std::uint64_t regional_visibility_replacements_ = 0;
 	std::uint64_t regional_visibility_retirements_ = 0;
