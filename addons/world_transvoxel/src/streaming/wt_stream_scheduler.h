@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <atomic>
+#include <functional>
 #include <limits>
 #include <mutex>
 #include <vector>
@@ -35,6 +36,25 @@ struct WtChunkJobResult {
 	WtChunkJobStage stage = WtChunkJobStage::Sample;
 	bool success = false;
 };
+
+enum class WtSchedulerQueueTraceEventKind : std::uint8_t {
+	Queued,
+	PriorityObserved,
+	Dequeued,
+};
+
+struct WtSchedulerQueueTraceEvent {
+	WtSchedulerQueueTraceEventKind kind =
+		WtSchedulerQueueTraceEventKind::Queued;
+	WtChunkJob job;
+	std::size_t queue_depth_before = 0;
+	std::size_t queue_depth_after = 0;
+	std::size_t jobs_ahead = 0;
+	std::size_t same_priority_jobs_ahead = 0;
+};
+
+using WtSchedulerQueueTraceObserver =
+	std::function<void(const WtSchedulerQueueTraceEvent &)>;
 
 enum class WtSchedulerStatus : std::uint8_t {
 	Ok,
@@ -104,18 +124,32 @@ public:
 	std::size_t queued_job_count() const noexcept;
 	std::size_t available_job_capacity() const noexcept;
 	std::size_t queued_completion_count() const noexcept;
+	void set_queue_trace_observer(WtSchedulerQueueTraceObserver observer);
 
 private:
 	class JobQueue {
 	public:
 		explicit JobQueue(std::size_t capacity);
-		bool push(const WtChunkJob &job);
-		bool pop(WtChunkJob &job);
+		bool push(
+			const WtChunkJob &job,
+			WtSchedulerQueueTraceEvent *trace_event = nullptr
+		);
+		bool pop(
+			WtChunkJob &job,
+			WtSchedulerQueueTraceEvent *trace_event = nullptr
+		);
 		bool reprioritize(
 			const WtChunkKey &key,
 			WtGenerationToken generation,
-			std::int32_t priority
+			std::int32_t priority,
+			WtSchedulerQueueTraceEvent *trace_event = nullptr
 		);
+		bool observe(
+			const WtChunkKey &key,
+			WtGenerationToken generation,
+			WtSchedulerQueueTraceEventKind kind,
+			WtSchedulerQueueTraceEvent &trace_event
+		) const;
 		std::size_t erase_key(const WtChunkKey &key);
 		std::size_t size() const noexcept;
 		std::size_t available() const noexcept;
@@ -145,6 +179,7 @@ private:
 	WtChunkRecord *find_record_mutable(const WtChunkKey &key) noexcept;
 	WtGenerationToken next_generation() noexcept;
 	WtChunkJob make_job(const WtChunkRecord &record, WtChunkJobStage stage) noexcept;
+	void notify_queue_trace(const WtSchedulerQueueTraceEvent &event);
 
 	std::size_t record_capacity_ = 0;
 	std::size_t viewer_capacity_ = 0;
@@ -156,6 +191,9 @@ private:
 	CompletionQueue completions_;
 	WtSchedulerMetrics metrics_;
 	std::atomic<std::uint64_t> asynchronous_queue_rejections_{ 0 };
+	std::mutex queue_trace_observer_mutex_;
+	WtSchedulerQueueTraceObserver queue_trace_observer_;
+	std::atomic<bool> queue_trace_enabled_{ false };
 };
 
 } // namespace world_transvoxel

@@ -54,7 +54,22 @@ page-runtime record existed.
 `readiness_repair_generation_created` identify generations created outside a
 normal viewer/edit demand. The repair event uses auxiliary `1` for a staged
 replacement and `0` for an unstaged repair. Both events carry the current world
-revision as `cause_id`. A regional `visibility_batch_published` event reports
+revision as `cause_id`.
+
+`scheduler_job_queued`, `scheduler_job_priority_observed`, and
+`scheduler_job_dequeued` carry an explicit `job_stage`, `effective_priority`,
+`job_sequence`, queue depth before and after the operation, jobs ahead, and
+same-priority jobs ahead. Queue counts are exact while the scheduler queue lock
+is held. The priority-observed event covers both a changed priority and an
+already-current priority while the exact job remains queued. The queued event
+covers both sample admission and mesh admission after successful sample
+completion. `page_meshing_ownership_established` confirms
+that a dequeued sample generation has a page-runtime record; its `auxiliary`
+value is the page phase and its `status` is the begin-sample result. These
+events observe priority propagation and queue residency without changing queue
+ordering.
+
+A regional `visibility_batch_published` event reports
 replacement count as `cause_id`,
 retirement count as `auxiliary`, and status `1`.
 

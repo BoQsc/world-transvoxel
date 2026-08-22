@@ -1,6 +1,8 @@
 #include "telemetry/wt_causal_trace.h"
 
+#include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <string_view>
 
 namespace wt = world_transvoxel;
@@ -36,8 +38,20 @@ int main() {
 		)) == "readiness_repair_generation_created" &&
 		std::string_view(wt::wt_causal_trace_event_kind_name(
 			wt::WtCausalTraceEventKind::VisibilityCoveragePriorityOutcome
-		)) == "visibility_coverage_priority_outcome",
-		"generation-origin or priority-outcome event name mismatch"
+		)) == "visibility_coverage_priority_outcome" &&
+		std::string_view(wt::wt_causal_trace_event_kind_name(
+			wt::WtCausalTraceEventKind::SchedulerJobQueued
+		)) == "scheduler_job_queued" &&
+		std::string_view(wt::wt_causal_trace_event_kind_name(
+			wt::WtCausalTraceEventKind::SchedulerJobPriorityObserved
+		)) == "scheduler_job_priority_observed" &&
+		std::string_view(wt::wt_causal_trace_event_kind_name(
+			wt::WtCausalTraceEventKind::SchedulerJobDequeued
+		)) == "scheduler_job_dequeued" &&
+		std::string_view(wt::wt_causal_trace_event_kind_name(
+			wt::WtCausalTraceEventKind::PageMeshingOwnershipEstablished
+		)) == "page_meshing_ownership_established",
+		"generation-origin, priority-outcome, or queue event name mismatch"
 	);
 	check(!trace.enabled(), "trace must be disabled by default");
 	trace.record(
@@ -77,6 +91,16 @@ int main() {
 		0,
 		0
 	);
+	const wt::WtCausalTraceJobDetails mesh_job {
+		wt::WtCausalTraceJobStage::Mesh,
+		std::numeric_limits<std::int32_t>::max(),
+		91,
+		true,
+		128,
+		127,
+		4,
+		3,
+	};
 	trace.record(
 		wt::WtCausalTraceEventKind::TransitionMeshFinished,
 		wt::WtCausalTraceThreadRole::Runtime,
@@ -85,7 +109,8 @@ int main() {
 		1,
 		0x12,
 		700,
-		0
+		0,
+		&mesh_job
 	);
 	const wt::WtCausalTraceSnapshot wrapped = trace.snapshot(0, 16);
 	check(wrapped.enabled && wrapped.capacity == 3 &&
@@ -107,7 +132,16 @@ int main() {
 		wrapped.events[2].auxiliary == 0x12 &&
 		wrapped.events[2].duration_ns == 700 &&
 		wrapped.events[2].key == first_key &&
-		wrapped.events[2].generation.value == 8,
+		wrapped.events[2].generation.value == 8 &&
+		wrapped.events[2].has_job_details &&
+		wrapped.events[2].job.stage == wt::WtCausalTraceJobStage::Mesh &&
+		wrapped.events[2].job.effective_priority ==
+			std::numeric_limits<std::int32_t>::max() &&
+		wrapped.events[2].job.sequence == 91 &&
+		wrapped.events[2].job.queue_depth_before == 128 &&
+		wrapped.events[2].job.queue_depth_after == 127 &&
+		wrapped.events[2].job.jobs_ahead == 4 &&
+		wrapped.events[2].job.same_priority_jobs_ahead == 3,
 		"wrapped trace event order or identity mismatch");
 	const wt::WtCausalTraceSnapshot delta = trace.snapshot(3, 1);
 	check(delta.events.size() == 1 && delta.events[0].sequence == 3,

@@ -157,6 +157,7 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 
 WtReadOnlyWorldRuntime::~WtReadOnlyWorldRuntime() {
 	storage_.set_trace_observer({});
+	if (scheduler_) scheduler_->set_queue_trace_observer({});
 	request_stop();
 }
 
@@ -197,11 +198,49 @@ bool WtReadOnlyWorldRuntime::begin_causal_trace() {
 			);
 		}
 	);
+	scheduler_->set_queue_trace_observer(
+		[this](const WtSchedulerQueueTraceEvent &event) {
+			WtCausalTraceEventKind event_kind =
+				WtCausalTraceEventKind::SchedulerJobQueued;
+			if (event.kind ==
+					WtSchedulerQueueTraceEventKind::PriorityObserved) {
+				event_kind =
+					WtCausalTraceEventKind::SchedulerJobPriorityObserved;
+			} else if (event.kind ==
+					WtSchedulerQueueTraceEventKind::Dequeued) {
+				event_kind = WtCausalTraceEventKind::SchedulerJobDequeued;
+			}
+			const WtCausalTraceJobDetails details {
+				event.job.stage == WtChunkJobStage::Sample ?
+					WtCausalTraceJobStage::Sample :
+					WtCausalTraceJobStage::Mesh,
+				event.job.priority,
+				event.job.sequence,
+				true,
+				event.queue_depth_before,
+				event.queue_depth_after,
+				event.jobs_ahead,
+				event.same_priority_jobs_ahead,
+			};
+			causal_trace_.record(
+				event_kind,
+				WtCausalTraceThreadRole::Runtime,
+				&event.job.key,
+				event.job.generation,
+				event.job.world_revision,
+				event.job.sequence,
+				0,
+				0,
+				&details
+			);
+		}
+	);
 	return true;
 }
 
 void WtReadOnlyWorldRuntime::end_causal_trace() {
 	storage_.set_trace_observer({});
+	scheduler_->set_queue_trace_observer({});
 	causal_trace_.end();
 }
 

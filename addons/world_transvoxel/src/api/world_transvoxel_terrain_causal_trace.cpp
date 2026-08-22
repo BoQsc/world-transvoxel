@@ -91,6 +91,32 @@ godot::Dictionary WorldTransvoxelTerrain::get_cpu_causal_trace_events(
 		encoded["cause_id"] = static_cast<std::int64_t>(event.cause_id);
 		encoded["auxiliary"] = static_cast<std::int64_t>(event.auxiliary);
 		encoded["status"] = event.status;
+		encoded["has_job_details"] = event.has_job_details;
+		if (event.has_job_details) {
+			encoded["job_stage"] =
+				event.job.stage == WtCausalTraceJobStage::Sample ?
+					"sample" : "mesh";
+			encoded["effective_priority"] = event.job.effective_priority;
+			encoded["job_sequence"] = static_cast<std::int64_t>(
+				event.job.sequence
+			);
+			encoded["has_queue_state"] = event.job.has_queue_state;
+			if (event.job.has_queue_state) {
+				encoded["queue_depth_before"] = static_cast<std::int64_t>(
+					event.job.queue_depth_before
+				);
+				encoded["queue_depth_after"] = static_cast<std::int64_t>(
+					event.job.queue_depth_after
+				);
+				encoded["jobs_ahead"] = static_cast<std::int64_t>(
+					event.job.jobs_ahead
+				);
+				encoded["same_priority_jobs_ahead"] =
+					static_cast<std::int64_t>(
+						event.job.same_priority_jobs_ahead
+					);
+			}
+		}
 		events[static_cast<int>(index)] = encoded;
 	}
 	output["events"] = events;

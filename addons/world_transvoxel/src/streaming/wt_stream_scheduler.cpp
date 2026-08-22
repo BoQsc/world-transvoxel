@@ -1,6 +1,7 @@
 #include "streaming/wt_stream_scheduler.h"
 
 #include <algorithm>
+#include <utility>
 
 namespace world_transvoxel {
 namespace {
@@ -18,22 +19,53 @@ WtStreamScheduler::JobQueue::JobQueue(std::size_t capacity) : capacity_(capacity
 	jobs_.reserve(capacity);
 }
 
-bool WtStreamScheduler::JobQueue::push(const WtChunkJob &job) {
+bool WtStreamScheduler::JobQueue::push(
+	const WtChunkJob &job,
+	WtSchedulerQueueTraceEvent *trace_event
+) {
 	std::lock_guard<std::mutex> lock(mutex_);
 	if (jobs_.size() >= capacity_) {
 		return false;
 	}
 	const auto position = std::lower_bound(jobs_.begin(), jobs_.end(), job, job_precedes);
+	if (trace_event != nullptr) {
+		trace_event->kind = WtSchedulerQueueTraceEventKind::Queued;
+		trace_event->job = job;
+		trace_event->queue_depth_before = jobs_.size();
+		trace_event->queue_depth_after = jobs_.size() + 1U;
+		trace_event->jobs_ahead = static_cast<std::size_t>(
+			position - jobs_.begin()
+		);
+		trace_event->same_priority_jobs_ahead =
+			static_cast<std::size_t>(std::count_if(
+				jobs_.begin(),
+				position,
+				[&job](const WtChunkJob &candidate) {
+					return candidate.priority == job.priority;
+				}
+			));
+	}
 	jobs_.insert(position, job);
 	return true;
 }
 
-bool WtStreamScheduler::JobQueue::pop(WtChunkJob &job) {
+bool WtStreamScheduler::JobQueue::pop(
+	WtChunkJob &job,
+	WtSchedulerQueueTraceEvent *trace_event
+) {
 	std::lock_guard<std::mutex> lock(mutex_);
 	if (jobs_.empty()) {
 		return false;
 	}
 	job = jobs_.front();
+	if (trace_event != nullptr) {
+		trace_event->kind = WtSchedulerQueueTraceEventKind::Dequeued;
+		trace_event->job = job;
+		trace_event->queue_depth_before = jobs_.size();
+		trace_event->queue_depth_after = jobs_.size() - 1U;
+		trace_event->jobs_ahead = 0;
+		trace_event->same_priority_jobs_ahead = 0;
+	}
 	jobs_.erase(jobs_.begin());
 	return true;
 }
@@ -41,7 +73,8 @@ bool WtStreamScheduler::JobQueue::pop(WtChunkJob &job) {
 bool WtStreamScheduler::JobQueue::reprioritize(
 	const WtChunkKey &key,
 	WtGenerationToken generation,
-	std::int32_t priority
+	std::int32_t priority,
+	WtSchedulerQueueTraceEvent *trace_event
 ) {
 	std::lock_guard<std::mutex> lock(mutex_);
 	bool changed = false;
@@ -53,8 +86,66 @@ bool WtStreamScheduler::JobQueue::reprioritize(
 	}
 	if (changed) {
 		std::sort(jobs_.begin(), jobs_.end(), job_precedes);
+		if (trace_event != nullptr) {
+			const auto found = std::find_if(
+				jobs_.begin(),
+				jobs_.end(),
+				[&](const WtChunkJob &job) {
+					return job.key == key && job.generation == generation;
+				}
+			);
+			trace_event->kind =
+				WtSchedulerQueueTraceEventKind::PriorityObserved;
+			trace_event->job = *found;
+			trace_event->queue_depth_before = jobs_.size();
+			trace_event->queue_depth_after = jobs_.size();
+			trace_event->jobs_ahead = static_cast<std::size_t>(
+				found - jobs_.begin()
+			);
+			trace_event->same_priority_jobs_ahead =
+				static_cast<std::size_t>(std::count_if(
+					jobs_.begin(),
+					found,
+					[priority](const WtChunkJob &candidate) {
+						return candidate.priority == priority;
+					}
+				));
+		}
 	}
 	return changed;
+}
+
+bool WtStreamScheduler::JobQueue::observe(
+	const WtChunkKey &key,
+	WtGenerationToken generation,
+	WtSchedulerQueueTraceEventKind kind,
+	WtSchedulerQueueTraceEvent &trace_event
+) const {
+	std::lock_guard<std::mutex> lock(mutex_);
+	const auto found = std::find_if(
+		jobs_.begin(),
+		jobs_.end(),
+		[&](const WtChunkJob &job) {
+			return job.key == key && job.generation == generation;
+		}
+	);
+	if (found == jobs_.end()) {
+		return false;
+	}
+	trace_event.kind = kind;
+	trace_event.job = *found;
+	trace_event.queue_depth_before = jobs_.size();
+	trace_event.queue_depth_after = jobs_.size();
+	trace_event.jobs_ahead = static_cast<std::size_t>(found - jobs_.begin());
+	trace_event.same_priority_jobs_ahead =
+		static_cast<std::size_t>(std::count_if(
+			jobs_.begin(),
+			found,
+			[&](const WtChunkJob &candidate) {
+				return candidate.priority == found->priority;
+			}
+		));
+	return true;
 }
 
 std::size_t WtStreamScheduler::JobQueue::erase_key(const WtChunkKey &key) {
@@ -188,9 +279,19 @@ WtSchedulerStatus WtStreamScheduler::request_chunk_version(
 	candidate.priority = priority;
 	candidate.lifecycle = WtChunkLifecycle::Sampling;
 	const WtChunkJob job = make_job(candidate, WtChunkJobStage::Sample);
-	if (!jobs_.push(job)) {
+	const bool trace_enabled = queue_trace_enabled_.load(
+		std::memory_order_acquire
+	);
+	WtSchedulerQueueTraceEvent trace_event;
+	if (!jobs_.push(
+			job,
+			trace_enabled ? &trace_event : nullptr
+		)) {
 		++metrics_.queue_rejections;
 		return WtSchedulerStatus::JobQueueFull;
+	}
+	if (trace_enabled) {
+		notify_queue_trace(trace_event);
 	}
 
 	if (record == nullptr) {
@@ -244,15 +345,47 @@ WtSchedulerStatus WtStreamScheduler::reprioritize_chunk(
 		return WtSchedulerStatus::NotFound;
 	}
 	if (record->priority == priority) {
+		WtSchedulerQueueTraceEvent trace_event;
+		if (queue_trace_enabled_.load(std::memory_order_acquire) && jobs_.observe(
+				record->key,
+				record->generation,
+				WtSchedulerQueueTraceEventKind::PriorityObserved,
+				trace_event
+			)) {
+			notify_queue_trace(trace_event);
+		}
 		return WtSchedulerStatus::AlreadyCurrent;
 	}
 	record->priority = priority;
-	jobs_.reprioritize(key, record->generation, priority);
+	const bool trace_enabled = queue_trace_enabled_.load(
+		std::memory_order_acquire
+	);
+	WtSchedulerQueueTraceEvent trace_event;
+	const bool traced = jobs_.reprioritize(
+		key,
+		record->generation,
+		priority,
+		trace_enabled ? &trace_event : nullptr
+	);
+	if (trace_enabled && traced) {
+		notify_queue_trace(trace_event);
+	}
 	return WtSchedulerStatus::Ok;
 }
 
 bool WtStreamScheduler::pop_job(WtChunkJob &job) {
-	return jobs_.pop(job);
+	const bool trace_enabled = queue_trace_enabled_.load(
+		std::memory_order_acquire
+	);
+	WtSchedulerQueueTraceEvent trace_event;
+	const bool popped = jobs_.pop(
+		job,
+		trace_enabled ? &trace_event : nullptr
+	);
+	if (trace_enabled && popped) {
+		notify_queue_trace(trace_event);
+	}
+	return popped;
 }
 
 WtSchedulerStatus WtStreamScheduler::submit_completion(const WtChunkJobResult &result) {
@@ -289,10 +422,20 @@ std::size_t WtStreamScheduler::apply_completions(std::size_t maximum_count) {
 		}
 		if (result.stage == WtChunkJobStage::Sample) {
 			const WtChunkJob mesh_job = make_job(*record, WtChunkJobStage::Mesh);
-			if (!jobs_.push(mesh_job)) {
+			const bool trace_enabled = queue_trace_enabled_.load(
+				std::memory_order_acquire
+			);
+			WtSchedulerQueueTraceEvent trace_event;
+			if (!jobs_.push(
+					mesh_job,
+					trace_enabled ? &trace_event : nullptr
+				)) {
 				++metrics_.queue_rejections;
 				record->lifecycle = WtChunkLifecycle::Failed;
 				continue;
+			}
+			if (trace_enabled) {
+				notify_queue_trace(trace_event);
 			}
 			record->lifecycle = WtChunkLifecycle::Meshing;
 			++metrics_.requested_jobs;
@@ -398,6 +541,28 @@ std::size_t WtStreamScheduler::available_job_capacity() const noexcept {
 
 std::size_t WtStreamScheduler::queued_completion_count() const noexcept {
 	return completions_.size();
+}
+
+void WtStreamScheduler::set_queue_trace_observer(
+	WtSchedulerQueueTraceObserver observer
+) {
+	const bool enabled = static_cast<bool>(observer);
+	std::lock_guard<std::mutex> lock(queue_trace_observer_mutex_);
+	queue_trace_observer_ = std::move(observer);
+	queue_trace_enabled_.store(enabled, std::memory_order_release);
+}
+
+void WtStreamScheduler::notify_queue_trace(
+	const WtSchedulerQueueTraceEvent &event
+) {
+	WtSchedulerQueueTraceObserver observer;
+	{
+		std::lock_guard<std::mutex> lock(queue_trace_observer_mutex_);
+		observer = queue_trace_observer_;
+	}
+	if (observer) {
+		observer(event);
+	}
 }
 
 WtGenerationToken WtStreamScheduler::next_generation() noexcept {

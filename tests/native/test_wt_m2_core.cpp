@@ -145,6 +145,67 @@ void test_scheduler_priority_and_lifecycle() {
 		"ready generation was redundantly queued");
 }
 
+void test_scheduler_queue_trace_observer() {
+	wt::WtStreamScheduler scheduler(4, 8, 8, 1);
+	std::vector<wt::WtSchedulerQueueTraceEvent> events;
+	scheduler.set_queue_trace_observer(
+		[&events](const wt::WtSchedulerQueueTraceEvent &event) {
+			events.push_back(event);
+		}
+	);
+	const wt::WtChunkKey low = { 0, 0, 0, 0 };
+	const wt::WtChunkKey high = { 1, 0, 0, 0 };
+	const wt::WtChunkKey middle = { 2, 0, 0, 0 };
+	check(scheduler.request_chunk(low, 1, 1) == wt::WtSchedulerStatus::Ok &&
+		scheduler.request_chunk(high, 1, 10) == wt::WtSchedulerStatus::Ok &&
+		scheduler.request_chunk(middle, 1, 5) == wt::WtSchedulerStatus::Ok,
+		"trace-observed scheduler setup failed");
+	check(events.size() == 3 &&
+		events[0].kind == wt::WtSchedulerQueueTraceEventKind::Queued &&
+		events[0].queue_depth_before == 0 &&
+		events[0].queue_depth_after == 1 &&
+		events[1].jobs_ahead == 0 &&
+		events[2].jobs_ahead == 1,
+		"queue admission observation mismatch");
+	check(scheduler.reprioritize_chunk(low, wt::kWtInteractiveEditPriority) ==
+		wt::WtSchedulerStatus::Ok,
+		"trace-observed reprioritization failed");
+	check(events.size() == 4 &&
+		events.back().kind ==
+			wt::WtSchedulerQueueTraceEventKind::PriorityObserved &&
+		events.back().job.priority == wt::kWtInteractiveEditPriority &&
+		events.back().jobs_ahead == 0 &&
+		events.back().same_priority_jobs_ahead == 0,
+		"priority-observed queue position mismatch");
+	check(scheduler.reprioritize_chunk(low, wt::kWtInteractiveEditPriority) ==
+			wt::WtSchedulerStatus::AlreadyCurrent &&
+		events.size() == 5 &&
+		events.back().kind ==
+			wt::WtSchedulerQueueTraceEventKind::PriorityObserved &&
+		events.back().job.priority == wt::kWtInteractiveEditPriority,
+		"already-current priority observation mismatch");
+
+	wt::WtChunkJob job;
+	check(scheduler.pop_job(job) && job.key == low &&
+		events.size() == 6 &&
+		events.back().kind == wt::WtSchedulerQueueTraceEventKind::Dequeued &&
+		events.back().queue_depth_before == 3 &&
+		events.back().queue_depth_after == 2,
+		"dequeue observation mismatch");
+	complete_job(scheduler, job, true);
+	check(events.size() == 7 &&
+		events.back().kind == wt::WtSchedulerQueueTraceEventKind::Queued &&
+		events.back().job.stage == wt::WtChunkJobStage::Mesh &&
+		events.back().job.priority == wt::kWtInteractiveEditPriority &&
+		events.back().jobs_ahead == 0,
+		"mesh queue admission lost effective priority");
+
+	const std::size_t observed_count = events.size();
+	scheduler.set_queue_trace_observer({});
+	check(scheduler.pop_job(job) && events.size() == observed_count,
+		"disabled queue trace observer retained an event");
+}
+
 void test_scheduler_stale_and_bounds() {
 	const wt::WtChunkKey key = { -1, 0, 0, 0 };
 	wt::WtStreamScheduler scheduler(1, 4, 1, 1);
@@ -238,6 +299,7 @@ int main() {
 	test_chunk_keys();
 	test_lod_map();
 	test_scheduler_priority_and_lifecycle();
+	test_scheduler_queue_trace_observer();
 	test_scheduler_stale_and_bounds();
 	test_scheduler_forget_wrapped_completions();
 	if (failure_count != 0) {

@@ -485,6 +485,32 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 				*page_cache_,
 				*scheduler_
 			);
+			if (trace_enabled) {
+				WtPageMeshingRuntimeRecordSnapshot ownership_record;
+				if (page_runtime_->copy_record(
+						job.key,
+						job.generation,
+						ownership_record
+					)) {
+					const WtCausalTraceJobDetails details {
+						WtCausalTraceJobStage::Sample,
+						ownership_record.priority,
+						job.sequence,
+					};
+					causal_trace_.record(
+						WtCausalTraceEventKind::
+							PageMeshingOwnershipEstablished,
+						WtCausalTraceThreadRole::Runtime,
+						&job.key,
+						job.generation,
+						job.world_revision,
+						static_cast<std::uint64_t>(ownership_record.phase),
+						0,
+						static_cast<std::int64_t>(status),
+						&details
+					);
+				}
+			}
 		} else {
 			WtChunkApplicationRecord application_record;
 			if (!application_->copy_record(job.key, application_record) ||

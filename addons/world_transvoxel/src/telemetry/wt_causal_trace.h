@@ -48,6 +48,10 @@ enum class WtCausalTraceEventKind : std::uint16_t {
 	TransitionRemeshGenerationCreated,
 	ReadinessRepairGenerationCreated,
 	VisibilityCoveragePriorityOutcome,
+	SchedulerJobQueued,
+	SchedulerJobPriorityObserved,
+	SchedulerJobDequeued,
+	PageMeshingOwnershipEstablished,
 };
 
 enum class WtVisibilityCoveragePriorityOutcome : std::int64_t {
@@ -65,6 +69,22 @@ enum class WtCausalTraceThreadRole : std::uint8_t {
 	Frontend,
 };
 
+enum class WtCausalTraceJobStage : std::uint8_t {
+	Sample = 1,
+	Mesh,
+};
+
+struct WtCausalTraceJobDetails {
+	WtCausalTraceJobStage stage = WtCausalTraceJobStage::Sample;
+	std::int32_t effective_priority = 0;
+	std::uint64_t sequence = 0;
+	bool has_queue_state = false;
+	std::size_t queue_depth_before = 0;
+	std::size_t queue_depth_after = 0;
+	std::size_t jobs_ahead = 0;
+	std::size_t same_priority_jobs_ahead = 0;
+};
+
 struct WtCausalTraceEvent {
 	std::uint64_t sequence = 0;
 	std::uint64_t elapsed_ns = 0;
@@ -77,6 +97,8 @@ struct WtCausalTraceEvent {
 	std::uint64_t cause_id = 0;
 	std::uint64_t auxiliary = 0;
 	std::int64_t status = 0;
+	bool has_job_details = false;
+	WtCausalTraceJobDetails job;
 };
 
 struct WtCausalTraceSnapshot {
@@ -103,7 +125,8 @@ public:
 		std::uint64_t cause_id = 0,
 		std::uint64_t auxiliary = 0,
 		std::uint64_t duration_ns = 0,
-		std::int64_t status = 0
+		std::int64_t status = 0,
+		const WtCausalTraceJobDetails *job_details = nullptr
 	);
 	WtCausalTraceSnapshot snapshot(
 		std::uint64_t first_sequence,

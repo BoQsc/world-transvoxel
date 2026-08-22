@@ -78,7 +78,8 @@ void WtCausalTraceBuffer::record(
 	std::uint64_t cause_id,
 	std::uint64_t auxiliary,
 	std::uint64_t duration_ns,
-	std::int64_t status
+	std::int64_t status,
+	const WtCausalTraceJobDetails *job_details
 ) {
 	if (!enabled_.load(std::memory_order_acquire)) return;
 	std::lock_guard<std::mutex> lock(mutex_);
@@ -95,6 +96,8 @@ void WtCausalTraceBuffer::record(
 	event.cause_id = cause_id;
 	event.auxiliary = auxiliary;
 	event.status = status;
+	event.has_job_details = job_details != nullptr;
+	if (job_details != nullptr) event.job = *job_details;
 	slots_[write_index_] = event;
 	write_index_ = (write_index_ + 1U) % slots_.size();
 	if (event_count_ < slots_.size()) {
@@ -192,6 +195,14 @@ const char *wt_causal_trace_event_kind_name(
 			return "readiness_repair_generation_created";
 		case WtCausalTraceEventKind::VisibilityCoveragePriorityOutcome:
 			return "visibility_coverage_priority_outcome";
+		case WtCausalTraceEventKind::SchedulerJobQueued:
+			return "scheduler_job_queued";
+		case WtCausalTraceEventKind::SchedulerJobPriorityObserved:
+			return "scheduler_job_priority_observed";
+		case WtCausalTraceEventKind::SchedulerJobDequeued:
+			return "scheduler_job_dequeued";
+		case WtCausalTraceEventKind::PageMeshingOwnershipEstablished:
+			return "page_meshing_ownership_established";
 	}
 	return "unknown";
 }
