@@ -253,13 +253,11 @@ private:
 	void stage_render_retirement(const WtChunkKey &key);
 	void cancel_render_retirement(const WtChunkKey &key);
 	void clear_visibility_coverage_priority_request(const WtChunkKey &key);
-	std::size_t request_visibility_coverage_priority_batch(
+	void request_visibility_coverage_priority_batch(
 		const std::vector<WtChunkApplicationRecord> &records,
 		std::size_t replacement_count,
-		std::size_t retirement_count,
-		std::int64_t reason = 0
+		std::size_t retirement_count
 	);
-	void request_pending_regional_visibility_priority();
 	void flush_ready_chunk_retirements();
 	void flush_ready_independent_publication_regions();
 	void flush_ready_chunk_replacements();
@@ -286,8 +284,6 @@ private:
 	std::uint64_t regional_visibility_publications_ = 0;
 	std::uint64_t regional_visibility_replacements_ = 0;
 	std::uint64_t regional_visibility_retirements_ = 0;
-	std::uint64_t regional_visibility_prewarm_batches_ = 0;
-	std::uint64_t regional_visibility_prewarm_requests_ = 0;
 	std::unique_ptr<WtChunkApplicationService> application_;
 	std::unique_ptr<WtGodotRenderSink> render_sink_;
 	std::unique_ptr<WtGodotCollisionSink> collision_sink_;

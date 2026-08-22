@@ -774,16 +774,6 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	);
 	set_metric(
 		output,
-		"regional_visibility_prewarm_batches",
-		regional_visibility_prewarm_batches_
-	);
-	set_metric(
-		output,
-		"regional_visibility_prewarm_requests",
-		regional_visibility_prewarm_requests_
-	);
-	set_metric(
-		output,
 		"regional_visibility_replacements",
 		regional_visibility_replacements_
 	);
