@@ -23,6 +23,10 @@ constexpr std::size_t kWtMaximumTransitionFaceIndices = 9216;
 constexpr std::size_t kWtMaximumCachedScalarSamples = 131072;
 constexpr std::size_t kWtMaximumSurfaceShiftScalarSamples = 524288;
 constexpr std::size_t kWtMaximumCachedCellSamples = 32768;
+constexpr std::size_t kWtInitialRegularChunkVertices = 2048;
+constexpr std::size_t kWtInitialRegularChunkIndices = 6144;
+constexpr std::size_t kWtInitialTransitionFaceVertices = 512;
+constexpr std::size_t kWtInitialTransitionFaceIndices = 1536;
 
 struct WtScalarSample {
 	float density = 0.0F;
@@ -81,6 +85,12 @@ struct WtChunkMeshBuffer {
 	std::size_t index_limit = 0;
 
 	void prepare(std::size_t maximum_vertices, std::size_t maximum_indices);
+	void prepare(
+		std::size_t maximum_vertices,
+		std::size_t maximum_indices,
+		std::size_t initial_vertices,
+		std::size_t initial_indices
+	);
 	void clear() noexcept;
 };
 

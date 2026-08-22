@@ -474,6 +474,12 @@ WtChunkMeshingStatus mesh_transition_face(
 	const WtFaceBasis basis = get_face_basis(face);
 	const WtGridPoint local_face_origin = face_origin(face, basis, extent_integer);
 	WtChunkMeshBuffer &face_output = output.transitions[static_cast<std::size_t>(face)];
+	face_output.prepare(
+		kWtMaximumTransitionFaceVertices,
+		kWtMaximumTransitionFaceIndices,
+		kWtInitialTransitionFaceVertices,
+		kWtInitialTransitionFaceIndices
+	);
 	scratch.reset_vertices();
 
 	for (int v_cell = 0; v_cell < kWtChunkCellsPerAxis; ++v_cell) {
@@ -587,12 +593,26 @@ void WtChunkMeshBuffer::prepare(
 	std::size_t maximum_vertices,
 	std::size_t maximum_indices
 ) {
+	prepare(
+		maximum_vertices,
+		maximum_indices,
+		maximum_vertices,
+		maximum_indices
+	);
+}
+
+void WtChunkMeshBuffer::prepare(
+	std::size_t maximum_vertices,
+	std::size_t maximum_indices,
+	std::size_t initial_vertices,
+	std::size_t initial_indices
+) {
 	vertex_limit = maximum_vertices;
 	index_limit = maximum_indices;
 	vertices.clear();
 	indices.clear();
-	vertices.reserve(maximum_vertices);
-	indices.reserve(maximum_indices);
+	vertices.reserve(std::min(maximum_vertices, initial_vertices));
+	indices.reserve(std::min(maximum_indices, initial_indices));
 }
 
 void WtChunkMeshBuffer::clear() noexcept {
@@ -661,12 +681,16 @@ WtChunkMeshingStatus WtChunkMesher::mesh(
 	output.transition_width_ratio = input.transition_width_ratio;
 	output.regular.prepare(
 		kWtMaximumRegularChunkVertices,
-		kWtMaximumRegularChunkIndices
+		kWtMaximumRegularChunkIndices,
+		kWtInitialRegularChunkVertices,
+		kWtInitialRegularChunkIndices
 	);
 	for (WtChunkMeshBuffer &transition : output.transitions) {
 		transition.prepare(
 			kWtMaximumTransitionFaceVertices,
-			kWtMaximumTransitionFaceIndices
+			kWtMaximumTransitionFaceIndices,
+			0,
+			0
 		);
 	}
 	scratch.reset_samples();

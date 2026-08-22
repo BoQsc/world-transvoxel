@@ -780,6 +780,127 @@ void test_errors(const wt::WtChunkMesher &mesher, wt::WtChunkMeshingScratch &scr
 	check(output.regular.indices.empty(), "backend failure retained output");
 }
 
+void test_bounded_initial_mesh_reservation(
+	const wt::WtChunkMesher &mesher,
+	wt::WtChunkMeshingScratch &scratch
+) {
+	FlatYSource source;
+	wt::WtChunkMeshResult output;
+	check(
+		mesher.mesh(
+			{ { 0, 0, 0, 0 }, 0, 0, 0.0F, 0.25F },
+			source,
+			output,
+			scratch
+		) == wt::WtChunkMeshingStatus::Ok,
+		"bounded initial reservation mesh failed"
+	);
+	check(
+		output.regular.vertex_limit == wt::kWtMaximumRegularChunkVertices &&
+		output.regular.index_limit == wt::kWtMaximumRegularChunkIndices,
+		"bounded initial reservation changed regular limits"
+	);
+	check(
+		output.regular.vertices.capacity() <
+			wt::kWtMaximumRegularChunkVertices &&
+		output.regular.indices.capacity() <
+			wt::kWtMaximumRegularChunkIndices,
+		"regular mesh still reserves worst-case capacity"
+	);
+	std::size_t retained_index_capacity = output.regular.indices.capacity();
+	for (const wt::WtChunkMeshBuffer &transition : output.transitions) {
+		retained_index_capacity += transition.indices.capacity();
+		check(
+			transition.vertex_limit ==
+				wt::kWtMaximumTransitionFaceVertices &&
+			transition.index_limit ==
+				wt::kWtMaximumTransitionFaceIndices,
+			"bounded initial reservation changed transition limits"
+		);
+		check(
+			transition.vertices.capacity() == 0 &&
+			transition.indices.capacity() == 0,
+			"inactive transition face allocated storage"
+		);
+	}
+	const std::size_t eager_index_capacity =
+		wt::kWtMaximumRegularChunkIndices +
+		6U * wt::kWtMaximumTransitionFaceIndices;
+	check(
+		retained_index_capacity * 8U < eager_index_capacity,
+		"bounded mesh retained excessive empty index capacity"
+	);
+
+	wt::WtChunkMeshResult preallocated;
+	preallocated.regular.prepare(
+		wt::kWtMaximumRegularChunkVertices,
+		wt::kWtMaximumRegularChunkIndices
+	);
+	for (wt::WtChunkMeshBuffer &transition : preallocated.transitions) {
+		transition.prepare(
+			wt::kWtMaximumTransitionFaceVertices,
+			wt::kWtMaximumTransitionFaceIndices
+		);
+	}
+	check(
+		mesher.mesh(
+			{ { 0, 0, 0, 0 }, 0, 0, 0.0F, 0.25F },
+			source,
+			preallocated,
+			scratch
+		) == wt::WtChunkMeshingStatus::Ok,
+		"preallocated comparison mesh failed"
+	);
+	std::uint64_t bounded_hash = 14695981039346656037ULL;
+	std::uint64_t preallocated_hash = 14695981039346656037ULL;
+	hash_result(bounded_hash, output);
+	hash_result(preallocated_hash, preallocated);
+	check(
+		bounded_hash == preallocated_hash,
+		"mesh geometry depends on prior buffer capacity"
+	);
+
+	SphereSource sphere;
+	sphere.center = { 8, 8, 8 };
+	wt::WtChunkMeshResult bounded_transition;
+	wt::WtChunkMeshResult preallocated_transition;
+	preallocated_transition.regular.prepare(
+		wt::kWtMaximumRegularChunkVertices,
+		wt::kWtMaximumRegularChunkIndices
+	);
+	for (wt::WtChunkMeshBuffer &transition :
+			preallocated_transition.transitions) {
+		transition.prepare(
+			wt::kWtMaximumTransitionFaceVertices,
+			wt::kWtMaximumTransitionFaceIndices
+		);
+	}
+	const wt::WtChunkMeshingInput transition_input = {
+		{ 0, 0, 0, 1 },
+		0x3fU,
+		0x3fU,
+		0.0F,
+		0.25F,
+	};
+	check(
+		mesher.mesh(
+			transition_input, sphere, bounded_transition, scratch
+		) == wt::WtChunkMeshingStatus::Ok &&
+		mesher.mesh(
+			transition_input, sphere, preallocated_transition, scratch
+		) == wt::WtChunkMeshingStatus::Ok,
+		"transition capacity comparison mesh failed"
+	);
+	bounded_hash = 14695981039346656037ULL;
+	preallocated_hash = 14695981039346656037ULL;
+	hash_result(bounded_hash, bounded_transition);
+	hash_result(preallocated_hash, preallocated_transition);
+	check(
+		bounded_hash == preallocated_hash,
+		"transition geometry depends on prior buffer capacity"
+	);
+}
+
 } // namespace
 
 int main() {
@@ -843,6 +964,7 @@ int main() {
 	test_convex_refined_corner_gallery(mesher, scratch, hash);
 	test_multiresolution_vertices_match_lod0(mesher, scratch);
 	test_errors(mesher, scratch);
+	test_bounded_initial_mesh_reservation(mesher, scratch);
 
 	constexpr std::uint64_t expected_hash = 0xf3ebfec883e2de19ULL;
 	check(hash == expected_hash, "M2 chunk aggregate hash mismatch");
