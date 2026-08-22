@@ -28,6 +28,8 @@ class WtM5ApplicationBenchmarkFixture;
 
 constexpr std::size_t kWtDefaultRenderApplyBudget = 4;
 constexpr std::size_t kWtDefaultCollisionApplyBudget = 2;
+constexpr std::size_t kWtMaximumRelocationVisibilityPrewarmRecords = 16;
+constexpr std::size_t kWtMaximumRelocationVisibilityPrewarmRegionAttempts = 8;
 
 class WorldTransvoxelTerrain : public godot::Node3D {
 	GDCLASS(WorldTransvoxelTerrain, godot::Node3D)
@@ -155,6 +157,13 @@ public:
 		std::int64_t radius_chunks,
 		std::int64_t maximum_lod = 0
 	);
+	bool request_relocation_visibility_prewarm(
+		const godot::Vector3 &position,
+		std::int64_t maximum_records =
+			static_cast<std::int64_t>(
+				kWtMaximumRelocationVisibilityPrewarmRecords
+			)
+	);
 	bool remove_viewer(std::int64_t viewer_id, std::int64_t revision);
 	bool update_collision_viewer(
 		std::int64_t viewer_id,
@@ -235,6 +244,7 @@ private:
 	struct CoveragePriorityRequest {
 		WtChunkKey key;
 		WtGenerationToken generation;
+		std::int32_t priority = 0;
 	};
 
 	void emit_lifecycle_state(WtWorldLifecycleState state);
@@ -253,11 +263,14 @@ private:
 	void stage_render_retirement(const WtChunkKey &key);
 	void cancel_render_retirement(const WtChunkKey &key);
 	void clear_visibility_coverage_priority_request(const WtChunkKey &key);
-	void request_visibility_coverage_priority_batch(
+	std::size_t request_visibility_coverage_priority_batch(
 		const std::vector<WtChunkApplicationRecord> &records,
 		std::size_t replacement_count,
-		std::size_t retirement_count
+		std::size_t retirement_count,
+		std::int32_t priority = kWtInteractiveEditPriority,
+		std::int64_t reason = 0
 	);
+	void consume_relocation_visibility_prewarm();
 	void flush_ready_chunk_retirements();
 	void flush_ready_independent_publication_regions();
 	void flush_ready_chunk_replacements();
@@ -284,6 +297,14 @@ private:
 	std::uint64_t regional_visibility_publications_ = 0;
 	std::uint64_t regional_visibility_replacements_ = 0;
 	std::uint64_t regional_visibility_retirements_ = 0;
+	bool relocation_visibility_prewarm_pending_ = false;
+	godot::Vector3 relocation_visibility_prewarm_position_;
+	std::size_t relocation_visibility_prewarm_maximum_records_ = 0;
+	std::uint64_t relocation_visibility_prewarm_requests_ = 0;
+	std::uint64_t relocation_visibility_prewarm_coalesced_ = 0;
+	std::uint64_t relocation_visibility_prewarm_attempts_ = 0;
+	std::uint64_t relocation_visibility_prewarm_batches_ = 0;
+	std::uint64_t relocation_visibility_prewarm_records_ = 0;
 	std::unique_ptr<WtChunkApplicationService> application_;
 	std::unique_ptr<WtGodotRenderSink> render_sink_;
 	std::unique_ptr<WtGodotCollisionSink> collision_sink_;

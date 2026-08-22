@@ -782,6 +782,33 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		"regional_visibility_retirements",
 		regional_visibility_retirements_
 	);
+	output["relocation_visibility_prewarm_pending"] =
+		relocation_visibility_prewarm_pending_;
+	set_metric(
+		output,
+		"relocation_visibility_prewarm_requests",
+		relocation_visibility_prewarm_requests_
+	);
+	set_metric(
+		output,
+		"relocation_visibility_prewarm_coalesced",
+		relocation_visibility_prewarm_coalesced_
+	);
+	set_metric(
+		output,
+		"relocation_visibility_prewarm_attempts",
+		relocation_visibility_prewarm_attempts_
+	);
+	set_metric(
+		output,
+		"relocation_visibility_prewarm_batches",
+		relocation_visibility_prewarm_batches_
+	);
+	set_metric(
+		output,
+		"relocation_visibility_prewarm_records",
+		relocation_visibility_prewarm_records_
+	);
 	output["visibility_coverage_priority_pending"] =
 		static_cast<std::int64_t>(
 			visibility_coverage_priority_requests_.size()

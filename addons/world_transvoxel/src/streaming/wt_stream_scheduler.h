@@ -13,6 +13,13 @@ namespace world_transvoxel {
 
 constexpr std::int32_t kWtInteractiveEditPriority =
 	std::numeric_limits<std::int32_t>::max();
+constexpr std::int32_t kWtCollisionPriorityMaximum =
+	kWtInteractiveEditPriority - 1;
+constexpr std::int32_t kWtCollisionPriorityDistanceLimit = 1000000;
+constexpr std::int32_t kWtMinimumCollisionPriority =
+	kWtCollisionPriorityMaximum - kWtCollisionPriorityDistanceLimit;
+constexpr std::int32_t kWtRelocationVisibilityPrewarmPriority =
+	kWtMinimumCollisionPriority - 1;
 
 enum class WtChunkJobStage : std::uint8_t {
 	Sample,
