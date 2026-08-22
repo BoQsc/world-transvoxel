@@ -234,6 +234,12 @@ struct WtPageMeshingRuntimeService::AsyncState {
 		return true;
 	}
 
+	bool admission_available() const {
+		std::lock_guard<std::mutex> lock(work_mutex);
+		return !stopping.load(std::memory_order_acquire) &&
+			work.size() < worker_count;
+	}
+
 	bool pop_completion(PreparedMeshCompletion &completion) {
 		std::lock_guard<std::mutex> lock(completion_mutex);
 		if (completions.empty()) return false;
@@ -459,6 +465,11 @@ bool WtPageMeshingRuntimeService::valid() const noexcept {
 
 bool WtPageMeshingRuntimeService::asynchronous_meshing_enabled() const noexcept {
 	return static_cast<bool>(async_);
+}
+
+bool WtPageMeshingRuntimeService::asynchronous_mesh_admission_available()
+	const noexcept {
+	return async_ != nullptr && async_->admission_available();
 }
 
 WtPageMeshingRuntimeStatus

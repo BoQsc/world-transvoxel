@@ -111,6 +111,12 @@ never called by a meshing worker and retain their existing thread-safety
 contracts. Causal trace mesh start/finish events identify the `meshing` role
 when workers are enabled.
 
+The asynchronous waiting queue admits at most one prepared mesh per configured
+worker. When that waiting capacity is full, the next mesh remains in the
+authoritative scheduler, where cancellation and interactive reprioritization
+still apply. A sample job at the front of the scheduler is not blocked by mesh
+admission pressure. This bound is separate from the immutable record capacity.
+
 ## Locked evidence
 
 `test_wt_m5_page_meshing_runtime` uses a real schema-1 manifest and thirteen

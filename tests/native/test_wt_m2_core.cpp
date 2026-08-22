@@ -122,6 +122,11 @@ void test_scheduler_priority_and_lifecycle() {
 		"middle-priority request failed");
 
 	wt::WtChunkJob job;
+	check(
+		scheduler.peek_job(job) && job.key == high &&
+			scheduler.queued_job_count() == 3,
+		"scheduler peek changed or misreported the priority queue"
+	);
 	check(scheduler.pop_job(job) && job.key == high, "highest priority did not run first");
 	check(scheduler.pop_job(job) && job.key == middle, "middle priority did not run second");
 	check(scheduler.pop_job(job) && job.key == low, "lowest priority did not run last");

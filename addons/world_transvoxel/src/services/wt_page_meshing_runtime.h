@@ -215,6 +215,7 @@ public:
 	);
 	void set_mesh_completion_notifier(std::function<void()> notifier);
 	bool asynchronous_meshing_enabled() const noexcept;
+	bool asynchronous_mesh_admission_available() const noexcept;
 
 	std::size_t flush_scheduler_results(
 		WtStreamScheduler &scheduler

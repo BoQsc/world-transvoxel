@@ -70,6 +70,13 @@ bool WtStreamScheduler::JobQueue::pop(
 	return true;
 }
 
+bool WtStreamScheduler::JobQueue::peek(WtChunkJob &job) const {
+	std::lock_guard<std::mutex> lock(mutex_);
+	if (jobs_.empty()) return false;
+	job = jobs_.front();
+	return true;
+}
+
 bool WtStreamScheduler::JobQueue::reprioritize(
 	const WtChunkKey &key,
 	WtGenerationToken generation,
@@ -371,6 +378,10 @@ WtSchedulerStatus WtStreamScheduler::reprioritize_chunk(
 		notify_queue_trace(trace_event);
 	}
 	return WtSchedulerStatus::Ok;
+}
+
+bool WtStreamScheduler::peek_job(WtChunkJob &job) const {
+	return jobs_.peek(job);
 }
 
 bool WtStreamScheduler::pop_job(WtChunkJob &job) {

@@ -429,7 +429,18 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 	bool progressed = false;
 	WtChunkJob job;
 	for (std::size_t count = 0; count < 4; ++count) {
-		if (has_pending_edit_operation() || !scheduler_->pop_job(job)) {
+		if (has_pending_edit_operation()) {
+			break;
+		}
+		if (page_runtime_->asynchronous_meshing_enabled() &&
+			!page_runtime_->asynchronous_mesh_admission_available()) {
+			WtChunkJob next_job;
+			if (!scheduler_->peek_job(next_job) ||
+				next_job.stage == WtChunkJobStage::Mesh) {
+				break;
+			}
+		}
+		if (!scheduler_->pop_job(job)) {
 			break;
 		}
 		progressed = true;
