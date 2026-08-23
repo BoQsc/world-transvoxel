@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/wt_chunk_state.h"
+#include "streaming/wt_foreground_priority.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -13,7 +14,7 @@
 namespace world_transvoxel {
 
 constexpr std::int32_t kWtInteractiveEditPriority =
-	std::numeric_limits<std::int32_t>::max();
+	kWtCommittedEditPriority;
 
 enum class WtChunkJobStage : std::uint8_t {
 	Sample,

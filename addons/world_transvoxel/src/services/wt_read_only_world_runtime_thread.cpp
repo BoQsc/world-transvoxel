@@ -26,6 +26,7 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 		// delta. Viewer events are coalesced and may safely follow the edit; the
 		// edit journal remains authoritative for chunks requested afterward.
 		bool progressed = process_world_operation_event();
+		progressed = process_foreground_priority_event() || progressed;
 		progressed = process_viewer_event() || progressed;
 		progressed = process_storage_completions() || progressed;
 		progressed = page_runtime_->resume_loading_records(
@@ -498,6 +499,10 @@ const char *wt_read_only_runtime_status_message(
 			return "viewer event is invalid";
 		case WtReadOnlyRuntimeStatus::ViewerQueueFull:
 			return "viewer event queue is full";
+		case WtReadOnlyRuntimeStatus::InvalidForegroundPriority:
+			return "foreground priority lease is invalid";
+		case WtReadOnlyRuntimeStatus::ForegroundPriorityQueueFull:
+			return "foreground priority event queue is full";
 		case WtReadOnlyRuntimeStatus::InvalidEdit:
 			return "edit transaction is invalid";
 		case WtReadOnlyRuntimeStatus::EditQueueFull:

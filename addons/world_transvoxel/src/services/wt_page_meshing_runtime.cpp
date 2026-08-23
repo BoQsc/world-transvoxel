@@ -1,5 +1,7 @@
 #include "services/wt_page_meshing_runtime.h"
 
+#include "storage/wt_chunk_page_sample_source.h"
+
 #include "services/wt_page_meshing_runtime_internal.h"
 
 #include "backend/wt_transvoxel_mit_backend.h"

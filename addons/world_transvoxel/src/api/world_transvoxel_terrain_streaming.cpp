@@ -175,6 +175,45 @@ bool WorldTransvoxelTerrain::remove_collision_viewer(
 	return status == WtReadOnlyRuntimeStatus::Ok;
 }
 
+bool WorldTransvoxelTerrain::update_foreground_priority_lease(
+	std::int64_t source_id,
+	std::int64_t revision,
+	std::int64_t priority_class,
+	const godot::Array &chunk_coordinates
+) {
+	if (!lifecycle_ || source_id <= 0 || revision <= 0 ||
+		priority_class < static_cast<std::int64_t>(
+			WtForegroundPriorityClass::PlayerSupport
+		) || priority_class > static_cast<std::int64_t>(
+			WtForegroundPriorityClass::InteractionFocus
+		) || static_cast<std::size_t>(chunk_coordinates.size()) >
+			kWtForegroundPriorityKeysPerSource) {
+		synchronous_world_error_ = "foreground priority lease is invalid";
+		return false;
+	}
+	std::vector<WtChunkKey> keys;
+	keys.reserve(static_cast<std::size_t>(chunk_coordinates.size()));
+	for (std::int64_t index = 0; index < chunk_coordinates.size(); ++index) {
+		const godot::Variant value = chunk_coordinates[index];
+		if (value.get_type() != godot::Variant::VECTOR3I) {
+			synchronous_world_error_ =
+				"foreground priority lease is invalid";
+			return false;
+		}
+		const godot::Vector3i coordinate = value;
+		keys.push_back({ coordinate.x, coordinate.y, coordinate.z, 0 });
+	}
+	const WtReadOnlyRuntimeStatus status =
+		lifecycle_->update_foreground_priority_lease({
+			static_cast<std::uint64_t>(source_id),
+			static_cast<std::uint64_t>(revision),
+			static_cast<WtForegroundPriorityClass>(priority_class),
+			std::move(keys),
+		});
+	synchronous_world_error_ = wt_read_only_runtime_status_message(status);
+	return status == WtReadOnlyRuntimeStatus::Ok;
+}
+
 std::int64_t
 WorldTransvoxelTerrain::get_rendered_chunk_count() const noexcept {
 	return static_cast<std::int64_t>(render_sink_->resource_count());

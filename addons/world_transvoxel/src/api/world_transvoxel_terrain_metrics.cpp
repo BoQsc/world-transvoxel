@@ -260,6 +260,44 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		"visibility_coverage_priority_stale",
 		runtime.visibility_coverage_priority_stale
 	);
+	set_metric(output, "foreground_priority_updates",
+		runtime.foreground_priority_updates);
+	set_metric(output, "foreground_priority_releases",
+		runtime.foreground_priority_releases);
+	set_metric(output, "foreground_priority_coalesced_events",
+		runtime.foreground_priority_coalesced_events);
+	set_metric(output, "foreground_priority_stale_events",
+		runtime.foreground_priority_stale_events);
+	set_metric(output, "foreground_priority_active_sources",
+		runtime.foreground_priority_active_sources);
+	set_metric(output, "foreground_priority_support_keys",
+		runtime.foreground_priority_support_keys);
+	set_metric(output, "foreground_priority_focus_keys",
+		runtime.foreground_priority_focus_keys);
+	set_metric(output, "foreground_priority_requested_keys",
+		runtime.foreground_priority_requested_keys);
+	set_metric(output, "foreground_priority_matched_keys",
+		runtime.foreground_priority_matched_keys);
+	set_metric(output, "foreground_priority_missing_keys",
+		runtime.foreground_priority_missing_keys);
+	set_metric(output, "foreground_priority_changed_priorities",
+		runtime.foreground_priority_changed_priorities);
+	set_metric(output, "foreground_priority_last_source_id",
+		runtime.foreground_priority_last_source_id);
+	set_metric(output, "foreground_priority_last_revision",
+		runtime.foreground_priority_last_revision);
+	set_metric(output, "foreground_priority_last_class",
+		runtime.foreground_priority_last_class);
+	output["foreground_priority_last_key_x"] =
+		runtime.foreground_priority_last_key_x;
+	output["foreground_priority_last_key_y"] =
+		runtime.foreground_priority_last_key_y;
+	output["foreground_priority_last_key_z"] =
+		runtime.foreground_priority_last_key_z;
+	set_metric(output, "foreground_priority_last_key_lod",
+		runtime.foreground_priority_last_key_lod);
+	output["foreground_priority_last_effective_priority"] =
+		runtime.foreground_priority_last_effective_priority;
 	set_metric(
 		output,
 		"edit_lod_retention_zones",

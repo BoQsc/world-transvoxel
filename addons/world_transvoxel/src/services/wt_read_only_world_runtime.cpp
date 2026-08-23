@@ -142,6 +142,10 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 	meshing_scratch_ = std::make_unique<WtChunkMeshingScratch>();
 	viewer_event_capacity_ = std::max<std::size_t>(viewers * 2U, 2U);
 	viewer_events_.reserve(viewer_event_capacity_);
+	foreground_priority_event_capacity_ =
+		kWtForegroundPrioritySourceCapacity;
+	foreground_priority_events_.reserve(foreground_priority_event_capacity_);
+	base_demands_.reserve(active);
 	world_operation_capacity_ = kWtProductionWorldOperationCapacity;
 	world_operations_.reserve(world_operation_capacity_);
 	const std::size_t publication_capacity = std::max<std::size_t>(
@@ -389,6 +393,64 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::remove_collision_viewer(
 		0,
 	}) ? WtReadOnlyRuntimeStatus::Ok :
 		WtReadOnlyRuntimeStatus::ViewerQueueFull;
+}
+
+WtReadOnlyRuntimeStatus
+WtReadOnlyWorldRuntime::update_foreground_priority_lease(
+	const WtForegroundPriorityLeaseRequest &request
+) {
+	if (!valid_ || request.source_id == 0 || request.revision == 0 ||
+		request.keys.size() > kWtForegroundPriorityKeysPerSource ||
+		(request.priority_class !=
+				WtForegroundPriorityClass::PlayerSupport &&
+			request.priority_class !=
+				WtForegroundPriorityClass::InteractionFocus)) {
+		return WtReadOnlyRuntimeStatus::InvalidForegroundPriority;
+	}
+	WtForegroundPriorityLeaseRequest canonical = request;
+	std::sort(canonical.keys.begin(), canonical.keys.end());
+	canonical.keys.erase(
+		std::unique(canonical.keys.begin(), canonical.keys.end()),
+		canonical.keys.end()
+	);
+	for (const WtChunkKey &key : canonical.keys) {
+		if (!wt_is_valid_chunk_key(key)) {
+			return WtReadOnlyRuntimeStatus::InvalidForegroundPriority;
+		}
+	}
+	return enqueue_foreground_priority_event({ std::move(canonical) }) ?
+		WtReadOnlyRuntimeStatus::Ok :
+		WtReadOnlyRuntimeStatus::ForegroundPriorityQueueFull;
+}
+
+bool WtReadOnlyWorldRuntime::enqueue_foreground_priority_event(
+	const ForegroundPriorityEvent &event
+) {
+	std::lock_guard<std::mutex> lock(input_mutex_);
+	const auto existing = std::find_if(
+		foreground_priority_events_.begin(),
+		foreground_priority_events_.end(),
+		[&](const ForegroundPriorityEvent &queued) {
+			return queued.request.source_id == event.request.source_id;
+		}
+	);
+	if (existing != foreground_priority_events_.end()) {
+		if (event.request.revision <= existing->request.revision) return false;
+		*existing = event;
+		{
+			std::lock_guard<std::mutex> metrics_lock(metrics_mutex_);
+			++metrics_.foreground_priority_coalesced_events;
+		}
+		notify_work();
+		return true;
+	}
+	if (foreground_priority_events_.size() >=
+		foreground_priority_event_capacity_) {
+		return false;
+	}
+	foreground_priority_events_.push_back(event);
+	notify_work();
+	return true;
 }
 
 bool WtReadOnlyWorldRuntime::enqueue_viewer_event(

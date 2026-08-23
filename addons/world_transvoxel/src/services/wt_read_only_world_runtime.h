@@ -7,6 +7,7 @@
 #include "services/wt_runtime_config.h"
 #include "storage/wt_world_snapshot_store.h"
 #include "streaming/wt_balanced_lod_planner.h"
+#include "streaming/wt_foreground_priority.h"
 #include "editing/wt_edit_transaction.h"
 #include "streaming/wt_multi_viewer_desired_set.h"
 #include "telemetry/wt_causal_trace.h"
@@ -45,6 +46,8 @@ enum class WtReadOnlyRuntimeStatus : std::uint8_t {
 	NotRunning,
 	InvalidViewer,
 	ViewerQueueFull,
+	InvalidForegroundPriority,
+	ForegroundPriorityQueueFull,
 	InvalidEdit,
 	EditQueueFull,
 	EditFailure,
@@ -168,6 +171,9 @@ public:
 	WtReadOnlyRuntimeStatus request_visibility_coverage_priority_batch(
 		const std::vector<WtVisibilityCoveragePriorityRequest> &requests
 	);
+	WtReadOnlyRuntimeStatus update_foreground_priority_lease(
+		const WtForegroundPriorityLeaseRequest &request
+	);
 	WtReadOnlyRuntimeStatus request_authoritative_sample(
 		const WtGridPoint &point,
 		std::uint8_t lod,
@@ -252,6 +258,9 @@ private:
 		std::vector<WtVisibilityCoveragePriorityRequest>
 			visibility_coverage_priority_requests;
 	};
+	struct ForegroundPriorityEvent {
+		WtForegroundPriorityLeaseRequest request;
+	};
 	struct EditLodRetentionZone {
 		double x = 0.0;
 		double y = 0.0;
@@ -282,6 +291,10 @@ private:
 
 	bool enqueue_viewer_event(const ViewerEvent &event);
 	bool process_viewer_event();
+	bool enqueue_foreground_priority_event(
+		const ForegroundPriorityEvent &event
+	);
+	bool process_foreground_priority_event();
 	bool enqueue_world_operation(WorldOperation &operation);
 	bool has_pending_edit_operation();
 	bool process_world_operation_event();
@@ -351,6 +364,8 @@ private:
 	mutable std::mutex input_mutex_;
 	std::vector<ViewerEvent> viewer_events_;
 	std::size_t viewer_event_capacity_ = 0;
+	std::vector<ForegroundPriorityEvent> foreground_priority_events_;
+	std::size_t foreground_priority_event_capacity_ = 0;
 	std::vector<WorldOperation> world_operations_;
 	std::size_t world_operation_capacity_ = 0;
 	std::uint64_t next_request_id_ = 0;
@@ -371,6 +386,8 @@ private:
 	std::uint64_t wake_sequence_ = 0;
 
 	std::unique_ptr<WtMultiViewerDesiredSet> desired_;
+	WtForegroundPriorityLeaseSet foreground_priority_leases_;
+	std::vector<WtViewerChunkDemand> base_demands_;
 	std::unique_ptr<WtBalancedLodPlanner> lod_planner_;
 	std::vector<WtLodPlannerViewer> planner_viewers_;
 	std::vector<CollisionViewer> collision_viewers_;

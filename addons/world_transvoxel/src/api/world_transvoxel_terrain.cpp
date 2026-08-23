@@ -281,6 +281,16 @@ void WorldTransvoxelTerrain::_bind_methods() {
 	);
 	godot::ClassDB::bind_method(
 		godot::D_METHOD(
+			"update_foreground_priority_lease",
+			"source_id",
+			"revision",
+			"priority_class",
+			"chunk_coordinates"
+		),
+		&WorldTransvoxelTerrain::update_foreground_priority_lease
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
 			"remove_collision_viewer", "viewer_id", "revision"
 		),
 		&WorldTransvoxelTerrain::remove_collision_viewer

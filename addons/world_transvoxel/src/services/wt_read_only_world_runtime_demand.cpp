@@ -629,6 +629,13 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		return true;
 	}
 
+	const std::vector<WtViewerChunkDemand> candidate_base_demands =
+		merged_demands;
+	const WtForegroundPriorityOverlayResult foreground_overlay =
+		foreground_priority_leases_.apply(
+			candidate_base_demands,
+			merged_demands
+		);
 	WtMultiViewerDesiredSet candidate_desired = *desired_;
 	WtDesiredSetDelta delta;
 	WtViewerSnapshot plan_snapshot;
@@ -784,6 +791,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	}
 	const std::size_t planned_demand_count = merged_demands.size();
 	*desired_ = std::move(candidate_desired);
+	base_demands_ = candidate_base_demands;
 	planner_viewers_ = std::move(candidate_viewers);
 	collision_viewers_ = std::move(candidate_collision_viewers);
 	current_plan_ = std::move(candidate_plan);
@@ -893,6 +901,14 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 				++metrics_.edit_lod_retention_plans;
 			}
 		}
+		metrics_.foreground_priority_requested_keys +=
+			foreground_overlay.requested_keys;
+		metrics_.foreground_priority_matched_keys +=
+			foreground_overlay.matched_keys;
+		metrics_.foreground_priority_missing_keys +=
+			foreground_overlay.missing_keys;
+		metrics_.foreground_priority_changed_priorities +=
+			foreground_overlay.changed_priorities;
 	}
 	process_pending_transition_remeshes();
 	return true;

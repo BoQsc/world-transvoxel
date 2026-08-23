@@ -2,6 +2,7 @@
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_hash256.h"
 #include "streaming/wt_balanced_lod_planner.h"
+#include "streaming/wt_foreground_priority.h"
 #include "wt_production_world_fixture.h"
 
 #include <algorithm>
@@ -316,11 +317,263 @@ void test_visibility_coverage_priority_generation_contract() {
 		"priority runtime did not stop cleanly");
 }
 
+void test_foreground_priority_lease_contract() {
+	const wt::WtChunkKey support_key{ 0, 0, 0, 0 };
+	const wt::WtChunkKey old_focus_key{ 1, 0, 0, 0 };
+	const wt::WtChunkKey new_focus_key{ 2, 0, 0, 0 };
+	const std::vector<wt::WtViewerChunkDemand> initial_base{
+		{ support_key, 100, true, true },
+		{ old_focus_key, 200, false, true },
+		{ new_focus_key, 300, false, true },
+	};
+	wt::WtForegroundPriorityLeaseSet leases;
+	check(
+		wt::kWtCommittedEditPriority > wt::kWtPlayerSupportPriority &&
+		wt::kWtPlayerSupportPriority > wt::kWtInteractionFocusPriority,
+		"foreground priority class order is invalid"
+	);
+	check(leases.update({
+		1,
+		1,
+		wt::WtForegroundPriorityClass::PlayerSupport,
+		{ support_key },
+	}) == wt::WtForegroundPriorityStatus::Ok,
+		"player support priority lease was rejected");
+	check(leases.update({
+		2,
+		1,
+		wt::WtForegroundPriorityClass::InteractionFocus,
+		{ old_focus_key },
+	}) == wt::WtForegroundPriorityStatus::Ok,
+		"interaction focus priority lease was rejected");
+	std::vector<wt::WtViewerChunkDemand> effective;
+	wt::WtForegroundPriorityOverlayResult overlay = leases.apply(
+		initial_base,
+		effective
+	);
+	check(
+		effective.size() == initial_base.size() &&
+		effective[0].priority == wt::kWtPlayerSupportPriority &&
+		effective[1].priority == wt::kWtInteractionFocusPriority &&
+		effective[2].priority == initial_base[2].priority &&
+		effective[0].collision_required ==
+			initial_base[0].collision_required &&
+		effective[1].visual_required == initial_base[1].visual_required &&
+		overlay.requested_keys == 2 && overlay.matched_keys == 2 &&
+		overlay.missing_keys == 0 && overlay.changed_priorities == 2,
+		"foreground overlay changed topology, flags, or wrong priorities"
+	);
+	check(leases.update({
+		2,
+		2,
+		wt::WtForegroundPriorityClass::InteractionFocus,
+		{ new_focus_key },
+	}) == wt::WtForegroundPriorityStatus::Ok,
+		"interaction focus move was rejected");
+	overlay = leases.apply(initial_base, effective);
+	check(
+		effective[1].priority == initial_base[1].priority &&
+		effective[2].priority == wt::kWtInteractionFocusPriority,
+		"interaction focus move did not restore the old base priority"
+	);
+	const std::vector<wt::WtViewerChunkDemand> updated_base{
+		{ support_key, 400, true, true },
+		{ old_focus_key, 500, false, true },
+		{ new_focus_key, 600, false, true },
+	};
+	check(leases.update({
+		2,
+		3,
+		wt::WtForegroundPriorityClass::InteractionFocus,
+		{},
+	}) == wt::WtForegroundPriorityStatus::Ok,
+		"interaction focus release was rejected");
+	leases.apply(updated_base, effective);
+	check(
+		effective[1].priority == updated_base[1].priority &&
+		effective[2].priority == updated_base[2].priority,
+		"focus release did not restore the latest viewer-plan priorities"
+	);
+	check(leases.update({
+		2,
+		2,
+		wt::WtForegroundPriorityClass::InteractionFocus,
+		{ old_focus_key },
+	}) == wt::WtForegroundPriorityStatus::StaleRevision,
+		"stale foreground priority revision was accepted");
+	leases.apply(updated_base, effective);
+	check(
+		effective[1].priority == updated_base[1].priority &&
+		effective[2].priority == updated_base[2].priority,
+		"stale foreground request mutated effective priorities"
+	);
+	std::printf(
+		"FOREGROUND_PRIORITY_LEASE_PASS sources=%zu active=%zu support=%zu focus=%zu\n",
+		leases.source_count(),
+		leases.active_source_count(),
+		leases.active_key_count(
+			wt::WtForegroundPriorityClass::PlayerSupport
+		),
+		leases.active_key_count(
+			wt::WtForegroundPriorityClass::InteractionFocus
+		)
+	);
+}
+
+void test_foreground_priority_runtime_contract() {
+	FixtureRoot fixture;
+	std::filesystem::path world_path;
+	check(wtt::wt_write_production_streaming_fixture(
+		fixture.path, 7003, 12, world_path
+	), "foreground runtime fixture write failed");
+	wt::WtAsyncStorageService storage({
+		16, 16, wt::kWtMaximumContainerSize
+	});
+	check(storage.open(world_path, fixture.path) ==
+		wt::WtAsyncStorageStatus::Ok,
+		"foreground runtime fixture open failed");
+	wt::WtRuntimeConfig config;
+	config.active_chunk_capacity = 8;
+	config.viewer_capacity = 1;
+	config.demand_capacity_per_viewer = 125;
+	config.storage_request_capacity = 16;
+	config.storage_completion_capacity = 16;
+	config.encoded_page_entry_capacity = 8;
+	config.decoded_page_entry_capacity = 8;
+	config.mesh_entry_capacity = 8;
+	config.render_entry_capacity = 8;
+	config.collision_entry_capacity = 8;
+	config.collision_activation_distance = 0.0;
+	config.collision_deactivation_distance = 0.0;
+	wt::WtReadOnlyWorldRuntime runtime(config, storage);
+	check(runtime.valid(), "foreground runtime configuration rejected");
+	check(runtime.begin_causal_trace(),
+		"foreground runtime causal trace start failed");
+	check(runtime.update_viewer(viewer(1, 1, 8.0, 8.0), 1) ==
+		wt::WtReadOnlyRuntimeStatus::Ok,
+		"foreground runtime viewer update rejected");
+	check(runtime.update_foreground_priority_lease({
+		1,
+		1,
+		wt::WtForegroundPriorityClass::PlayerSupport,
+		{ { 0, 0, 0, 0 } },
+	}) == wt::WtReadOnlyRuntimeStatus::Ok,
+		"foreground runtime support lease rejected");
+	check(runtime.update_foreground_priority_lease({
+		2,
+		1,
+		wt::WtForegroundPriorityClass::InteractionFocus,
+		{ { 1, 0, 0, 0 } },
+	}) == wt::WtReadOnlyRuntimeStatus::Ok,
+		"foreground runtime focus lease rejected");
+	std::atomic<wt::WtReadOnlyRuntimeStatus> run_status{
+		wt::WtReadOnlyRuntimeStatus::Ok
+	};
+	std::thread worker([&]() { run_status.store(runtime.run()); });
+	PublicationCounts counts;
+	std::vector<std::uint8_t> evidence;
+	check(collect_until(runtime, counts, 3, 1, evidence),
+		"foreground runtime pages did not publish");
+	check(runtime.update_foreground_priority_lease({
+		2,
+		2,
+		wt::WtForegroundPriorityClass::InteractionFocus,
+		{ { -1, 0, 0, 0 } },
+	}) == wt::WtReadOnlyRuntimeStatus::Ok,
+		"foreground runtime focus move rejected");
+	const auto deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(2);
+	while (std::chrono::steady_clock::now() < deadline) {
+		const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+		if (metrics.foreground_priority_updates >= 3 &&
+			metrics.foreground_priority_active_sources == 2 &&
+			metrics.foreground_priority_support_keys == 1 &&
+			metrics.foreground_priority_focus_keys == 1) {
+			break;
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+	std::printf(
+		"FOREGROUND_RUNTIME_METRICS updates=%llu active=%llu support=%llu focus=%llu changed=%llu matched=%llu missing=%llu\n",
+		static_cast<unsigned long long>(metrics.foreground_priority_updates),
+		static_cast<unsigned long long>(
+			metrics.foreground_priority_active_sources
+		),
+		static_cast<unsigned long long>(
+			metrics.foreground_priority_support_keys
+		),
+		static_cast<unsigned long long>(
+			metrics.foreground_priority_focus_keys
+		),
+		static_cast<unsigned long long>(
+			metrics.foreground_priority_changed_priorities
+		),
+		static_cast<unsigned long long>(
+			metrics.foreground_priority_matched_keys
+		),
+		static_cast<unsigned long long>(
+			metrics.foreground_priority_missing_keys
+		)
+	);
+	check(
+		metrics.foreground_priority_updates == 3 &&
+		metrics.foreground_priority_active_sources == 2 &&
+		metrics.foreground_priority_support_keys == 1 &&
+		metrics.foreground_priority_focus_keys == 1 &&
+		metrics.foreground_priority_changed_priorities >= 2,
+		"foreground runtime metrics did not expose active leases"
+	);
+	runtime.end_causal_trace();
+	const wt::WtCausalTraceSnapshot trace = runtime.causal_trace_snapshot(
+		0, 1024
+	);
+	bool support_priority_seen = false;
+	bool new_focus_priority_seen = false;
+	bool old_focus_demoted = false;
+	for (const wt::WtCausalTraceEvent &event : trace.events) {
+		if (!event.has_chunk) continue;
+		if (event.key == wt::WtChunkKey{ 0, 0, 0, 0 }) {
+			if ((event.kind == wt::WtCausalTraceEventKind::ChunkDemandAccepted &&
+					event.auxiliary == static_cast<std::uint64_t>(
+						wt::kWtPlayerSupportPriority
+					)) ||
+				(event.kind ==
+						wt::WtCausalTraceEventKind::ForegroundPriorityChanged &&
+					event.status == wt::kWtPlayerSupportPriority)) {
+				support_priority_seen = true;
+			}
+		}
+		if (event.kind !=
+				wt::WtCausalTraceEventKind::ForegroundPriorityChanged) {
+			continue;
+		}
+		if (event.key == wt::WtChunkKey{ -1, 0, 0, 0 } &&
+			event.status == wt::kWtInteractionFocusPriority) {
+			new_focus_priority_seen = true;
+		}
+		if (event.key == wt::WtChunkKey{ 1, 0, 0, 0 } &&
+			event.status < wt::kWtInteractionFocusPriority) {
+			old_focus_demoted = true;
+		}
+	}
+	check(support_priority_seen && new_focus_priority_seen &&
+		old_focus_demoted,
+		"foreground runtime trace did not prove promotion and demotion");
+	runtime.request_stop();
+	worker.join();
+	storage.close();
+	check(run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok,
+		"foreground priority runtime did not stop cleanly");
+}
+
 } // namespace
 
 int main() {
 	test_g8_2000x2000_window_planning();
 	test_visibility_coverage_priority_generation_contract();
+	test_foreground_priority_lease_contract();
+	test_foreground_priority_runtime_contract();
 
 	FixtureRoot fixture;
 	std::filesystem::path world_path;

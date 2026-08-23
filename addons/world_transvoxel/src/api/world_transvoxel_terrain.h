@@ -166,6 +166,12 @@ public:
 		std::int64_t viewer_id,
 		std::int64_t revision
 	);
+	bool update_foreground_priority_lease(
+		std::int64_t source_id,
+		std::int64_t revision,
+		std::int64_t priority_class,
+		const godot::Array &chunk_coordinates
+	);
 	godot::Ref<WorldTransvoxelChunkState> query_chunk_state(
 		const godot::Vector3i &chunk_coordinate,
 		std::int64_t lod

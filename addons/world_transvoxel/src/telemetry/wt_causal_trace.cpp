@@ -203,6 +203,12 @@ const char *wt_causal_trace_event_kind_name(
 			return "scheduler_job_dequeued";
 		case WtCausalTraceEventKind::PageMeshingOwnershipEstablished:
 			return "page_meshing_ownership_established";
+		case WtCausalTraceEventKind::ForegroundPriorityLeaseApplied:
+			return "foreground_priority_lease_applied";
+		case WtCausalTraceEventKind::ForegroundPriorityLeaseRejected:
+			return "foreground_priority_lease_rejected";
+		case WtCausalTraceEventKind::ForegroundPriorityChanged:
+			return "foreground_priority_changed";
 	}
 	return "unknown";
 }

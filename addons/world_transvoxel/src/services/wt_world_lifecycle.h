@@ -78,6 +78,9 @@ public:
 	WtReadOnlyRuntimeStatus request_visibility_coverage_priority_batch(
 		const std::vector<WtVisibilityCoveragePriorityRequest> &requests
 	);
+	WtReadOnlyRuntimeStatus update_foreground_priority_lease(
+		const WtForegroundPriorityLeaseRequest &request
+	);
 	WtReadOnlyRuntimeStatus request_authoritative_sample(
 		const WtGridPoint &point,
 		std::uint8_t lod,

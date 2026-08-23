@@ -52,6 +52,9 @@ enum class WtCausalTraceEventKind : std::uint16_t {
 	SchedulerJobPriorityObserved,
 	SchedulerJobDequeued,
 	PageMeshingOwnershipEstablished,
+	ForegroundPriorityLeaseApplied,
+	ForegroundPriorityLeaseRejected,
+	ForegroundPriorityChanged,
 };
 
 enum class WtVisibilityCoveragePriorityOutcome : std::int64_t {
