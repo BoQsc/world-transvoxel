@@ -16,6 +16,21 @@
 namespace world_transvoxel {
 namespace {
 
+template <std::size_t Size>
+godot::PackedInt32Array to_packed_int32(
+	const std::array<std::uint32_t, Size> &values
+) {
+	godot::PackedInt32Array result;
+	result.resize(static_cast<std::int64_t>(Size));
+	for (std::size_t index = 0; index < Size; ++index) {
+		result.set(
+			static_cast<std::int64_t>(index),
+			static_cast<std::int32_t>(values[index])
+		);
+	}
+	return result;
+}
+
 constexpr std::array<std::uint8_t, 9> kTransitionCaseBitSamples = {
 	0, 1, 2, 5, 8, 7, 6, 3, 4
 };
@@ -512,6 +527,10 @@ void WorldTransvoxelCellProbe::_bind_methods() {
 		&WorldTransvoxelCellProbe::get_backend_identity
 	);
 	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_gpu_meshing_tables"),
+		&WorldTransvoxelCellProbe::get_gpu_meshing_tables
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD(
 			"mesh_regular_cell",
 			"densities",
@@ -566,6 +585,24 @@ godot::Dictionary WorldTransvoxelCellProbe::get_backend_identity() const {
 	result["transition_case_count"] =
 		static_cast<std::int64_t>(info.transition_case_count);
 	result["render_authority"] = "NATIVE_TRANSVOXEL_BACKEND_AUTHORITATIVE";
+	return result;
+}
+
+godot::Dictionary WorldTransvoxelCellProbe::get_gpu_meshing_tables() const {
+	const WtMeshingBackendInfo &info =
+		wt_get_transvoxel_mit_backend().get_info();
+	const WtTransvoxelTablePack &pack = wt_get_transvoxel_mit_table_pack();
+	godot::Dictionary result;
+	result["schema"] = "world_transvoxel.cell_probe.gpu_meshing_tables.v1";
+	result["backend_id"] = info.id;
+	result["backend_upstream_revision"] = info.upstream_revision;
+	result["authority"] = "NATIVE_TRANSVOXEL_BACKEND_TABLE_EXPORT";
+	result["regular_cell_class"] = to_packed_int32(pack.regular_cell_class);
+	result["regular_cell_data"] = to_packed_int32(pack.regular_cell_data);
+	result["regular_vertex_data"] = to_packed_int32(pack.regular_vertex_data);
+	result["transition_cell_class"] = to_packed_int32(pack.transition_cell_class);
+	result["transition_cell_data"] = to_packed_int32(pack.transition_cell_data);
+	result["transition_vertex_data"] = to_packed_int32(pack.transition_vertex_data);
 	return result;
 }
 

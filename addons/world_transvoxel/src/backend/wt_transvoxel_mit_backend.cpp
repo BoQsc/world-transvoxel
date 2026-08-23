@@ -461,4 +461,42 @@ const WtMeshingBackend &wt_get_transvoxel_mit_backend() noexcept {
 	return kBackend;
 }
 
+const WtTransvoxelTablePack &wt_get_transvoxel_mit_table_pack() noexcept {
+	static const WtTransvoxelTablePack pack = [] {
+		WtTransvoxelTablePack result;
+		for (std::size_t case_index = 0; case_index < 256; ++case_index) {
+			result.regular_cell_class[case_index] = regularCellClass[case_index];
+			for (std::size_t vertex_index = 0; vertex_index < 12; ++vertex_index) {
+				result.regular_vertex_data[case_index * 12 + vertex_index] =
+					regularVertexData[case_index][vertex_index];
+			}
+		}
+		for (std::size_t class_index = 0; class_index < 16; ++class_index) {
+			result.regular_cell_data[class_index * 16] =
+				regularCellData[class_index].geometryCounts;
+			for (std::size_t index = 0; index < 15; ++index) {
+				result.regular_cell_data[class_index * 16 + index + 1] =
+					regularCellData[class_index].vertexIndex[index];
+			}
+		}
+		for (std::size_t case_index = 0; case_index < 512; ++case_index) {
+			result.transition_cell_class[case_index] = transitionCellClass[case_index];
+			for (std::size_t vertex_index = 0; vertex_index < 12; ++vertex_index) {
+				result.transition_vertex_data[case_index * 12 + vertex_index] =
+					transitionVertexData[case_index][vertex_index];
+			}
+		}
+		for (std::size_t class_index = 0; class_index < 56; ++class_index) {
+			result.transition_cell_data[class_index * 37] =
+				static_cast<std::uint32_t>(transitionCellData[class_index].geometryCounts);
+			for (std::size_t index = 0; index < 36; ++index) {
+				result.transition_cell_data[class_index * 37 + index + 1] =
+					transitionCellData[class_index].vertexIndex[index];
+			}
+		}
+		return result;
+	}();
+	return pack;
+}
+
 } // namespace world_transvoxel

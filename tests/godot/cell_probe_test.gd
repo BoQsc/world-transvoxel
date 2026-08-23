@@ -25,6 +25,32 @@ func _run_test() -> void:
 	if not bool(identity.get("available", false)):
 		_fail("backend was not available")
 		return
+	var tables: Dictionary = probe.call("get_gpu_meshing_tables")
+	if tables.get("schema", "") != "world_transvoxel.cell_probe.gpu_meshing_tables.v1":
+		_fail("unexpected GPU meshing table schema")
+		return
+	if tables.get("authority", "") != "NATIVE_TRANSVOXEL_BACKEND_TABLE_EXPORT":
+		_fail("GPU meshing tables were not marked as a native export")
+		return
+	var table_sizes := {
+		"regular_cell_class": 256,
+		"regular_cell_data": 16 * 16,
+		"regular_vertex_data": 256 * 12,
+		"transition_cell_class": 512,
+		"transition_cell_data": 56 * 37,
+		"transition_vertex_data": 512 * 12,
+	}
+	for table_name in table_sizes:
+		var values := PackedInt32Array(tables.get(table_name, PackedInt32Array()))
+		if values.size() != int(table_sizes[table_name]):
+			_fail("unexpected %s size" % table_name)
+			return
+	if PackedInt32Array(tables["regular_cell_class"])[1] != 1 or \
+			PackedInt32Array(tables["regular_vertex_data"])[12] != 0x6201 or \
+			PackedInt32Array(tables["transition_cell_class"])[3] != 0x84 or \
+			PackedInt32Array(tables["transition_vertex_data"])[12] != 0x2301:
+		_fail("GPU meshing table sentinels differ from the native backend")
+		return
 
 	var densities := PackedFloat32Array([-1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
 	var gradients := PackedVector3Array()

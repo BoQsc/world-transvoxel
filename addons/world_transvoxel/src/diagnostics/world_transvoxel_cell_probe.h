@@ -21,6 +21,7 @@ protected:
 
 public:
 	godot::Dictionary get_backend_identity() const;
+	godot::Dictionary get_gpu_meshing_tables() const;
 	godot::Dictionary mesh_regular_cell(
 		const godot::PackedFloat32Array &densities,
 		const godot::PackedVector3Array &gradients,
