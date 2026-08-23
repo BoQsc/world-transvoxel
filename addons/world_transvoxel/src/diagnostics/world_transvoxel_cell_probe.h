@@ -1,6 +1,7 @@
 #pragma once
 
 #include <godot_cpp/classes/ref_counted.hpp>
+#include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/callable.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/packed_float32_array.hpp>
@@ -48,6 +49,25 @@ public:
 		std::int64_t cached_transition_mask,
 		double isovalue,
 		double transition_width_ratio
+	) const;
+	godot::Dictionary capture_chunk_cells_with_callable(
+		const godot::Callable &sample_callable,
+		const godot::Vector3i &chunk_coordinate,
+		std::int64_t lod,
+		std::int64_t transition_mask,
+		std::int64_t cached_transition_mask,
+		double isovalue,
+		double transition_width_ratio
+	) const;
+	godot::Dictionary finalize_chunk_with_gpu_cells_callable(
+		const godot::Callable &sample_callable,
+		const godot::Vector3i &chunk_coordinate,
+		std::int64_t lod,
+		std::int64_t transition_mask,
+		std::int64_t cached_transition_mask,
+		double isovalue,
+		double transition_width_ratio,
+		const godot::Array &gpu_cells
 	) const;
 };
 

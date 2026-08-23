@@ -1,4 +1,5 @@
 #include "backend/wt_transvoxel_mit_backend.h"
+#include "diagnostics/wt_gpu_meshing_differential_backend.h"
 #include "meshing/wt_chunk_mesh_finalize.h"
 #include "meshing/wt_chunk_mesher.h"
 #include "wt_m2_mesh_test_support.h"
@@ -901,6 +902,63 @@ void test_bounded_initial_mesh_reservation(
 	);
 }
 
+void test_recorded_gpu_cell_replay() {
+	const wt::WtMeshingBackend &authority = wt::wt_get_transvoxel_mit_backend();
+	wt::WtRecordingMeshingBackend recording(authority);
+	wt::WtChunkMeshingScratch scratch;
+	wt::WtChunkMeshResult reference;
+	FlatYSource source;
+	const wt::WtChunkMeshingInput input = {
+		{ 0, 0, 0, 1 },
+		wt::wt_face_bit(wt::WtChunkFace::PositiveZ),
+		wt::wt_face_bit(wt::WtChunkFace::PositiveZ),
+		0.0F,
+		0.25F,
+	};
+	check(
+		wt::WtChunkMesher(recording).mesh(input, source, reference, scratch) ==
+			wt::WtChunkMeshingStatus::Ok,
+		"recording backend chunk mesh failed"
+	);
+	check(!recording.overflowed(), "recording backend overflowed");
+	check(
+		recording.records().size() == 4352,
+		"recording backend cell inventory changed"
+	);
+
+	std::vector<wt::WtReplayMeshingCell> replay_cells;
+	replay_cells.reserve(recording.records().size());
+	for (const wt::WtRecordedMeshingCell &record : recording.records()) {
+		replay_cells.push_back(wt::wt_make_replay_meshing_cell(record));
+	}
+	wt::WtReplayMeshingBackend replay(authority, replay_cells);
+	wt::WtChunkMeshResult replayed;
+	check(
+		wt::WtChunkMesher(replay).mesh(input, source, replayed, scratch) ==
+			wt::WtChunkMeshingStatus::Ok,
+		"recorded cell replay failed"
+	);
+	check(replay.complete(), "recorded cell replay did not consume exactly all cells");
+	std::uint64_t reference_hash = 14695981039346656037ULL;
+	std::uint64_t replay_hash = 14695981039346656037ULL;
+	hash_result(reference_hash, reference);
+	hash_result(replay_hash, replayed);
+	check(reference_hash == replay_hash, "recorded cell replay changed finalized chunk");
+
+	replay_cells.pop_back();
+	wt::WtReplayMeshingBackend truncated(authority, replay_cells);
+	wt::WtChunkMeshResult rejected;
+	check(
+		wt::WtChunkMesher(truncated).mesh(input, source, rejected, scratch) ==
+			wt::WtChunkMeshingStatus::CellBackendFailure,
+		"truncated cell replay did not fail closed"
+	);
+	check(
+		truncated.failure() == wt::WtReplayMeshingFailure::CellSequenceExhausted,
+		"truncated cell replay reported the wrong failure"
+	);
+}
+
 } // namespace
 
 int main() {
@@ -965,6 +1023,7 @@ int main() {
 	test_multiresolution_vertices_match_lod0(mesher, scratch);
 	test_errors(mesher, scratch);
 	test_bounded_initial_mesh_reservation(mesher, scratch);
+	test_recorded_gpu_cell_replay();
 
 	constexpr std::uint64_t expected_hash = 0xf3ebfec883e2de19ULL;
 	check(hash == expected_hash, "M2 chunk aggregate hash mismatch");
@@ -974,6 +1033,6 @@ int main() {
 		return 1;
 	}
 	std::printf("M2_CHUNK_MESH_PASS same_lod=5 topology_windows=1 transition_faces=6 edge_galleries=12 "
-		"corner_galleries=9 convex_refined_corners=1 winding=outward\n");
+		"corner_galleries=9 convex_refined_corners=1 gpu_cell_replay=1 winding=outward\n");
 	return 0;
 }

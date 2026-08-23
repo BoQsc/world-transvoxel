@@ -150,8 +150,70 @@ func _run_test() -> void:
 		_fail("chunk render/backend index arrays differ in length")
 		return
 
+	var capture: Dictionary = probe.call(
+		"capture_chunk_cells_with_callable",
+		Callable(self, "_chunk_sample"),
+		Vector3i.ZERO,
+		1,
+		1 << 5,
+		1 << 5,
+		0.0,
+		0.25
+	)
+	if capture.get("schema", "") != "world_transvoxel.cell_probe.chunk_cell_capture.v1" \
+			or not bool(capture.get("ok", false)):
+		_fail("chunk cell capture failed: %s" % str(capture.get("error", "")))
+		return
+	var cell_batch: Dictionary = capture.get("cell_batch", {})
+	if cell_batch.get("schema", "") != "world_transvoxel.cell_probe.chunk_cell_batch.v1" \
+			or int(cell_batch.get("cell_count", 0)) != 4352 \
+			or int(cell_batch.get("regular_cell_count", 0)) != 4096 \
+			or int(cell_batch.get("transition_cell_count", 0)) != 256:
+		_fail("captured chunk cell inventory changed")
+		return
+	var authority_cells: Array = cell_batch.get("authority_cells", [])
+	var replayed: Dictionary = probe.call(
+		"finalize_chunk_with_gpu_cells_callable",
+		Callable(self, "_chunk_sample"),
+		Vector3i.ZERO,
+		1,
+		1 << 5,
+		1 << 5,
+		0.0,
+		0.25,
+		authority_cells
+	)
+	if replayed.get("schema", "") != \
+			"world_transvoxel.cell_probe.gpu_replay_chunk_mesh.v1" \
+			or not bool(replayed.get("ok", false)) \
+			or not bool(replayed.get("replay_complete", false)) \
+			or not bool(replayed.get("gpu_cell_payload_used", false)) \
+			or bool(replayed.get("cpu_cell_geometry_fallback_used", true)):
+		_fail("captured cell replay failed: %s" % str(replayed.get("replay_failure", "")))
+		return
+	if not _chunk_mesh_equal(capture.get("cpu_chunk", {}), replayed):
+		_fail("captured cell replay changed finalized chunk geometry")
+		return
+	var truncated := authority_cells.duplicate()
+	truncated.resize(truncated.size() - 1)
+	var rejected: Dictionary = probe.call(
+		"finalize_chunk_with_gpu_cells_callable",
+		Callable(self, "_chunk_sample"),
+		Vector3i.ZERO,
+		1,
+		1 << 5,
+		1 << 5,
+		0.0,
+		0.25,
+		truncated
+	)
+	if bool(rejected.get("ok", false)) \
+			or rejected.get("replay_failure", "") != "CellSequenceExhausted":
+		_fail("truncated captured cell replay did not fail closed")
+		return
+
 	print(
-		"CELL_PROBE_TEST_PASS regular_vertices=%d regular_triangles=%d transition_vertices=%d transition_triangles=%d chunk_vertices=%d chunk_triangles=%d backend=%s" %
+		"CELL_PROBE_TEST_PASS regular_vertices=%d regular_triangles=%d transition_vertices=%d transition_triangles=%d chunk_vertices=%d chunk_triangles=%d replay_cells=%d backend=%s" %
 		[
 			int(mesh.get("vertex_count", 0)),
 			int(mesh.get("triangle_count", 0)),
@@ -159,6 +221,7 @@ func _run_test() -> void:
 			int(transition_mesh.get("triangle_count", 0)),
 			int(regular_chunk.get("vertex_count", 0)),
 			int(regular_chunk.get("triangle_count", 0)),
+			int(cell_batch.get("cell_count", 0)),
 			str(identity.get("backend_id", "")),
 		]
 	)
@@ -173,6 +236,14 @@ func _chunk_sample(point: Vector3i) -> Dictionary:
 		"material": 1 if density < 0.0 else 0,
 		"material_authored": true,
 	}
+
+
+func _chunk_mesh_equal(left: Dictionary, right: Dictionary) -> bool:
+	if left.get("regular", {}) != right.get("regular", {}):
+		return false
+	var left_transitions: Array = left.get("transitions", [])
+	var right_transitions: Array = right.get("transitions", [])
+	return left_transitions == right_transitions
 
 
 func _fail(message: String) -> void:
