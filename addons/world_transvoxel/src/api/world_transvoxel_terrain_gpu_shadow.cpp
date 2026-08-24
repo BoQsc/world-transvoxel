@@ -193,6 +193,9 @@ godot::Dictionary WorldTransvoxelTerrain::get_gpu_meshing_shadow_metrics() const
 	result["in_flight_requests"] = static_cast<std::int64_t>(metrics.in_flight_requests);
 	result["captured_requests"] = static_cast<std::int64_t>(metrics.captured_requests);
 	result["capacity_rejections"] = static_cast<std::int64_t>(metrics.capacity_rejections);
+	result["superseded_queued_requests"] = static_cast<std::int64_t>(
+		metrics.superseded_queued_requests
+	);
 	result["matched_results"] = static_cast<std::int64_t>(metrics.matched_results);
 	result["mismatched_results"] = static_cast<std::int64_t>(metrics.mismatched_results);
 	result["stale_results"] = static_cast<std::int64_t>(metrics.stale_results);

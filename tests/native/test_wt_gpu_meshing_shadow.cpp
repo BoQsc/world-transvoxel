@@ -63,6 +63,52 @@ int main() {
 		"matching completion was rejected"
 	);
 
+	require(queue.begin(2), "freshness queue restart failed");
+	require(queue.capture(capture_for(15, 0)), "freshness in-flight capture failed");
+	WtGpuMeshingShadowRequest freshness_in_flight;
+	require(queue.pop(freshness_in_flight), "freshness request did not enter flight");
+	require(queue.capture(capture_for(16, 0)), "freshness queued capture failed");
+	require(
+		queue.capture(capture_for(17, 1)),
+		"newer world revision did not replace queued validation work"
+	);
+	WtGpuMeshingShadowRequest freshest_request;
+	require(queue.pop(freshest_request), "freshest queued request did not pop");
+	require(
+		freshest_request.job.world_revision == 1 &&
+			freshest_request.job.generation.value == 17,
+		"freshness replacement retained the wrong request"
+	);
+	const WtGpuMeshingShadowCompletion superseded_in_flight = queue.complete(
+		freshness_in_flight.request_id,
+		identity_for(freshness_in_flight),
+		7,
+		1,
+		true,
+		{}
+	);
+	require(
+		superseded_in_flight.status == WtGpuMeshingShadowCompletionStatus::Stale,
+		"older in-flight revision was not stale"
+	);
+	const WtGpuMeshingShadowCompletion freshest_completion = queue.complete(
+		freshest_request.request_id,
+		identity_for(freshest_request),
+		7,
+		1,
+		true,
+		{}
+	);
+	require(
+		freshest_completion.status == WtGpuMeshingShadowCompletionStatus::Matched,
+		"freshness replacement did not complete"
+	);
+	const WtGpuMeshingShadowMetrics freshness_metrics = queue.metrics();
+	require(
+		freshness_metrics.superseded_queued_requests == 1,
+		"queued supersession metric was not recorded"
+	);
+
 	require(queue.begin(2), "queue restart failed");
 	require(queue.capture(capture_for(20)), "identity capture failed");
 	WtGpuMeshingShadowRequest identity_request;
@@ -132,6 +178,7 @@ int main() {
 	queue.end();
 	require(!queue.metrics().enabled, "queue remained enabled after end");
 
-	std::cout << "GPU_MESHING_SHADOW_TEST_PASS capacity=2 stale=1 mismatched=1\n";
+	std::cout << "GPU_MESHING_SHADOW_TEST_PASS capacity=2 stale=1 mismatched=1 "
+		"queued_superseded=1\n";
 	return 0;
 }

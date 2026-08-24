@@ -59,6 +59,7 @@ struct WtGpuMeshingShadowMetrics {
 	std::size_t in_flight_requests = 0;
 	std::uint64_t captured_requests = 0;
 	std::uint64_t capacity_rejections = 0;
+	std::uint64_t superseded_queued_requests = 0;
 	std::uint64_t matched_results = 0;
 	std::uint64_t mismatched_results = 0;
 	std::uint64_t stale_results = 0;
@@ -87,6 +88,10 @@ private:
 	static bool identity_matches(
 		const WtGpuMeshingShadowRequest &request,
 		const WtGpuMeshingShadowIdentity &identity
+	) noexcept;
+	static bool supersedes_queued(
+		const WtGpuMeshingShadowCapture &capture,
+		const WtGpuMeshingShadowRequest &queued
 	) noexcept;
 	bool is_latest_locked(const WtGpuMeshingShadowRequest &request) const noexcept;
 

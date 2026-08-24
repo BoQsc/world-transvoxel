@@ -40,12 +40,26 @@ bool WtGpuMeshingShadowQueue::capture(WtGpuMeshingShadowCapture capture) {
 	if (capture.records.empty()) return false;
 	std::lock_guard<std::mutex> lock(mutex_);
 	if (!enabled_) return false;
-	if (queued_.size() + in_flight_.size() >= capacity_) {
-		++metrics_.capacity_rejections;
-		return false;
-	}
 	WtGpuMeshingShadowRequest request;
 	static_cast<WtGpuMeshingShadowCapture &>(request) = std::move(capture);
+	if (queued_.size() + in_flight_.size() >= capacity_) {
+		const auto replace = std::find_if(
+			queued_.begin(), queued_.end(),
+			[&request](const WtGpuMeshingShadowRequest &queued) {
+				return supersedes_queued(request, queued);
+			}
+		);
+		if (replace == queued_.end()) {
+			++metrics_.capacity_rejections;
+			return false;
+		}
+		request.request_id = next_request_id_++;
+		*replace = std::move(request);
+		++metrics_.captured_requests;
+		++metrics_.superseded_queued_requests;
+		metrics_.queued_requests = queued_.size();
+		return true;
+	}
 	request.request_id = next_request_id_++;
 	queued_.push_back(std::move(request));
 	++metrics_.captured_requests;
@@ -137,6 +151,18 @@ bool WtGpuMeshingShadowQueue::identity_matches(
 		request.job.world_revision == identity.world_revision &&
 		request.transition_mask == identity.transition_mask &&
 		request.surface == identity.surface;
+}
+
+bool WtGpuMeshingShadowQueue::supersedes_queued(
+	const WtGpuMeshingShadowCapture &capture,
+	const WtGpuMeshingShadowRequest &queued
+) noexcept {
+	if (capture.job.source_revision > queued.job.source_revision) return true;
+	if (capture.job.source_revision < queued.job.source_revision) return false;
+	if (capture.job.world_revision > queued.job.world_revision) return true;
+	if (capture.job.world_revision < queued.job.world_revision) return false;
+	return capture.job.key == queued.job.key &&
+		capture.job.generation.value > queued.job.generation.value;
 }
 
 bool WtGpuMeshingShadowQueue::is_latest_locked(
