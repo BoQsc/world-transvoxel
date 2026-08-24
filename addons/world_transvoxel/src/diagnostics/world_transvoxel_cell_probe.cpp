@@ -1,5 +1,7 @@
 #include "diagnostics/world_transvoxel_cell_probe.h"
 
+#include "diagnostics/wt_gpu_meshing_godot_codec.h"
+
 #include "backend/wt_transvoxel_mit_backend.h"
 #include "diagnostics/wt_gpu_meshing_differential_backend.h"
 #include "meshing/wt_chunk_mesher.h"
@@ -876,6 +878,12 @@ bool parse_gpu_replay_cells(
 }
 
 } // namespace
+
+godot::Dictionary wt_gpu_meshing_shadow_cell_batch(
+	const std::vector<WtRecordedMeshingCell> &records
+) {
+	return captured_chunk_cell_batch(records);
+}
 
 void WorldTransvoxelCellProbe::_bind_methods() {
 	godot::ClassDB::bind_method(

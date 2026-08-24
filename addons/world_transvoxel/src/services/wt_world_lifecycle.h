@@ -35,7 +35,10 @@ enum class WtWorldLifecycleStatus : std::uint8_t {
 
 class WtWorldLifecycleService {
 public:
-	explicit WtWorldLifecycleService(WtRuntimeConfig config);
+	explicit WtWorldLifecycleService(
+		WtRuntimeConfig config,
+		std::shared_ptr<WtGpuMeshingShadowQueue> gpu_meshing_shadow = {}
+	);
 	~WtWorldLifecycleService();
 
 	WtWorldLifecycleService(const WtWorldLifecycleService &) = delete;
@@ -164,6 +167,7 @@ private:
 	std::unique_ptr<WtAsyncStorageService> storage_;
 	std::unique_ptr<WtEditJournalStore> edit_journal_store_;
 	std::unique_ptr<WtReadOnlyWorldRuntime> runtime_;
+	std::shared_ptr<WtGpuMeshingShadowQueue> gpu_meshing_shadow_;
 	std::thread control_thread_;
 };
 

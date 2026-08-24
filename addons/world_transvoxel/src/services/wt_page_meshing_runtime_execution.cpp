@@ -113,6 +113,7 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 	const WtTerrainMeshReadyCallback &terrain_mesh_ready,
 	bool visual_required,
 	const WtMeshExecutionCallback &execution_callback,
+	const WtMeshCellCaptureCallback &cell_capture_callback,
 	PreparedMeshJob &prepared
 ) {
 	const std::uint64_t started = steady_time_ns();
@@ -231,6 +232,7 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 	prepared.visual_required = visual_required;
 	prepared.terrain_mesh_ready = terrain_mesh_ready;
 	prepared.execution_callback = execution_callback;
+	prepared.cell_capture_callback = cell_capture_callback;
 	prepared.dependencies.reserve(record->dependencies.size());
 	for (const Dependency &dependency : record->dependencies) {
 		if (!dependency.page) source_valid = false;
@@ -286,18 +288,42 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		);
 	}
 	completion.mesh = std::make_shared<WtChunkMeshResult>();
-	const bool mesh_ok = source_valid && mesher.mesh(
-		{
-			completion.prepared.job.key,
-			completion.prepared.transition_mask,
-			completion.prepared.cached_transition_mask,
-			0.0F,
-			0.25F,
-		},
-		*source,
-		*completion.mesh,
-		scratch
-	) == WtChunkMeshingStatus::Ok;
+	WtChunkMeshingStatus terrain_status =
+		WtChunkMeshingStatus::SampleSourceFailure;
+	if (source_valid && completion.prepared.cell_capture_callback) {
+		WtRecordingMeshingBackend recording(mesher.backend());
+		terrain_status = WtChunkMesher(recording).mesh(
+			{
+				completion.prepared.job.key,
+				completion.prepared.transition_mask,
+				completion.prepared.cached_transition_mask,
+				0.0F,
+				0.25F,
+			},
+			*source,
+			*completion.mesh,
+			scratch
+		);
+		if (!recording.overflowed()) {
+			completion.terrain_records = recording.take_records();
+		} else {
+			terrain_status = WtChunkMeshingStatus::CellBackendFailure;
+		}
+	} else if (source_valid) {
+		terrain_status = mesher.mesh(
+			{
+				completion.prepared.job.key,
+				completion.prepared.transition_mask,
+				completion.prepared.cached_transition_mask,
+				0.0F,
+				0.25F,
+			},
+			*source,
+			*completion.mesh,
+			scratch
+		);
+	}
+	const bool mesh_ok = terrain_status == WtChunkMeshingStatus::Ok;
 	completion.water_mesh = std::make_shared<WtChunkMeshResult>();
 	bool water_present = false;
 	if (mesh_ok && completion.prepared.visual_required) {
@@ -337,18 +363,42 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 			*source,
 			kWtStaticWaterMaterialId
 		);
-		water_mesh_ok = mesher.mesh(
-			{
-				completion.prepared.job.key,
-				completion.prepared.transition_mask,
-				completion.prepared.cached_transition_mask,
-				0.0F,
-				0.25F,
-			},
-			water_source,
-			*completion.water_mesh,
-			scratch
-		) == WtChunkMeshingStatus::Ok;
+		WtChunkMeshingStatus water_status =
+			WtChunkMeshingStatus::CellBackendFailure;
+		if (completion.prepared.cell_capture_callback) {
+			WtRecordingMeshingBackend recording(mesher.backend());
+			water_status = WtChunkMesher(recording).mesh(
+				{
+					completion.prepared.job.key,
+					completion.prepared.transition_mask,
+					completion.prepared.cached_transition_mask,
+					0.0F,
+					0.25F,
+				},
+				water_source,
+				*completion.water_mesh,
+				scratch
+			);
+			if (!recording.overflowed()) {
+				completion.water_records = recording.take_records();
+			} else {
+				water_status = WtChunkMeshingStatus::CellBackendFailure;
+			}
+		} else {
+			water_status = mesher.mesh(
+				{
+					completion.prepared.job.key,
+					completion.prepared.transition_mask,
+					completion.prepared.cached_transition_mask,
+					0.0F,
+					0.25F,
+				},
+				water_source,
+				*completion.water_mesh,
+				scratch
+			);
+		}
+		water_mesh_ok = water_status == WtChunkMeshingStatus::Ok;
 	} else if (mesh_ok) {
 		completion.water_mesh->key = completion.prepared.job.key;
 		completion.water_mesh->world_origin =
@@ -413,6 +463,27 @@ WtPageMeshingRuntimeService::accept_prepared_mesh_completion(
 		})) {
 		record_time();
 		return WtPageMeshingRuntimeStatus::TerrainMeshReadyCallbackFailure;
+	}
+	if (completion.status == WtPageMeshingRuntimeStatus::Ok &&
+		completion.prepared.cell_capture_callback) {
+		if (!completion.terrain_records.empty()) {
+			completion.prepared.cell_capture_callback({
+				completion.prepared.job,
+				completion.prepared.transition_mask,
+				completion.prepared.cached_transition_mask,
+				WtGpuMeshingShadowSurface::Terrain,
+				std::move(completion.terrain_records),
+			});
+		}
+		if (!completion.water_records.empty()) {
+			completion.prepared.cell_capture_callback({
+				completion.prepared.job,
+				completion.prepared.transition_mask,
+				completion.prepared.cached_transition_mask,
+				WtGpuMeshingShadowSurface::StaticWater,
+				std::move(completion.water_records),
+			});
+		}
 	}
 	for (Dependency &dependency : record->dependencies) {
 		dependency.page.reset();

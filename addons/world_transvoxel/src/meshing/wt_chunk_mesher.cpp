@@ -651,6 +651,10 @@ void WtChunkMeshingScratch::reset_vertices() {
 WtChunkMesher::WtChunkMesher(const WtMeshingBackend &backend) noexcept : backend_(backend) {
 }
 
+const WtMeshingBackend &WtChunkMesher::backend() const noexcept {
+	return backend_;
+}
+
 WtChunkMeshingStatus WtChunkMesher::mesh(
 	const WtChunkMeshingInput &input,
 	const WtChunkSampleSource &source,

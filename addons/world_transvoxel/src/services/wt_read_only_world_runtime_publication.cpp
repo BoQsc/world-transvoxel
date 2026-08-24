@@ -539,6 +539,16 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 						return process_terrain_mesh_completion(completion);
 					};
 			}
+			WtMeshCellCaptureCallback cell_capture_callback;
+			if (gpu_meshing_shadow_ && gpu_meshing_shadow_->enabled()) {
+				const std::shared_ptr<WtGpuMeshingShadowQueue> shadow =
+					gpu_meshing_shadow_;
+				cell_capture_callback = [shadow](
+					WtGpuMeshingShadowCapture capture
+				) {
+					shadow->capture(std::move(capture));
+				};
+			}
 			if (asynchronous_mesh) {
 				const WtMeshExecutionCallback execution_callback =
 					[this](const WtMeshExecutionEvent &event) {
@@ -581,7 +591,8 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 					&storage_,
 					terrain_mesh_ready,
 					application_record.visual_required,
-					execution_callback
+					execution_callback,
+					cell_capture_callback
 				);
 			} else {
 				status = page_runtime_->execute_mesh_job(
@@ -594,7 +605,8 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 					initial_world_revision_,
 					&storage_,
 					terrain_mesh_ready,
-					application_record.visual_required
+					application_record.visual_required,
+					cell_capture_callback
 				);
 			}
 		}

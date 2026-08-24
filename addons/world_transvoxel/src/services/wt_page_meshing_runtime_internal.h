@@ -17,6 +17,7 @@ struct WtPageMeshingRuntimeService::PreparedMeshJob {
 	std::vector<PreparedDependency> dependencies;
 	WtTerrainMeshReadyCallback terrain_mesh_ready;
 	WtMeshExecutionCallback execution_callback;
+	WtMeshCellCaptureCallback cell_capture_callback;
 	std::uint64_t enqueued_time_ns = 0;
 };
 
@@ -24,6 +25,8 @@ struct WtPageMeshingRuntimeService::PreparedMeshCompletion {
 	PreparedMeshJob prepared;
 	std::shared_ptr<WtChunkMeshResult> mesh;
 	std::shared_ptr<WtChunkMeshResult> water_mesh;
+	std::vector<WtRecordedMeshingCell> terrain_records;
+	std::vector<WtRecordedMeshingCell> water_records;
 	WtPageMeshingRuntimeStatus status =
 		WtPageMeshingRuntimeStatus::MeshingFailure;
 	std::uint64_t queue_wait_ns = 0;

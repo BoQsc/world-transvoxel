@@ -72,6 +72,11 @@ WtRecordingMeshingBackend::records() const noexcept {
 	return records_;
 }
 
+std::vector<WtRecordedMeshingCell>
+WtRecordingMeshingBackend::take_records() noexcept {
+	return std::move(records_);
+}
+
 bool WtRecordingMeshingBackend::overflowed() const noexcept {
 	return overflowed_;
 }

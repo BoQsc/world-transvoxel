@@ -23,6 +23,7 @@ namespace world_transvoxel {
 class WtChunkApplicationService;
 class WtGodotCollisionSink;
 class WtGodotRenderSink;
+class WtGpuMeshingShadowQueue;
 class WtM3IntegrationFixture;
 class WtM5ApplicationBenchmarkFixture;
 
@@ -35,6 +36,7 @@ class WorldTransvoxelTerrain : public godot::Node3D {
 protected:
 	static void _bind_methods();
 	static void bind_edit_methods();
+	static void bind_gpu_meshing_shadow_methods();
 	static void bind_metrics_methods();
 	static void bind_query_snapshot_methods();
 
@@ -207,6 +209,16 @@ public:
 	std::int64_t get_render_latency_frames_maximum() const noexcept;
 	std::int64_t get_collision_latency_frames_maximum() const noexcept;
 	godot::Dictionary get_runtime_metrics() const;
+	bool begin_gpu_meshing_shadow(std::int64_t capacity = 3);
+	void end_gpu_meshing_shadow();
+	godot::Dictionary pop_gpu_meshing_shadow_request();
+	godot::Dictionary complete_gpu_meshing_shadow_request(
+		std::int64_t request_id,
+		const godot::Dictionary &identity,
+		bool matched,
+		const godot::String &error
+	);
+	godot::Dictionary get_gpu_meshing_shadow_metrics() const;
 	bool begin_cpu_causal_trace();
 	void end_cpu_causal_trace();
 	godot::Dictionary get_cpu_causal_trace_events(
@@ -278,6 +290,7 @@ private:
 
 	godot::Ref<WorldTransvoxelConfig> configuration_;
 	std::unique_ptr<WtWorldLifecycleService> lifecycle_;
+	std::shared_ptr<WtGpuMeshingShadowQueue> gpu_meshing_shadow_;
 	WtWorldLifecycleState last_notified_state_ =
 		WtWorldLifecycleState::Stopped;
 	godot::String synchronous_world_error_ = "ok";

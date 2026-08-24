@@ -5,11 +5,15 @@
 
 namespace world_transvoxel {
 
-WtWorldLifecycleService::WtWorldLifecycleService(WtRuntimeConfig config) :
+WtWorldLifecycleService::WtWorldLifecycleService(
+	WtRuntimeConfig config,
+	std::shared_ptr<WtGpuMeshingShadowQueue> gpu_meshing_shadow
+) :
 		config_(config),
 		configuration_valid_(
 			wt_validate_runtime_config(config) == WtRuntimeConfigStatus::Ok
-		) {
+		),
+		gpu_meshing_shadow_(std::move(gpu_meshing_shadow)) {
 }
 
 WtWorldLifecycleService::~WtWorldLifecycleService() {
@@ -233,7 +237,8 @@ void WtWorldLifecycleService::control_main() noexcept {
 			runtime_ = std::make_unique<WtReadOnlyWorldRuntime>(
 				config_,
 				*storage_,
-				edit_journal_store_.get()
+				edit_journal_store_.get(),
+				gpu_meshing_shadow_
 			);
 			if (runtime_->valid()) {
 				state_ = WtWorldLifecycleState::Running;

@@ -62,11 +62,13 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::delta_failure_status(
 WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 	WtRuntimeConfig config,
 	WtAsyncStorageService &storage,
-	WtEditJournalStore *edit_journal_store
+	WtEditJournalStore *edit_journal_store,
+	std::shared_ptr<WtGpuMeshingShadowQueue> gpu_meshing_shadow
 ) :
 		config_(config),
 		storage_(storage),
-		edit_journal_store_(edit_journal_store) {
+		edit_journal_store_(edit_journal_store),
+		gpu_meshing_shadow_(std::move(gpu_meshing_shadow)) {
 	if (wt_validate_runtime_config(config_) != WtRuntimeConfigStatus::Ok ||
 		!storage_.is_open()) {
 		last_status_.store(WtReadOnlyRuntimeStatus::InvalidConfiguration);

@@ -160,6 +160,22 @@ Application budgets and metrics:
 - `get_collision_latency_frames_maximum() -> int`
 - `get_runtime_metrics() -> Dictionary`
 
+Opt-in GPU meshing shadow validation:
+
+- `begin_gpu_meshing_shadow(capacity=3) -> bool`
+- `pop_gpu_meshing_shadow_request() -> Dictionary`
+- `complete_gpu_meshing_shadow_request(request_id, identity, matched, error="") -> Dictionary`
+- `get_gpu_meshing_shadow_metrics() -> Dictionary`
+- `end_gpu_meshing_shadow()`
+
+The shadow API records the exact regular and transition cell inputs and CPU
+authority outputs of accepted live terrain and static-water mesh jobs. It is
+bounded to 1-16 requests, is disabled by default, and does not publish GPU
+geometry. Completion identity includes page key, LOD, generation, source and
+world revisions, transition mask, and surface. Changed identity and
+superseded results are rejected. CPU render and collision publication remain
+authoritative. See `docs/contracts/GPU_MESHING_SHADOW_CONTRACT.md`.
+
 The metrics dictionary includes `pending_chunk_retirements`, the number of old
 chunk records/resources retained until the current replacement set is fully
 ready, and `pending_chunk_replacements`, the number of same-key edit

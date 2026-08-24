@@ -1,5 +1,6 @@
 #pragma once
 
+#include "diagnostics/wt_gpu_meshing_shadow.h"
 #include "meshing/wt_chunk_mesher.h"
 #include "services/wt_page_meshing_runtime_owner.h"
 #include "streaming/wt_stream_scheduler.h"
@@ -97,6 +98,8 @@ struct WtMeshExecutionEvent {
 
 using WtMeshExecutionCallback =
 	std::function<void(const WtMeshExecutionEvent &)>;
+using WtMeshCellCaptureCallback =
+	std::function<void(WtGpuMeshingShadowCapture)>;
 
 struct WtPageMeshingRuntimeMetrics {
 	std::uint64_t sample_jobs = 0;
@@ -196,7 +199,8 @@ public:
 		std::uint64_t initial_world_revision = 0,
 		WtAsyncStorageService *authoritative_storage = nullptr,
 		const WtTerrainMeshReadyCallback &terrain_mesh_ready = {},
-		bool visual_required = true
+		bool visual_required = true,
+		const WtMeshCellCaptureCallback &cell_capture_callback = {}
 	);
 	WtPageMeshingRuntimeStatus dispatch_mesh_job(
 		const WtChunkJob &job,
@@ -206,7 +210,8 @@ public:
 		WtAsyncStorageService *authoritative_storage = nullptr,
 		const WtTerrainMeshReadyCallback &terrain_mesh_ready = {},
 		bool visual_required = true,
-		const WtMeshExecutionCallback &execution_callback = {}
+		const WtMeshExecutionCallback &execution_callback = {},
+		const WtMeshCellCaptureCallback &cell_capture_callback = {}
 	);
 	WtPageMeshingRuntimeStatus process_async_mesh_completions(
 		WtStreamScheduler &scheduler,
@@ -336,6 +341,7 @@ private:
 		const WtTerrainMeshReadyCallback &terrain_mesh_ready,
 		bool visual_required,
 		const WtMeshExecutionCallback &execution_callback,
+		const WtMeshCellCaptureCallback &cell_capture_callback,
 		PreparedMeshJob &prepared
 	);
 	static PreparedMeshCompletion execute_prepared_mesh_job(

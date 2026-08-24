@@ -60,6 +60,7 @@ public:
 	) const noexcept override;
 
 	const std::vector<WtRecordedMeshingCell> &records() const noexcept;
+	std::vector<WtRecordedMeshingCell> take_records() noexcept;
 	bool overflowed() const noexcept;
 
 private:

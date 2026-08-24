@@ -2,6 +2,7 @@
 
 #include "backend/wt_transvoxel_mit_backend.h"
 #include "core/wt_version.h"
+#include "diagnostics/wt_gpu_meshing_shadow.h"
 #include "physics/wt_godot_collision_sink.h"
 #include "render/wt_godot_render_sink.h"
 #include "services/wt_chunk_application.h"
@@ -17,6 +18,7 @@
 namespace world_transvoxel {
 
 WorldTransvoxelTerrain::WorldTransvoxelTerrain() {
+	gpu_meshing_shadow_ = std::make_shared<WtGpuMeshingShadowQueue>();
 	application_ = std::make_unique<WtChunkApplicationService>(256, 128, 128);
 	render_sink_ = std::make_unique<WtGodotRenderSink>(*this);
 	collision_sink_ = std::make_unique<WtGodotCollisionSink>(*this);
@@ -258,6 +260,7 @@ void WorldTransvoxelTerrain::_bind_methods() {
 		&WorldTransvoxelTerrain::get_world_page_count
 	);
 	bind_edit_methods();
+	bind_gpu_meshing_shadow_methods();
 	bind_metrics_methods();
 	bind_query_snapshot_methods();
 	godot::ClassDB::bind_method(

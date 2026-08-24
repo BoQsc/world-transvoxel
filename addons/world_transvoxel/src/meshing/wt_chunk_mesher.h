@@ -162,6 +162,7 @@ public:
 		WtChunkMeshResult &output,
 		WtChunkMeshingScratch &scratch
 	) const;
+	const WtMeshingBackend &backend() const noexcept;
 
 private:
 	const WtMeshingBackend &backend_;

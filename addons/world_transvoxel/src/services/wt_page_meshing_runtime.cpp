@@ -516,7 +516,8 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 	std::uint64_t initial_world_revision,
 	WtAsyncStorageService *authoritative_storage,
 	const WtTerrainMeshReadyCallback &terrain_mesh_ready,
-	bool visual_required
+	bool visual_required,
+	const WtMeshCellCaptureCallback &cell_capture_callback
 ) {
 	PreparedMeshJob prepared;
 	const WtPageMeshingRuntimeStatus prepare_status = prepare_mesh_job(
@@ -528,6 +529,7 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 		terrain_mesh_ready,
 		visual_required,
 		{},
+		cell_capture_callback,
 		prepared
 	);
 	if (prepare_status != WtPageMeshingRuntimeStatus::Ok) {
@@ -555,7 +557,8 @@ WtPageMeshingRuntimeService::dispatch_mesh_job(
 	WtAsyncStorageService *authoritative_storage,
 	const WtTerrainMeshReadyCallback &terrain_mesh_ready,
 	bool visual_required,
-	const WtMeshExecutionCallback &execution_callback
+	const WtMeshExecutionCallback &execution_callback,
+	const WtMeshCellCaptureCallback &cell_capture_callback
 ) {
 	if (!async_) return WtPageMeshingRuntimeStatus::InvalidConfiguration;
 	PreparedMeshJob prepared;
@@ -568,6 +571,7 @@ WtPageMeshingRuntimeService::dispatch_mesh_job(
 		terrain_mesh_ready,
 		visual_required,
 		execution_callback,
+		cell_capture_callback,
 		prepared
 	);
 	if (status != WtPageMeshingRuntimeStatus::Ok) return status;

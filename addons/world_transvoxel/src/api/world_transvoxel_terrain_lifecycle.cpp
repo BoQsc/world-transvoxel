@@ -83,7 +83,9 @@ bool WorldTransvoxelTerrain::start_world(
 		return false;
 	}
 	const WtRuntimeConfig config = configuration_->to_native();
-	auto lifecycle = std::make_unique<WtWorldLifecycleService>(config);
+	auto lifecycle = std::make_unique<WtWorldLifecycleService>(
+		config, gpu_meshing_shadow_
+	);
 	const WtWorldLifecycleStatus status = lifecycle->start(
 		globalized_path(world_manifest_path),
 		globalized_path(object_root)
@@ -139,7 +141,9 @@ bool WorldTransvoxelTerrain::start_procedural_snapshot(
 		return false;
 	}
 	const WtRuntimeConfig config = configuration_->to_native();
-	auto lifecycle = std::make_unique<WtWorldLifecycleService>(config);
+	auto lifecycle = std::make_unique<WtWorldLifecycleService>(
+		config, gpu_meshing_shadow_
+	);
 	const WtWorldLifecycleStatus status = lifecycle->start_procedural_snapshot(
 		globalized_path(snapshot_directory),
 		globalized_path(journal_root)
@@ -324,7 +328,9 @@ bool WorldTransvoxelTerrain::
 		return false;
 	}
 	const WtRuntimeConfig config = configuration_->to_native();
-	auto lifecycle = std::make_unique<WtWorldLifecycleService>(config);
+	auto lifecycle = std::make_unique<WtWorldLifecycleService>(
+		config, gpu_meshing_shadow_
+	);
 	const WtWorldLifecycleStatus status = lifecycle->start_procedural(
 		descriptor,
 		globalized_path(object_root)
@@ -434,7 +440,9 @@ bool WorldTransvoxelTerrain::start_flat_world_with_vertical_origin(
 		return false;
 	}
 	const WtRuntimeConfig config = configuration_->to_native();
-	auto lifecycle = std::make_unique<WtWorldLifecycleService>(config);
+	auto lifecycle = std::make_unique<WtWorldLifecycleService>(
+		config, gpu_meshing_shadow_
+	);
 	const WtWorldLifecycleStatus status = lifecycle->start_procedural(
 		descriptor,
 		globalized_path(object_root)

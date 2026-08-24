@@ -37,6 +37,7 @@ class WtChunkMesher;
 struct WtChunkMeshingScratch;
 struct WtTerrainMeshCompletion;
 class WtPageMeshingRuntimeService;
+class WtGpuMeshingShadowQueue;
 class WtStoragePageCache;
 class WtStreamScheduler;
 
@@ -138,7 +139,8 @@ public:
 	WtReadOnlyWorldRuntime(
 		WtRuntimeConfig config,
 		WtAsyncStorageService &storage,
-		WtEditJournalStore *edit_journal_store = nullptr
+		WtEditJournalStore *edit_journal_store = nullptr,
+		std::shared_ptr<WtGpuMeshingShadowQueue> gpu_meshing_shadow = {}
 	);
 	~WtReadOnlyWorldRuntime();
 
@@ -410,6 +412,7 @@ private:
 	std::unique_ptr<WtEditSpatialIndex> edit_spatial_index_;
 	std::unique_ptr<WtEditRuntimeReplacementService> edit_replacement_;
 	std::unique_ptr<WtPageMeshingRuntimeService> page_runtime_;
+	std::shared_ptr<WtGpuMeshingShadowQueue> gpu_meshing_shadow_;
 	std::unique_ptr<WtChunkMesher> mesher_;
 	std::unique_ptr<WtChunkMeshingScratch> meshing_scratch_;
 	mutable std::mutex metrics_mutex_;
