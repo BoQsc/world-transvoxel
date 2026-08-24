@@ -249,6 +249,7 @@ void WtRenderPayload::clear() noexcept {
 	generation = {};
 	world_origin = {};
 	transition_mask = 0;
+	publication_source = WtRenderPublicationSource::CpuAuthority;
 	vertices.clear();
 	indices.clear();
 	water_vertices.clear();

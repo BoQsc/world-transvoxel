@@ -210,11 +210,19 @@ public:
 	std::int64_t get_collision_latency_frames_maximum() const noexcept;
 	godot::Dictionary get_runtime_metrics() const;
 	bool begin_gpu_meshing_shadow(std::int64_t capacity = 3);
+	bool begin_gpu_meshing_publication(std::int64_t capacity = 3);
 	void end_gpu_meshing_shadow();
 	godot::Dictionary pop_gpu_meshing_shadow_request();
 	godot::Dictionary complete_gpu_meshing_shadow_request(
 		std::int64_t request_id,
 		const godot::Dictionary &identity,
+		bool matched,
+		const godot::String &error
+	);
+	godot::Dictionary complete_gpu_meshing_publication_request(
+		std::int64_t request_id,
+		const godot::Dictionary &identity,
+		const godot::Array &gpu_cells,
 		bool matched,
 		const godot::String &error
 	);
@@ -291,6 +299,14 @@ private:
 	godot::Ref<WorldTransvoxelConfig> configuration_;
 	std::unique_ptr<WtWorldLifecycleService> lifecycle_;
 	std::shared_ptr<WtGpuMeshingShadowQueue> gpu_meshing_shadow_;
+	bool gpu_meshing_publication_enabled_ = false;
+	std::uint64_t gpu_meshing_publication_attempts_ = 0;
+	std::uint64_t gpu_meshing_publication_queued_ = 0;
+	std::uint64_t gpu_meshing_publication_finalization_rejections_ = 0;
+	std::uint64_t gpu_meshing_publication_application_rejections_ = 0;
+	std::uint64_t gpu_meshing_publication_stale_application_skips_ = 0;
+	std::uint64_t gpu_meshing_publication_terrain_queued_ = 0;
+	std::uint64_t gpu_meshing_publication_water_queued_ = 0;
 	WtWorldLifecycleState last_notified_state_ =
 		WtWorldLifecycleState::Stopped;
 	godot::String synchronous_world_error_ = "ok";

@@ -879,6 +879,14 @@ bool parse_gpu_replay_cells(
 
 } // namespace
 
+bool wt_parse_gpu_replay_cells(
+	const godot::Array &values,
+	std::vector<WtReplayMeshingCell> &cells,
+	godot::String &error
+) {
+	return parse_gpu_replay_cells(values, cells, error);
+}
+
 godot::Dictionary wt_gpu_meshing_shadow_cell_batch(
 	const std::vector<WtRecordedMeshingCell> &records
 ) {
@@ -1219,7 +1227,7 @@ godot::Dictionary WorldTransvoxelCellProbe::finalize_chunk_with_gpu_cells_callab
 	}
 	std::vector<WtReplayMeshingCell> replay_cells;
 	godot::String parse_error;
-	if (!parse_gpu_replay_cells(gpu_cells, replay_cells, parse_error)) {
+	if (!wt_parse_gpu_replay_cells(gpu_cells, replay_cells, parse_error)) {
 		result["status"] = chunk_status_name(WtChunkMeshingStatus::InvalidInput);
 		result["error"] = parse_error;
 		return result;

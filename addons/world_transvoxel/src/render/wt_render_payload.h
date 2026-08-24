@@ -21,11 +21,18 @@ struct WtRenderVertex {
 	bool material_authored = false;
 };
 
+enum class WtRenderPublicationSource : std::uint8_t {
+	CpuAuthority = 0,
+	GpuCellCandidate = 1,
+};
+
 struct WtRenderPayload {
 	WtChunkKey key;
 	WtGenerationToken generation;
 	WtGridPoint world_origin;
 	std::uint8_t transition_mask = 0;
+	WtRenderPublicationSource publication_source =
+		WtRenderPublicationSource::CpuAuthority;
 	std::vector<WtRenderVertex> vertices;
 	std::vector<std::uint32_t> indices;
 	std::vector<WtRenderVertex> water_vertices;

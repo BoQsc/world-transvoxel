@@ -350,6 +350,30 @@ void test_application_service(
 		metrics.collision_latency_frames_maximum == 1,
 		"collision application latency metrics mismatch");
 
+	wt::WtChunkApplicationService promotion(1, 2, 1);
+	RenderSink promotion_render_sink;
+	CollisionSink promotion_collision_sink;
+	auto authority_render = std::make_shared<wt::WtRenderPayload>(render_source);
+	authority_render->generation = { 31 };
+	check(promotion.expect_chunk(key, { 31 }, false) ==
+			wt::WtApplicationStatus::Ok &&
+		promotion.submit_render(authority_render) == wt::WtApplicationStatus::Ok,
+		"GPU candidate promotion authority setup failed");
+	promotion.apply(1, 0, promotion_render_sink, promotion_collision_sink);
+	auto gpu_candidate = std::make_shared<wt::WtRenderPayload>(*authority_render);
+	gpu_candidate->publication_source =
+		wt::WtRenderPublicationSource::GpuCellCandidate;
+	check(promotion.submit_render(gpu_candidate) == wt::WtApplicationStatus::Ok,
+		"same-generation GPU candidate submission failed");
+	promotion.apply(1, 0, promotion_render_sink, promotion_collision_sink);
+	const wt::WtApplicationMetrics promotion_metrics = promotion.get_metrics();
+	check(promotion_render_sink.calls == 2 && promotion_collision_sink.calls == 0,
+		"GPU candidate promotion changed collision application");
+	check(promotion_metrics.submitted_gpu_candidate_render == 1 &&
+		promotion_metrics.applied_gpu_candidate_render == 1 &&
+		promotion_metrics.stale_gpu_candidate_render == 0,
+		"GPU candidate publication provenance was not retained");
+
 	wt::WtChunkApplicationService collision_only(1, 1, 1);
 	RenderSink hidden_render_sink;
 	CollisionSink collision_only_sink;

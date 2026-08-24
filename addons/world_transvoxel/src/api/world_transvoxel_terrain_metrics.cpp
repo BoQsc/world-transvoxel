@@ -666,16 +666,31 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	);
 	set_metric(
 		output,
+		"application_submitted_gpu_candidate_render",
+		application.submitted_gpu_candidate_render
+	);
+	set_metric(
+		output,
 		"application_submitted_collision",
 		application.submitted_collision
 	);
 	set_metric(output, "application_applied_render", application.applied_render);
 	set_metric(
 		output,
+		"application_applied_gpu_candidate_render",
+		application.applied_gpu_candidate_render
+	);
+	set_metric(
+		output,
 		"application_applied_collision",
 		application.applied_collision
 	);
 	set_metric(output, "application_stale_render", application.stale_render);
+	set_metric(
+		output,
+		"application_stale_gpu_candidate_render",
+		application.stale_gpu_candidate_render
+	);
 	output["application_last_stale_render_key_x"] =
 		application.last_stale_render_key_x;
 	output["application_last_stale_render_key_y"] =

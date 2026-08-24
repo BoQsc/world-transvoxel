@@ -466,23 +466,39 @@ WtPageMeshingRuntimeService::accept_prepared_mesh_completion(
 	}
 	if (completion.status == WtPageMeshingRuntimeStatus::Ok &&
 		completion.prepared.cell_capture_callback) {
+		auto make_capture = [&](WtGpuMeshingShadowSurface surface) {
+			WtGpuMeshingShadowCapture capture;
+			capture.job = completion.prepared.job;
+			capture.transition_mask = completion.prepared.transition_mask;
+			capture.cached_transition_mask =
+				completion.prepared.cached_transition_mask;
+			capture.surface = surface;
+			capture.authority_terrain_mesh = completion.mesh;
+			capture.authority_water_mesh = completion.water_mesh;
+			capture.retained_pages.reserve(
+				completion.prepared.dependencies.size()
+			);
+			for (const PreparedDependency &dependency :
+					completion.prepared.dependencies) {
+				capture.retained_pages.push_back({
+					dependency.key, dependency.page
+				});
+			}
+			return capture;
+		};
 		if (!completion.terrain_records.empty()) {
-			completion.prepared.cell_capture_callback({
-				completion.prepared.job,
-				completion.prepared.transition_mask,
-				completion.prepared.cached_transition_mask,
-				WtGpuMeshingShadowSurface::Terrain,
-				std::move(completion.terrain_records),
-			});
+			WtGpuMeshingShadowCapture capture = make_capture(
+				WtGpuMeshingShadowSurface::Terrain
+			);
+			capture.records = std::move(completion.terrain_records);
+			completion.prepared.cell_capture_callback(std::move(capture));
 		}
 		if (!completion.water_records.empty()) {
-			completion.prepared.cell_capture_callback({
-				completion.prepared.job,
-				completion.prepared.transition_mask,
-				completion.prepared.cached_transition_mask,
-				WtGpuMeshingShadowSurface::StaticWater,
-				std::move(completion.water_records),
-			});
+			WtGpuMeshingShadowCapture capture = make_capture(
+				WtGpuMeshingShadowSurface::StaticWater
+			);
+			capture.records = std::move(completion.water_records);
+			completion.prepared.cell_capture_callback(std::move(capture));
 		}
 	}
 	for (Dependency &dependency : record->dependencies) {

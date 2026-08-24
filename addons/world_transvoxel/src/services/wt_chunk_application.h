@@ -30,10 +30,13 @@ struct WtChunkApplicationRecord {
 
 struct WtApplicationMetrics {
 	std::uint64_t submitted_render = 0;
+	std::uint64_t submitted_gpu_candidate_render = 0;
 	std::uint64_t submitted_collision = 0;
 	std::uint64_t applied_render = 0;
+	std::uint64_t applied_gpu_candidate_render = 0;
 	std::uint64_t applied_collision = 0;
 	std::uint64_t stale_render = 0;
+	std::uint64_t stale_gpu_candidate_render = 0;
 	std::uint64_t stale_collision = 0;
 	std::uint64_t unrequired_collision = 0;
 	std::uint64_t sink_failures = 0;
@@ -161,6 +164,7 @@ private:
 	WtCollisionApplyQueue collision_queue_;
 	WtApplicationMetrics metrics_;
 	std::atomic<std::uint64_t> asynchronous_render_submissions_{ 0 };
+	std::atomic<std::uint64_t> asynchronous_gpu_candidate_render_submissions_{ 0 };
 	std::atomic<std::uint64_t> asynchronous_collision_submissions_{ 0 };
 	std::atomic<std::uint64_t> asynchronous_queue_rejections_{ 0 };
 	std::atomic<std::uint64_t> application_tick_{ 0 };

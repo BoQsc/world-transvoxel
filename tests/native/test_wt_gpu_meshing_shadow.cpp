@@ -62,6 +62,11 @@ int main() {
 		matched.status == WtGpuMeshingShadowCompletionStatus::Matched,
 		"matching completion was rejected"
 	);
+	require(
+		matched.has_retained_request &&
+			matched.retained_request.job.generation == first.job.generation,
+		"matching completion lost its retained publication identity"
+	);
 
 	require(queue.begin(2), "freshness queue restart failed");
 	require(queue.capture(capture_for(15, 0)), "freshness in-flight capture failed");

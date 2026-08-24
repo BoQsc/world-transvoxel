@@ -176,6 +176,22 @@ world revisions, transition mask, and surface. Changed identity and
 superseded results are rejected. CPU render and collision publication remain
 authoritative. See `docs/contracts/GPU_MESHING_SHADOW_CONTRACT.md`.
 
+Opt-in matched GPU-cell render publication:
+
+- `begin_gpu_meshing_publication(capacity=3) -> bool`
+- `pop_gpu_meshing_shadow_request() -> Dictionary`
+- `complete_gpu_meshing_publication_request(request_id, identity, gpu_cells, matched, error="") -> Dictionary`
+- `get_gpu_meshing_shadow_metrics() -> Dictionary`
+- `end_gpu_meshing_shadow()`
+
+This default-off route accepts only GPU cell results that pass the worker
+differential, native finalization, exact CPU-authority render comparison, and
+current application-generation gates. It can queue a same-generation visual
+replacement but cannot publish collision. The current route still reads cells
+back, finalizes on CPU, and uploads a Godot `ArrayMesh`; it is not GPU-resident
+rendering or a performance claim. See
+`docs/contracts/GPU_MESHING_PUBLICATION_CONTRACT.md`.
+
 The metrics dictionary includes `pending_chunk_retirements`, the number of old
 chunk records/resources retained until the current replacement set is fully
 ready, and `pending_chunk_replacements`, the number of same-key edit

@@ -5,11 +5,20 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
 
 namespace world_transvoxel {
+
+struct WtChunkMeshResult;
+struct WtChunkPage;
+
+struct WtGpuMeshingShadowPage {
+	WtChunkKey key;
+	std::shared_ptr<const WtChunkPage> page;
+};
 
 enum class WtGpuMeshingShadowSurface : std::uint8_t {
 	Terrain = 0,
@@ -22,6 +31,9 @@ struct WtGpuMeshingShadowCapture {
 	std::uint8_t cached_transition_mask = 0;
 	WtGpuMeshingShadowSurface surface = WtGpuMeshingShadowSurface::Terrain;
 	std::vector<WtRecordedMeshingCell> records;
+	std::vector<WtGpuMeshingShadowPage> retained_pages;
+	std::shared_ptr<const WtChunkMeshResult> authority_terrain_mesh;
+	std::shared_ptr<const WtChunkMeshResult> authority_water_mesh;
 };
 
 struct WtGpuMeshingShadowRequest : WtGpuMeshingShadowCapture {
@@ -50,6 +62,8 @@ struct WtGpuMeshingShadowCompletion {
 		WtGpuMeshingShadowCompletionStatus::UnknownRequest;
 	std::uint64_t request_id = 0;
 	std::string error;
+	WtGpuMeshingShadowRequest retained_request;
+	bool has_retained_request = false;
 };
 
 struct WtGpuMeshingShadowMetrics {
@@ -69,7 +83,7 @@ struct WtGpuMeshingShadowMetrics {
 
 class WtGpuMeshingShadowQueue {
 public:
-	bool begin(std::size_t capacity);
+	bool begin(std::size_t capacity, bool retain_publication_authority = false);
 	void end();
 	bool enabled() const noexcept;
 	bool capture(WtGpuMeshingShadowCapture capture);
@@ -97,6 +111,7 @@ private:
 
 	mutable std::mutex mutex_;
 	bool enabled_ = false;
+	bool retain_publication_authority_ = false;
 	std::size_t capacity_ = 0;
 	std::uint64_t next_request_id_ = 1;
 	std::vector<WtGpuMeshingShadowRequest> queued_;

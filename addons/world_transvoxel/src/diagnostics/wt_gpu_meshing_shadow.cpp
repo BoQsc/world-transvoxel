@@ -5,10 +5,14 @@
 
 namespace world_transvoxel {
 
-bool WtGpuMeshingShadowQueue::begin(std::size_t capacity) {
+bool WtGpuMeshingShadowQueue::begin(
+	std::size_t capacity,
+	bool retain_publication_authority
+) {
 	if (capacity == 0 || capacity > 16) return false;
 	std::lock_guard<std::mutex> lock(mutex_);
 	enabled_ = true;
+	retain_publication_authority_ = retain_publication_authority;
 	capacity_ = capacity;
 	next_request_id_ = 1;
 	queued_.clear();
@@ -22,6 +26,7 @@ bool WtGpuMeshingShadowQueue::begin(std::size_t capacity) {
 void WtGpuMeshingShadowQueue::end() {
 	std::lock_guard<std::mutex> lock(mutex_);
 	enabled_ = false;
+	retain_publication_authority_ = false;
 	capacity_ = 0;
 	queued_.clear();
 	in_flight_.clear();
@@ -42,6 +47,11 @@ bool WtGpuMeshingShadowQueue::capture(WtGpuMeshingShadowCapture capture) {
 	if (!enabled_) return false;
 	WtGpuMeshingShadowRequest request;
 	static_cast<WtGpuMeshingShadowCapture &>(request) = std::move(capture);
+	if (!retain_publication_authority_) {
+		request.retained_pages.clear();
+		request.authority_terrain_mesh.reset();
+		request.authority_water_mesh.reset();
+	}
 	if (queued_.size() + in_flight_.size() >= capacity_) {
 		const auto replace = std::find_if(
 			queued_.begin(), queued_.end(),
@@ -78,6 +88,9 @@ bool WtGpuMeshingShadowQueue::pop(WtGpuMeshingShadowRequest &request) {
 	tracked_request.cached_transition_mask = request.cached_transition_mask;
 	tracked_request.surface = request.surface;
 	tracked_request.request_id = request.request_id;
+	tracked_request.retained_pages = request.retained_pages;
+	tracked_request.authority_terrain_mesh = request.authority_terrain_mesh;
+	tracked_request.authority_water_mesh = request.authority_water_mesh;
 	in_flight_.push_back(std::move(tracked_request));
 	metrics_.queued_requests = queued_.size();
 	metrics_.in_flight_requests = in_flight_.size();
@@ -109,15 +122,18 @@ WtGpuMeshingShadowCompletion WtGpuMeshingShadowQueue::complete(
 	WtGpuMeshingShadowRequest request = std::move(*found);
 	in_flight_.erase(found);
 	metrics_.in_flight_requests = in_flight_.size();
-	if (!identity_matches(request, identity)) {
+	completion.retained_request = std::move(request);
+	completion.has_retained_request = true;
+	const WtGpuMeshingShadowRequest &retained = completion.retained_request;
+	if (!identity_matches(retained, identity)) {
 		completion.status = WtGpuMeshingShadowCompletionStatus::IdentityMismatch;
 		completion.error = "GPU shadow result identity does not match its request";
 		++metrics_.identity_mismatches;
 		return completion;
 	}
-	if (!enabled_ || request.job.source_revision != current_source_revision ||
-		request.job.world_revision != current_world_revision ||
-		!is_latest_locked(request)) {
+	if (!enabled_ || retained.job.source_revision != current_source_revision ||
+		retained.job.world_revision != current_world_revision ||
+		!is_latest_locked(retained)) {
 		completion.status = WtGpuMeshingShadowCompletionStatus::Stale;
 		completion.error = "GPU shadow result became stale before validation";
 		++metrics_.stale_results;

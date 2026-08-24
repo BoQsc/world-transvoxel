@@ -192,6 +192,12 @@ WtApplicationStatus WtChunkApplicationService::submit_render(
 	);
 	if (status == WtApplicationStatus::Ok) {
 		asynchronous_render_submissions_.fetch_add(1, std::memory_order_relaxed);
+		if (payload && payload->publication_source ==
+				WtRenderPublicationSource::GpuCellCandidate) {
+			asynchronous_gpu_candidate_render_submissions_.fetch_add(
+				1, std::memory_order_relaxed
+			);
+		}
 	} else if (status == WtApplicationStatus::QueueFull) {
 		asynchronous_queue_rejections_.fetch_add(1, std::memory_order_relaxed);
 	}
@@ -288,10 +294,18 @@ std::size_t WtChunkApplicationService::apply_render(
 			metrics_.last_stale_render_record_generation =
 				record == nullptr ? 0U : record->generation.value;
 			++metrics_.stale_render;
+			if (payload->publication_source ==
+					WtRenderPublicationSource::GpuCellCandidate) {
+				++metrics_.stale_gpu_candidate_render;
+			}
 			continue;
 		}
 		if (!record->visual_required) {
 			++metrics_.stale_render;
+			if (payload->publication_source ==
+					WtRenderPublicationSource::GpuCellCandidate) {
+				++metrics_.stale_gpu_candidate_render;
+			}
 			continue;
 		}
 		const bool trace_enabled = static_cast<bool>(trace_observer_);
@@ -317,6 +331,10 @@ std::size_t WtChunkApplicationService::apply_render(
 			record->staged_replacement = false;
 		}
 		++metrics_.applied_render;
+		if (payload->publication_source ==
+				WtRenderPublicationSource::GpuCellCandidate) {
+			++metrics_.applied_gpu_candidate_render;
+		}
 	}
 	return processed;
 }
@@ -571,6 +589,10 @@ WtApplicationMetrics WtChunkApplicationService::get_metrics() const noexcept {
 	WtApplicationMetrics snapshot = metrics_;
 	snapshot.submitted_render =
 		asynchronous_render_submissions_.load(std::memory_order_relaxed);
+	snapshot.submitted_gpu_candidate_render =
+		asynchronous_gpu_candidate_render_submissions_.load(
+			std::memory_order_relaxed
+		);
 	snapshot.submitted_collision =
 		asynchronous_collision_submissions_.load(std::memory_order_relaxed);
 	snapshot.queue_rejections =

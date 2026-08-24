@@ -151,6 +151,10 @@ bool wt_is_valid_render_payload(const WtRenderPayload &render) noexcept {
 	if (!wt_is_valid_chunk_key(render.key) ||
 		render.generation.value == 0 ||
 		render.world_origin != wt_chunk_bounds(render.key).minimum ||
+		static_cast<std::uint8_t>(render.publication_source) >
+			static_cast<std::uint8_t>(
+				WtRenderPublicationSource::GpuCellCandidate
+			) ||
 		(render.transition_mask & 0xC0U) != 0 ||
 		render.vertices.size() > kWtMaximumRenderVertices ||
 		render.indices.size() > kWtMaximumRenderIndices ||
@@ -191,6 +195,7 @@ bool wt_equal_render_payload(
 		left.generation != right.generation ||
 		left.world_origin != right.world_origin ||
 		left.transition_mask != right.transition_mask ||
+		left.publication_source != right.publication_source ||
 		left.vertices.size() != right.vertices.size() ||
 		left.indices != right.indices ||
 		left.water_vertices.size() != right.water_vertices.size() ||
