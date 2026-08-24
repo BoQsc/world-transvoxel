@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/wt_chunk_key.h"
+#include "core/wt_chunk_state.h"
 
 #include <vector>
 
@@ -31,6 +32,16 @@ bool wt_collision_retirement_is_safe(
 	const WtChunkKey &retirement,
 	const std::vector<WtChunkKey> &required_collision_chunks,
 	const std::vector<WtChunkKey> &physically_ready_collision_chunks
+) noexcept;
+
+bool wt_required_collision_can_publish_independently(
+	WtGenerationToken record_generation,
+	WtGenerationToken render_generation,
+	WtGenerationToken collision_generation,
+	WtGenerationToken staged_collision_generation,
+	bool collision_required,
+	bool collision_ready,
+	bool visual_required
 ) noexcept;
 
 } // namespace world_transvoxel

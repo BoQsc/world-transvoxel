@@ -249,6 +249,7 @@ private:
 		std::size_t &collision_publication_count,
 		std::uint64_t collision_apply_time_ns_start
 	);
+	void publish_ready_independent_collision_coverage();
 	void stage_chunk_retirement(const WtChunkKey &key);
 	void cancel_chunk_retirement(const WtChunkKey &key);
 	void stage_collision_retirement(const WtChunkKey &key);

@@ -45,6 +45,9 @@ void WorldTransvoxelTerrain::_process(double delta) {
 			*render_sink_,
 			*collision_sink_
 		);
+	if (collision_publication_count != 0 || applied.collision_processed != 0) {
+		publish_ready_independent_collision_coverage();
+	}
 	const WtApplicationMetrics application_after =
 		application_->get_metrics();
 	collision_apply_frame_time_ns_last_ =

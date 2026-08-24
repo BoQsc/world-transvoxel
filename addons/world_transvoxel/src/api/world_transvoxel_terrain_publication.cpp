@@ -9,6 +9,27 @@
 
 namespace world_transvoxel {
 
+void WorldTransvoxelTerrain::publish_ready_independent_collision_coverage() {
+	for (const WtChunkApplicationRecord &record : application_->get_records()) {
+		if (!wt_required_collision_can_publish_independently(
+				record.generation,
+				render_sink_->applied_generation(record.key),
+				collision_sink_->applied_generation(record.key),
+				collision_sink_->staged_generation(record.key),
+				record.collision_required,
+				record.collision_ready,
+				record.visual_required
+			)) {
+			continue;
+		}
+		if (!collision_sink_->publish_staged_record(record.key)) {
+			synchronous_world_error_ =
+				"independent collision coverage publication failed";
+			return;
+		}
+	}
+}
+
 void WorldTransvoxelTerrain::stage_collision_retirement(
 	const WtChunkKey &key
 ) {

@@ -578,6 +578,31 @@ void test_cross_lod_replacement_publication_policy() {
 		),
 		"collision shape outside current demand was not safely retired"
 	);
+	check(
+		wt::wt_required_collision_can_publish_independently(
+			{ 21 }, { 21 }, {}, { 21 }, true, true, true
+		),
+		"new required collision did not join its live visual independently"
+	);
+	check(
+		wt::wt_required_collision_can_publish_independently(
+			{ 21 }, {}, {}, { 21 }, true, true, false
+		),
+		"collision-only support was tied to visual publication"
+	);
+	check(
+		!wt::wt_required_collision_can_publish_independently(
+			{ 21 }, { 21 }, { 20 }, { 21 }, true, true, true
+		) && !wt::wt_required_collision_can_publish_independently(
+			{ 21 }, {}, {}, { 21 }, true, true, true
+		) && !wt::wt_required_collision_can_publish_independently(
+			{ 21 }, { 21 }, {}, { 20 }, true, true, true
+		) && !wt::wt_required_collision_can_publish_independently(
+			{ 21 }, { 21 }, {}, { 21 }, false, true, true
+		),
+		"independent collision publication accepted a replacement, hidden "
+		"visual, stale generation, or unrequired shape"
+	);
 	region.replacements.pop_back();
 	check(
 		!wt::wt_chunk_publication_region_has_complete_coverage(region),

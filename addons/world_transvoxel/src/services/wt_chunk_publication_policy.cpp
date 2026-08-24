@@ -390,4 +390,24 @@ bool wt_collision_retirement_is_safe(
 	);
 }
 
+bool wt_required_collision_can_publish_independently(
+	WtGenerationToken record_generation,
+	WtGenerationToken render_generation,
+	WtGenerationToken collision_generation,
+	WtGenerationToken staged_collision_generation,
+	bool collision_required,
+	bool collision_ready,
+	bool visual_required
+) noexcept {
+	if (!collision_required || !collision_ready ||
+			record_generation.value == 0 || collision_generation.value != 0 ||
+			staged_collision_generation != record_generation) {
+		return false;
+	}
+	// A new physical support shape may join retained coarse collision once its
+	// matching visual is live. Existing same-key shapes remain synchronized with
+	// their staged render replacement.
+	return !visual_required || render_generation == record_generation;
+}
+
 } // namespace world_transvoxel
