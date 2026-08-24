@@ -549,6 +549,35 @@ void test_cross_lod_replacement_publication_policy() {
 		wt::wt_chunk_publication_region_has_complete_coverage(region),
 		"complete fine replacement set did not cover its coarse retirement"
 	);
+	const std::vector<wt::WtChunkKey> complete_collision_coverage =
+		region.replacements;
+	std::vector<wt::WtChunkKey> partial_collision_coverage =
+		complete_collision_coverage;
+	partial_collision_coverage.pop_back();
+	check(
+		!wt::wt_collision_retirement_is_safe(
+			region.retirements.front(),
+			complete_collision_coverage,
+			partial_collision_coverage
+		),
+		"partial physical collision coverage retired its coarse safety shape"
+	);
+	check(
+		wt::wt_collision_retirement_is_safe(
+			region.retirements.front(),
+			complete_collision_coverage,
+			complete_collision_coverage
+		),
+		"complete physical collision coverage retained its obsolete coarse shape"
+	);
+	check(
+		wt::wt_collision_retirement_is_safe(
+			region.retirements.front(),
+			{ { 8, 0, 0, 0 } },
+			{}
+		),
+		"collision shape outside current demand was not safely retired"
+	);
 	region.replacements.pop_back();
 	check(
 		!wt::wt_chunk_publication_region_has_complete_coverage(region),

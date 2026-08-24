@@ -76,6 +76,7 @@ void WorldTransvoxelTerrain::_process(double delta) {
 	flush_ready_chunk_replacements();
 	flush_ready_render_retirements();
 	publish_staged_records_if_ready();
+	flush_ready_collision_retirements();
 	render_sink_->advance_retirements();
 	notify_lifecycle_state();
 }
@@ -270,6 +271,9 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 				if (status == WtApplicationStatus::Ok ||
 					status == WtApplicationStatus::AlreadyCurrent) {
 					cancel_chunk_retirement(publication.key);
+					if (publication.collision_required) {
+						cancel_collision_retirement(publication.key);
+					}
 					if (publication.visual_required) {
 						cancel_render_retirement(publication.key);
 					}
@@ -292,8 +296,13 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 					publication.key,
 					publication.collision_required
 				);
-				if (!publication.collision_required) {
-					collision_sink_->remove_collision(publication.key);
+				if (status == WtApplicationStatus::Ok ||
+						status == WtApplicationStatus::AlreadyCurrent) {
+					if (publication.collision_required) {
+						cancel_collision_retirement(publication.key);
+					} else {
+						stage_collision_retirement(publication.key);
+					}
 				}
 				break;
 			}
@@ -495,6 +504,7 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 void WorldTransvoxelTerrain::stage_chunk_retirement(
 	const WtChunkKey &key
 ) {
+	cancel_collision_retirement(key);
 	cancel_chunk_replacement(key);
 	cancel_render_retirement(key);
 	const auto iterator = std::lower_bound(
@@ -848,6 +858,8 @@ void WorldTransvoxelTerrain::reset_world_application(std::size_t capacity) {
 		capacity * 2U : std::numeric_limits<std::size_t>::max();
 	pending_chunk_retirements_.clear();
 	pending_chunk_retirements_.reserve(staging_capacity);
+	pending_collision_retirements_.clear();
+	pending_collision_retirements_.reserve(staging_capacity);
 	pending_chunk_replacements_.clear();
 	pending_chunk_replacements_.reserve(staging_capacity);
 	ready_staged_chunk_replacements_.clear();

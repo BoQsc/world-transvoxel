@@ -9,6 +9,73 @@
 
 namespace world_transvoxel {
 
+void WorldTransvoxelTerrain::stage_collision_retirement(
+	const WtChunkKey &key
+) {
+	const auto iterator = std::lower_bound(
+		pending_collision_retirements_.begin(),
+		pending_collision_retirements_.end(),
+		key
+	);
+	if (iterator == pending_collision_retirements_.end() || *iterator != key) {
+		pending_collision_retirements_.insert(iterator, key);
+	}
+}
+
+void WorldTransvoxelTerrain::cancel_collision_retirement(
+	const WtChunkKey &key
+) {
+	const auto iterator = std::lower_bound(
+		pending_collision_retirements_.begin(),
+		pending_collision_retirements_.end(),
+		key
+	);
+	if (iterator != pending_collision_retirements_.end() && *iterator == key) {
+		pending_collision_retirements_.erase(iterator);
+	}
+}
+
+void WorldTransvoxelTerrain::flush_ready_collision_retirements() {
+	if (open_viewer_plan_publications_ != 0 ||
+			pending_collision_retirements_.empty()) {
+		return;
+	}
+	std::vector<WtChunkKey> required;
+	std::vector<WtChunkKey> physically_ready;
+	const std::vector<WtChunkApplicationRecord> records =
+		application_->get_records();
+	required.reserve(records.size());
+	physically_ready.reserve(records.size());
+	for (const WtChunkApplicationRecord &record : records) {
+		if (!record.collision_required) continue;
+		required.push_back(record.key);
+		if (!record.collision_ready) continue;
+		const WtGenerationToken applied =
+			collision_sink_->applied_generation(record.key);
+		const WtGenerationToken staged =
+			collision_sink_->staged_generation(record.key);
+		if (applied.value != 0 || staged.value == 0) {
+			physically_ready.push_back(record.key);
+		}
+	}
+	constexpr std::size_t kMaximumRetirementsPerFrame = 32;
+	std::size_t processed = 0;
+	for (std::size_t index = 0;
+			index < pending_collision_retirements_.size() &&
+			processed < kMaximumRetirementsPerFrame;) {
+		const WtChunkKey key = pending_collision_retirements_[index];
+		if (!wt_collision_retirement_is_safe(key, required, physically_ready)) {
+			++index;
+			continue;
+		}
+		collision_sink_->remove_collision(key);
+		pending_collision_retirements_.erase(
+			pending_collision_retirements_.begin() + index
+		);
+		++processed;
+	}
+}
+
 void WorldTransvoxelTerrain::clear_visibility_coverage_priority_request(
 	const WtChunkKey &key
 ) {

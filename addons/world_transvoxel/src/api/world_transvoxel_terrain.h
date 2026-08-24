@@ -251,6 +251,8 @@ private:
 	);
 	void stage_chunk_retirement(const WtChunkKey &key);
 	void cancel_chunk_retirement(const WtChunkKey &key);
+	void stage_collision_retirement(const WtChunkKey &key);
+	void cancel_collision_retirement(const WtChunkKey &key);
 	void stage_chunk_replacement(
 		const WtChunkKey &key,
 		bool independently_publishable
@@ -265,6 +267,7 @@ private:
 		std::size_t retirement_count
 	);
 	void flush_ready_chunk_retirements();
+	void flush_ready_collision_retirements();
 	void flush_ready_independent_publication_regions();
 	void flush_ready_chunk_replacements();
 	void flush_ready_render_retirements();
@@ -280,6 +283,7 @@ private:
 	WtReadOnlyPublication deferred_publication_;
 	bool has_deferred_publication_ = false;
 	std::vector<WtChunkKey> pending_chunk_retirements_;
+	std::vector<WtChunkKey> pending_collision_retirements_;
 	std::vector<WtChunkKey> pending_chunk_replacements_;
 	std::vector<WtChunkKey> ready_staged_chunk_replacements_;
 	std::vector<WtChunkKey> independently_publishable_chunk_replacements_;

@@ -27,4 +27,10 @@ bool wt_chunk_publication_region_has_complete_coverage(
 	const WtChunkPublicationRegion &region
 ) noexcept;
 
+bool wt_collision_retirement_is_safe(
+	const WtChunkKey &retirement,
+	const std::vector<WtChunkKey> &required_collision_chunks,
+	const std::vector<WtChunkKey> &physically_ready_collision_chunks
+) noexcept;
+
 } // namespace world_transvoxel

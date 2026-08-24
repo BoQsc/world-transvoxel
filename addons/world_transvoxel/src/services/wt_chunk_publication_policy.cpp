@@ -377,4 +377,17 @@ bool wt_chunk_publication_region_has_complete_coverage(
 	return true;
 }
 
+bool wt_collision_retirement_is_safe(
+	const WtChunkKey &retirement,
+	const std::vector<WtChunkKey> &required_collision_chunks,
+	const std::vector<WtChunkKey> &physically_ready_collision_chunks
+) noexcept {
+	if (!wt_is_valid_chunk_key(retirement)) return false;
+	if (!overlaps_any(retirement, required_collision_chunks)) return true;
+	return replacement_set_covers(
+		retirement,
+		physically_ready_collision_chunks
+	);
+}
+
 } // namespace world_transvoxel
