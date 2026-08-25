@@ -220,6 +220,12 @@ finishes, including failure and cancellation paths. The resident metrics expose
 `capture_reservation_rejections`, `reserved_captures`, and
 `released_capture_slots`.
 
+Reservations carry the authoritative scheduler job identity and priority. A
+newer source/world revision, newer generation of the same chunk, or
+higher-priority job may replace a complete lower-priority queued job before CPU
+meshing starts. In-flight work is never cancelled by this queue, and captures
+whose job identity differs from their reservation are rejected.
+
 Admitted inputs are still recorded while the CPU Transvoxel mesher produces the
 authoritative chunk. Reservations and native packing remove rejected recording
 work, per-cell Godot Dictionaries, and synchronous GDScript packing from

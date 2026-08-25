@@ -568,7 +568,7 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 				const std::shared_ptr<WtGpuMeshingShadowQueue> shadow =
 					gpu_meshing_shadow_;
 				const std::uint64_t reservation_id =
-					shadow->reserve_capture_slots();
+					shadow->reserve_capture_slots(job);
 				if (reservation_id != 0) {
 					const auto reservation = std::make_shared<
 						GpuMeshingCaptureReservation

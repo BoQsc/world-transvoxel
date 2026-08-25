@@ -140,15 +140,18 @@ int main() {
 
 	WtGpuMeshingShadowQueue reservation_queue;
 	require(reservation_queue.begin(2, true), "reservation queue did not start");
+	WtGpuMeshingShadowCapture reserved_capture = capture_for(8);
 	const std::uint64_t reservation_id =
-		reservation_queue.reserve_capture_slots();
+		reservation_queue.reserve_capture_slots(reserved_capture.job);
 	require(reservation_id != 0, "bounded capture reservation failed");
 	require(
 		reservation_queue.metrics().reserved_capture_slots == 2,
 		"publication reservation did not retain atomic surface capacity"
 	);
 	require(
-		reservation_queue.capture_reserved(reservation_id, capture_for(8)),
+		reservation_queue.capture_reserved(
+			reservation_id, std::move(reserved_capture)
+		),
 		"reserved terrain capture failed"
 	);
 	WtGpuMeshingShadowCapture water_capture = capture_for(8);
@@ -165,7 +168,7 @@ int main() {
 		"reserved capture accounting did not converge"
 	);
 	require(
-		reservation_queue.reserve_capture_slots() == 0,
+		reservation_queue.reserve_capture_slots(capture_for(7).job) == 0,
 		"queued reserved captures did not retain hard capacity"
 	);
 	WtGpuMeshingShadowRequest reserved_terrain;
@@ -195,7 +198,7 @@ int main() {
 		"reserved water request did not release"
 	);
 	const std::uint64_t releasable_id =
-		reservation_queue.reserve_capture_slots();
+		reservation_queue.reserve_capture_slots(capture_for(9).job);
 	require(releasable_id != 0, "releasable reservation failed");
 	reservation_queue.release_capture_slots(releasable_id);
 	require(
@@ -203,6 +206,39 @@ int main() {
 			reservation_queue.metrics().released_capture_slots == 2,
 		"unused reservation did not release"
 	);
+
+	WtGpuMeshingShadowQueue priority_queue;
+	require(priority_queue.begin(2), "priority reservation queue did not start");
+	WtGpuMeshingShadowCapture low_priority = capture_for(10);
+	low_priority.job.priority = 10;
+	require(priority_queue.capture(low_priority), "first low-priority capture failed");
+	low_priority.surface = WtGpuMeshingShadowSurface::StaticWater;
+	require(priority_queue.capture(low_priority), "second low-priority capture failed");
+	WtGpuMeshingShadowCapture high_priority = capture_for(11);
+	high_priority.job.priority = 20;
+	const std::uint64_t priority_reservation =
+		priority_queue.reserve_capture_slots(high_priority.job);
+	require(priority_reservation != 0, "higher-priority reservation was rejected");
+	require(
+		priority_queue.metrics().superseded_queued_requests == 2 &&
+			priority_queue.metrics().queued_requests == 0,
+		"higher-priority reservation did not evict the complete queued job"
+	);
+	WtGpuMeshingShadowCapture wrong_reserved_capture = high_priority;
+	wrong_reserved_capture.job.generation.value += 1;
+	require(
+		!priority_queue.capture_reserved(
+			priority_reservation, std::move(wrong_reserved_capture)
+		),
+		"reservation accepted a different job identity"
+	);
+	require(
+		priority_queue.capture_reserved(
+			priority_reservation, std::move(high_priority)
+		),
+		"higher-priority reserved capture failed"
+	);
+	priority_queue.release_capture_slots(priority_reservation);
 
 	WtGpuMeshingShadowQueue queue;
 	require(!queue.begin(0), "zero capacity was accepted");

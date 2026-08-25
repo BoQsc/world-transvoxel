@@ -110,7 +110,7 @@ public:
 	bool begin(std::size_t capacity, bool retain_publication_authority = false);
 	void end();
 	bool enabled() const noexcept;
-	std::uint64_t reserve_capture_slots();
+	std::uint64_t reserve_capture_slots(const WtChunkJob &job);
 	bool capture_reserved(
 		std::uint64_t reservation_id,
 		WtGpuMeshingShadowCapture capture
@@ -143,6 +143,7 @@ private:
 	struct CaptureReservation {
 		std::uint64_t id = 0;
 		std::size_t remaining_slots = 0;
+		WtChunkJob job;
 	};
 
 	static bool identity_matches(
@@ -152,6 +153,14 @@ private:
 	static bool supersedes_queued(
 		const WtGpuMeshingShadowCapture &capture,
 		const WtGpuMeshingShadowRequest &queued
+	) noexcept;
+	static bool same_job_version(
+		const WtChunkJob &left,
+		const WtChunkJob &right
+	) noexcept;
+	static bool job_supersedes(
+		const WtChunkJob &incoming,
+		const WtChunkJob &queued
 	) noexcept;
 	bool is_latest_locked(const WtGpuMeshingShadowRequest &request) const noexcept;
 

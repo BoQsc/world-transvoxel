@@ -45,7 +45,9 @@ bool WtGpuMeshingShadowQueue::enabled() const noexcept {
 	return enabled_;
 }
 
-std::uint64_t WtGpuMeshingShadowQueue::reserve_capture_slots() {
+std::uint64_t WtGpuMeshingShadowQueue::reserve_capture_slots(
+	const WtChunkJob &job
+) {
 	std::lock_guard<std::mutex> lock(mutex_);
 	++metrics_.capture_reservation_attempts;
 	if (!enabled_) {
@@ -53,14 +55,56 @@ std::uint64_t WtGpuMeshingShadowQueue::reserve_capture_slots() {
 		return 0;
 	}
 	const std::size_t requested_slots = capacity_ >= 2 ? 2U : 1U;
-	const std::size_t occupied = queued_.size() + in_flight_.size() +
+	std::size_t occupied = queued_.size() + in_flight_.size() +
 		metrics_.reserved_capture_slots;
+	if (occupied <= capacity_ && requested_slots > capacity_ - occupied) {
+		const std::size_t required = requested_slots - (capacity_ - occupied);
+		std::size_t released = 0;
+		while (released < required) {
+			const auto candidate = std::min_element(
+				queued_.begin(), queued_.end(),
+				[](const WtGpuMeshingShadowRequest &left,
+					const WtGpuMeshingShadowRequest &right) {
+					if (left.job.priority != right.job.priority) {
+						return left.job.priority < right.job.priority;
+					}
+					return left.job.sequence < right.job.sequence;
+				}
+			);
+			if (candidate == queued_.end() ||
+				!job_supersedes(job, candidate->job)) {
+				break;
+			}
+			const WtChunkJob superseded_job = candidate->job;
+			const std::size_t before = queued_.size();
+			queued_.erase(
+				std::remove_if(
+					queued_.begin(), queued_.end(),
+					[&superseded_job](
+						const WtGpuMeshingShadowRequest &request
+					) {
+						return same_job_version(
+							request.job, superseded_job
+						);
+					}
+				),
+				queued_.end()
+			);
+			const std::size_t removed = before - queued_.size();
+			if (removed == 0) break;
+			released += removed;
+			metrics_.superseded_queued_requests += removed;
+		}
+		metrics_.queued_requests = queued_.size();
+		occupied = queued_.size() + in_flight_.size() +
+			metrics_.reserved_capture_slots;
+	}
 	if (occupied > capacity_ || requested_slots > capacity_ - occupied) {
 		++metrics_.capture_reservation_rejections;
 		return 0;
 	}
 	const std::uint64_t reservation_id = next_reservation_id_++;
-	capture_reservations_.push_back({ reservation_id, requested_slots });
+	capture_reservations_.push_back({ reservation_id, requested_slots, job });
 	metrics_.reserved_capture_slots += requested_slots;
 	return reservation_id;
 }
@@ -79,7 +123,8 @@ bool WtGpuMeshingShadowQueue::capture_reserved(
 		}
 	);
 	if (reservation == capture_reservations_.end() ||
-		reservation->remaining_slots == 0) {
+		reservation->remaining_slots == 0 ||
+		!same_job_version(reservation->job, capture.job)) {
 		return false;
 	}
 	WtGpuMeshingShadowRequest request;
@@ -352,6 +397,33 @@ bool WtGpuMeshingShadowQueue::supersedes_queued(
 	if (capture.job.world_revision < queued.job.world_revision) return false;
 	return capture.job.key == queued.job.key &&
 		capture.job.generation.value > queued.job.generation.value;
+}
+
+bool WtGpuMeshingShadowQueue::same_job_version(
+	const WtChunkJob &left,
+	const WtChunkJob &right
+) noexcept {
+	return left.key == right.key &&
+		left.generation == right.generation &&
+		left.source_revision == right.source_revision &&
+		left.world_revision == right.world_revision;
+}
+
+bool WtGpuMeshingShadowQueue::job_supersedes(
+	const WtChunkJob &incoming,
+	const WtChunkJob &queued
+) noexcept {
+	if (incoming.source_revision != queued.source_revision) {
+		return incoming.source_revision > queued.source_revision;
+	}
+	if (incoming.world_revision != queued.world_revision) {
+		return incoming.world_revision > queued.world_revision;
+	}
+	if (incoming.key == queued.key &&
+		incoming.generation != queued.generation) {
+		return incoming.generation.value > queued.generation.value;
+	}
+	return incoming.priority > queued.priority;
 }
 
 bool WtGpuMeshingShadowQueue::is_latest_locked(
