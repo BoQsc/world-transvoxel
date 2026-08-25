@@ -1607,7 +1607,9 @@ void test_runtime_lifecycle(
 						wt::WtGpuMeshingCaptureStage::PreMeshField &&
 					capture.authority_terrain_mesh == nullptr &&
 					capture.authority_water_mesh == nullptr &&
-					capture.records.size() == expected_field_cells;
+					capture.records.empty() &&
+					capture.retained_pages.size() == kDependencyCount &&
+					expected_field_cells == 4864;
 				++pre_mesh_field_capture_count;
 			},
 			true

@@ -321,31 +321,8 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		}
 	}
 	const auto capture_pre_mesh_field = [
-		&completion, &mesher, &scratch, water_present
-	](
-		const WtChunkSampleSource &capture_source,
-		WtGpuMeshingShadowSurface surface
-	) {
-		WtFieldCaptureMeshingBackend capture_backend(mesher.backend());
-		WtChunkMeshResult ignored_mesh;
-		const WtChunkMeshingStatus capture_status =
-			WtChunkMesher(capture_backend).mesh(
-				{
-					completion.prepared.job.key,
-					completion.prepared.transition_mask,
-					completion.prepared.cached_transition_mask,
-					0.0F,
-					0.25F,
-				},
-				capture_source,
-				ignored_mesh,
-				scratch
-			);
-		if (capture_status != WtChunkMeshingStatus::Ok ||
-			capture_backend.overflowed() ||
-			capture_backend.cpu_topology_call_count() != 0) {
-			return false;
-		}
+		&completion, water_present
+	](WtGpuMeshingShadowSurface surface) {
 		WtGpuMeshingShadowCapture capture;
 		capture.job = completion.prepared.job;
 		capture.transition_mask = completion.prepared.transition_mask;
@@ -354,8 +331,12 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		capture.surface = surface;
 		capture.capture_stage = WtGpuMeshingCaptureStage::PreMeshField;
 		capture.static_water_surface_expected = water_present;
-		capture.records = capture_backend.take_records();
-		if (capture.records.empty()) return false;
+		capture.retained_pages.reserve(completion.prepared.dependencies.size());
+		for (const PreparedDependency &dependency :
+				completion.prepared.dependencies) {
+			capture.retained_pages.push_back({ dependency.key, dependency.page });
+		}
+		if (capture.retained_pages.empty()) return false;
 		completion.prepared.cell_capture_callback(std::move(capture));
 		return true;
 	};
@@ -363,9 +344,7 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		WtChunkMeshingStatus::SampleSourceFailure;
 	if (source_valid && completion.prepared.cell_capture_callback &&
 		completion.prepared.pre_mesh_field_capture &&
-		!capture_pre_mesh_field(
-			*source, WtGpuMeshingShadowSurface::Terrain
-		)) {
+		!capture_pre_mesh_field(WtGpuMeshingShadowSurface::Terrain)) {
 		terrain_status = WtChunkMeshingStatus::CellBackendFailure;
 	} else if (source_valid && completion.prepared.cell_capture_callback &&
 		!completion.prepared.pre_mesh_field_capture) {
@@ -414,9 +393,7 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		if (completion.prepared.cell_capture_callback &&
 			completion.prepared.pre_mesh_field_capture) {
 			if (!capture_pre_mesh_field(
-					water_source,
-					WtGpuMeshingShadowSurface::StaticWater
-				)) {
+					WtGpuMeshingShadowSurface::StaticWater)) {
 				water_status = WtChunkMeshingStatus::CellBackendFailure;
 			} else {
 				water_status = mesher.mesh(

@@ -2,6 +2,7 @@
 
 #include "backend/wt_transvoxel_mit_backend.h"
 #include "core/wt_chunk_key.h"
+#include "storage/wt_chunk_page.h"
 
 #include <algorithm>
 #include <cmath>
@@ -148,6 +149,170 @@ void expand_cell_bounds(
 	}
 }
 
+unsigned int face_count(std::uint8_t mask) noexcept {
+	unsigned int count = 0;
+	for (unsigned int face = 0; face < 6; ++face) {
+		if ((mask & (1U << face)) != 0) ++count;
+	}
+	return count;
+}
+
+bool valid_page_field_input(
+	const WtGpuMeshingShadowPage &retained,
+	std::uint64_t source_revision
+) noexcept {
+	if (!retained.page || retained.key != retained.page->metadata.key) {
+		return false;
+	}
+	const WtChunkPage &page = *retained.page;
+	return wt_is_valid_chunk_key(page.metadata.key) &&
+		page.metadata.source_revision == source_revision &&
+		page.metadata.sample_minimum == -1 &&
+		page.metadata.sample_maximum == 17 &&
+		page.metadata.dimension_x == kWtChunkMeshingSamplesPerAxis &&
+		page.metadata.dimension_y == kWtChunkMeshingSamplesPerAxis &&
+		page.metadata.dimension_z == kWtChunkMeshingSamplesPerAxis &&
+		page.metadata.sample_count == kWtChunkPageSampleCount &&
+		page.metadata.cell_spacing == static_cast<std::uint64_t>(
+			wt_lod_cell_size(page.metadata.key.lod)
+		) && page.samples.size() == kWtChunkPageSampleCount;
+}
+
+bool pack_page_field_input(
+	const WtGpuMeshingShadowRequest &request,
+	WtGpuMeshingInputPack &output,
+	std::string &error
+) {
+	if (request.retained_pages.empty() || request.retained_pages.size() > 25) {
+		error = "GPU page-field dependency count is outside the bounded contract";
+		return false;
+	}
+	std::vector<const WtGpuMeshingShadowPage *> pages;
+	pages.reserve(request.retained_pages.size());
+	for (const WtGpuMeshingShadowPage &retained : request.retained_pages) {
+		if (!valid_page_field_input(retained, request.job.source_revision)) {
+			error = "GPU page-field dependency is invalid";
+			return false;
+		}
+		pages.push_back(&retained);
+	}
+	std::sort(pages.begin(), pages.end(), [](const auto *left, const auto *right) {
+		return left->key < right->key;
+	});
+	if (std::adjacent_find(
+			pages.begin(), pages.end(), [](const auto *left, const auto *right) {
+				return left->key == right->key;
+			}) != pages.end()) {
+		error = "GPU page-field dependencies contain a duplicate page";
+		return false;
+	}
+	const auto primary = std::find_if(
+		pages.begin(), pages.end(), [&request](const auto *retained) {
+			return retained->key == request.job.key;
+		}
+	);
+	if (primary == pages.end()) {
+		error = "GPU page-field input lacks its primary page";
+		return false;
+	}
+
+	output.page_field_input = true;
+	output.cell_count = static_cast<std::size_t>(
+		kWtChunkCellsPerAxis * kWtChunkCellsPerAxis * kWtChunkCellsPerAxis +
+		face_count(request.cached_transition_mask) *
+			kWtChunkCellsPerAxis * kWtChunkCellsPerAxis
+	);
+	output.sample_count = pages.size() * kWtChunkPageSampleCount;
+	output.field_values.reserve(output.sample_count * 4U);
+	output.field_meta.reserve(output.sample_count * 4U);
+	output.cell_headers.reserve(pages.size() * 4U);
+	output.cell_origins.reserve(pages.size() * 4U);
+	output.cell_options.reserve(pages.size() * 4U);
+	for (std::size_t page_index = 0; page_index < pages.size(); ++page_index) {
+		const WtChunkPage &page = *pages[page_index]->page;
+		const WtGridPoint minimum = wt_chunk_bounds(page.metadata.key).minimum;
+		const std::size_t sample_offset = page_index * kWtChunkPageSampleCount;
+		output.cell_headers.insert(output.cell_headers.end(), {
+			page.metadata.key.x,
+			page.metadata.key.y,
+			page.metadata.key.z,
+			static_cast<std::int32_t>(page.metadata.key.lod),
+		});
+		output.cell_origins.insert(output.cell_origins.end(), {
+			static_cast<float>(minimum.x),
+			static_cast<float>(minimum.y),
+			static_cast<float>(minimum.z),
+			static_cast<float>(page.metadata.cell_spacing),
+		});
+		output.cell_options.insert(output.cell_options.end(), {
+			static_cast<float>(sample_offset),
+			static_cast<float>(page.metadata.dimension_x),
+			static_cast<float>(page.metadata.sample_minimum),
+			static_cast<float>(page.metadata.sample_maximum),
+		});
+		for (const WtScalarSample &sample : page.samples) {
+			if (!finite(sample.density) || !finite(sample.static_water_density)) {
+				error = "GPU page-field sample is non-finite";
+				return false;
+			}
+			output.field_values.insert(output.field_values.end(), {
+				sample.density, sample.static_water_density, 0.0F, 0.0F,
+			});
+			output.field_meta.insert(output.field_meta.end(), {
+				static_cast<std::int32_t>(sample.material),
+				sample.material_authored ? 1 : 0,
+				static_cast<std::int32_t>(page_index),
+				1,
+			});
+		}
+	}
+	// Binding 5 remains part of the stable shader inventory. Page-field mode
+	// derives references in compute and carries one explicit sentinel only.
+	output.sample_references.push_back(0);
+	const WtChunkBounds chunk_bounds_value = wt_chunk_bounds(request.job.key);
+	output.bounds_min = {
+		static_cast<float>(chunk_bounds_value.minimum.x),
+		static_cast<float>(chunk_bounds_value.minimum.y),
+		static_cast<float>(chunk_bounds_value.minimum.z),
+	};
+	output.bounds_max = {
+		static_cast<float>(chunk_bounds_value.maximum.x),
+		static_cast<float>(chunk_bounds_value.maximum.y),
+		static_cast<float>(chunk_bounds_value.maximum.z),
+	};
+	const std::uint64_t source_revision = request.job.source_revision;
+	const std::uint64_t world_revision = request.job.world_revision;
+	output.config = {
+		static_cast<std::int32_t>(output.cell_count),
+		static_cast<std::int32_t>(output.sample_count),
+		static_cast<std::int32_t>(pages.size()),
+		1,
+		request.job.key.x,
+		request.job.key.y,
+		request.job.key.z,
+		static_cast<std::int32_t>(request.job.key.lod),
+		i32_bits(static_cast<std::uint32_t>(request.job.generation.value)),
+		i32_bits(static_cast<std::uint32_t>(source_revision)),
+		i32_bits(static_cast<std::uint32_t>(source_revision >> 32U)),
+		i32_bits(static_cast<std::uint32_t>(world_revision)),
+		i32_bits(static_cast<std::uint32_t>(world_revision >> 32U)),
+		static_cast<std::int32_t>(request.transition_mask),
+		request.surface == WtGpuMeshingShadowSurface::StaticWater ? 1 : 0,
+		static_cast<std::int32_t>(request.cached_transition_mask),
+	};
+	const WtTransvoxelTablePack &tables = wt_get_transvoxel_mit_table_pack();
+	output.packed_byte_count =
+		byte_size(output.field_values) + byte_size(output.field_meta) +
+		byte_size(output.cell_headers) + byte_size(output.cell_origins) +
+		byte_size(output.cell_options) + byte_size(output.sample_references) +
+		sizeof(output.config) + sizeof(tables.regular_cell_class) +
+		sizeof(tables.regular_cell_data) + sizeof(tables.regular_vertex_data) +
+		sizeof(tables.transition_cell_class) +
+		sizeof(tables.transition_cell_data) +
+		sizeof(tables.transition_vertex_data);
+	return true;
+}
+
 } // namespace
 
 bool wt_pack_gpu_meshing_input(
@@ -157,6 +322,14 @@ bool wt_pack_gpu_meshing_input(
 ) {
 	output = {};
 	error.clear();
+	if (request.capture_stage == WtGpuMeshingCaptureStage::PreMeshField &&
+		request.records.empty()) {
+		if (!wt_is_valid_chunk_key(request.job.key)) {
+			error = "GPU meshing chunk key is invalid";
+			return false;
+		}
+		return pack_page_field_input(request, output, error);
+	}
 	if (request.records.empty() ||
 		request.records.size() > kWtMaximumRecordedChunkCells) {
 		error = "GPU meshing record count is outside the bounded contract";

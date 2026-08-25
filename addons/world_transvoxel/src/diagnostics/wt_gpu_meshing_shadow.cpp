@@ -121,7 +121,8 @@ bool WtGpuMeshingShadowQueue::capture_reserved(
 	std::uint64_t reservation_id,
 	WtGpuMeshingShadowCapture capture
 ) {
-	if (reservation_id == 0 || capture.records.empty()) return false;
+	if (reservation_id == 0 ||
+		(capture.records.empty() && capture.retained_pages.empty())) return false;
 	std::lock_guard<std::mutex> lock(mutex_);
 	if (!enabled_ || capture.capture_stage != capture_stage_) return false;
 	const auto reservation = std::find_if(
@@ -187,7 +188,7 @@ void WtGpuMeshingShadowQueue::release_capture_slots(
 }
 
 bool WtGpuMeshingShadowQueue::capture(WtGpuMeshingShadowCapture capture) {
-	if (capture.records.empty()) return false;
+	if (capture.records.empty() && capture.retained_pages.empty()) return false;
 	std::lock_guard<std::mutex> lock(mutex_);
 	if (!enabled_ || capture.capture_stage != capture_stage_) return false;
 	WtGpuMeshingShadowRequest request;

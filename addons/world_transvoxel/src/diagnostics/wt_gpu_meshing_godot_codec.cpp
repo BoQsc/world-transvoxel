@@ -59,7 +59,7 @@ godot::Dictionary wt_gpu_meshing_shadow_packed_input(
 	const WtGpuMeshingShadowRequest &request
 ) {
 	godot::Dictionary result;
-	result["schema"] = "world_transvoxel.gpu_meshing_input_buffers.v2";
+	result["schema"] = "world_transvoxel.gpu_meshing_input_buffers.v3";
 	result["position_space"] = "world";
 	result["status"] = "FAIL";
 	result["fallback_used"] = false;
@@ -90,6 +90,10 @@ godot::Dictionary wt_gpu_meshing_shadow_packed_input(
 	result["input_buffers"] = buffers;
 	result["cell_count"] = static_cast<std::int64_t>(packed.cell_count);
 	result["sample_count"] = static_cast<std::int64_t>(packed.sample_count);
+	result["page_count"] = static_cast<std::int64_t>(
+		packed.page_field_input ? request.retained_pages.size() : 0
+	);
+	result["page_field_input"] = packed.page_field_input;
 	result["bounds_min"] = godot::Vector3(
 		packed.bounds_min.x, packed.bounds_min.y, packed.bounds_min.z
 	);

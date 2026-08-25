@@ -1,6 +1,7 @@
 #include "diagnostics/wt_gpu_meshing_shadow.h"
 #include "diagnostics/wt_gpu_meshing_input_pack.h"
 #include "backend/wt_transvoxel_mit_backend.h"
+#include "storage/wt_chunk_page.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -81,6 +82,29 @@ WtGpuMeshingShadowRequest packing_request() {
 		);
 	}
 	request.records = { regular, transition };
+	return request;
+}
+
+WtGpuMeshingShadowRequest page_field_request() {
+	WtGpuMeshingShadowRequest request;
+	request.job.key = { 2, -1, 3, 1 };
+	request.job.generation.value = 19;
+	request.job.source_revision = 7;
+	request.job.world_revision = 11;
+	request.transition_mask = 5;
+	request.cached_transition_mask = 5;
+	request.capture_stage = WtGpuMeshingCaptureStage::PreMeshField;
+	auto page = std::make_shared<WtChunkPage>();
+	page->metadata.key = request.job.key;
+	page->metadata.cell_spacing = 2;
+	page->metadata.source_revision = request.job.source_revision;
+	page->samples.resize(kWtChunkPageSampleCount);
+	for (std::size_t index = 0; index < page->samples.size(); ++index) {
+		page->samples[index].density = static_cast<float>(index % 37U) - 18.0F;
+		page->samples[index].material = static_cast<std::uint16_t>(index % 9U);
+		page->samples[index].material_authored = (index % 3U) == 0;
+	}
+	request.retained_pages.push_back({ request.job.key, std::move(page) });
 	return request;
 }
 
@@ -174,6 +198,39 @@ int main() {
 		"packed resident bounds changed"
 	);
 	require(packed.packed_byte_count > 50000, "packed byte metric is incomplete");
+	WtGpuMeshingInputPack page_packed;
+	require(
+		wt_pack_gpu_meshing_input(
+			page_field_request(), page_packed, packing_error
+		),
+		"valid page-field resident request did not pack"
+	);
+	require(
+		page_packed.page_field_input &&
+			page_packed.cell_count == 4608 &&
+			page_packed.sample_count == kWtChunkPageSampleCount &&
+			page_packed.config[2] == 1 && page_packed.config[3] == 1 &&
+			page_packed.config[15] == 5,
+		"page-field resident dimensions or mode changed"
+	);
+	require(
+		page_packed.field_values.size() == kWtChunkPageSampleCount * 4U &&
+			page_packed.field_meta.size() == kWtChunkPageSampleCount * 4U &&
+			page_packed.cell_headers.size() == 4 &&
+			page_packed.cell_origins.size() == 4 &&
+			page_packed.cell_options.size() == 4 &&
+			page_packed.sample_references.size() == 1,
+		"page-field resident buffer inventory changed"
+	);
+	require(
+		page_packed.bounds_min.x == 64.0F &&
+			page_packed.bounds_min.y == -32.0F &&
+			page_packed.bounds_min.z == 96.0F &&
+			page_packed.bounds_max.x == 96.0F &&
+			page_packed.bounds_max.y == 0.0F &&
+			page_packed.bounds_max.z == 128.0F,
+		"page-field resident bounds changed"
+	);
 	WtGpuMeshingShadowRequest invalid_request = packing_request();
 	invalid_request.records[0].regular_input.samples[0].density =
 		std::numeric_limits<float>::infinity();
