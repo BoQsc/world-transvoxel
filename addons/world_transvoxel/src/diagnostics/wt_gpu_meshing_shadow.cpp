@@ -15,8 +15,10 @@ bool WtGpuMeshingShadowQueue::begin(
 	retain_publication_authority_ = retain_publication_authority;
 	capacity_ = capacity;
 	next_request_id_ = 1;
+	next_reservation_id_ = 1;
 	queued_.clear();
 	in_flight_.clear();
+	capture_reservations_.clear();
 	metrics_ = {};
 	metrics_.enabled = true;
 	metrics_.capacity = capacity;
@@ -30,15 +32,102 @@ void WtGpuMeshingShadowQueue::end() {
 	capacity_ = 0;
 	queued_.clear();
 	in_flight_.clear();
+	capture_reservations_.clear();
 	metrics_.enabled = false;
 	metrics_.capacity = 0;
 	metrics_.queued_requests = 0;
 	metrics_.in_flight_requests = 0;
+	metrics_.reserved_capture_slots = 0;
 }
 
 bool WtGpuMeshingShadowQueue::enabled() const noexcept {
 	std::lock_guard<std::mutex> lock(mutex_);
 	return enabled_;
+}
+
+std::uint64_t WtGpuMeshingShadowQueue::reserve_capture_slots() {
+	std::lock_guard<std::mutex> lock(mutex_);
+	++metrics_.capture_reservation_attempts;
+	if (!enabled_) {
+		++metrics_.capture_reservation_rejections;
+		return 0;
+	}
+	const std::size_t requested_slots = capacity_ >= 2 ? 2U : 1U;
+	const std::size_t occupied = queued_.size() + in_flight_.size() +
+		metrics_.reserved_capture_slots;
+	if (occupied > capacity_ || requested_slots > capacity_ - occupied) {
+		++metrics_.capture_reservation_rejections;
+		return 0;
+	}
+	const std::uint64_t reservation_id = next_reservation_id_++;
+	capture_reservations_.push_back({ reservation_id, requested_slots });
+	metrics_.reserved_capture_slots += requested_slots;
+	return reservation_id;
+}
+
+bool WtGpuMeshingShadowQueue::capture_reserved(
+	std::uint64_t reservation_id,
+	WtGpuMeshingShadowCapture capture
+) {
+	if (reservation_id == 0 || capture.records.empty()) return false;
+	std::lock_guard<std::mutex> lock(mutex_);
+	if (!enabled_) return false;
+	const auto reservation = std::find_if(
+		capture_reservations_.begin(), capture_reservations_.end(),
+		[reservation_id](const CaptureReservation &candidate) {
+			return candidate.id == reservation_id;
+		}
+	);
+	if (reservation == capture_reservations_.end() ||
+		reservation->remaining_slots == 0) {
+		return false;
+	}
+	WtGpuMeshingShadowRequest request;
+	static_cast<WtGpuMeshingShadowCapture &>(request) = std::move(capture);
+	if (!retain_publication_authority_) {
+		request.retained_pages.clear();
+		request.authority_terrain_mesh.reset();
+		request.authority_water_mesh.reset();
+	}
+	--reservation->remaining_slots;
+	--metrics_.reserved_capture_slots;
+	request.request_id = next_request_id_++;
+	const auto replace = std::find_if(
+		queued_.begin(), queued_.end(),
+		[&request](const WtGpuMeshingShadowRequest &queued) {
+			return supersedes_queued(request, queued);
+		}
+	);
+	if (replace != queued_.end()) {
+		*replace = std::move(request);
+		++metrics_.superseded_queued_requests;
+	} else {
+		queued_.push_back(std::move(request));
+	}
+	if (reservation->remaining_slots == 0) {
+		capture_reservations_.erase(reservation);
+	}
+	++metrics_.captured_requests;
+	++metrics_.reserved_captures;
+	metrics_.queued_requests = queued_.size();
+	return true;
+}
+
+void WtGpuMeshingShadowQueue::release_capture_slots(
+	std::uint64_t reservation_id
+) noexcept {
+	if (reservation_id == 0) return;
+	std::lock_guard<std::mutex> lock(mutex_);
+	const auto reservation = std::find_if(
+		capture_reservations_.begin(), capture_reservations_.end(),
+		[reservation_id](const CaptureReservation &candidate) {
+			return candidate.id == reservation_id;
+		}
+	);
+	if (reservation == capture_reservations_.end()) return;
+	metrics_.reserved_capture_slots -= reservation->remaining_slots;
+	metrics_.released_capture_slots += reservation->remaining_slots;
+	capture_reservations_.erase(reservation);
 }
 
 bool WtGpuMeshingShadowQueue::capture(WtGpuMeshingShadowCapture capture) {
@@ -52,7 +141,8 @@ bool WtGpuMeshingShadowQueue::capture(WtGpuMeshingShadowCapture capture) {
 		request.authority_terrain_mesh.reset();
 		request.authority_water_mesh.reset();
 	}
-	if (queued_.size() + in_flight_.size() >= capacity_) {
+	if (queued_.size() + in_flight_.size() +
+			metrics_.reserved_capture_slots >= capacity_) {
 		const auto replace = std::find_if(
 			queued_.begin(), queued_.end(),
 			[&request](const WtGpuMeshingShadowRequest &queued) {

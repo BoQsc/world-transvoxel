@@ -24,6 +24,30 @@
 namespace world_transvoxel {
 namespace {
 
+class GpuMeshingCaptureReservation {
+public:
+	GpuMeshingCaptureReservation(
+		std::shared_ptr<WtGpuMeshingShadowQueue> queue,
+		std::uint64_t reservation_id
+	) noexcept :
+		queue_(std::move(queue)),
+		reservation_id_(reservation_id) {}
+
+	~GpuMeshingCaptureReservation() {
+		if (queue_) queue_->release_capture_slots(reservation_id_);
+	}
+
+	void capture(WtGpuMeshingShadowCapture capture) const {
+		if (queue_) {
+			queue_->capture_reserved(reservation_id_, std::move(capture));
+		}
+	}
+
+private:
+	std::shared_ptr<WtGpuMeshingShadowQueue> queue_;
+	std::uint64_t reservation_id_ = 0;
+};
+
 const WtLodMapEntry *find_plan_entry(
 	const std::vector<WtLodMapEntry> &entries,
 	const WtChunkKey &key
@@ -543,11 +567,18 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			if (gpu_meshing_shadow_ && gpu_meshing_shadow_->enabled()) {
 				const std::shared_ptr<WtGpuMeshingShadowQueue> shadow =
 					gpu_meshing_shadow_;
-				cell_capture_callback = [shadow](
-					WtGpuMeshingShadowCapture capture
-				) {
-					shadow->capture(std::move(capture));
-				};
+				const std::uint64_t reservation_id =
+					shadow->reserve_capture_slots();
+				if (reservation_id != 0) {
+					const auto reservation = std::make_shared<
+						GpuMeshingCaptureReservation
+					>(shadow, reservation_id);
+					cell_capture_callback = [reservation](
+						WtGpuMeshingShadowCapture capture
+					) {
+						reservation->capture(std::move(capture));
+					};
+				}
 			}
 			if (asynchronous_mesh) {
 				const WtMeshExecutionCallback execution_callback =

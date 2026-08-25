@@ -138,6 +138,72 @@ int main() {
 		"non-finite resident sample was accepted"
 	);
 
+	WtGpuMeshingShadowQueue reservation_queue;
+	require(reservation_queue.begin(2, true), "reservation queue did not start");
+	const std::uint64_t reservation_id =
+		reservation_queue.reserve_capture_slots();
+	require(reservation_id != 0, "bounded capture reservation failed");
+	require(
+		reservation_queue.metrics().reserved_capture_slots == 2,
+		"publication reservation did not retain atomic surface capacity"
+	);
+	require(
+		reservation_queue.capture_reserved(reservation_id, capture_for(8)),
+		"reserved terrain capture failed"
+	);
+	WtGpuMeshingShadowCapture water_capture = capture_for(8);
+	water_capture.surface = WtGpuMeshingShadowSurface::StaticWater;
+	require(
+		reservation_queue.capture_reserved(
+			reservation_id, std::move(water_capture)
+		),
+		"reserved water capture failed"
+	);
+	require(
+		reservation_queue.metrics().reserved_capture_slots == 0 &&
+			reservation_queue.metrics().reserved_captures == 2,
+		"reserved capture accounting did not converge"
+	);
+	require(
+		reservation_queue.reserve_capture_slots() == 0,
+		"queued reserved captures did not retain hard capacity"
+	);
+	WtGpuMeshingShadowRequest reserved_terrain;
+	require(
+		reservation_queue.pop(reserved_terrain),
+		"reserved terrain request did not pop"
+	);
+	require(
+		reservation_queue.reject_resident(
+			reserved_terrain.request_id,
+			identity_for(reserved_terrain),
+			"test release"
+		).status == WtGpuMeshingResidentValidationStatus::Rejected,
+		"reserved terrain request did not release"
+	);
+	WtGpuMeshingShadowRequest reserved_water;
+	require(
+		reservation_queue.pop(reserved_water),
+		"reserved water request did not pop"
+	);
+	require(
+		reservation_queue.reject_resident(
+			reserved_water.request_id,
+			identity_for(reserved_water),
+			"test release"
+		).status == WtGpuMeshingResidentValidationStatus::Rejected,
+		"reserved water request did not release"
+	);
+	const std::uint64_t releasable_id =
+		reservation_queue.reserve_capture_slots();
+	require(releasable_id != 0, "releasable reservation failed");
+	reservation_queue.release_capture_slots(releasable_id);
+	require(
+		reservation_queue.metrics().reserved_capture_slots == 0 &&
+			reservation_queue.metrics().released_capture_slots == 2,
+		"unused reservation did not release"
+	);
+
 	WtGpuMeshingShadowQueue queue;
 	require(!queue.begin(0), "zero capacity was accepted");
 	require(queue.begin(1), "bounded queue did not start");

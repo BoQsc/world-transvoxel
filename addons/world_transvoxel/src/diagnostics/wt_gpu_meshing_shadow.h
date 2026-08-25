@@ -75,6 +75,11 @@ struct WtGpuMeshingShadowMetrics {
 	std::uint64_t captured_requests = 0;
 	std::uint64_t capacity_rejections = 0;
 	std::uint64_t superseded_queued_requests = 0;
+	std::size_t reserved_capture_slots = 0;
+	std::uint64_t capture_reservation_attempts = 0;
+	std::uint64_t capture_reservation_rejections = 0;
+	std::uint64_t reserved_captures = 0;
+	std::uint64_t released_capture_slots = 0;
 	std::uint64_t matched_results = 0;
 	std::uint64_t mismatched_results = 0;
 	std::uint64_t stale_results = 0;
@@ -105,6 +110,12 @@ public:
 	bool begin(std::size_t capacity, bool retain_publication_authority = false);
 	void end();
 	bool enabled() const noexcept;
+	std::uint64_t reserve_capture_slots();
+	bool capture_reserved(
+		std::uint64_t reservation_id,
+		WtGpuMeshingShadowCapture capture
+	);
+	void release_capture_slots(std::uint64_t reservation_id) noexcept;
 	bool capture(WtGpuMeshingShadowCapture capture);
 	bool pop(WtGpuMeshingShadowRequest &request);
 	WtGpuMeshingShadowCompletion complete(
@@ -129,6 +140,11 @@ public:
 	WtGpuMeshingShadowMetrics metrics() const noexcept;
 
 private:
+	struct CaptureReservation {
+		std::uint64_t id = 0;
+		std::size_t remaining_slots = 0;
+	};
+
 	static bool identity_matches(
 		const WtGpuMeshingShadowRequest &request,
 		const WtGpuMeshingShadowIdentity &identity
@@ -144,8 +160,10 @@ private:
 	bool retain_publication_authority_ = false;
 	std::size_t capacity_ = 0;
 	std::uint64_t next_request_id_ = 1;
+	std::uint64_t next_reservation_id_ = 1;
 	std::vector<WtGpuMeshingShadowRequest> queued_;
 	std::vector<WtGpuMeshingShadowRequest> in_flight_;
+	std::vector<CaptureReservation> capture_reservations_;
 	WtGpuMeshingShadowMetrics metrics_;
 };
 
