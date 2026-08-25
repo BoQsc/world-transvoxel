@@ -485,6 +485,12 @@ godot::Dictionary WorldTransvoxelTerrain::get_gpu_meshing_shadow_metrics() const
 	result["released_capture_slots"] = static_cast<std::int64_t>(
 		metrics.released_capture_slots
 	);
+	result["priority_dequeues"] = static_cast<std::int64_t>(
+		metrics.priority_dequeues
+	);
+	result["dequeue_superseded_requests"] = static_cast<std::int64_t>(
+		metrics.dequeue_superseded_requests
+	);
 	result["matched_results"] = static_cast<std::int64_t>(metrics.matched_results);
 	result["mismatched_results"] = static_cast<std::int64_t>(metrics.mismatched_results);
 	result["stale_results"] = static_cast<std::int64_t>(metrics.stale_results);

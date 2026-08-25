@@ -240,6 +240,52 @@ int main() {
 	);
 	priority_queue.release_capture_slots(priority_reservation);
 
+	WtGpuMeshingShadowQueue dequeue_queue;
+	require(dequeue_queue.begin(4), "priority dequeue queue did not start");
+	WtGpuMeshingShadowCapture low_dequeue = capture_for(12);
+	low_dequeue.job.key.x = 1;
+	low_dequeue.job.priority = 10;
+	WtGpuMeshingShadowCapture high_dequeue = capture_for(12);
+	high_dequeue.job.key.x = 2;
+	high_dequeue.job.priority = 20;
+	require(dequeue_queue.capture(low_dequeue), "low-priority dequeue capture failed");
+	require(dequeue_queue.capture(high_dequeue), "high-priority dequeue capture failed");
+	WtGpuMeshingShadowRequest priority_request;
+	require(
+		dequeue_queue.pop(priority_request) && priority_request.job.key.x == 2,
+		"dequeue did not select authoritative scheduler priority"
+	);
+	require(
+		dequeue_queue.metrics().priority_dequeues == 1,
+		"priority dequeue was not measured"
+	);
+	require(
+		dequeue_queue.reject_resident(
+			priority_request.request_id,
+			identity_for(priority_request),
+			"test release"
+		).status == WtGpuMeshingResidentValidationStatus::Rejected,
+		"priority dequeue request did not release"
+	);
+	WtGpuMeshingShadowCapture stale_dequeue = capture_for(13);
+	stale_dequeue.job.key.x = 3;
+	stale_dequeue.job.world_revision = 1;
+	WtGpuMeshingShadowCapture current_dequeue = capture_for(14);
+	current_dequeue.job.key.x = 3;
+	current_dequeue.job.world_revision = 2;
+	require(dequeue_queue.capture(stale_dequeue), "stale dequeue capture failed");
+	require(dequeue_queue.capture(current_dequeue), "current dequeue capture failed");
+	WtGpuMeshingShadowRequest current_request;
+	require(
+		dequeue_queue.pop(current_request) &&
+			current_request.job.world_revision == 2,
+		"dequeue did not select the newest world revision"
+	);
+	require(
+		dequeue_queue.metrics().dequeue_superseded_requests >= 2,
+		"dequeue did not coalesce obsolete queued revisions"
+	);
+
 	WtGpuMeshingShadowQueue queue;
 	require(!queue.begin(0), "zero capacity was accepted");
 	require(queue.begin(1), "bounded queue did not start");
@@ -348,22 +394,16 @@ int main() {
 	require(queue.begin(2), "latest-generation queue restart failed");
 	require(queue.capture(capture_for(40)), "older generation capture failed");
 	require(queue.capture(capture_for(41)), "newer generation capture failed");
-	WtGpuMeshingShadowRequest older_request;
-	require(queue.pop(older_request), "older generation request did not pop");
-	const WtGpuMeshingShadowCompletion stale_generation = queue.complete(
-		older_request.request_id,
-		identity_for(older_request),
-		7,
-		0,
-		true,
-		{}
-	);
-	require(
-		stale_generation.status == WtGpuMeshingShadowCompletionStatus::Stale,
-		"superseded generation was not stale"
-	);
 	WtGpuMeshingShadowRequest newer_request;
-	require(queue.pop(newer_request), "newer generation request did not pop");
+	require(
+		queue.pop(newer_request) && newer_request.job.generation.value == 41,
+		"newer generation was not selected at dequeue"
+	);
+	WtGpuMeshingShadowRequest obsolete_request;
+	require(
+		!queue.pop(obsolete_request),
+		"obsolete generation entered flight after dequeue coalescing"
+	);
 	const WtGpuMeshingShadowCompletion mismatched = queue.complete(
 		newer_request.request_id,
 		identity_for(newer_request),
@@ -377,7 +417,10 @@ int main() {
 		"GPU mismatch was not retained"
 	);
 	const WtGpuMeshingShadowMetrics metrics = queue.metrics();
-	require(metrics.stale_results == 1, "stale metric changed after restart");
+	require(
+		metrics.dequeue_superseded_requests == 1,
+		"dequeue supersession metric changed after restart"
+	);
 	require(metrics.mismatched_results == 1, "mismatch metric was not recorded");
 	require(metrics.in_flight_requests == 0, "completed request remained in flight");
 

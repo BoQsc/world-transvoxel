@@ -226,6 +226,12 @@ higher-priority job may replace a complete lower-priority queued job before CPU
 meshing starts. In-flight work is never cancelled by this queue, and captures
 whose job identity differs from their reservation are rejected.
 
+Dequeue follows the same authoritative source revision, world revision, job
+priority, generation, and sequence ordering as admission. Before handing a
+request to Godot, it removes queued requests from older global revisions and
+older generations of the selected chunk. Metrics expose `priority_dequeues` and
+`dequeue_superseded_requests`; this coalescing never cancels in-flight work.
+
 Admitted inputs are still recorded while the CPU Transvoxel mesher produces the
 authoritative chunk. Reservations and native packing remove rejected recording
 work, per-cell Godot Dictionaries, and synchronous GDScript packing from

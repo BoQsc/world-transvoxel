@@ -215,8 +215,41 @@ bool WtGpuMeshingShadowQueue::capture(WtGpuMeshingShadowCapture capture) {
 bool WtGpuMeshingShadowQueue::pop(WtGpuMeshingShadowRequest &request) {
 	std::lock_guard<std::mutex> lock(mutex_);
 	if (!enabled_ || queued_.empty()) return false;
-	request = std::move(queued_.front());
-	queued_.erase(queued_.begin());
+	const auto selected = std::min_element(
+		queued_.begin(), queued_.end(),
+		[](const WtGpuMeshingShadowRequest &left,
+			const WtGpuMeshingShadowRequest &right) {
+			return job_precedes(left.job, right.job);
+		}
+	);
+	const WtChunkJob selected_job = selected->job;
+	const bool priority_dequeue = selected != queued_.begin();
+	request = std::move(*selected);
+	queued_.erase(selected);
+	const std::size_t before_coalesce = queued_.size();
+	queued_.erase(
+		std::remove_if(
+			queued_.begin(), queued_.end(),
+			[&selected_job](const WtGpuMeshingShadowRequest &candidate) {
+				if (candidate.job.source_revision <
+					selected_job.source_revision ||
+					candidate.job.world_revision < selected_job.world_revision) {
+					return true;
+				}
+				return candidate.job.key == selected_job.key &&
+					candidate.job.source_revision ==
+						selected_job.source_revision &&
+					candidate.job.world_revision == selected_job.world_revision &&
+					candidate.job.generation.value <
+						selected_job.generation.value;
+			}
+		),
+		queued_.end()
+	);
+	const std::size_t coalesced = before_coalesce - queued_.size();
+	if (priority_dequeue) ++metrics_.priority_dequeues;
+	metrics_.dequeue_superseded_requests += coalesced;
+	metrics_.superseded_queued_requests += coalesced;
 	WtGpuMeshingShadowRequest tracked_request;
 	tracked_request.job = request.job;
 	tracked_request.transition_mask = request.transition_mask;
@@ -424,6 +457,25 @@ bool WtGpuMeshingShadowQueue::job_supersedes(
 		return incoming.generation.value > queued.generation.value;
 	}
 	return incoming.priority > queued.priority;
+}
+
+bool WtGpuMeshingShadowQueue::job_precedes(
+	const WtChunkJob &left,
+	const WtChunkJob &right
+) noexcept {
+	if (left.source_revision != right.source_revision) {
+		return left.source_revision > right.source_revision;
+	}
+	if (left.world_revision != right.world_revision) {
+		return left.world_revision > right.world_revision;
+	}
+	if (left.priority != right.priority) {
+		return left.priority > right.priority;
+	}
+	if (left.key == right.key && left.generation != right.generation) {
+		return left.generation.value > right.generation.value;
+	}
+	return left.sequence < right.sequence;
 }
 
 bool WtGpuMeshingShadowQueue::is_latest_locked(

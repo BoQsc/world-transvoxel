@@ -452,6 +452,12 @@ godot::Dictionary WorldTransvoxelTerrain::get_gpu_resident_render_metrics() cons
 	result["released_capture_slots"] = static_cast<std::int64_t>(
 		queue_metrics.released_capture_slots
 	);
+	result["priority_dequeues"] = static_cast<std::int64_t>(
+		queue_metrics.priority_dequeues
+	);
+	result["dequeue_superseded_requests"] = static_cast<std::int64_t>(
+		queue_metrics.dequeue_superseded_requests
+	);
 	result["validation_attempts"] = static_cast<std::int64_t>(
 		gpu_resident_render_validation_attempts_
 	);

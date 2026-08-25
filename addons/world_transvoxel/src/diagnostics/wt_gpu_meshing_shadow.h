@@ -80,6 +80,8 @@ struct WtGpuMeshingShadowMetrics {
 	std::uint64_t capture_reservation_rejections = 0;
 	std::uint64_t reserved_captures = 0;
 	std::uint64_t released_capture_slots = 0;
+	std::uint64_t priority_dequeues = 0;
+	std::uint64_t dequeue_superseded_requests = 0;
 	std::uint64_t matched_results = 0;
 	std::uint64_t mismatched_results = 0;
 	std::uint64_t stale_results = 0;
@@ -161,6 +163,10 @@ private:
 	static bool job_supersedes(
 		const WtChunkJob &incoming,
 		const WtChunkJob &queued
+	) noexcept;
+	static bool job_precedes(
+		const WtChunkJob &left,
+		const WtChunkJob &right
 	) noexcept;
 	bool is_latest_locked(const WtGpuMeshingShadowRequest &request) const noexcept;
 
