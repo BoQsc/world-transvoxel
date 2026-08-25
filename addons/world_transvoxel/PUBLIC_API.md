@@ -192,6 +192,31 @@ back, finalizes on CPU, and uploads a Godot `ArrayMesh`; it is not GPU-resident
 rendering or a performance claim. See
 `docs/contracts/GPU_MESHING_PUBLICATION_CONTRACT.md`.
 
+Opt-in GPU-resident render publication:
+
+- `begin_gpu_resident_render_publication(capacity=3) -> bool`
+- `pop_gpu_resident_render_request() -> Dictionary`
+- `validate_gpu_resident_render_request(request_id, identity) -> Dictionary`
+- `get_gpu_resident_render_chunk_readiness(identity) -> Dictionary`
+- `reject_gpu_resident_render_request(request_id, identity, error) -> Dictionary`
+- `set_gpu_resident_render_chunk_active(identities, active) -> Dictionary`
+- `reconcile_gpu_resident_render_chunks(terrain_identities) -> Dictionary`
+- `get_gpu_resident_render_metrics() -> Dictionary`
+- `end_gpu_resident_render_publication()`
+
+The default-off v2 request returns 13 native-packed GPU input buffers, cell and
+byte counts, and the exact page/generation/revision/surface identity. It does
+not export the diagnostic `cell_batch`, invoke a fallback mesher, replace CPU
+collision authority, or hide the CPU visual before native freshness/readiness
+validation and atomic surface-set activation succeed. A native packing failure
+is rejected immediately so it cannot retain bounded queue capacity.
+
+This route still records inputs while the CPU Transvoxel mesher produces the
+authoritative chunk. Native packing removes per-cell Godot Dictionaries and
+synchronous GDScript packing from production resident submission, but it does
+not eliminate duplicate CPU meshing or establish GPU field-generation
+authority.
+
 The metrics dictionary includes `pending_chunk_retirements`, the number of old
 chunk records/resources retained until the current replacement set is fully
 ready, and `pending_chunk_replacements`, the number of same-key edit

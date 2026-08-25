@@ -29,6 +29,10 @@ godot::Dictionary wt_gpu_meshing_shadow_cell_batch(
 	const std::vector<WtRecordedMeshingCell> &records
 );
 
+godot::Dictionary wt_gpu_meshing_shadow_packed_input(
+	const WtGpuMeshingShadowRequest &request
+);
+
 bool wt_parse_gpu_replay_cells(
 	const godot::Array &values,
 	std::vector<WtReplayMeshingCell> &cells,

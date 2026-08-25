@@ -733,7 +733,9 @@ gpu_meshing_shadow_test = native_test_env.Program(
     ),
     source=[
         "tests/native/test_wt_gpu_meshing_shadow.cpp",
+        "addons/world_transvoxel/src/backend/wt_transvoxel_mit_backend.cpp",
         "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/diagnostics/wt_gpu_meshing_input_pack.cpp",
         "addons/world_transvoxel/src/diagnostics/wt_gpu_meshing_shadow.cpp",
     ],
 )

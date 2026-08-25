@@ -1,7 +1,9 @@
 #include "diagnostics/wt_gpu_meshing_shadow.h"
+#include "diagnostics/wt_gpu_meshing_input_pack.h"
 
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 
 namespace {
 
@@ -36,6 +38,51 @@ WtGpuMeshingShadowIdentity identity_for(
 	return identity;
 }
 
+WtCellSample sample_for(float density, std::uint16_t material) {
+	WtCellSample sample;
+	sample.density = density;
+	sample.gradient = { 1.0F, 2.0F, 3.0F };
+	sample.material = material;
+	sample.material_authored = material % 2U != 0U;
+	return sample;
+}
+
+WtGpuMeshingShadowRequest packing_request() {
+	WtGpuMeshingShadowRequest request;
+	request.job.key = { -2, 3, 4, 2 };
+	request.job.generation.value = 0x80000011ULL;
+	request.job.source_revision = 0x1234567887654321ULL;
+	request.job.world_revision = 0xfedcba9876543210ULL;
+	request.transition_mask = 37;
+	request.surface = WtGpuMeshingShadowSurface::StaticWater;
+	WtRecordedMeshingCell regular;
+	regular.type = WtRecordedCellType::Regular;
+	regular.regular_input.origin = { 10.0F, 20.0F, 30.0F };
+	regular.regular_input.cell_size = 4.0F;
+	regular.regular_input.isovalue = 0.25F;
+	for (unsigned int index = 0; index < kWtRegularSampleCount; ++index) {
+		regular.regular_input.samples[index] = sample_for(
+			static_cast<float>(index) - 3.5F,
+			static_cast<std::uint16_t>(index + 1U)
+		);
+	}
+	WtRecordedMeshingCell transition;
+	transition.type = WtRecordedCellType::Transition;
+	transition.transition_input.full_resolution_origin = { -1.0F, 2.0F, 8.0F };
+	transition.transition_input.sample_spacing = 2.0F;
+	transition.transition_input.transition_width = 0.5F;
+	transition.transition_input.isovalue = -0.25F;
+	transition.transition_input.orientation = WtTransitionOrientation::NegativeZ;
+	for (unsigned int index = 0; index < kWtTransitionSampleCount; ++index) {
+		transition.transition_input.samples[index] = sample_for(
+			6.0F - static_cast<float>(index),
+			static_cast<std::uint16_t>(index + 20U)
+		);
+	}
+	request.records = { regular, transition };
+	return request;
+}
+
 void require(bool condition, const char *message) {
 	if (condition) return;
 	std::cerr << "GPU_MESHING_SHADOW_TEST_FAIL: " << message << '\n';
@@ -45,6 +92,52 @@ void require(bool condition, const char *message) {
 } // namespace
 
 int main() {
+	WtGpuMeshingInputPack packed;
+	std::string packing_error;
+	require(
+		wt_pack_gpu_meshing_input(packing_request(), packed, packing_error),
+		"valid resident request did not pack"
+	);
+	require(
+		packed.cell_count == 2 && packed.sample_count == 17,
+		"packed resident dimensions changed"
+	);
+	require(
+		packed.field_values.size() == 68 && packed.field_meta.size() == 68 &&
+			packed.cell_headers.size() == 8 && packed.cell_origins.size() == 8 &&
+			packed.cell_options.size() == 8 &&
+			packed.sample_references.size() == 17,
+		"packed resident buffer sizes changed"
+	);
+	require(
+		packed.cell_headers[0] == 0 && packed.cell_headers[2] == 0 &&
+			packed.cell_headers[3] == 8 && packed.cell_headers[4] == 1 &&
+			packed.cell_headers[5] == 5 && packed.cell_headers[6] == 8 &&
+			packed.cell_headers[7] == 9,
+		"packed resident cell headers changed"
+	);
+	require(
+		packed.field_values[0] == -3.5F && packed.field_values[1] == 1.0F &&
+			packed.field_meta[0] == 1 && packed.field_meta[1] == 1 &&
+			packed.field_meta[2] == 0 && packed.sample_references[16] == 16,
+		"packed resident sample layout changed"
+	);
+	require(
+		packed.config[0] == 2 && packed.config[1] == 17 &&
+			packed.config[4] == -2 && packed.config[7] == 2 &&
+			packed.config[13] == 37 && packed.config[14] == 1 &&
+			packed.config[15] == 17,
+		"packed resident identity layout changed"
+	);
+	require(packed.packed_byte_count > 50000, "packed byte metric is incomplete");
+	WtGpuMeshingShadowRequest invalid_request = packing_request();
+	invalid_request.records[0].regular_input.samples[0].density =
+		std::numeric_limits<float>::infinity();
+	require(
+		!wt_pack_gpu_meshing_input(invalid_request, packed, packing_error),
+		"non-finite resident sample was accepted"
+	);
+
 	WtGpuMeshingShadowQueue queue;
 	require(!queue.begin(0), "zero capacity was accepted");
 	require(queue.begin(1), "bounded queue did not start");

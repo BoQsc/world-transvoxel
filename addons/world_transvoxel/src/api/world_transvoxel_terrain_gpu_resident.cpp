@@ -53,25 +53,48 @@ void WorldTransvoxelTerrain::end_gpu_resident_render_publication() {
 godot::Dictionary WorldTransvoxelTerrain::pop_gpu_resident_render_request() {
 	godot::Dictionary result;
 	result["schema"] =
-		"world_transvoxel.gpu_resident_render_request.v1";
+		"world_transvoxel.gpu_resident_render_request.v2";
 	result["status"] = "EMPTY";
 	result["gpu_resident_render_publication"] = true;
 	result["cpu_render_visible_until_activation"] = true;
 	result["cpu_collision_publication_unchanged"] = true;
+	result["native_input_packing"] = true;
+	result["cell_batch_exported"] = false;
+	result["fallback_used"] = false;
 	if (!gpu_resident_render_publication_enabled_ || !gpu_meshing_shadow_) {
 		result["status"] = "DISABLED";
 		return result;
 	}
 	WtGpuMeshingShadowRequest request;
 	if (!gpu_meshing_shadow_->pop(request)) return result;
-	godot::Dictionary batch = wt_gpu_meshing_shadow_cell_batch(request.records);
-	const godot::PackedFloat32Array densities = batch.get(
-		"densities", godot::PackedFloat32Array()
-	);
+	const godot::Dictionary packed = wt_gpu_meshing_shadow_packed_input(request);
+	if (packed.get("status", "FAIL") != "PASS") {
+		WtGpuMeshingShadowIdentity identity;
+		identity.key = request.job.key;
+		identity.generation = request.job.generation;
+		identity.source_revision = request.job.source_revision;
+		identity.world_revision = request.job.world_revision;
+		identity.transition_mask = request.transition_mask;
+		identity.surface = request.surface;
+		gpu_meshing_shadow_->reject_resident(
+			request.request_id,
+			identity,
+			"Native GPU input packing failed"
+		);
+		++gpu_resident_render_validation_rejections_;
+		result["status"] = "PACKING_FAILED";
+		result["request_id"] = static_cast<std::int64_t>(request.request_id);
+		result["error"] = packed.get("error", "Native GPU input packing failed");
+		return result;
+	}
 	result["status"] = "PASS";
 	result["request_id"] = static_cast<std::int64_t>(request.request_id);
-	result["identity"] = wt_gpu_meshing_shadow_identity(request, densities.size());
-	result["cell_batch"] = batch;
+	result["identity"] = wt_gpu_meshing_shadow_identity(
+		request, packed.get("sample_count", 0)
+	);
+	result["gpu_input_buffers"] = packed.get("input_buffers", godot::Array());
+	result["cell_count"] = packed.get("cell_count", 0);
+	result["packed_byte_count"] = packed.get("packed_byte_count", 0);
 	return result;
 }
 

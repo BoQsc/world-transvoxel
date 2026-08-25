@@ -1,9 +1,25 @@
 #include "diagnostics/wt_gpu_meshing_godot_codec.h"
 
 #include "core/wt_chunk_key.h"
+#include "backend/wt_transvoxel_mit_backend.h"
+#include "diagnostics/wt_gpu_meshing_input_pack.h"
 #include "diagnostics/wt_gpu_meshing_shadow.h"
 
 #include <cstdint>
+#include <cstring>
+
+namespace {
+
+template <typename Container>
+godot::PackedByteArray to_bytes(const Container &values) {
+	godot::PackedByteArray result;
+	const std::size_t size = sizeof(typename Container::value_type) * values.size();
+	result.resize(static_cast<std::int64_t>(size));
+	if (size > 0) std::memcpy(result.ptrw(), values.data(), size);
+	return result;
+}
+
+} // namespace
 
 namespace world_transvoxel {
 
@@ -34,6 +50,46 @@ godot::Dictionary wt_gpu_meshing_shadow_identity(
 		WtGpuMeshingShadowSurface::StaticWater ? 1 : 0;
 	identity["sample_count"] = sample_count;
 	return identity;
+}
+
+godot::Dictionary wt_gpu_meshing_shadow_packed_input(
+	const WtGpuMeshingShadowRequest &request
+) {
+	godot::Dictionary result;
+	result["schema"] = "world_transvoxel.gpu_meshing_input_buffers.v1";
+	result["status"] = "FAIL";
+	result["fallback_used"] = false;
+	WtGpuMeshingInputPack packed;
+	std::string error;
+	if (!wt_pack_gpu_meshing_input(request, packed, error)) {
+		result["error"] = error.c_str();
+		return result;
+	}
+	const WtTransvoxelTablePack &tables = wt_get_transvoxel_mit_table_pack();
+	godot::Array buffers;
+	buffers.resize(13);
+	buffers[0] = to_bytes(packed.field_values);
+	buffers[1] = to_bytes(packed.field_meta);
+	buffers[2] = to_bytes(packed.cell_headers);
+	buffers[3] = to_bytes(packed.cell_origins);
+	buffers[4] = to_bytes(packed.cell_options);
+	buffers[5] = to_bytes(packed.sample_references);
+	buffers[6] = to_bytes(packed.config);
+	buffers[7] = to_bytes(tables.regular_cell_class);
+	buffers[8] = to_bytes(tables.regular_cell_data);
+	buffers[9] = to_bytes(tables.regular_vertex_data);
+	buffers[10] = to_bytes(tables.transition_cell_class);
+	buffers[11] = to_bytes(tables.transition_cell_data);
+	buffers[12] = to_bytes(tables.transition_vertex_data);
+	result["status"] = "PASS";
+	result["error"] = "";
+	result["input_buffers"] = buffers;
+	result["cell_count"] = static_cast<std::int64_t>(packed.cell_count);
+	result["sample_count"] = static_cast<std::int64_t>(packed.sample_count);
+	result["packed_byte_count"] = static_cast<std::int64_t>(
+		packed.packed_byte_count
+	);
+	return result;
 }
 
 bool wt_parse_gpu_meshing_shadow_identity(
