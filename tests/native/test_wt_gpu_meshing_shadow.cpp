@@ -123,6 +123,15 @@ int main() {
 		"packed resident sample layout changed"
 	);
 	require(
+		packed.cell_origins[0] == -118.0F &&
+			packed.cell_origins[1] == 212.0F &&
+			packed.cell_origins[2] == 286.0F &&
+			packed.cell_origins[4] == -129.0F &&
+			packed.cell_origins[5] == 194.0F &&
+			packed.cell_origins[6] == 264.0F,
+		"packed resident cell origins are not world-relative"
+	);
+	require(
 		packed.config[0] == 2 && packed.config[1] == 17 &&
 			packed.config[4] == -2 && packed.config[7] == 2 &&
 			packed.config[13] == 37 && packed.config[14] == 1 &&
@@ -130,9 +139,9 @@ int main() {
 		"packed resident identity layout changed"
 	);
 	require(
-		packed.bounds_min.x == -1.0F && packed.bounds_min.y == -2.0F &&
-			packed.bounds_min.z == 7.5F && packed.bounds_max.x == 14.0F &&
-			packed.bounds_max.y == 24.0F && packed.bounds_max.z == 34.0F,
+		packed.bounds_min.x == -129.0F && packed.bounds_min.y == 190.0F &&
+			packed.bounds_min.z == 263.5F && packed.bounds_max.x == -114.0F &&
+			packed.bounds_max.y == 216.0F && packed.bounds_max.z == 290.0F,
 		"packed resident bounds changed"
 	);
 	require(packed.packed_byte_count > 50000, "packed byte metric is incomplete");

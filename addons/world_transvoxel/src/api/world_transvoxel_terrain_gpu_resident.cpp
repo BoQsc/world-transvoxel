@@ -53,7 +53,8 @@ void WorldTransvoxelTerrain::end_gpu_resident_render_publication() {
 godot::Dictionary WorldTransvoxelTerrain::pop_gpu_resident_render_request() {
 	godot::Dictionary result;
 	result["schema"] =
-		"world_transvoxel.gpu_resident_render_request.v2";
+		"world_transvoxel.gpu_resident_render_request.v3";
+	result["position_space"] = "world";
 	result["status"] = "EMPTY";
 	result["gpu_resident_render_publication"] = true;
 	result["cpu_render_visible_until_activation"] = true;

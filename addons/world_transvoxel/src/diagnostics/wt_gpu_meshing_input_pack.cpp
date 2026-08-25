@@ -1,6 +1,7 @@
 #include "diagnostics/wt_gpu_meshing_input_pack.h"
 
 #include "backend/wt_transvoxel_mit_backend.h"
+#include "core/wt_chunk_key.h"
 
 #include <algorithm>
 #include <cmath>
@@ -161,6 +162,16 @@ bool wt_pack_gpu_meshing_input(
 		error = "GPU meshing record count is outside the bounded contract";
 		return false;
 	}
+	if (!wt_is_valid_chunk_key(request.job.key)) {
+		error = "GPU meshing chunk key is invalid";
+		return false;
+	}
+	const WtGridPoint chunk_minimum = wt_chunk_bounds(request.job.key).minimum;
+	const WtVec3 world_origin = {
+		static_cast<float>(chunk_minimum.x),
+		static_cast<float>(chunk_minimum.y),
+		static_cast<float>(chunk_minimum.z),
+	};
 	const std::size_t maximum_samples =
 		request.records.size() * kWtTransitionSampleCount;
 	if (maximum_samples > static_cast<std::size_t>(
@@ -184,9 +195,14 @@ bool wt_pack_gpu_meshing_input(
 		const bool transition = record.type == WtRecordedCellType::Transition;
 		const unsigned int sample_count = transition ?
 			kWtTransitionSampleCount : kWtRegularSampleCount;
-		const WtVec3 origin = transition ?
+		const WtVec3 local_origin = transition ?
 			record.transition_input.full_resolution_origin :
 			record.regular_input.origin;
+		const WtVec3 origin = {
+			world_origin.x + local_origin.x,
+			world_origin.y + local_origin.y,
+			world_origin.z + local_origin.z,
+		};
 		const float spacing = transition ?
 			record.transition_input.sample_spacing :
 			record.regular_input.cell_size;

@@ -56,7 +56,8 @@ godot::Dictionary wt_gpu_meshing_shadow_packed_input(
 	const WtGpuMeshingShadowRequest &request
 ) {
 	godot::Dictionary result;
-	result["schema"] = "world_transvoxel.gpu_meshing_input_buffers.v1";
+	result["schema"] = "world_transvoxel.gpu_meshing_input_buffers.v2";
+	result["position_space"] = "world";
 	result["status"] = "FAIL";
 	result["fallback_used"] = false;
 	WtGpuMeshingInputPack packed;
