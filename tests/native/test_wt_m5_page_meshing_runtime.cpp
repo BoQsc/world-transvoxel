@@ -1572,6 +1572,12 @@ void test_runtime_lifecycle(
 	const wt::WtChunkMesher mesher(wt::wt_get_transvoxel_mit_backend());
 	wt::WtChunkMeshingScratch scratch;
 	bool terrain_ready_before_water = false;
+	bool pre_mesh_field_before_terrain = false;
+	std::size_t pre_mesh_field_capture_count = 0;
+	const std::size_t expected_field_cells =
+		static_cast<std::size_t>(wt::kWtChunkCellsPerAxis) *
+			wt::kWtChunkCellsPerAxis * wt::kWtChunkCellsPerAxis +
+		3U * wt::kWtChunkCellsPerAxis * wt::kWtChunkCellsPerAxis;
 	check(
 		runtime.execute_mesh_job(
 			mesh_job,
@@ -1584,6 +1590,7 @@ void test_runtime_lifecycle(
 			[&](const wt::WtTerrainMeshCompletion &completion) {
 				const auto records = runtime.get_records();
 				terrain_ready_before_water =
+					pre_mesh_field_before_terrain &&
 					completion.key == fixture.coarse_key &&
 					completion.generation == sample.generation &&
 					completion.mesh != nullptr && records.size() == 1 &&
@@ -1591,14 +1598,27 @@ void test_runtime_lifecycle(
 						wt::WtPageMeshingRuntimePhase::AwaitingMesh &&
 					records[0].pinned_page_count == kDependencyCount;
 				return terrain_ready_before_water;
-			}
+			},
+			true,
+			[&](wt::WtGpuMeshingShadowCapture capture) {
+				pre_mesh_field_before_terrain =
+					!terrain_ready_before_water &&
+					capture.capture_stage ==
+						wt::WtGpuMeshingCaptureStage::PreMeshField &&
+					capture.authority_terrain_mesh == nullptr &&
+					capture.authority_water_mesh == nullptr &&
+					capture.records.size() == expected_field_cells;
+				++pre_mesh_field_capture_count;
+			},
+			true
 		) ==
 			wt::WtPageMeshingRuntimeStatus::Ok,
 		"page-backed runtime meshing failed"
 	);
 	const auto meshed = runtime.get_records();
 	check(
-		terrain_ready_before_water && meshed.size() == 1 &&
+		terrain_ready_before_water && pre_mesh_field_before_terrain &&
+			pre_mesh_field_capture_count >= 1 && meshed.size() == 1 &&
 		meshed[0].phase == wt::WtPageMeshingRuntimePhase::Ready &&
 		meshed[0].pinned_page_count == 0 &&
 		runtime.pinned_page_count() == 0,

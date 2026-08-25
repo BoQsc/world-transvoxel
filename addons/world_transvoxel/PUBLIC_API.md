@@ -204,7 +204,13 @@ Opt-in GPU-resident render publication:
 - `get_gpu_resident_render_metrics() -> Dictionary`
 - `end_gpu_resident_render_publication()`
 
-The default-off v2 request returns 13 native-packed GPU input buffers, cell and
+Resident request schema `world_transvoxel.gpu_resident_render_request.v4`
+captures immutable field inputs before CPU Transvoxel topology. It reports
+`input_stage=pre_mesh_field`, `cpu_topology_input_dependency=false`, and keeps
+`cpu_field_sampling=true` until production density/material field generation is
+separately moved and qualified on the GPU. CPU collision authority is unchanged.
+
+The default-off v4 request returns 13 native-packed GPU input buffers, cell and
 byte counts, and the exact page/generation/revision/surface identity. It does
 not export the diagnostic `cell_batch`, invoke a fallback mesher, replace CPU
 collision authority, or hide the CPU visual before native freshness/readiness

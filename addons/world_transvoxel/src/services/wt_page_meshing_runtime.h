@@ -200,7 +200,8 @@ public:
 		WtAsyncStorageService *authoritative_storage = nullptr,
 		const WtTerrainMeshReadyCallback &terrain_mesh_ready = {},
 		bool visual_required = true,
-		const WtMeshCellCaptureCallback &cell_capture_callback = {}
+		const WtMeshCellCaptureCallback &cell_capture_callback = {},
+		bool pre_mesh_field_capture = false
 	);
 	WtPageMeshingRuntimeStatus dispatch_mesh_job(
 		const WtChunkJob &job,
@@ -211,7 +212,8 @@ public:
 		const WtTerrainMeshReadyCallback &terrain_mesh_ready = {},
 		bool visual_required = true,
 		const WtMeshExecutionCallback &execution_callback = {},
-		const WtMeshCellCaptureCallback &cell_capture_callback = {}
+		const WtMeshCellCaptureCallback &cell_capture_callback = {},
+		bool pre_mesh_field_capture = false
 	);
 	WtPageMeshingRuntimeStatus process_async_mesh_completions(
 		WtStreamScheduler &scheduler,
@@ -342,6 +344,7 @@ private:
 		bool visual_required,
 		const WtMeshExecutionCallback &execution_callback,
 		const WtMeshCellCaptureCallback &cell_capture_callback,
+		bool pre_mesh_field_capture,
 		PreparedMeshJob &prepared
 	);
 	static PreparedMeshCompletion execute_prepared_mesh_job(

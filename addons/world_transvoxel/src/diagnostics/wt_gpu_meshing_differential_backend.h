@@ -69,6 +69,34 @@ private:
 	mutable bool overflowed_ = false;
 };
 
+// Captures immutable field inputs without invoking CPU Transvoxel topology.
+class WtFieldCaptureMeshingBackend final : public WtMeshingBackend {
+public:
+	explicit WtFieldCaptureMeshingBackend(const WtMeshingBackend &authority);
+
+	const WtMeshingBackendInfo &get_info() const noexcept override;
+	bool is_available() const noexcept override;
+	WtCellStatus mesh_regular_cell(
+		const WtRegularCellInput &input,
+		WtCellMesh &output,
+		WtCellMeshingScratch &scratch
+	) const noexcept override;
+	WtCellStatus mesh_transition_cell(
+		const WtTransitionCellInput &input,
+		WtCellMesh &output,
+		WtCellMeshingScratch &scratch
+	) const noexcept override;
+
+	std::vector<WtRecordedMeshingCell> take_records() noexcept;
+	bool overflowed() const noexcept;
+	std::size_t cpu_topology_call_count() const noexcept;
+
+private:
+	const WtMeshingBackend &authority_;
+	mutable std::vector<WtRecordedMeshingCell> records_;
+	mutable bool overflowed_ = false;
+};
+
 class WtReplayMeshingBackend final : public WtMeshingBackend {
 public:
 	WtReplayMeshingBackend(

@@ -7,12 +7,14 @@ namespace world_transvoxel {
 
 bool WtGpuMeshingShadowQueue::begin(
 	std::size_t capacity,
-	bool retain_publication_authority
+	bool retain_publication_authority,
+	WtGpuMeshingCaptureStage capture_stage
 ) {
 	if (capacity == 0 || capacity > 16) return false;
 	std::lock_guard<std::mutex> lock(mutex_);
 	enabled_ = true;
 	retain_publication_authority_ = retain_publication_authority;
+	capture_stage_ = capture_stage;
 	capacity_ = capacity;
 	next_request_id_ = 1;
 	next_reservation_id_ = 1;
@@ -29,6 +31,7 @@ void WtGpuMeshingShadowQueue::end() {
 	std::lock_guard<std::mutex> lock(mutex_);
 	enabled_ = false;
 	retain_publication_authority_ = false;
+	capture_stage_ = WtGpuMeshingCaptureStage::PostMeshAuthority;
 	capacity_ = 0;
 	queued_.clear();
 	in_flight_.clear();
@@ -43,6 +46,11 @@ void WtGpuMeshingShadowQueue::end() {
 bool WtGpuMeshingShadowQueue::enabled() const noexcept {
 	std::lock_guard<std::mutex> lock(mutex_);
 	return enabled_;
+}
+
+bool WtGpuMeshingShadowQueue::captures_pre_mesh_field() const noexcept {
+	std::lock_guard<std::mutex> lock(mutex_);
+	return enabled_ && capture_stage_ == WtGpuMeshingCaptureStage::PreMeshField;
 }
 
 std::uint64_t WtGpuMeshingShadowQueue::reserve_capture_slots(
@@ -115,7 +123,7 @@ bool WtGpuMeshingShadowQueue::capture_reserved(
 ) {
 	if (reservation_id == 0 || capture.records.empty()) return false;
 	std::lock_guard<std::mutex> lock(mutex_);
-	if (!enabled_) return false;
+	if (!enabled_ || capture.capture_stage != capture_stage_) return false;
 	const auto reservation = std::find_if(
 		capture_reservations_.begin(), capture_reservations_.end(),
 		[reservation_id](const CaptureReservation &candidate) {
@@ -154,6 +162,9 @@ bool WtGpuMeshingShadowQueue::capture_reserved(
 	}
 	++metrics_.captured_requests;
 	++metrics_.reserved_captures;
+	if (capture_stage_ == WtGpuMeshingCaptureStage::PreMeshField) {
+		++metrics_.pre_mesh_field_captures;
+	}
 	metrics_.queued_requests = queued_.size();
 	return true;
 }
@@ -178,7 +189,7 @@ void WtGpuMeshingShadowQueue::release_capture_slots(
 bool WtGpuMeshingShadowQueue::capture(WtGpuMeshingShadowCapture capture) {
 	if (capture.records.empty()) return false;
 	std::lock_guard<std::mutex> lock(mutex_);
-	if (!enabled_) return false;
+	if (!enabled_ || capture.capture_stage != capture_stage_) return false;
 	WtGpuMeshingShadowRequest request;
 	static_cast<WtGpuMeshingShadowCapture &>(request) = std::move(capture);
 	if (!retain_publication_authority_) {
@@ -201,6 +212,9 @@ bool WtGpuMeshingShadowQueue::capture(WtGpuMeshingShadowCapture capture) {
 		request.request_id = next_request_id_++;
 		*replace = std::move(request);
 		++metrics_.captured_requests;
+		if (capture_stage_ == WtGpuMeshingCaptureStage::PreMeshField) {
+			++metrics_.pre_mesh_field_captures;
+		}
 		++metrics_.superseded_queued_requests;
 		metrics_.queued_requests = queued_.size();
 		return true;
@@ -208,6 +222,9 @@ bool WtGpuMeshingShadowQueue::capture(WtGpuMeshingShadowCapture capture) {
 	request.request_id = next_request_id_++;
 	queued_.push_back(std::move(request));
 	++metrics_.captured_requests;
+	if (capture_stage_ == WtGpuMeshingCaptureStage::PreMeshField) {
+		++metrics_.pre_mesh_field_captures;
+	}
 	metrics_.queued_requests = queued_.size();
 	return true;
 }
@@ -255,6 +272,7 @@ bool WtGpuMeshingShadowQueue::pop(WtGpuMeshingShadowRequest &request) {
 	tracked_request.transition_mask = request.transition_mask;
 	tracked_request.cached_transition_mask = request.cached_transition_mask;
 	tracked_request.surface = request.surface;
+	tracked_request.capture_stage = request.capture_stage;
 	tracked_request.static_water_surface_expected =
 		request.static_water_surface_expected;
 	tracked_request.request_id = request.request_id;
@@ -495,6 +513,13 @@ const char *wt_gpu_meshing_shadow_surface_name(
 ) noexcept {
 	return surface == WtGpuMeshingShadowSurface::StaticWater ?
 		"static_water" : "terrain";
+}
+
+const char *wt_gpu_meshing_capture_stage_name(
+	WtGpuMeshingCaptureStage stage
+) noexcept {
+	return stage == WtGpuMeshingCaptureStage::PreMeshField ?
+		"pre_mesh_field" : "post_mesh_authority";
 }
 
 const char *wt_gpu_meshing_shadow_completion_status_name(

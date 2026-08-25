@@ -44,6 +44,9 @@ godot::Dictionary wt_gpu_meshing_shadow_identity(
 	identity["transition_mask"] = request.transition_mask;
 	identity["cached_transition_mask"] = request.cached_transition_mask;
 	identity["surface"] = wt_gpu_meshing_shadow_surface_name(request.surface);
+	identity["input_stage"] = wt_gpu_meshing_capture_stage_name(
+		request.capture_stage
+	);
 	identity["static_water_surface_expected"] =
 		request.static_water_surface_expected;
 	identity["field_mode"] = request.surface ==

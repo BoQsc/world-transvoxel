@@ -1,5 +1,6 @@
 #include "diagnostics/wt_gpu_meshing_shadow.h"
 #include "diagnostics/wt_gpu_meshing_input_pack.h"
+#include "backend/wt_transvoxel_mit_backend.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -92,6 +93,34 @@ void require(bool condition, const char *message) {
 } // namespace
 
 int main() {
+	WtTransvoxelMitBackend topology_authority;
+	WtFieldCaptureMeshingBackend field_capture(topology_authority);
+	const WtGpuMeshingShadowRequest field_fixture = packing_request();
+	WtCellMesh ignored_cell_mesh;
+	WtCellMeshingScratch ignored_cell_scratch;
+	require(
+		field_capture.mesh_regular_cell(
+			field_fixture.records[0].regular_input,
+			ignored_cell_mesh,
+			ignored_cell_scratch
+		) == WtCellStatus::Empty,
+		"pre-mesh regular field capture attempted CPU topology"
+	);
+	require(
+		field_capture.mesh_transition_cell(
+			field_fixture.records[1].transition_input,
+			ignored_cell_mesh,
+			ignored_cell_scratch
+		) == WtCellStatus::Empty,
+		"pre-mesh transition field capture attempted CPU topology"
+	);
+	require(
+		field_capture.take_records().size() == 2 &&
+			field_capture.cpu_topology_call_count() == 0 &&
+			!field_capture.overflowed(),
+		"pre-mesh field capture did not retain exact bounded inputs"
+	);
+
 	WtGpuMeshingInputPack packed;
 	std::string packing_error;
 	require(
@@ -152,6 +181,26 @@ int main() {
 		!wt_pack_gpu_meshing_input(invalid_request, packed, packing_error),
 		"non-finite resident sample was accepted"
 	);
+
+	WtGpuMeshingShadowQueue pre_mesh_queue;
+	require(
+		pre_mesh_queue.begin(
+			2, false, WtGpuMeshingCaptureStage::PreMeshField
+		) && pre_mesh_queue.captures_pre_mesh_field(),
+		"pre-mesh resident queue did not retain its capture stage"
+	);
+	WtGpuMeshingShadowCapture wrong_stage_capture = capture_for(7);
+	require(
+		!pre_mesh_queue.capture(wrong_stage_capture),
+		"pre-mesh resident queue accepted post-mesh authority input"
+	);
+	wrong_stage_capture.capture_stage = WtGpuMeshingCaptureStage::PreMeshField;
+	require(
+		pre_mesh_queue.capture(std::move(wrong_stage_capture)) &&
+			pre_mesh_queue.metrics().pre_mesh_field_captures == 1,
+		"pre-mesh resident queue did not account direct field input"
+	);
+	pre_mesh_queue.end();
 
 	WtGpuMeshingShadowQueue reservation_queue;
 	require(reservation_queue.begin(2, true), "reservation queue did not start");
@@ -479,6 +528,6 @@ int main() {
 	require(!queue.metrics().enabled, "queue remained enabled after end");
 
 	std::cout << "GPU_MESHING_SHADOW_TEST_PASS capacity=2 stale=1 mismatched=1 "
-		"queued_superseded=1\n";
+		"queued_superseded=1 pre_mesh_field=1 cpu_topology_calls=0\n";
 	return 0;
 }

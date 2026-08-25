@@ -81,6 +81,74 @@ bool WtRecordingMeshingBackend::overflowed() const noexcept {
 	return overflowed_;
 }
 
+WtFieldCaptureMeshingBackend::WtFieldCaptureMeshingBackend(
+	const WtMeshingBackend &authority
+) : authority_(authority) {
+	records_.reserve(kWtMaximumRecordedChunkCells);
+}
+
+const WtMeshingBackendInfo &
+WtFieldCaptureMeshingBackend::get_info() const noexcept {
+	return authority_.get_info();
+}
+
+bool WtFieldCaptureMeshingBackend::is_available() const noexcept {
+	return authority_.is_available();
+}
+
+WtCellStatus WtFieldCaptureMeshingBackend::mesh_regular_cell(
+	const WtRegularCellInput &input,
+	WtCellMesh &output,
+	WtCellMeshingScratch &
+) const noexcept {
+	output.clear();
+	if (records_.size() >= kWtMaximumRecordedChunkCells) {
+		overflowed_ = true;
+		return WtCellStatus::TopologyFailure;
+	}
+	WtRecordedMeshingCell record;
+	record.type = WtRecordedCellType::Regular;
+	record.regular_input = input;
+	record.case_code = wt_regular_case_code(input);
+	record.status = record.case_code == 0 || record.case_code == 255 ?
+		WtCellStatus::Empty : WtCellStatus::Ok;
+	records_.push_back(std::move(record));
+	return WtCellStatus::Empty;
+}
+
+WtCellStatus WtFieldCaptureMeshingBackend::mesh_transition_cell(
+	const WtTransitionCellInput &input,
+	WtCellMesh &output,
+	WtCellMeshingScratch &
+) const noexcept {
+	output.clear();
+	if (records_.size() >= kWtMaximumRecordedChunkCells) {
+		overflowed_ = true;
+		return WtCellStatus::TopologyFailure;
+	}
+	WtRecordedMeshingCell record;
+	record.type = WtRecordedCellType::Transition;
+	record.transition_input = input;
+	record.case_code = wt_transition_case_code(input);
+	record.status = record.case_code == 0 || record.case_code == 511 ?
+		WtCellStatus::Empty : WtCellStatus::Ok;
+	records_.push_back(std::move(record));
+	return WtCellStatus::Empty;
+}
+
+std::vector<WtRecordedMeshingCell>
+WtFieldCaptureMeshingBackend::take_records() noexcept {
+	return std::move(records_);
+}
+
+bool WtFieldCaptureMeshingBackend::overflowed() const noexcept {
+	return overflowed_;
+}
+
+std::size_t WtFieldCaptureMeshingBackend::cpu_topology_call_count() const noexcept {
+	return 0;
+}
+
 WtReplayMeshingBackend::WtReplayMeshingBackend(
 	const WtMeshingBackend &authority,
 	const std::vector<WtReplayMeshingCell> &cells

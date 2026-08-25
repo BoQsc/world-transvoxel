@@ -33,7 +33,9 @@ bool WorldTransvoxelTerrain::begin_gpu_resident_render_publication(
 			render_sink_->restore_gpu_resident_replacements();
 	}
 	if (!gpu_meshing_shadow_ || !gpu_meshing_shadow_->begin(
-			static_cast<std::size_t>(std::clamp<std::int64_t>(capacity, 0, 16))
+			static_cast<std::size_t>(std::clamp<std::int64_t>(capacity, 0, 16)),
+			false,
+			WtGpuMeshingCaptureStage::PreMeshField
 		)) {
 		return false;
 	}
@@ -53,13 +55,18 @@ void WorldTransvoxelTerrain::end_gpu_resident_render_publication() {
 godot::Dictionary WorldTransvoxelTerrain::pop_gpu_resident_render_request() {
 	godot::Dictionary result;
 	result["schema"] =
-		"world_transvoxel.gpu_resident_render_request.v3";
+		"world_transvoxel.gpu_resident_render_request.v4";
 	result["position_space"] = "world";
+	result["input_stage"] = "pre_mesh_field";
 	result["status"] = "EMPTY";
 	result["gpu_resident_render_publication"] = true;
 	result["cpu_render_visible_until_activation"] = true;
 	result["cpu_collision_publication_unchanged"] = true;
 	result["native_input_packing"] = true;
+	result["cpu_topology_input_dependency"] = false;
+	result["cpu_field_sampling"] = true;
+	result["gpu_density_field_generation"] = false;
+	result["gpu_transvoxel_extraction"] = true;
 	result["cell_batch_exported"] = false;
 	result["fallback_used"] = false;
 	if (!gpu_resident_render_publication_enabled_ || !gpu_meshing_shadow_) {
@@ -98,6 +105,9 @@ godot::Dictionary WorldTransvoxelTerrain::pop_gpu_resident_render_request() {
 	result["bounds_min"] = packed.get("bounds_min", godot::Vector3());
 	result["bounds_max"] = packed.get("bounds_max", godot::Vector3());
 	result["packed_byte_count"] = packed.get("packed_byte_count", 0);
+	result["input_stage"] = wt_gpu_meshing_capture_stage_name(
+		request.capture_stage
+	);
 	return result;
 }
 
@@ -455,6 +465,9 @@ godot::Dictionary WorldTransvoxelTerrain::get_gpu_resident_render_metrics() cons
 	result["released_capture_slots"] = static_cast<std::int64_t>(
 		queue_metrics.released_capture_slots
 	);
+	result["pre_mesh_field_captures"] = static_cast<std::int64_t>(
+		queue_metrics.pre_mesh_field_captures
+	);
 	result["priority_dequeues"] = static_cast<std::int64_t>(
 		queue_metrics.priority_dequeues
 	);
@@ -498,6 +511,10 @@ godot::Dictionary WorldTransvoxelTerrain::get_gpu_resident_render_metrics() cons
 		gpu_resident_render_restored_cpu_chunks_
 	);
 	result["cpu_collision_authority"] = true;
+	result["cpu_topology_input_dependency"] = false;
+	result["cpu_field_sampling"] = true;
+	result["gpu_density_field_generation"] = false;
+	result["gpu_transvoxel_extraction"] = true;
 	return result;
 }
 

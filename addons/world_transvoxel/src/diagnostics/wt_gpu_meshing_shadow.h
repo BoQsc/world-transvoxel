@@ -25,11 +25,18 @@ enum class WtGpuMeshingShadowSurface : std::uint8_t {
 	StaticWater = 1,
 };
 
+enum class WtGpuMeshingCaptureStage : std::uint8_t {
+	PostMeshAuthority = 0,
+	PreMeshField = 1,
+};
+
 struct WtGpuMeshingShadowCapture {
 	WtChunkJob job;
 	std::uint8_t transition_mask = 0;
 	std::uint8_t cached_transition_mask = 0;
 	WtGpuMeshingShadowSurface surface = WtGpuMeshingShadowSurface::Terrain;
+	WtGpuMeshingCaptureStage capture_stage =
+		WtGpuMeshingCaptureStage::PostMeshAuthority;
 	bool static_water_surface_expected = false;
 	std::vector<WtRecordedMeshingCell> records;
 	std::vector<WtGpuMeshingShadowPage> retained_pages;
@@ -80,6 +87,7 @@ struct WtGpuMeshingShadowMetrics {
 	std::uint64_t capture_reservation_rejections = 0;
 	std::uint64_t reserved_captures = 0;
 	std::uint64_t released_capture_slots = 0;
+	std::uint64_t pre_mesh_field_captures = 0;
 	std::uint64_t priority_dequeues = 0;
 	std::uint64_t dequeue_superseded_requests = 0;
 	std::uint64_t matched_results = 0;
@@ -109,9 +117,15 @@ struct WtGpuMeshingResidentValidation {
 
 class WtGpuMeshingShadowQueue {
 public:
-	bool begin(std::size_t capacity, bool retain_publication_authority = false);
+	bool begin(
+		std::size_t capacity,
+		bool retain_publication_authority = false,
+		WtGpuMeshingCaptureStage capture_stage =
+			WtGpuMeshingCaptureStage::PostMeshAuthority
+	);
 	void end();
 	bool enabled() const noexcept;
+	bool captures_pre_mesh_field() const noexcept;
 	std::uint64_t reserve_capture_slots(const WtChunkJob &job);
 	bool capture_reserved(
 		std::uint64_t reservation_id,
@@ -173,6 +187,8 @@ private:
 	mutable std::mutex mutex_;
 	bool enabled_ = false;
 	bool retain_publication_authority_ = false;
+	WtGpuMeshingCaptureStage capture_stage_ =
+		WtGpuMeshingCaptureStage::PostMeshAuthority;
 	std::size_t capacity_ = 0;
 	std::uint64_t next_request_id_ = 1;
 	std::uint64_t next_reservation_id_ = 1;
@@ -184,6 +200,9 @@ private:
 
 const char *wt_gpu_meshing_shadow_surface_name(
 	WtGpuMeshingShadowSurface surface
+) noexcept;
+const char *wt_gpu_meshing_capture_stage_name(
+	WtGpuMeshingCaptureStage stage
 ) noexcept;
 const char *wt_gpu_meshing_shadow_completion_status_name(
 	WtGpuMeshingShadowCompletionStatus status

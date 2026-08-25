@@ -18,6 +18,7 @@ struct WtPageMeshingRuntimeService::PreparedMeshJob {
 	WtTerrainMeshReadyCallback terrain_mesh_ready;
 	WtMeshExecutionCallback execution_callback;
 	WtMeshCellCaptureCallback cell_capture_callback;
+	bool pre_mesh_field_capture = false;
 	std::uint64_t enqueued_time_ns = 0;
 };
 
