@@ -2,6 +2,7 @@
 
 #include "backend/wt_transvoxel_mit_backend.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -49,6 +50,103 @@ std::size_t byte_size(const std::vector<T> &values) noexcept {
 	return values.size() * sizeof(T);
 }
 
+void expand_bounds(const WtVec3 &point, WtGpuMeshingInputPack &output) {
+	output.bounds_min.x = std::min(output.bounds_min.x, point.x);
+	output.bounds_min.y = std::min(output.bounds_min.y, point.y);
+	output.bounds_min.z = std::min(output.bounds_min.z, point.z);
+	output.bounds_max.x = std::max(output.bounds_max.x, point.x);
+	output.bounds_max.y = std::max(output.bounds_max.y, point.y);
+	output.bounds_max.z = std::max(output.bounds_max.z, point.z);
+}
+
+WtVec3 offset_point(
+	const WtVec3 &origin,
+	const WtVec3 &axis_u,
+	const WtVec3 &axis_v,
+	const WtVec3 &axis_w,
+	float u,
+	float v,
+	float w
+) noexcept {
+	return {
+		origin.x + axis_u.x * u + axis_v.x * v + axis_w.x * w,
+		origin.y + axis_u.y * u + axis_v.y * v + axis_w.y * w,
+		origin.z + axis_u.z * u + axis_v.z * v + axis_w.z * w,
+	};
+}
+
+void transition_basis(
+	std::int32_t orientation,
+	WtVec3 &axis_u,
+	WtVec3 &axis_v,
+	WtVec3 &axis_w
+) noexcept {
+	switch (orientation) {
+	case 0:
+		axis_u = { 0.0F, 1.0F, 0.0F };
+		axis_v = { 0.0F, 0.0F, 1.0F };
+		axis_w = { 1.0F, 0.0F, 0.0F };
+		break;
+	case 1:
+		axis_u = { 0.0F, 1.0F, 0.0F };
+		axis_v = { 0.0F, 0.0F, -1.0F };
+		axis_w = { -1.0F, 0.0F, 0.0F };
+		break;
+	case 2:
+		axis_u = { 0.0F, 0.0F, 1.0F };
+		axis_v = { 1.0F, 0.0F, 0.0F };
+		axis_w = { 0.0F, 1.0F, 0.0F };
+		break;
+	case 3:
+		axis_u = { 0.0F, 0.0F, 1.0F };
+		axis_v = { -1.0F, 0.0F, 0.0F };
+		axis_w = { 0.0F, -1.0F, 0.0F };
+		break;
+	case 4:
+		axis_u = { 1.0F, 0.0F, 0.0F };
+		axis_v = { 0.0F, 1.0F, 0.0F };
+		axis_w = { 0.0F, 0.0F, 1.0F };
+		break;
+	default:
+		axis_u = { 1.0F, 0.0F, 0.0F };
+		axis_v = { 0.0F, -1.0F, 0.0F };
+		axis_w = { 0.0F, 0.0F, -1.0F };
+		break;
+	}
+}
+
+void expand_cell_bounds(
+	const WtVec3 &origin,
+	float spacing,
+	bool transition,
+	std::int32_t orientation,
+	float transition_width,
+	WtGpuMeshingInputPack &output
+) {
+	if (!transition) {
+		expand_bounds(origin, output);
+		expand_bounds({
+			origin.x + spacing,
+			origin.y + spacing,
+			origin.z + spacing,
+		}, output);
+		return;
+	}
+	WtVec3 axis_u;
+	WtVec3 axis_v;
+	WtVec3 axis_w;
+	transition_basis(orientation, axis_u, axis_v, axis_w);
+	for (const float u : { 0.0F, 2.0F * spacing }) {
+		for (const float v : { 0.0F, 2.0F * spacing }) {
+			for (const float w : { 0.0F, transition_width }) {
+				expand_bounds(offset_point(
+					origin, axis_u, axis_v, axis_w, u, v, w
+				), output);
+			}
+		}
+	}
+}
+
 } // namespace
 
 bool wt_pack_gpu_meshing_input(
@@ -78,6 +176,9 @@ bool wt_pack_gpu_meshing_input(
 	output.cell_origins.reserve(output.cell_count * 4U);
 	output.cell_options.reserve(output.cell_count * 4U);
 	output.sample_references.reserve(maximum_samples);
+	const float infinity = std::numeric_limits<float>::infinity();
+	output.bounds_min = { infinity, infinity, infinity };
+	output.bounds_max = { -infinity, -infinity, -infinity };
 
 	for (const WtRecordedMeshingCell &record : request.records) {
 		const bool transition = record.type == WtRecordedCellType::Transition;
@@ -118,6 +219,14 @@ bool wt_pack_gpu_meshing_input(
 		output.cell_options.insert(output.cell_options.end(), {
 			transition_width, isovalue, 0.0F, 0.0F,
 		});
+		expand_cell_bounds(
+			origin,
+			spacing,
+			transition,
+			orientation,
+			transition_width,
+			output
+		);
 		for (unsigned int index = 0; index < sample_count; ++index) {
 			const WtCellSample &sample = transition ?
 				record.transition_input.samples[index] :

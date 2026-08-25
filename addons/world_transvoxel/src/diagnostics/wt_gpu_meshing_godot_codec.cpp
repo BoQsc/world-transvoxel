@@ -86,6 +86,12 @@ godot::Dictionary wt_gpu_meshing_shadow_packed_input(
 	result["input_buffers"] = buffers;
 	result["cell_count"] = static_cast<std::int64_t>(packed.cell_count);
 	result["sample_count"] = static_cast<std::int64_t>(packed.sample_count);
+	result["bounds_min"] = godot::Vector3(
+		packed.bounds_min.x, packed.bounds_min.y, packed.bounds_min.z
+	);
+	result["bounds_max"] = godot::Vector3(
+		packed.bounds_max.x, packed.bounds_max.y, packed.bounds_max.z
+	);
 	result["packed_byte_count"] = static_cast<std::int64_t>(
 		packed.packed_byte_count
 	);

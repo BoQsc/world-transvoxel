@@ -129,6 +129,12 @@ int main() {
 			packed.config[15] == 17,
 		"packed resident identity layout changed"
 	);
+	require(
+		packed.bounds_min.x == -1.0F && packed.bounds_min.y == -2.0F &&
+			packed.bounds_min.z == 7.5F && packed.bounds_max.x == 14.0F &&
+			packed.bounds_max.y == 24.0F && packed.bounds_max.z == 34.0F,
+		"packed resident bounds changed"
+	);
 	require(packed.packed_byte_count > 50000, "packed byte metric is incomplete");
 	WtGpuMeshingShadowRequest invalid_request = packing_request();
 	invalid_request.records[0].regular_input.samples[0].density =

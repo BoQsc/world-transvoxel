@@ -17,6 +17,8 @@ struct WtGpuMeshingInputPack {
 	std::vector<float> cell_options;
 	std::vector<std::int32_t> sample_references;
 	std::array<std::int32_t, 16> config{};
+	WtVec3 bounds_min;
+	WtVec3 bounds_max;
 	std::size_t cell_count = 0;
 	std::size_t sample_count = 0;
 	std::size_t packed_byte_count = 0;

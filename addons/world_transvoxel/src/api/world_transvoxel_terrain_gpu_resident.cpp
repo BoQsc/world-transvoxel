@@ -94,6 +94,8 @@ godot::Dictionary WorldTransvoxelTerrain::pop_gpu_resident_render_request() {
 	);
 	result["gpu_input_buffers"] = packed.get("input_buffers", godot::Array());
 	result["cell_count"] = packed.get("cell_count", 0);
+	result["bounds_min"] = packed.get("bounds_min", godot::Vector3());
+	result["bounds_max"] = packed.get("bounds_max", godot::Vector3());
 	result["packed_byte_count"] = packed.get("packed_byte_count", 0);
 	return result;
 }
