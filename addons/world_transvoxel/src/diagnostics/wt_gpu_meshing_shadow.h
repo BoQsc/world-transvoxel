@@ -30,6 +30,7 @@ struct WtGpuMeshingShadowCapture {
 	std::uint8_t transition_mask = 0;
 	std::uint8_t cached_transition_mask = 0;
 	WtGpuMeshingShadowSurface surface = WtGpuMeshingShadowSurface::Terrain;
+	bool static_water_surface_expected = false;
 	std::vector<WtRecordedMeshingCell> records;
 	std::vector<WtGpuMeshingShadowPage> retained_pages;
 	std::shared_ptr<const WtChunkMeshResult> authority_terrain_mesh;
@@ -79,6 +80,24 @@ struct WtGpuMeshingShadowMetrics {
 	std::uint64_t stale_results = 0;
 	std::uint64_t unknown_results = 0;
 	std::uint64_t identity_mismatches = 0;
+	std::uint64_t resident_ready_results = 0;
+	std::uint64_t resident_rejected_results = 0;
+	std::uint64_t resident_stale_results = 0;
+};
+
+enum class WtGpuMeshingResidentValidationStatus : std::uint8_t {
+	Ready,
+	Rejected,
+	Stale,
+	UnknownRequest,
+	IdentityMismatch,
+};
+
+struct WtGpuMeshingResidentValidation {
+	WtGpuMeshingResidentValidationStatus status =
+		WtGpuMeshingResidentValidationStatus::UnknownRequest;
+	std::uint64_t request_id = 0;
+	std::string error;
 };
 
 class WtGpuMeshingShadowQueue {
@@ -94,6 +113,17 @@ public:
 		std::uint64_t current_source_revision,
 		std::uint64_t current_world_revision,
 		bool matched,
+		std::string error
+	);
+	WtGpuMeshingResidentValidation validate_resident(
+		std::uint64_t request_id,
+		const WtGpuMeshingShadowIdentity &identity,
+		std::uint64_t current_source_revision,
+		std::uint64_t current_world_revision
+	);
+	WtGpuMeshingResidentValidation reject_resident(
+		std::uint64_t request_id,
+		const WtGpuMeshingShadowIdentity &identity,
 		std::string error
 	);
 	WtGpuMeshingShadowMetrics metrics() const noexcept;
@@ -124,6 +154,9 @@ const char *wt_gpu_meshing_shadow_surface_name(
 ) noexcept;
 const char *wt_gpu_meshing_shadow_completion_status_name(
 	WtGpuMeshingShadowCompletionStatus status
+) noexcept;
+const char *wt_gpu_meshing_resident_validation_status_name(
+	WtGpuMeshingResidentValidationStatus status
 ) noexcept;
 
 } // namespace world_transvoxel

@@ -87,6 +87,8 @@ bool WtGpuMeshingShadowQueue::pop(WtGpuMeshingShadowRequest &request) {
 	tracked_request.transition_mask = request.transition_mask;
 	tracked_request.cached_transition_mask = request.cached_transition_mask;
 	tracked_request.surface = request.surface;
+	tracked_request.static_water_surface_expected =
+		request.static_water_surface_expected;
 	tracked_request.request_id = request.request_id;
 	tracked_request.retained_pages = request.retained_pages;
 	tracked_request.authority_terrain_mesh = request.authority_terrain_mesh;
@@ -145,6 +147,87 @@ WtGpuMeshingShadowCompletion WtGpuMeshingShadowQueue::complete(
 	if (matched) ++metrics_.matched_results;
 	else ++metrics_.mismatched_results;
 	return completion;
+}
+
+WtGpuMeshingResidentValidation WtGpuMeshingShadowQueue::validate_resident(
+	std::uint64_t request_id,
+	const WtGpuMeshingShadowIdentity &identity,
+	std::uint64_t current_source_revision,
+	std::uint64_t current_world_revision
+) {
+	std::lock_guard<std::mutex> lock(mutex_);
+	WtGpuMeshingResidentValidation validation;
+	validation.request_id = request_id;
+	const auto found = std::find_if(
+		in_flight_.begin(), in_flight_.end(),
+		[request_id](const WtGpuMeshingShadowRequest &request) {
+			return request.request_id == request_id;
+		}
+	);
+	if (found == in_flight_.end()) {
+		++metrics_.unknown_results;
+		validation.error = "GPU resident request is not in flight";
+		return validation;
+	}
+	WtGpuMeshingShadowRequest request = std::move(*found);
+	in_flight_.erase(found);
+	metrics_.in_flight_requests = in_flight_.size();
+	if (!identity_matches(request, identity)) {
+		validation.status =
+			WtGpuMeshingResidentValidationStatus::IdentityMismatch;
+		validation.error =
+			"GPU resident result identity does not match its request";
+		++metrics_.identity_mismatches;
+		return validation;
+	}
+	if (!enabled_ || request.job.source_revision != current_source_revision ||
+		request.job.world_revision != current_world_revision ||
+		!is_latest_locked(request)) {
+		validation.status = WtGpuMeshingResidentValidationStatus::Stale;
+		validation.error =
+			"GPU resident result became stale before admission";
+		++metrics_.resident_stale_results;
+		return validation;
+	}
+	validation.status = WtGpuMeshingResidentValidationStatus::Ready;
+	++metrics_.resident_ready_results;
+	return validation;
+}
+
+WtGpuMeshingResidentValidation WtGpuMeshingShadowQueue::reject_resident(
+	std::uint64_t request_id,
+	const WtGpuMeshingShadowIdentity &identity,
+	std::string error
+) {
+	std::lock_guard<std::mutex> lock(mutex_);
+	WtGpuMeshingResidentValidation validation;
+	validation.request_id = request_id;
+	const auto found = std::find_if(
+		in_flight_.begin(), in_flight_.end(),
+		[request_id](const WtGpuMeshingShadowRequest &request) {
+			return request.request_id == request_id;
+		}
+	);
+	if (found == in_flight_.end()) {
+		++metrics_.unknown_results;
+		validation.error = "GPU resident request is not in flight";
+		return validation;
+	}
+	WtGpuMeshingShadowRequest request = std::move(*found);
+	in_flight_.erase(found);
+	metrics_.in_flight_requests = in_flight_.size();
+	if (!identity_matches(request, identity)) {
+		validation.status =
+			WtGpuMeshingResidentValidationStatus::IdentityMismatch;
+		validation.error =
+			"Rejected GPU resident identity does not match its request";
+		++metrics_.identity_mismatches;
+		return validation;
+	}
+	validation.status = WtGpuMeshingResidentValidationStatus::Rejected;
+	validation.error = std::move(error);
+	++metrics_.resident_rejected_results;
+	return validation;
 }
 
 WtGpuMeshingShadowMetrics WtGpuMeshingShadowQueue::metrics() const noexcept {
@@ -209,6 +292,21 @@ const char *wt_gpu_meshing_shadow_completion_status_name(
 		case WtGpuMeshingShadowCompletionStatus::Stale: return "STALE";
 		case WtGpuMeshingShadowCompletionStatus::UnknownRequest: return "UNKNOWN_REQUEST";
 		case WtGpuMeshingShadowCompletionStatus::IdentityMismatch: return "IDENTITY_MISMATCH";
+	}
+	return "UNKNOWN_REQUEST";
+}
+
+const char *wt_gpu_meshing_resident_validation_status_name(
+	WtGpuMeshingResidentValidationStatus status
+) noexcept {
+	switch (status) {
+		case WtGpuMeshingResidentValidationStatus::Ready: return "READY";
+		case WtGpuMeshingResidentValidationStatus::Rejected: return "REJECTED";
+		case WtGpuMeshingResidentValidationStatus::Stale: return "STALE";
+		case WtGpuMeshingResidentValidationStatus::UnknownRequest:
+			return "UNKNOWN_REQUEST";
+		case WtGpuMeshingResidentValidationStatus::IdentityMismatch:
+			return "IDENTITY_MISMATCH";
 	}
 	return "UNKNOWN_REQUEST";
 }

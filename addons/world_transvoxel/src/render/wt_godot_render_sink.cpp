@@ -284,6 +284,7 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 			Record &record = iterator->second;
 			record.staged_mesh.unref();
 			record.staged_generation = payload.generation;
+			record.staged_transition_mask = payload.transition_mask;
 			record.staged = true;
 			record.staged_empty = true;
 			record.retiring = false;
@@ -323,6 +324,7 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 		if (should_stage_existing_replacement(payload.key)) {
 			record.staged_mesh = mesh;
 			record.staged_generation = payload.generation;
+			record.staged_transition_mask = payload.transition_mask;
 			record.staged = true;
 			record.staged_empty = false;
 			record.retiring = false;
@@ -360,13 +362,16 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	record.introduction_frame = 0;
 	record.staged_mesh.unref();
 	record.staged_generation = {};
+	record.staged_transition_mask = 0;
 	record.staged_empty = false;
+	record.gpu_resident_replaced = false;
 	record.instance->set_position(to_godot(payload.world_origin));
 	record.instance->set_mesh(mesh);
 	record.instance->set_visible(!record.staged);
 	apply_record_material_override(record);
 	set_record_transparency(record, record.introducing ? 1.0F : 0.0F);
 	record.generation = payload.generation;
+	record.transition_mask = payload.transition_mask;
 	return true;
 }
 
@@ -414,6 +419,7 @@ bool WtGodotRenderSink::begin_render_retirement(const WtChunkKey &key) {
 		record.staged_empty = true;
 		record.staged_mesh.unref();
 		record.staged_generation = {};
+		record.staged_transition_mask = 0;
 		record.retiring = false;
 		record.introducing = false;
 		record.retirement_frame = 0;
@@ -600,8 +606,10 @@ bool WtGodotRenderSink::publish_staged_record(
 		record.instance->set_mesh(record.staged_mesh);
 		apply_record_material_override(record);
 		record.generation = record.staged_generation;
+		record.transition_mask = record.staged_transition_mask;
 		record.staged_mesh.unref();
 		record.staged_generation = {};
+		record.staged_transition_mask = 0;
 		record.retiring = false;
 		record.introducing = false;
 		record.retirement_frame = 0;
@@ -611,6 +619,7 @@ bool WtGodotRenderSink::publish_staged_record(
 	}
 	record.staged = false;
 	record.staged_empty = false;
+	record.gpu_resident_replaced = false;
 	record.instance->set_visible(true);
 	return true;
 }
@@ -631,8 +640,10 @@ void WtGodotRenderSink::publish_staged_records() noexcept {
 			record.instance->set_mesh(record.staged_mesh);
 			apply_record_material_override(record);
 			record.generation = record.staged_generation;
+			record.transition_mask = record.staged_transition_mask;
 			record.staged_mesh.unref();
 			record.staged_generation = {};
+			record.staged_transition_mask = 0;
 			record.staged_empty = false;
 			record.retiring = false;
 			record.introducing = false;
@@ -642,6 +653,7 @@ void WtGodotRenderSink::publish_staged_records() noexcept {
 			set_record_transparency(record, 0.0F);
 		}
 		record.staged = false;
+		record.gpu_resident_replaced = false;
 		record.instance->set_visible(true);
 	}
 	for (auto iterator = records_.begin(); iterator != records_.end();) {
@@ -669,6 +681,60 @@ WtGenerationToken WtGodotRenderSink::staged_generation(
 	const auto iterator = records_.find(key);
 	return iterator == records_.end() ? WtGenerationToken{} :
 		iterator->second.staged_generation;
+}
+
+bool WtGodotRenderSink::can_set_gpu_resident_replacement(
+	const WtChunkKey &key,
+	WtGenerationToken generation,
+	std::uint8_t transition_mask
+) const noexcept {
+	const auto iterator = records_.find(key);
+	return iterator != records_.end() && iterator->second.instance != nullptr &&
+		iterator->second.generation == generation &&
+		iterator->second.transition_mask == transition_mask &&
+		!iterator->second.staged;
+}
+
+bool WtGodotRenderSink::set_gpu_resident_replacement(
+	const WtChunkKey &key,
+	WtGenerationToken generation,
+	std::uint8_t transition_mask,
+	bool active
+) noexcept {
+	if (!on_owner_thread()) return false;
+	if (!can_set_gpu_resident_replacement(key, generation, transition_mask)) {
+		return false;
+	}
+	const auto iterator = records_.find(key);
+	Record &record = iterator->second;
+	record.gpu_resident_replaced = active;
+	record.instance->set_visible(!active);
+	return true;
+}
+
+bool WtGodotRenderSink::gpu_resident_replacement_matches(
+	const WtChunkKey &key,
+	WtGenerationToken generation,
+	std::uint8_t transition_mask
+) const noexcept {
+	const auto iterator = records_.find(key);
+	return iterator != records_.end() && iterator->second.instance != nullptr &&
+		iterator->second.generation == generation &&
+		iterator->second.transition_mask == transition_mask &&
+		!iterator->second.staged && iterator->second.gpu_resident_replaced;
+}
+
+std::size_t WtGodotRenderSink::restore_gpu_resident_replacements() noexcept {
+	if (!on_owner_thread()) return 0;
+	std::size_t restored = 0;
+	for (auto &entry : records_) {
+		Record &record = entry.second;
+		if (!record.gpu_resident_replaced || record.instance == nullptr) continue;
+		record.gpu_resident_replaced = false;
+		record.instance->set_visible(!record.staged);
+		++restored;
+	}
+	return restored;
 }
 
 void WtGodotRenderSink::set_shader_fade_parameter_enabled(

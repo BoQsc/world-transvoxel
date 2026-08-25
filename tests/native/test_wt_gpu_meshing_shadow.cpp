@@ -18,6 +18,7 @@ WtGpuMeshingShadowCapture capture_for(
 	capture.job.world_revision = world_revision;
 	capture.transition_mask = 3;
 	capture.cached_transition_mask = 1;
+	capture.static_water_surface_expected = true;
 	capture.records.resize(1);
 	return capture;
 }
@@ -51,6 +52,10 @@ int main() {
 	WtGpuMeshingShadowRequest first;
 	require(queue.pop(first), "first request did not pop");
 	require(first.records.size() == 1, "popped request lost its cell records");
+	require(
+		first.static_water_surface_expected,
+		"popped request lost its expected surface inventory"
+	);
 	require(
 		!queue.capture(capture_for(12)),
 		"in-flight request was not counted against capacity"
@@ -180,6 +185,43 @@ int main() {
 	require(metrics.stale_results == 1, "stale metric changed after restart");
 	require(metrics.mismatched_results == 1, "mismatch metric was not recorded");
 	require(metrics.in_flight_requests == 0, "completed request remained in flight");
+
+	require(queue.begin(2), "resident validation queue restart failed");
+	require(queue.capture(capture_for(50, 4)), "resident capture failed");
+	WtGpuMeshingShadowRequest resident_request;
+	require(queue.pop(resident_request), "resident request did not pop");
+	const WtGpuMeshingResidentValidation resident_ready =
+		queue.validate_resident(
+			resident_request.request_id,
+			identity_for(resident_request),
+			7,
+			4
+		);
+	require(
+		resident_ready.status == WtGpuMeshingResidentValidationStatus::Ready,
+		"current resident request was not admitted"
+	);
+	require(queue.capture(capture_for(51, 4)), "resident rejection capture failed");
+	WtGpuMeshingShadowRequest rejected_request;
+	require(queue.pop(rejected_request), "resident rejection did not pop");
+	const WtGpuMeshingResidentValidation resident_rejected =
+		queue.reject_resident(
+			rejected_request.request_id,
+			identity_for(rejected_request),
+			"render allocation failed"
+		);
+	require(
+		resident_rejected.status ==
+			WtGpuMeshingResidentValidationStatus::Rejected,
+		"resident rejection was not retained"
+	);
+	const WtGpuMeshingShadowMetrics resident_metrics = queue.metrics();
+	require(
+		resident_metrics.resident_ready_results == 1 &&
+			resident_metrics.resident_rejected_results == 1 &&
+			resident_metrics.matched_results == 0,
+		"resident validation polluted differential result metrics"
+	);
 	queue.end();
 	require(!queue.metrics().enabled, "queue remained enabled after end");
 

@@ -44,6 +44,23 @@ public:
 	void publish_staged_records() noexcept;
 	WtGenerationToken applied_generation(const WtChunkKey &key) const noexcept;
 	WtGenerationToken staged_generation(const WtChunkKey &key) const noexcept;
+	bool can_set_gpu_resident_replacement(
+		const WtChunkKey &key,
+		WtGenerationToken generation,
+		std::uint8_t transition_mask
+	) const noexcept;
+	bool set_gpu_resident_replacement(
+		const WtChunkKey &key,
+		WtGenerationToken generation,
+		std::uint8_t transition_mask,
+		bool active
+	) noexcept;
+	bool gpu_resident_replacement_matches(
+		const WtChunkKey &key,
+		WtGenerationToken generation,
+		std::uint8_t transition_mask
+	) const noexcept;
+	std::size_t restore_gpu_resident_replacements() noexcept;
 	void set_shader_fade_parameter_enabled(bool enabled) noexcept;
 	bool is_shader_fade_parameter_enabled() const noexcept;
 	void set_transition_frames(std::uint32_t frames) noexcept;
@@ -60,6 +77,8 @@ private:
 		godot::Ref<godot::Mesh> staged_mesh;
 		WtGenerationToken generation;
 		WtGenerationToken staged_generation;
+		std::uint8_t transition_mask = 0;
+		std::uint8_t staged_transition_mask = 0;
 		float current_transparency = 0.0F;
 		float retirement_start_transparency = 0.0F;
 		std::uint32_t introduction_frame = 0;
@@ -69,6 +88,7 @@ private:
 		bool retiring = false;
 		bool staged = false;
 		bool staged_empty = false;
+		bool gpu_resident_replaced = false;
 	};
 
 	bool on_owner_thread() const noexcept;

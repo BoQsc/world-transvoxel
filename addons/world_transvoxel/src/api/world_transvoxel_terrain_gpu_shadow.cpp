@@ -4,6 +4,7 @@
 #include "diagnostics/wt_gpu_meshing_godot_codec.h"
 #include "diagnostics/wt_gpu_meshing_shadow.h"
 #include "meshing/wt_material_volume_sample_source.h"
+#include "render/wt_godot_render_sink.h"
 #include "render/wt_render_payload.h"
 #include "services/wt_chunk_application.h"
 #include "services/wt_chunk_resource_payload.h"
@@ -19,65 +20,6 @@
 
 namespace world_transvoxel {
 namespace {
-
-godot::Dictionary shadow_identity(
-	const WtGpuMeshingShadowRequest &request,
-	std::int64_t sample_count
-) {
-	godot::Dictionary identity;
-	identity["page_x"] = request.job.key.x;
-	identity["page_y"] = request.job.key.y;
-	identity["page_z"] = request.job.key.z;
-	identity["lod"] = request.job.key.lod;
-	identity["generation"] = static_cast<std::int64_t>(
-		request.job.generation.value
-	);
-	identity["source_revision"] = static_cast<std::int64_t>(
-		request.job.source_revision
-	);
-	identity["world_revision"] = static_cast<std::int64_t>(
-		request.job.world_revision
-	);
-	identity["transition_mask"] = request.transition_mask;
-	identity["cached_transition_mask"] = request.cached_transition_mask;
-	identity["surface"] = wt_gpu_meshing_shadow_surface_name(request.surface);
-	identity["field_mode"] = request.surface ==
-		WtGpuMeshingShadowSurface::StaticWater ? 1 : 0;
-	identity["sample_count"] = sample_count;
-	return identity;
-}
-
-bool parse_shadow_identity(
-	const godot::Dictionary &dictionary,
-	WtGpuMeshingShadowIdentity &identity
-) {
-	const godot::String surface = dictionary.get("surface", "");
-	if (surface != "terrain" && surface != "static_water") return false;
-	const std::int64_t generation = dictionary.get("generation", 0);
-	const std::int64_t source_revision = dictionary.get("source_revision", 0);
-	const std::int64_t world_revision = dictionary.get("world_revision", -1);
-	const std::int64_t lod = dictionary.get("lod", -1);
-	const std::int64_t transition_mask = dictionary.get("transition_mask", -1);
-	if (generation <= 0 || source_revision <= 0 || world_revision < 0 ||
-		lod < 0 || lod > kWtMaximumLod || transition_mask < 0 ||
-		transition_mask > 0x3f) {
-		return false;
-	}
-	identity.key = {
-		static_cast<std::int32_t>(dictionary.get("page_x", 0)),
-		static_cast<std::int32_t>(dictionary.get("page_y", 0)),
-		static_cast<std::int32_t>(dictionary.get("page_z", 0)),
-		static_cast<std::uint8_t>(lod),
-	};
-	identity.generation.value = static_cast<std::uint64_t>(generation);
-	identity.source_revision = static_cast<std::uint64_t>(source_revision);
-	identity.world_revision = static_cast<std::uint64_t>(world_revision);
-	identity.transition_mask = static_cast<std::uint8_t>(transition_mask);
-	identity.surface = surface == "static_water" ?
-		WtGpuMeshingShadowSurface::StaticWater :
-		WtGpuMeshingShadowSurface::Terrain;
-	return wt_is_valid_chunk_key(identity.key);
-}
 
 bool build_gpu_cell_render_candidate(
 	const WtGpuMeshingShadowRequest &request,
@@ -236,9 +178,62 @@ void WorldTransvoxelTerrain::bind_gpu_meshing_shadow_methods() {
 		godot::D_METHOD("get_gpu_meshing_shadow_metrics"),
 		&WorldTransvoxelTerrain::get_gpu_meshing_shadow_metrics
 	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("begin_gpu_resident_render_publication", "capacity"),
+		&WorldTransvoxelTerrain::begin_gpu_resident_render_publication,
+		DEFVAL(3)
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("end_gpu_resident_render_publication"),
+		&WorldTransvoxelTerrain::end_gpu_resident_render_publication
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("pop_gpu_resident_render_request"),
+		&WorldTransvoxelTerrain::pop_gpu_resident_render_request
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"validate_gpu_resident_render_request", "request_id", "identity"
+		),
+		&WorldTransvoxelTerrain::validate_gpu_resident_render_request
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"get_gpu_resident_render_chunk_readiness", "identity"
+		),
+		&WorldTransvoxelTerrain::get_gpu_resident_render_chunk_readiness
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"reject_gpu_resident_render_request",
+			"request_id",
+			"identity",
+			"error"
+		),
+		&WorldTransvoxelTerrain::reject_gpu_resident_render_request
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"set_gpu_resident_render_chunk_active", "identities", "active"
+		),
+		&WorldTransvoxelTerrain::set_gpu_resident_render_chunk_active
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"reconcile_gpu_resident_render_chunks", "terrain_identities"
+		),
+		&WorldTransvoxelTerrain::reconcile_gpu_resident_render_chunks
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_gpu_resident_render_metrics"),
+		&WorldTransvoxelTerrain::get_gpu_resident_render_metrics
+	);
 }
 
 bool WorldTransvoxelTerrain::begin_gpu_meshing_shadow(std::int64_t capacity) {
+	if (gpu_resident_render_publication_enabled_) {
+		end_gpu_resident_render_publication();
+	}
 	gpu_meshing_publication_enabled_ = false;
 	return gpu_meshing_shadow_ && gpu_meshing_shadow_->begin(
 		static_cast<std::size_t>(std::clamp<std::int64_t>(capacity, 0, 16))
@@ -248,6 +243,9 @@ bool WorldTransvoxelTerrain::begin_gpu_meshing_shadow(std::int64_t capacity) {
 bool WorldTransvoxelTerrain::begin_gpu_meshing_publication(
 	std::int64_t capacity
 ) {
+	if (gpu_resident_render_publication_enabled_) {
+		end_gpu_resident_render_publication();
+	}
 	gpu_meshing_publication_enabled_ = false;
 	gpu_meshing_publication_attempts_ = 0;
 	gpu_meshing_publication_queued_ = 0;
@@ -288,7 +286,7 @@ godot::Dictionary WorldTransvoxelTerrain::pop_gpu_meshing_shadow_request() {
 	);
 	result["status"] = "PASS";
 	result["request_id"] = static_cast<std::int64_t>(request.request_id);
-	result["identity"] = shadow_identity(request, densities.size());
+	result["identity"] = wt_gpu_meshing_shadow_identity(request, densities.size());
 	result["cell_batch"] = batch;
 	return result;
 }
@@ -312,7 +310,7 @@ godot::Dictionary WorldTransvoxelTerrain::complete_gpu_meshing_shadow_request(
 		return result;
 	}
 	WtGpuMeshingShadowIdentity identity;
-	if (!parse_shadow_identity(identity_dictionary, identity)) {
+	if (!wt_parse_gpu_meshing_shadow_identity(identity_dictionary, identity)) {
 		result["status"] = "IDENTITY_MISMATCH";
 		result["error"] = "GPU shadow result identity is invalid";
 		return result;
@@ -367,7 +365,7 @@ WorldTransvoxelTerrain::complete_gpu_meshing_publication_request(
 		return result;
 	}
 	WtGpuMeshingShadowIdentity identity;
-	if (!parse_shadow_identity(identity_dictionary, identity)) {
+	if (!wt_parse_gpu_meshing_shadow_identity(identity_dictionary, identity)) {
 		result["status"] = "IDENTITY_MISMATCH";
 		result["error"] = "GPU publication result identity is invalid";
 		return result;

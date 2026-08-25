@@ -227,6 +227,29 @@ public:
 		const godot::String &error
 	);
 	godot::Dictionary get_gpu_meshing_shadow_metrics() const;
+	bool begin_gpu_resident_render_publication(std::int64_t capacity = 3);
+	void end_gpu_resident_render_publication();
+	godot::Dictionary pop_gpu_resident_render_request();
+	godot::Dictionary validate_gpu_resident_render_request(
+		std::int64_t request_id,
+		const godot::Dictionary &identity
+	);
+	godot::Dictionary get_gpu_resident_render_chunk_readiness(
+		const godot::Dictionary &identity
+	);
+	godot::Dictionary reject_gpu_resident_render_request(
+		std::int64_t request_id,
+		const godot::Dictionary &identity,
+		const godot::String &error
+	);
+	godot::Dictionary set_gpu_resident_render_chunk_active(
+		const godot::Array &identities,
+		bool active
+	);
+	godot::Dictionary reconcile_gpu_resident_render_chunks(
+		const godot::Array &terrain_identities
+	);
+	godot::Dictionary get_gpu_resident_render_metrics() const;
 	bool begin_cpu_causal_trace();
 	void end_cpu_causal_trace();
 	godot::Dictionary get_cpu_causal_trace_events(
@@ -307,6 +330,19 @@ private:
 	std::uint64_t gpu_meshing_publication_stale_application_skips_ = 0;
 	std::uint64_t gpu_meshing_publication_terrain_queued_ = 0;
 	std::uint64_t gpu_meshing_publication_water_queued_ = 0;
+	bool gpu_resident_render_publication_enabled_ = false;
+	std::uint64_t gpu_resident_render_validation_attempts_ = 0;
+	std::uint64_t gpu_resident_render_validation_ready_ = 0;
+	std::uint64_t gpu_resident_render_validation_rejections_ = 0;
+	std::uint64_t gpu_resident_render_stale_skips_ = 0;
+	std::uint64_t gpu_resident_render_readiness_attempts_ = 0;
+	std::uint64_t gpu_resident_render_readiness_waits_ = 0;
+	std::uint64_t gpu_resident_render_readiness_ready_ = 0;
+	std::uint64_t gpu_resident_render_readiness_stale_ = 0;
+	std::uint64_t gpu_resident_render_activated_chunks_ = 0;
+	std::uint64_t gpu_resident_render_retired_chunks_ = 0;
+	std::uint64_t gpu_resident_render_reconciled_retires_ = 0;
+	std::uint64_t gpu_resident_render_restored_cpu_chunks_ = 0;
 	WtWorldLifecycleState last_notified_state_ =
 		WtWorldLifecycleState::Stopped;
 	godot::String synchronous_world_error_ = "ok";

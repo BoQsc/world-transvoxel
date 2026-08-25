@@ -473,6 +473,8 @@ WtPageMeshingRuntimeService::accept_prepared_mesh_completion(
 			capture.cached_transition_mask =
 				completion.prepared.cached_transition_mask;
 			capture.surface = surface;
+			capture.static_water_surface_expected =
+				!completion.water_records.empty();
 			capture.authority_terrain_mesh = completion.mesh;
 			capture.authority_water_mesh = completion.water_mesh;
 			capture.retained_pages.reserve(
