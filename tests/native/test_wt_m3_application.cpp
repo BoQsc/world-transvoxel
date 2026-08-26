@@ -496,6 +496,47 @@ void test_staged_replacement_collision_waits_for_render(
 		"preserved replacement generations did not synchronize");
 }
 
+void test_gpu_placeholder_waits_for_external_activation(
+	const wt::WtRenderPayload &render_source
+) {
+	wt::WtChunkApplicationService service(1, 1, 1);
+	RenderSink render_sink;
+	CollisionSink collision_sink;
+	auto placeholder = std::make_shared<wt::WtRenderPayload>(render_source);
+	placeholder->generation = { 41 };
+	placeholder->publication_source =
+		wt::WtRenderPublicationSource::GpuResidentPlaceholder;
+	check(service.expect_chunk(placeholder->key, { 41 }, false, true, true) ==
+			wt::WtApplicationStatus::Ok &&
+		service.submit_render(placeholder) == wt::WtApplicationStatus::Ok,
+		"GPU placeholder setup failed");
+	service.apply(1, 0, render_sink, collision_sink);
+	const wt::WtChunkApplicationRecord *record =
+		service.find_record(placeholder->key);
+	check(record != nullptr && !record->visual_ready &&
+		record->visual_generation.value == 41 &&
+		record->external_visual_activation_required &&
+		record->staged_replacement && !record->fully_ready(),
+		"GPU placeholder retired coverage before external activation");
+	check(service.confirm_external_visual_activation(
+			placeholder->key, { 40 }
+		) == wt::WtApplicationStatus::StaleGeneration,
+		"stale GPU activation was accepted");
+	check(service.confirm_external_visual_activation(
+			placeholder->key, { 41 }
+		) == wt::WtApplicationStatus::Ok,
+		"current GPU activation was rejected");
+	record = service.find_record(placeholder->key);
+	check(record != nullptr && record->visual_ready &&
+		!record->external_visual_activation_required &&
+		!record->staged_replacement && record->fully_ready(),
+		"GPU activation did not release visual readiness");
+	check(service.confirm_external_visual_activation(
+			placeholder->key, { 41 }
+		) == wt::WtApplicationStatus::AlreadyCurrent,
+		"repeated GPU activation was not idempotent");
+}
+
 void test_cross_lod_replacement_publication_policy() {
 	const wt::WtChunkKey fine { 2, 0, 0, 0 };
 	const wt::WtChunkKey containing_coarse { 1, 0, 0, 1 };
@@ -779,6 +820,7 @@ int main() {
 	constexpr std::size_t stale_cycles = 1000;
 	test_application_service(render, stale_cycles);
 	test_staged_replacement_collision_waits_for_render(render);
+	test_gpu_placeholder_waits_for_external_activation(render);
 	test_cross_lod_replacement_publication_policy();
 	test_collision_deadline_bounds_frame_work(render);
 	if (failure_count != 0) {

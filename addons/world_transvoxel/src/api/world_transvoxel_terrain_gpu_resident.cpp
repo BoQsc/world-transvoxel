@@ -212,8 +212,9 @@ get_gpu_resident_render_chunk_readiness(
 			"GPU resident geometry no longer matches the CPU chunk generation";
 		return result;
 	}
-	if (!record.visual_ready ||
-		record.visual_generation != identity.generation) {
+	if (record.visual_generation != identity.generation ||
+		(!record.visual_ready &&
+			!record.external_visual_activation_required)) {
 		++gpu_resident_render_readiness_waits_;
 		result["status"] = "WAITING_APPLICATION";
 		result["error"] =
@@ -367,7 +368,9 @@ godot::Dictionary WorldTransvoxelTerrain::set_gpu_resident_render_chunk_active(
 	if (!application_ || !application_->copy_record(chunk_identity.key, record) ||
 		record.generation != chunk_identity.generation ||
 		record.visual_generation != chunk_identity.generation ||
-		!record.visual_required || !record.visual_ready ||
+		!record.visual_required ||
+		(!record.visual_ready &&
+			!record.external_visual_activation_required) ||
 		!render_sink_->set_gpu_resident_replacement(
 			chunk_identity.key,
 			chunk_identity.generation,
@@ -376,6 +379,23 @@ godot::Dictionary WorldTransvoxelTerrain::set_gpu_resident_render_chunk_active(
 		)) {
 		result["status"] = "STALE_APPLICATION";
 		result["error"] = "GPU resident chunk cannot replace the CPU visual";
+		return result;
+	}
+	const WtApplicationStatus activation_status =
+		application_->confirm_external_visual_activation(
+			chunk_identity.key, chunk_identity.generation
+		);
+	if (activation_status != WtApplicationStatus::Ok &&
+		activation_status != WtApplicationStatus::AlreadyCurrent) {
+		render_sink_->set_gpu_resident_replacement(
+			chunk_identity.key,
+			chunk_identity.generation,
+			chunk_identity.transition_mask,
+			false
+		);
+		result["status"] = "STALE_APPLICATION";
+		result["error"] =
+			"GPU resident activation did not commit application readiness";
 		return result;
 	}
 	++gpu_resident_render_activated_chunks_;
@@ -411,13 +431,23 @@ godot::Dictionary WorldTransvoxelTerrain::reconcile_gpu_resident_render_chunks(
 			application_->copy_record(identity.key, record) &&
 			record.generation == identity.generation &&
 			record.visual_generation == identity.generation &&
-			record.visual_required && record.visual_ready;
+			record.visual_required &&
+			(record.visual_ready ||
+				record.external_visual_activation_required);
 		if (valid && !render_sink_->gpu_resident_replacement_matches(
 				identity.key, identity.generation, identity.transition_mask
 			)) {
 			valid = render_sink_->set_gpu_resident_replacement(
 				identity.key, identity.generation, identity.transition_mask, true
 			);
+		}
+		if (valid) {
+			const WtApplicationStatus activation_status =
+				application_->confirm_external_visual_activation(
+					identity.key, identity.generation
+				);
+			valid = activation_status == WtApplicationStatus::Ok ||
+				activation_status == WtApplicationStatus::AlreadyCurrent;
 		}
 		if (valid) continue;
 		if (render_sink_) {

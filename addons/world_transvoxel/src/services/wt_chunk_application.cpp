@@ -68,6 +68,7 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 			if (visual_required && !record->visual_required) {
 				record->visual_required = true;
 				record->visual_ready = false;
+				record->external_visual_activation_required = false;
 				changed = true;
 			}
 			if (collision_required && !record->collision_required) {
@@ -142,6 +143,7 @@ WtApplicationStatus WtChunkApplicationService::set_visual_required(
 	if (required) {
 		record->visual_ready = false;
 		record->visual_generation = {};
+		record->external_visual_activation_required = false;
 	}
 	return WtApplicationStatus::Ok;
 }
@@ -166,6 +168,28 @@ WtApplicationStatus WtChunkApplicationService::set_collision_required(
 		record->collision_ready = false;
 		record->collision_generation = {};
 	}
+	return WtApplicationStatus::Ok;
+}
+
+WtApplicationStatus WtChunkApplicationService::confirm_external_visual_activation(
+	const WtChunkKey &key,
+	WtGenerationToken generation
+) {
+	std::lock_guard<std::mutex> lock(records_mutex_);
+	WtChunkApplicationRecord *record = find_record_mutable(key);
+	if (record == nullptr) return WtApplicationStatus::NotFound;
+	if (record->generation != generation ||
+		record->visual_generation != generation) {
+		return WtApplicationStatus::StaleGeneration;
+	}
+	if (!record->visual_required) return WtApplicationStatus::InvalidInput;
+	if (!record->external_visual_activation_required) {
+		return record->visual_ready ? WtApplicationStatus::AlreadyCurrent :
+			WtApplicationStatus::InvalidInput;
+	}
+	record->external_visual_activation_required = false;
+	record->visual_ready = true;
+	if (record->fully_ready()) record->staged_replacement = false;
 	return WtApplicationStatus::Ok;
 }
 
@@ -325,8 +349,11 @@ std::size_t WtChunkApplicationService::apply_render(
 			++metrics_.sink_failures;
 			continue;
 		}
-		record->visual_ready = true;
 		record->visual_generation = payload->generation;
+		record->external_visual_activation_required =
+			payload->publication_source ==
+				WtRenderPublicationSource::GpuResidentPlaceholder;
+		record->visual_ready = !record->external_visual_activation_required;
 		if (record->fully_ready()) {
 			record->staged_replacement = false;
 		}
