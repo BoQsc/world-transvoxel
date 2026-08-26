@@ -270,7 +270,8 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 	const std::vector<WtLodPlannerViewer> &viewers,
 	const std::vector<WtDesiredChunk> &current_desired,
 	const WtCollisionPolicy &collision_policy,
-	WtBalancedLodPlan &output
+	WtBalancedLodPlan &output,
+	bool visual_viewer_collision_enabled
 ) const {
 	output.clear();
 	if (!valid_ || !wt_is_valid_collision_policy(collision_policy)) {
@@ -373,18 +374,20 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 		for (const WtLodPlannerViewer &viewer : ordered) {
 			const double distance = distance_to_chunk(viewer.snapshot, entry.key);
 			nearest = std::min(nearest, distance);
-			const WtCollisionRequirement collision =
-				wt_evaluate_collision_requirement(
-					collision_policy,
-					current != nullptr && current->collision_required,
-					distance
-				);
-			if (collision == WtCollisionRequirement::Invalid) {
-				output.clear();
-				return WtBalancedLodPlannerStatus::InvalidConfiguration;
+			if (visual_viewer_collision_enabled) {
+				const WtCollisionRequirement collision =
+					wt_evaluate_collision_requirement(
+						collision_policy,
+						current != nullptr && current->collision_required,
+						distance
+					);
+				if (collision == WtCollisionRequirement::Invalid) {
+					output.clear();
+					return WtBalancedLodPlannerStatus::InvalidConfiguration;
+				}
+				collision_required = collision_required ||
+					collision == WtCollisionRequirement::Required;
 			}
-			collision_required = collision_required ||
-				collision == WtCollisionRequirement::Required;
 		}
 		const double bounded = std::min(
 			nearest,

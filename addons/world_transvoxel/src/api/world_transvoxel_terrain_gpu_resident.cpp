@@ -55,12 +55,13 @@ void WorldTransvoxelTerrain::end_gpu_resident_render_publication() {
 godot::Dictionary WorldTransvoxelTerrain::pop_gpu_resident_render_request() {
 	godot::Dictionary result;
 	result["schema"] =
-		"world_transvoxel.gpu_resident_render_request.v5";
+		"world_transvoxel.gpu_resident_render_request.v6";
 	result["position_space"] = "world";
 	result["input_stage"] = "pre_mesh_field";
 	result["status"] = "EMPTY";
 	result["gpu_resident_render_publication"] = true;
-	result["cpu_render_visible_until_activation"] = true;
+	result["cpu_render_visible_until_activation"] = false;
+	result["cpu_visual_mesh_omitted"] = false;
 	result["cpu_collision_publication_unchanged"] = true;
 	result["native_input_packing"] = true;
 	result["cpu_topology_input_dependency"] = false;
@@ -99,6 +100,9 @@ godot::Dictionary WorldTransvoxelTerrain::pop_gpu_resident_render_request() {
 	}
 	result["status"] = "PASS";
 	result["request_id"] = static_cast<std::int64_t>(request.request_id);
+	result["cpu_visual_mesh_omitted"] = request.cpu_visual_mesh_omitted;
+	result["cpu_render_visible_until_activation"] =
+		!request.cpu_visual_mesh_omitted;
 	result["identity"] = wt_gpu_meshing_shadow_identity(
 		request, packed.get("sample_count", 0)
 	);
@@ -470,6 +474,9 @@ godot::Dictionary WorldTransvoxelTerrain::get_gpu_resident_render_metrics() cons
 	);
 	result["pre_mesh_field_captures"] = static_cast<std::int64_t>(
 		queue_metrics.pre_mesh_field_captures
+	);
+	result["cpu_visual_mesh_omitted_captures"] = static_cast<std::int64_t>(
+		queue_metrics.cpu_visual_mesh_omitted_captures
 	);
 	result["priority_dequeues"] = static_cast<std::int64_t>(
 		queue_metrics.priority_dequeues

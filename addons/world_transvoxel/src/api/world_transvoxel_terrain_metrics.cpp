@@ -522,6 +522,11 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	);
 	set_metric(output, "page_sample_failures", runtime.page_sample_failures);
 	set_metric(output, "page_mesh_failures", runtime.page_mesh_failures);
+	set_metric(
+		output,
+		"page_gpu_resident_visual_only_completions",
+		runtime.page_gpu_resident_visual_only_completions
+	);
 	set_metric(output, "page_storage_failures", runtime.page_storage_failures);
 	set_metric(output, "page_cache_failures", runtime.page_cache_failures);
 	set_metric(

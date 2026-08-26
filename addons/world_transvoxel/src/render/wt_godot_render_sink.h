@@ -77,8 +77,10 @@ private:
 		godot::Ref<godot::Mesh> staged_mesh;
 		WtGenerationToken generation;
 		WtGenerationToken staged_generation;
+		WtGenerationToken pending_gpu_generation;
 		std::uint8_t transition_mask = 0;
 		std::uint8_t staged_transition_mask = 0;
+		std::uint8_t pending_gpu_transition_mask = 0;
 		float current_transparency = 0.0F;
 		float retirement_start_transparency = 0.0F;
 		std::uint32_t introduction_frame = 0;
@@ -89,6 +91,8 @@ private:
 		bool staged = false;
 		bool staged_empty = false;
 		bool gpu_resident_replaced = false;
+		bool gpu_resident_placeholder = false;
+		bool pending_gpu_resident_placeholder = false;
 	};
 
 	bool on_owner_thread() const noexcept;

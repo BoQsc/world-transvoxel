@@ -14,6 +14,7 @@ struct WtPageMeshingRuntimeService::PreparedMeshJob {
 	std::uint8_t transition_mask = 0;
 	std::uint8_t cached_transition_mask = 0;
 	bool visual_required = true;
+	bool gpu_resident_visual_only = false;
 	std::vector<PreparedDependency> dependencies;
 	WtTerrainMeshReadyCallback terrain_mesh_ready;
 	WtMeshExecutionCallback execution_callback;
@@ -32,6 +33,7 @@ struct WtPageMeshingRuntimeService::PreparedMeshCompletion {
 		WtPageMeshingRuntimeStatus::MeshingFailure;
 	std::uint64_t queue_wait_ns = 0;
 	std::uint64_t execute_time_ns = 0;
+	bool gpu_resident_visual_only = false;
 };
 
 } // namespace world_transvoxel

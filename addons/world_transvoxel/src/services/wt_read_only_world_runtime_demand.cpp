@@ -485,7 +485,8 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 					planning_viewers,
 					desired_->get_desired_chunks(),
 					collision_policy,
-					candidate_plan
+					candidate_plan,
+					config_.visual_viewer_collision_enabled
 				);
 			};
 		plan_status = try_plan_with_retention(
@@ -531,7 +532,8 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 					planning_viewers,
 					desired_->get_desired_chunks(),
 					collision_policy,
-					candidate_plan
+					candidate_plan,
+					config_.visual_viewer_collision_enabled
 				);
 			}
 		}

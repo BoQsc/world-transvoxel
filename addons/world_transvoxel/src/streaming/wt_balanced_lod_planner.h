@@ -57,7 +57,8 @@ public:
 		const std::vector<WtLodPlannerViewer> &viewers,
 		const std::vector<WtDesiredChunk> &current_desired,
 		const WtCollisionPolicy &collision_policy,
-		WtBalancedLodPlan &output
+		WtBalancedLodPlan &output,
+		bool visual_viewer_collision_enabled = true
 	) const;
 
 	std::size_t active_capacity() const noexcept;

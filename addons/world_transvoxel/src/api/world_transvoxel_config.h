@@ -69,6 +69,8 @@ public:
 	double get_collision_activation_distance() const noexcept;
 	void set_collision_deactivation_distance(double value);
 	double get_collision_deactivation_distance() const noexcept;
+	void set_visual_viewer_collision_enabled(bool value);
+	bool is_visual_viewer_collision_enabled() const noexcept;
 	void set_render_transition_frames(std::int64_t value);
 	std::int64_t get_render_transition_frames() const noexcept;
 	void set_shader_fade_parameter_enabled(bool value);
@@ -101,6 +103,7 @@ private:
 	std::int64_t collision_apply_deadline_us_ = 4000;
 	double collision_activation_distance_ = 96.0;
 	double collision_deactivation_distance_ = 128.0;
+	bool visual_viewer_collision_enabled_ = true;
 	std::int64_t render_transition_frames_ = 0;
 	bool shader_fade_parameter_enabled_ = false;
 	bool global_coarse_lod_coverage_ = false;

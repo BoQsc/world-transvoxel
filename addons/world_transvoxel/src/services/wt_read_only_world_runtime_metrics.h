@@ -135,6 +135,7 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t hierarchy_lod_enumerations = 0;
 	std::uint64_t page_sample_failures = 0;
 	std::uint64_t page_mesh_failures = 0;
+	std::uint64_t page_gpu_resident_visual_only_completions = 0;
 	std::uint64_t page_storage_failures = 0;
 	std::uint64_t page_cache_failures = 0;
 	std::uint64_t page_scheduler_backpressure = 0;

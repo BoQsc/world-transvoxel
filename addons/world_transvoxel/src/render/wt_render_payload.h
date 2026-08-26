@@ -24,6 +24,7 @@ struct WtRenderVertex {
 enum class WtRenderPublicationSource : std::uint8_t {
 	CpuAuthority = 0,
 	GpuCellCandidate = 1,
+	GpuResidentPlaceholder = 2,
 };
 
 struct WtRenderPayload {

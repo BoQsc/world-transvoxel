@@ -115,6 +115,7 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 	const WtMeshExecutionCallback &execution_callback,
 	const WtMeshCellCaptureCallback &cell_capture_callback,
 	bool pre_mesh_field_capture,
+	bool collision_required,
 	PreparedMeshJob &prepared
 ) {
 	const std::uint64_t started = steady_time_ns();
@@ -235,6 +236,8 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 	prepared.execution_callback = execution_callback;
 	prepared.cell_capture_callback = cell_capture_callback;
 	prepared.pre_mesh_field_capture = pre_mesh_field_capture;
+	prepared.gpu_resident_visual_only = pre_mesh_field_capture &&
+		visual_required && !collision_required;
 	prepared.dependencies.reserve(record->dependencies.size());
 	for (const Dependency &dependency : record->dependencies) {
 		if (!dependency.page) source_valid = false;
@@ -261,6 +264,8 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 ) {
 	PreparedMeshCompletion completion;
 	completion.prepared = std::move(prepared);
+	completion.gpu_resident_visual_only =
+		completion.prepared.gpu_resident_visual_only;
 	const auto primary = std::lower_bound(
 		completion.prepared.dependencies.begin(),
 		completion.prepared.dependencies.end(),
@@ -331,6 +336,8 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		capture.surface = surface;
 		capture.capture_stage = WtGpuMeshingCaptureStage::PreMeshField;
 		capture.static_water_surface_expected = water_present;
+		capture.cpu_visual_mesh_omitted =
+			completion.prepared.gpu_resident_visual_only;
 		capture.retained_pages.reserve(completion.prepared.dependencies.size());
 		for (const PreparedDependency &dependency :
 				completion.prepared.dependencies) {
@@ -340,12 +347,38 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		completion.prepared.cell_capture_callback(std::move(capture));
 		return true;
 	};
+	const auto initialize_gpu_placeholder_mesh = [&completion](
+		WtChunkMeshResult &mesh
+	) {
+		mesh.key = completion.prepared.job.key;
+		mesh.world_origin = wt_chunk_bounds(completion.prepared.job.key).minimum;
+		mesh.transition_mask = completion.prepared.transition_mask;
+		mesh.cached_transition_mask =
+			completion.prepared.cached_transition_mask;
+	};
 	WtChunkMeshingStatus terrain_status =
 		WtChunkMeshingStatus::SampleSourceFailure;
 	if (source_valid && completion.prepared.cell_capture_callback &&
-		completion.prepared.pre_mesh_field_capture &&
-		!capture_pre_mesh_field(WtGpuMeshingShadowSurface::Terrain)) {
-		terrain_status = WtChunkMeshingStatus::CellBackendFailure;
+		completion.prepared.pre_mesh_field_capture) {
+		if (!capture_pre_mesh_field(WtGpuMeshingShadowSurface::Terrain)) {
+			terrain_status = WtChunkMeshingStatus::CellBackendFailure;
+		} else if (completion.prepared.gpu_resident_visual_only) {
+			initialize_gpu_placeholder_mesh(*completion.mesh);
+			terrain_status = WtChunkMeshingStatus::Ok;
+		} else {
+			terrain_status = mesher.mesh(
+				{
+					completion.prepared.job.key,
+					completion.prepared.transition_mask,
+					completion.prepared.cached_transition_mask,
+					0.0F,
+					0.25F,
+				},
+				*source,
+				*completion.mesh,
+				scratch
+			);
+		}
 	} else if (source_valid && completion.prepared.cell_capture_callback &&
 		!completion.prepared.pre_mesh_field_capture) {
 		WtRecordingMeshingBackend recording(mesher.backend());
@@ -384,10 +417,6 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 	completion.water_mesh = std::make_shared<WtChunkMeshResult>();
 	bool water_mesh_ok = mesh_ok;
 	if (mesh_ok && completion.prepared.visual_required && water_present) {
-		const WtMaterialVolumeSampleSource water_source(
-			*source,
-			kWtStaticWaterMaterialId
-		);
 		WtChunkMeshingStatus water_status =
 			WtChunkMeshingStatus::CellBackendFailure;
 		if (completion.prepared.cell_capture_callback &&
@@ -395,7 +424,14 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 			if (!capture_pre_mesh_field(
 					WtGpuMeshingShadowSurface::StaticWater)) {
 				water_status = WtChunkMeshingStatus::CellBackendFailure;
+			} else if (completion.prepared.gpu_resident_visual_only) {
+				initialize_gpu_placeholder_mesh(*completion.water_mesh);
+				water_status = WtChunkMeshingStatus::Ok;
 			} else {
+				const WtMaterialVolumeSampleSource water_source(
+					*source,
+					kWtStaticWaterMaterialId
+				);
 				water_status = mesher.mesh(
 					{
 						completion.prepared.job.key,
@@ -410,6 +446,10 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 				);
 			}
 		} else if (completion.prepared.cell_capture_callback) {
+			const WtMaterialVolumeSampleSource water_source(
+				*source,
+				kWtStaticWaterMaterialId
+			);
 			WtRecordingMeshingBackend recording(mesher.backend());
 			water_status = WtChunkMesher(recording).mesh(
 				{
@@ -429,6 +469,10 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 				water_status = WtChunkMeshingStatus::CellBackendFailure;
 			}
 		} else {
+			const WtMaterialVolumeSampleSource water_source(
+				*source,
+				kWtStaticWaterMaterialId
+			);
 			water_status = mesher.mesh(
 				{
 					completion.prepared.job.key,
@@ -444,13 +488,7 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		}
 		water_mesh_ok = water_status == WtChunkMeshingStatus::Ok;
 	} else if (mesh_ok) {
-		completion.water_mesh->key = completion.prepared.job.key;
-		completion.water_mesh->world_origin =
-			wt_chunk_bounds(completion.prepared.job.key).minimum;
-		completion.water_mesh->transition_mask =
-			completion.prepared.transition_mask;
-		completion.water_mesh->cached_transition_mask =
-			completion.prepared.cached_transition_mask;
+		initialize_gpu_placeholder_mesh(*completion.water_mesh);
 	}
 	completion.status = mesh_ok && water_mesh_ok ?
 		WtPageMeshingRuntimeStatus::Ok :
@@ -499,6 +537,7 @@ WtPageMeshingRuntimeService::accept_prepared_mesh_completion(
 		record - records_.begin()
 	);
 	if (completion.status == WtPageMeshingRuntimeStatus::Ok &&
+		!completion.gpu_resident_visual_only &&
 		completion.prepared.terrain_mesh_ready &&
 		!completion.prepared.terrain_mesh_ready({
 			record->key,
@@ -564,8 +603,12 @@ WtPageMeshingRuntimeService::accept_prepared_mesh_completion(
 	}
 	record->mesh = std::move(completion.mesh);
 	record->water_mesh = std::move(completion.water_mesh);
+	record->gpu_resident_visual_only = completion.gpu_resident_visual_only;
 	record->phase = WtPageMeshingRuntimePhase::MeshReady;
 	++metrics_.mesh_successes;
+	if (completion.gpu_resident_visual_only) {
+		++metrics_.gpu_resident_visual_only_completions;
+	}
 	const WtPageMeshingRuntimeStatus status =
 		submit_pending_result(record_index, scheduler);
 	record_time();

@@ -204,18 +204,20 @@ Opt-in GPU-resident render publication:
 - `get_gpu_resident_render_metrics() -> Dictionary`
 - `end_gpu_resident_render_publication()`
 
-Resident request schema `world_transvoxel.gpu_resident_render_request.v4`
-captures immutable field inputs before CPU Transvoxel topology. It reports
-`input_stage=pre_mesh_field`, `cpu_topology_input_dependency=false`, and keeps
-`cpu_field_sampling=true` until production density/material field generation is
-separately moved and qualified on the GPU. CPU collision authority is unchanged.
+Resident request schema `world_transvoxel.gpu_resident_render_request.v6`
+captures immutable page-lattice inputs before CPU Transvoxel topology. It reports
+`input_stage=pre_mesh_field`, `cpu_topology_input_dependency=false`,
+`cpu_field_sampling=false`, and GPU density/material field generation. CPU
+collision authority is unchanged.
 
-The default-off v4 request returns 13 native-packed GPU input buffers, cell and
+The default-off v6 request returns 13 native-packed GPU input buffers, cell and
 byte counts, and the exact page/generation/revision/surface identity. It does
-not export the diagnostic `cell_batch`, invoke a fallback mesher, replace CPU
-collision authority, or hide the CPU visual before native freshness/readiness
-validation and atomic surface-set activation succeed. A native packing failure
-is rejected immediately so it cannot retain bounded queue capacity.
+not export the diagnostic `cell_batch`, invoke a fallback mesher, or replace CPU
+collision authority. `cpu_visual_mesh_omitted=true` proves that a non-collision
+chunk did not build CPU visual topology. Collision-required chunks report
+`false` and retain CPU topology only for targeted physics. Native packing and
+resident allocation failures are rejected immediately so they cannot retain
+bounded queue capacity.
 
 Before CPU meshing begins, the runtime reserves one bounded capture slot for a
 single-surface queue or two slots when the queue can represent the atomic

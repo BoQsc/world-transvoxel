@@ -1612,6 +1612,7 @@ void test_runtime_lifecycle(
 					expected_field_cells == 4864;
 				++pre_mesh_field_capture_count;
 			},
+			true,
 			true
 		) ==
 			wt::WtPageMeshingRuntimeStatus::Ok,
@@ -1638,7 +1639,8 @@ void test_runtime_lifecycle(
 		runtime.pop_mesh_completion(mesh_completion) &&
 		mesh_completion.key == fixture.coarse_key &&
 		mesh_completion.generation == sample.generation &&
-		mesh_completion.mesh != nullptr,
+			mesh_completion.mesh != nullptr &&
+			!mesh_completion.gpu_resident_visual_only,
 		"runtime mesh completion ownership mismatch"
 	);
 	std::uint64_t mesh_hash = 14695981039346656037ULL;

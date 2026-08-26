@@ -28,19 +28,22 @@ bool WtGpuMeshingShadowQueue::begin(
 }
 
 void WtGpuMeshingShadowQueue::end() {
-	std::lock_guard<std::mutex> lock(mutex_);
-	enabled_ = false;
-	retain_publication_authority_ = false;
-	capture_stage_ = WtGpuMeshingCaptureStage::PostMeshAuthority;
-	capacity_ = 0;
-	queued_.clear();
-	in_flight_.clear();
-	capture_reservations_.clear();
-	metrics_.enabled = false;
-	metrics_.capacity = 0;
-	metrics_.queued_requests = 0;
-	metrics_.in_flight_requests = 0;
-	metrics_.reserved_capture_slots = 0;
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		enabled_ = false;
+		retain_publication_authority_ = false;
+		capture_stage_ = WtGpuMeshingCaptureStage::PostMeshAuthority;
+		capacity_ = 0;
+		queued_.clear();
+		in_flight_.clear();
+		capture_reservations_.clear();
+		metrics_.enabled = false;
+		metrics_.capacity = 0;
+		metrics_.queued_requests = 0;
+		metrics_.in_flight_requests = 0;
+		metrics_.reserved_capture_slots = 0;
+	}
+	notify_capacity_available();
 }
 
 bool WtGpuMeshingShadowQueue::enabled() const noexcept {
@@ -51,6 +54,13 @@ bool WtGpuMeshingShadowQueue::enabled() const noexcept {
 bool WtGpuMeshingShadowQueue::captures_pre_mesh_field() const noexcept {
 	std::lock_guard<std::mutex> lock(mutex_);
 	return enabled_ && capture_stage_ == WtGpuMeshingCaptureStage::PreMeshField;
+}
+
+void WtGpuMeshingShadowQueue::set_capacity_available_notifier(
+	std::function<void()> notifier
+) {
+	std::lock_guard<std::mutex> lock(notifier_mutex_);
+	capacity_available_notifier_ = std::move(notifier);
 }
 
 std::uint64_t WtGpuMeshingShadowQueue::reserve_capture_slots(
@@ -136,6 +146,7 @@ bool WtGpuMeshingShadowQueue::capture_reserved(
 		!same_job_version(reservation->job, capture.job)) {
 		return false;
 	}
+	const bool cpu_visual_mesh_omitted = capture.cpu_visual_mesh_omitted;
 	WtGpuMeshingShadowRequest request;
 	static_cast<WtGpuMeshingShadowCapture &>(request) = std::move(capture);
 	if (!retain_publication_authority_) {
@@ -166,6 +177,9 @@ bool WtGpuMeshingShadowQueue::capture_reserved(
 	if (capture_stage_ == WtGpuMeshingCaptureStage::PreMeshField) {
 		++metrics_.pre_mesh_field_captures;
 	}
+	if (cpu_visual_mesh_omitted) {
+		++metrics_.cpu_visual_mesh_omitted_captures;
+	}
 	metrics_.queued_requests = queued_.size();
 	return true;
 }
@@ -185,12 +199,14 @@ void WtGpuMeshingShadowQueue::release_capture_slots(
 	metrics_.reserved_capture_slots -= reservation->remaining_slots;
 	metrics_.released_capture_slots += reservation->remaining_slots;
 	capture_reservations_.erase(reservation);
+	notify_capacity_available();
 }
 
 bool WtGpuMeshingShadowQueue::capture(WtGpuMeshingShadowCapture capture) {
 	if (capture.records.empty() && capture.retained_pages.empty()) return false;
 	std::lock_guard<std::mutex> lock(mutex_);
 	if (!enabled_ || capture.capture_stage != capture_stage_) return false;
+	const bool cpu_visual_mesh_omitted = capture.cpu_visual_mesh_omitted;
 	WtGpuMeshingShadowRequest request;
 	static_cast<WtGpuMeshingShadowCapture &>(request) = std::move(capture);
 	if (!retain_publication_authority_) {
@@ -216,6 +232,9 @@ bool WtGpuMeshingShadowQueue::capture(WtGpuMeshingShadowCapture capture) {
 		if (capture_stage_ == WtGpuMeshingCaptureStage::PreMeshField) {
 			++metrics_.pre_mesh_field_captures;
 		}
+		if (cpu_visual_mesh_omitted) {
+			++metrics_.cpu_visual_mesh_omitted_captures;
+		}
 		++metrics_.superseded_queued_requests;
 		metrics_.queued_requests = queued_.size();
 		return true;
@@ -225,6 +244,9 @@ bool WtGpuMeshingShadowQueue::capture(WtGpuMeshingShadowCapture capture) {
 	++metrics_.captured_requests;
 	if (capture_stage_ == WtGpuMeshingCaptureStage::PreMeshField) {
 		++metrics_.pre_mesh_field_captures;
+	}
+	if (cpu_visual_mesh_omitted) {
+		++metrics_.cpu_visual_mesh_omitted_captures;
 	}
 	metrics_.queued_requests = queued_.size();
 	return true;
@@ -268,6 +290,7 @@ bool WtGpuMeshingShadowQueue::pop(WtGpuMeshingShadowRequest &request) {
 	if (priority_dequeue) ++metrics_.priority_dequeues;
 	metrics_.dequeue_superseded_requests += coalesced;
 	metrics_.superseded_queued_requests += coalesced;
+	if (coalesced != 0) notify_capacity_available();
 	WtGpuMeshingShadowRequest tracked_request;
 	tracked_request.job = request.job;
 	tracked_request.transition_mask = request.transition_mask;
@@ -276,6 +299,7 @@ bool WtGpuMeshingShadowQueue::pop(WtGpuMeshingShadowRequest &request) {
 	tracked_request.capture_stage = request.capture_stage;
 	tracked_request.static_water_surface_expected =
 		request.static_water_surface_expected;
+	tracked_request.cpu_visual_mesh_omitted = request.cpu_visual_mesh_omitted;
 	tracked_request.request_id = request.request_id;
 	tracked_request.retained_pages = request.retained_pages;
 	tracked_request.authority_terrain_mesh = request.authority_terrain_mesh;
@@ -311,6 +335,7 @@ WtGpuMeshingShadowCompletion WtGpuMeshingShadowQueue::complete(
 	WtGpuMeshingShadowRequest request = std::move(*found);
 	in_flight_.erase(found);
 	metrics_.in_flight_requests = in_flight_.size();
+	notify_capacity_available();
 	completion.retained_request = std::move(request);
 	completion.has_retained_request = true;
 	const WtGpuMeshingShadowRequest &retained = completion.retained_request;
@@ -359,6 +384,7 @@ WtGpuMeshingResidentValidation WtGpuMeshingShadowQueue::validate_resident(
 	WtGpuMeshingShadowRequest request = std::move(*found);
 	in_flight_.erase(found);
 	metrics_.in_flight_requests = in_flight_.size();
+	notify_capacity_available();
 	if (!identity_matches(request, identity)) {
 		validation.status =
 			WtGpuMeshingResidentValidationStatus::IdentityMismatch;
@@ -403,6 +429,7 @@ WtGpuMeshingResidentValidation WtGpuMeshingShadowQueue::reject_resident(
 	WtGpuMeshingShadowRequest request = std::move(*found);
 	in_flight_.erase(found);
 	metrics_.in_flight_requests = in_flight_.size();
+	notify_capacity_available();
 	if (!identity_matches(request, identity)) {
 		validation.status =
 			WtGpuMeshingResidentValidationStatus::IdentityMismatch;
@@ -425,6 +452,15 @@ WtGpuMeshingShadowMetrics WtGpuMeshingShadowQueue::metrics() const noexcept {
 	result.queued_requests = queued_.size();
 	result.in_flight_requests = in_flight_.size();
 	return result;
+}
+
+void WtGpuMeshingShadowQueue::notify_capacity_available() const {
+	std::function<void()> notifier;
+	{
+		std::lock_guard<std::mutex> lock(notifier_mutex_);
+		notifier = capacity_available_notifier_;
+	}
+	if (notifier) notifier();
 }
 
 bool WtGpuMeshingShadowQueue::identity_matches(

@@ -284,6 +284,20 @@ bool run_g21_near_field_capacity_regression(
 		minimum_collision_priority > maximum_visual_only_priority,
 		"player collision demand does not outrank visual-only streaming"
 	);
+	wt::WtBalancedLodPlan visual_only_plan;
+	check(
+		planner.plan(viewers, {}, {}, visual_only_plan, false) ==
+			wt::WtBalancedLodPlannerStatus::Ok &&
+		visual_only_plan.entries.size() == plan.entries.size() &&
+		std::all_of(
+			visual_only_plan.demands.begin(),
+			visual_only_plan.demands.end(),
+			[](const wt::WtViewerChunkDemand &demand) {
+				return demand.visual_required && !demand.collision_required;
+			}
+		),
+		"visual-only viewer policy still synthesized collision demand"
+	);
 	return entry_count <= 8192 && nearest_coarse_distance >= 48.0;
 }
 

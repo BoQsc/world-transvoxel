@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -38,6 +39,7 @@ struct WtGpuMeshingShadowCapture {
 	WtGpuMeshingCaptureStage capture_stage =
 		WtGpuMeshingCaptureStage::PostMeshAuthority;
 	bool static_water_surface_expected = false;
+	bool cpu_visual_mesh_omitted = false;
 	std::vector<WtRecordedMeshingCell> records;
 	std::vector<WtGpuMeshingShadowPage> retained_pages;
 	std::shared_ptr<const WtChunkMeshResult> authority_terrain_mesh;
@@ -88,6 +90,7 @@ struct WtGpuMeshingShadowMetrics {
 	std::uint64_t reserved_captures = 0;
 	std::uint64_t released_capture_slots = 0;
 	std::uint64_t pre_mesh_field_captures = 0;
+	std::uint64_t cpu_visual_mesh_omitted_captures = 0;
 	std::uint64_t priority_dequeues = 0;
 	std::uint64_t dequeue_superseded_requests = 0;
 	std::uint64_t matched_results = 0;
@@ -126,6 +129,7 @@ public:
 	void end();
 	bool enabled() const noexcept;
 	bool captures_pre_mesh_field() const noexcept;
+	void set_capacity_available_notifier(std::function<void()> notifier);
 	std::uint64_t reserve_capture_slots(const WtChunkJob &job);
 	bool capture_reserved(
 		std::uint64_t reservation_id,
@@ -183,8 +187,11 @@ private:
 		const WtChunkJob &right
 	) noexcept;
 	bool is_latest_locked(const WtGpuMeshingShadowRequest &request) const noexcept;
+	void notify_capacity_available() const;
 
 	mutable std::mutex mutex_;
+	mutable std::mutex notifier_mutex_;
+	std::function<void()> capacity_available_notifier_;
 	bool enabled_ = false;
 	bool retain_publication_authority_ = false;
 	WtGpuMeshingCaptureStage capture_stage_ =

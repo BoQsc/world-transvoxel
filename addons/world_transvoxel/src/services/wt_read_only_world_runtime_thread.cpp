@@ -20,6 +20,11 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 	if (!valid_) return WtReadOnlyRuntimeStatus::InvalidConfiguration;
 	storage_.set_completion_notifier([this]() { notify_work(); });
 	page_runtime_->set_mesh_completion_notifier([this]() { notify_work(); });
+	if (gpu_meshing_shadow_) {
+		gpu_meshing_shadow_->set_capacity_available_notifier(
+			[this]() { notify_work(); }
+		);
+	}
 	std::uint64_t observed_wake = 0;
 	while (!stop_requested_.load()) {
 		// Foreground edits must not sit behind a potentially large viewer-plan
@@ -55,12 +60,15 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 		if (last_status_.load() != WtReadOnlyRuntimeStatus::Ok) break;
 		if (!progressed) {
 			std::unique_lock<std::mutex> lock(wake_mutex_);
-			observed_wake = wake_sequence_;
 			wake_condition_.wait(lock, [&]() {
 				return stop_requested_.load() ||
 					wake_sequence_ != observed_wake;
 			});
+			observed_wake = wake_sequence_;
 		}
+	}
+	if (gpu_meshing_shadow_) {
+		gpu_meshing_shadow_->set_capacity_available_notifier({});
 	}
 	page_runtime_->set_mesh_completion_notifier({});
 	storage_.set_completion_notifier({});
@@ -376,6 +384,8 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 		const WtPageMeshingRuntimeMetrics page = page_runtime_->get_metrics();
 		snapshot.page_sample_failures = page.sample_failures;
 		snapshot.page_mesh_failures = page.mesh_failures;
+		snapshot.page_gpu_resident_visual_only_completions =
+			page.gpu_resident_visual_only_completions;
 		snapshot.page_storage_failures = page.storage_failures;
 		snapshot.page_cache_failures = page.cache_failures;
 		snapshot.page_scheduler_backpressure = page.scheduler_backpressure;

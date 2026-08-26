@@ -277,6 +277,38 @@ void WtGodotRenderSink::apply_record_material_override(Record &record) {
 
 bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	if (!on_owner_thread()) return false;
+	if (payload.publication_source ==
+			WtRenderPublicationSource::GpuResidentPlaceholder) {
+		Record &record = records_[payload.key];
+		if (record.instance == nullptr) {
+			record.instance = memnew(godot::MeshInstance3D);
+			record.key = payload.key;
+			record.instance->set_name(chunk_name(payload.key));
+			record.instance->set_position(to_godot(payload.world_origin));
+			record.instance->set_visible(false);
+			owner_.add_child(record.instance);
+			record.generation = payload.generation;
+			record.transition_mask = payload.transition_mask;
+			record.gpu_resident_placeholder = true;
+			record.gpu_resident_replaced = false;
+			return true;
+		}
+		if (record.generation == payload.generation) {
+			record.transition_mask = payload.transition_mask;
+			record.instance->set_mesh(godot::Ref<godot::Mesh>());
+			record.instance->set_visible(false);
+			record.gpu_resident_placeholder = true;
+			record.gpu_resident_replaced = false;
+			record.pending_gpu_resident_placeholder = false;
+			record.pending_gpu_generation = {};
+			record.pending_gpu_transition_mask = 0;
+			return true;
+		}
+		record.pending_gpu_generation = payload.generation;
+		record.pending_gpu_transition_mask = payload.transition_mask;
+		record.pending_gpu_resident_placeholder = true;
+		return true;
+	}
 	if (payload.indices.empty() && payload.water_indices.empty()) {
 		const auto iterator = records_.find(payload.key);
 		if (iterator != records_.end() &&
@@ -313,6 +345,9 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	}
 
 	Record &record = records_[payload.key];
+	record.pending_gpu_generation = {};
+	record.pending_gpu_transition_mask = 0;
+	record.pending_gpu_resident_placeholder = false;
 	const bool created = record.instance == nullptr;
 	if (created) {
 		record.instance = memnew(godot::MeshInstance3D);
@@ -365,6 +400,7 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 	record.staged_transition_mask = 0;
 	record.staged_empty = false;
 	record.gpu_resident_replaced = false;
+	record.gpu_resident_placeholder = false;
 	record.instance->set_position(to_godot(payload.world_origin));
 	record.instance->set_mesh(mesh);
 	record.instance->set_visible(!record.staged);
@@ -689,10 +725,15 @@ bool WtGodotRenderSink::can_set_gpu_resident_replacement(
 	std::uint8_t transition_mask
 ) const noexcept {
 	const auto iterator = records_.find(key);
-	return iterator != records_.end() && iterator->second.instance != nullptr &&
-		iterator->second.generation == generation &&
-		iterator->second.transition_mask == transition_mask &&
-		!iterator->second.staged;
+	if (iterator == records_.end() || iterator->second.instance == nullptr) {
+		return false;
+	}
+	const Record &record = iterator->second;
+	return (record.generation == generation &&
+			record.transition_mask == transition_mask && !record.staged) ||
+		(record.pending_gpu_resident_placeholder &&
+			record.pending_gpu_generation == generation &&
+			record.pending_gpu_transition_mask == transition_mask);
 }
 
 bool WtGodotRenderSink::set_gpu_resident_replacement(
@@ -707,8 +748,30 @@ bool WtGodotRenderSink::set_gpu_resident_replacement(
 	}
 	const auto iterator = records_.find(key);
 	Record &record = iterator->second;
+	if (record.pending_gpu_resident_placeholder &&
+		record.pending_gpu_generation == generation &&
+		record.pending_gpu_transition_mask == transition_mask) {
+		if (!active) {
+			record.pending_gpu_resident_placeholder = false;
+			record.pending_gpu_generation = {};
+			record.pending_gpu_transition_mask = 0;
+			return true;
+		}
+		record.generation = record.pending_gpu_generation;
+		record.transition_mask = record.pending_gpu_transition_mask;
+		record.pending_gpu_resident_placeholder = false;
+		record.pending_gpu_generation = {};
+		record.pending_gpu_transition_mask = 0;
+		record.instance->set_mesh(godot::Ref<godot::Mesh>());
+		record.gpu_resident_placeholder = true;
+		record.staged = false;
+		record.staged_empty = false;
+		record.staged_mesh.unref();
+		record.staged_generation = {};
+		record.staged_transition_mask = 0;
+	}
 	record.gpu_resident_replaced = active;
-	record.instance->set_visible(!active);
+	record.instance->set_visible(!active && !record.gpu_resident_placeholder);
 	return true;
 }
 
@@ -731,8 +794,10 @@ std::size_t WtGodotRenderSink::restore_gpu_resident_replacements() noexcept {
 		Record &record = entry.second;
 		if (!record.gpu_resident_replaced || record.instance == nullptr) continue;
 		record.gpu_resident_replaced = false;
-		record.instance->set_visible(!record.staged);
-		++restored;
+		record.instance->set_visible(
+			!record.staged && !record.gpu_resident_placeholder
+		);
+		if (!record.gpu_resident_placeholder) ++restored;
 	}
 	return restored;
 }

@@ -84,6 +84,21 @@ void WorldTransvoxelConfig::_bind_methods() {
 		"0,1000000,0.01,or_greater"
 	);
 	godot::ClassDB::bind_method(
+		godot::D_METHOD("set_visual_viewer_collision_enabled", "enabled"),
+		&WorldTransvoxelConfig::set_visual_viewer_collision_enabled
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("is_visual_viewer_collision_enabled"),
+		&WorldTransvoxelConfig::is_visual_viewer_collision_enabled
+	);
+	ADD_PROPERTY(
+		godot::PropertyInfo(
+			godot::Variant::BOOL, "visual_viewer_collision_enabled"
+		),
+		"set_visual_viewer_collision_enabled",
+		"is_visual_viewer_collision_enabled"
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD("set_shader_fade_parameter_enabled", "enabled"),
 		&WorldTransvoxelConfig::set_shader_fade_parameter_enabled
 	);
@@ -158,6 +173,8 @@ WtRuntimeConfig WorldTransvoxelConfig::to_native() const noexcept {
 	result.collision_apply_budget = collision_apply_budget_;
 	result.collision_activation_distance = collision_activation_distance_;
 	result.collision_deactivation_distance = collision_deactivation_distance_;
+	result.visual_viewer_collision_enabled =
+		visual_viewer_collision_enabled_;
 	result.global_coarse_lod_coverage = global_coarse_lod_coverage_;
 	return result;
 }
@@ -249,6 +266,16 @@ void WorldTransvoxelConfig::set_collision_deactivation_distance(double value) {
 
 double WorldTransvoxelConfig::get_collision_deactivation_distance() const noexcept {
 	return collision_deactivation_distance_;
+}
+
+void WorldTransvoxelConfig::set_visual_viewer_collision_enabled(bool value) {
+	if (visual_viewer_collision_enabled_ == value) return;
+	visual_viewer_collision_enabled_ = value;
+	emit_changed();
+}
+
+bool WorldTransvoxelConfig::is_visual_viewer_collision_enabled() const noexcept {
+	return visual_viewer_collision_enabled_;
 }
 
 void WorldTransvoxelConfig::set_shader_fade_parameter_enabled(bool value) {

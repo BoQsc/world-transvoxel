@@ -167,6 +167,9 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 WtReadOnlyWorldRuntime::~WtReadOnlyWorldRuntime() {
 	storage_.set_trace_observer({});
 	if (scheduler_) scheduler_->set_queue_trace_observer({});
+	if (gpu_meshing_shadow_) {
+		gpu_meshing_shadow_->set_capacity_available_notifier({});
+	}
 	request_stop();
 	if (page_runtime_) {
 		page_runtime_->set_mesh_completion_notifier({});

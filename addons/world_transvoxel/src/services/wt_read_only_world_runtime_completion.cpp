@@ -145,6 +145,41 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			!application_record.visual_required) {
 			continue;
 		}
+		if (completion.gpu_resident_visual_only) {
+			auto render = std::make_shared<WtRenderPayload>();
+			render->key = completion.key;
+			render->generation = completion.generation;
+			render->world_origin = completion.mesh->world_origin;
+			render->transition_mask = completion.mesh->transition_mask;
+			render->publication_source =
+				WtRenderPublicationSource::GpuResidentPlaceholder;
+			if (resource_cache_->insert_render(render, record->generation) !=
+					WtChunkResourceCacheStatus::Ok) {
+				set_failure(
+					WtReadOnlyRuntimeStatus::PipelineRenderCompletionFailure
+				);
+				break;
+			}
+			WtReadOnlyPublication publication;
+			publication.kind = WtReadOnlyPublicationKind::RenderPayload;
+			publication.key = render->key;
+			publication.generation = render->generation;
+			publication.render = render;
+			publication.staged_replacement =
+				application_record.staged_replacement;
+			if (!push_publication(std::move(publication))) {
+				if (!stop_requested_.load()) {
+					set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
+				}
+				break;
+			}
+			std::lock_guard<std::mutex> lock(metrics_mutex_);
+			++metrics_.mesh_completions;
+			if (completion.mesh->transition_mask != 0) {
+				++metrics_.transition_mesh_completions;
+			}
+			continue;
+		}
 		std::shared_ptr<WtCollisionPayload> collision;
 		if (application_record.staged_replacement &&
 			!prepare_terrain_collision_payload(

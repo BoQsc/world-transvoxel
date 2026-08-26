@@ -77,6 +77,7 @@ struct WtPageMeshCompletion {
 	WtGenerationToken generation;
 	std::shared_ptr<const WtChunkMeshResult> mesh;
 	std::shared_ptr<const WtChunkMeshResult> water_mesh;
+	bool gpu_resident_visual_only = false;
 };
 
 struct WtTerrainMeshCompletion {
@@ -116,6 +117,7 @@ struct WtPageMeshingRuntimeMetrics {
 	std::uint64_t sample_failures = 0;
 	std::uint64_t mesh_successes = 0;
 	std::uint64_t mesh_failures = 0;
+	std::uint64_t gpu_resident_visual_only_completions = 0;
 	std::uint64_t surface_shift_rebuilds = 0;
 	std::uint64_t surface_shift_failures = 0;
 	std::uint64_t scheduler_backpressure = 0;
@@ -201,7 +203,8 @@ public:
 		const WtTerrainMeshReadyCallback &terrain_mesh_ready = {},
 		bool visual_required = true,
 		const WtMeshCellCaptureCallback &cell_capture_callback = {},
-		bool pre_mesh_field_capture = false
+		bool pre_mesh_field_capture = false,
+		bool collision_required = false
 	);
 	WtPageMeshingRuntimeStatus dispatch_mesh_job(
 		const WtChunkJob &job,
@@ -213,7 +216,8 @@ public:
 		bool visual_required = true,
 		const WtMeshExecutionCallback &execution_callback = {},
 		const WtMeshCellCaptureCallback &cell_capture_callback = {},
-		bool pre_mesh_field_capture = false
+		bool pre_mesh_field_capture = false,
+		bool collision_required = false
 	);
 	WtPageMeshingRuntimeStatus process_async_mesh_completions(
 		WtStreamScheduler &scheduler,
@@ -299,6 +303,7 @@ private:
 		std::vector<Dependency> dependencies;
 		std::shared_ptr<const WtChunkMeshResult> mesh;
 		std::shared_ptr<const WtChunkMeshResult> water_mesh;
+		bool gpu_resident_visual_only = false;
 	};
 	struct LoadingRetryCandidate {
 		WtChunkKey key;
@@ -345,6 +350,7 @@ private:
 		const WtMeshExecutionCallback &execution_callback,
 		const WtMeshCellCaptureCallback &cell_capture_callback,
 		bool pre_mesh_field_capture,
+		bool collision_required,
 		PreparedMeshJob &prepared
 	);
 	static PreparedMeshCompletion execute_prepared_mesh_job(

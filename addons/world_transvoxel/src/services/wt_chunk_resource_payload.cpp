@@ -153,7 +153,7 @@ bool wt_is_valid_render_payload(const WtRenderPayload &render) noexcept {
 		render.world_origin != wt_chunk_bounds(render.key).minimum ||
 		static_cast<std::uint8_t>(render.publication_source) >
 			static_cast<std::uint8_t>(
-				WtRenderPublicationSource::GpuCellCandidate
+				WtRenderPublicationSource::GpuResidentPlaceholder
 			) ||
 		(render.transition_mask & 0xC0U) != 0 ||
 		render.vertices.size() > kWtMaximumRenderVertices ||
