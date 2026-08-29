@@ -466,7 +466,7 @@ std::size_t WtChunkApplicationService::apply_deferred_collisions(
 			iterator = deferred_collisions_.erase(iterator);
 			continue;
 		}
-		if (should_defer_collision(*record)) {
+		if (should_defer_collision(*record, *payload)) {
 			++iterator;
 			continue;
 		}
@@ -554,7 +554,7 @@ std::size_t WtChunkApplicationService::apply_collision(
 			++metrics_.unrequired_collision;
 			continue;
 		}
-		if (should_defer_collision(*record)) {
+		if (should_defer_collision(*record, *payload)) {
 			if (!defer_collision(entry)) {
 				++metrics_.queue_rejections;
 			}
@@ -592,8 +592,14 @@ std::size_t WtChunkApplicationService::apply_collision(
 }
 
 bool WtChunkApplicationService::should_defer_collision(
-	const WtChunkApplicationRecord &record
+	const WtChunkApplicationRecord &record,
+	const WtCollisionPayload &payload
 ) const noexcept {
+	// An empty payload creates no physical surface, so applying it cannot expose
+	// collision ahead of the staged visual replacement. Resolving it immediately
+	// prevents empty support chunks from blocking movement on an unrelated visual
+	// activation cohort.
+	if (payload.faces.empty()) return false;
 	return record.staged_replacement && record.visual_required &&
 		!record.visual_ready;
 }

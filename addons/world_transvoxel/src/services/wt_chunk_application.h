@@ -164,7 +164,8 @@ private:
 		bool &deadline_exhausted
 	);
 	bool should_defer_collision(
-		const WtChunkApplicationRecord &record
+		const WtChunkApplicationRecord &record,
+		const WtCollisionPayload &payload
 	) const noexcept;
 	bool defer_collision(const WtCollisionApplyEntry &entry);
 

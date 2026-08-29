@@ -582,6 +582,37 @@ void test_gpu_placeholder_waits_for_external_activation(
 		"changed GPU transition mask retained stale visual readiness");
 }
 
+void test_empty_collision_does_not_wait_for_external_visual(
+	const wt::WtRenderPayload &render_source
+) {
+	wt::WtChunkApplicationService service(1, 1, 1);
+	RenderSink render_sink;
+	CollisionSink collision_sink;
+	auto placeholder = std::make_shared<wt::WtRenderPayload>(render_source);
+	placeholder->generation = { 42 };
+	placeholder->publication_source =
+		wt::WtRenderPublicationSource::GpuResidentPlaceholder;
+	auto empty_collision = std::make_shared<wt::WtCollisionPayload>();
+	empty_collision->key = placeholder->key;
+	empty_collision->generation = placeholder->generation;
+	empty_collision->world_origin = wt::wt_chunk_bounds(placeholder->key).minimum;
+	check(service.expect_chunk(
+			placeholder->key, placeholder->generation, true, true, true
+		) == wt::WtApplicationStatus::Ok &&
+		service.submit_render(placeholder) == wt::WtApplicationStatus::Ok &&
+		service.submit_collision(empty_collision) == wt::WtApplicationStatus::Ok,
+		"empty GPU collision setup failed");
+	service.apply(0, 1, render_sink, collision_sink);
+	const wt::WtChunkApplicationRecord *record =
+		service.find_record(placeholder->key);
+	check(collision_sink.calls == 1 && record != nullptr &&
+		record->collision_ready &&
+		record->collision_generation == placeholder->generation &&
+		!record->visual_ready && record->staged_replacement &&
+		!record->fully_ready(),
+		"empty collision waited for unrelated external visual activation");
+}
+
 void test_cross_lod_replacement_publication_policy() {
 	const wt::WtChunkKey fine { 2, 0, 0, 0 };
 	const wt::WtChunkKey containing_coarse { 1, 0, 0, 1 };
@@ -923,6 +954,7 @@ int main() {
 	test_application_service(render, stale_cycles);
 	test_staged_replacement_collision_waits_for_render(render);
 	test_gpu_placeholder_waits_for_external_activation(render);
+	test_empty_collision_does_not_wait_for_external_visual(render);
 	test_cross_lod_replacement_publication_policy();
 	test_collision_deadline_bounds_frame_work(render);
 	if (failure_count != 0) {
