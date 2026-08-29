@@ -252,9 +252,6 @@ godot::Dictionary WorldTransvoxelTerrain::validate_gpu_resident_render_request(
 			identity,
 			static_cast<std::uint64_t>(std::max<std::int64_t>(
 				0, get_world_source_revision()
-			)),
-			static_cast<std::uint64_t>(std::max<std::int64_t>(
-				0, get_world_revision()
 			))
 		);
 	result["status"] = wt_gpu_meshing_resident_validation_status_name(
@@ -293,8 +290,6 @@ get_gpu_resident_render_chunk_readiness(
 		!wt_parse_gpu_meshing_shadow_identity(identity_dictionary, identity) ||
 		identity.source_revision != static_cast<std::uint64_t>(
 			std::max<std::int64_t>(0, get_world_source_revision())
-		) || identity.world_revision != static_cast<std::uint64_t>(
-			std::max<std::int64_t>(0, get_world_revision())
 		)) {
 		++gpu_resident_render_readiness_stale_;
 		++gpu_resident_render_stale_skips_;
@@ -372,8 +367,6 @@ godot::Dictionary WorldTransvoxelTerrain::prepare_gpu_resident_render_chunk(
 	if (!gpu_resident_render_publication_enabled_ || !application_ || !render_sink_ ||
 		inventory.identity.source_revision != static_cast<std::uint64_t>(
 			std::max<std::int64_t>(0, get_world_source_revision())
-		) || inventory.identity.world_revision != static_cast<std::uint64_t>(
-			std::max<std::int64_t>(0, get_world_revision())
 		)) {
 		result["status"] = "STALE";
 		result["error"] = "GPU resident chunk revision became stale";
@@ -637,8 +630,6 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 		}
 		if (inventory.identity.source_revision != static_cast<std::uint64_t>(
 				std::max<std::int64_t>(0, get_world_source_revision())
-			) || inventory.identity.world_revision != static_cast<std::uint64_t>(
-				std::max<std::int64_t>(0, get_world_revision())
 			)) {
 			result["status"] = "STALE";
 			result["error"] = "GPU resident activation cohort revision became stale";
@@ -993,8 +984,6 @@ godot::Dictionary WorldTransvoxelTerrain::set_gpu_resident_render_chunk_active(
 	if (!gpu_resident_render_publication_enabled_ ||
 		chunk_identity.source_revision != static_cast<std::uint64_t>(
 			std::max<std::int64_t>(0, get_world_source_revision())
-		) || chunk_identity.world_revision != static_cast<std::uint64_t>(
-			std::max<std::int64_t>(0, get_world_revision())
 		)) {
 		result["status"] = "STALE";
 		result["error"] = "GPU resident chunk revision became stale";

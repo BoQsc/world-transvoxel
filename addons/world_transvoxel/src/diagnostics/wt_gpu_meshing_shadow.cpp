@@ -284,16 +284,16 @@ bool WtGpuMeshingShadowQueue::pop(WtGpuMeshingShadowRequest &request) {
 			queued_.begin(), queued_.end(),
 			[&selected_job](const WtGpuMeshingShadowRequest &candidate) {
 				if (candidate.job.source_revision <
-					selected_job.source_revision ||
-					candidate.job.world_revision < selected_job.world_revision) {
+					selected_job.source_revision) {
 					return true;
 				}
 				return candidate.job.key == selected_job.key &&
 					candidate.job.source_revision ==
 						selected_job.source_revision &&
-					candidate.job.world_revision == selected_job.world_revision &&
-					candidate.job.generation.value <
-						selected_job.generation.value;
+					(candidate.job.world_revision < selected_job.world_revision ||
+					(candidate.job.world_revision == selected_job.world_revision &&
+						candidate.job.generation.value <
+							selected_job.generation.value));
 			}
 		),
 		queued_.end()
@@ -376,8 +376,7 @@ WtGpuMeshingShadowCompletion WtGpuMeshingShadowQueue::complete(
 WtGpuMeshingResidentValidation WtGpuMeshingShadowQueue::validate_resident(
 	std::uint64_t request_id,
 	const WtGpuMeshingShadowIdentity &identity,
-	std::uint64_t current_source_revision,
-	std::uint64_t current_world_revision
+	std::uint64_t current_source_revision
 ) {
 	std::lock_guard<std::mutex> lock(mutex_);
 	WtGpuMeshingResidentValidation validation;
@@ -406,7 +405,6 @@ WtGpuMeshingResidentValidation WtGpuMeshingShadowQueue::validate_resident(
 		return validation;
 	}
 	if (!enabled_ || request.job.source_revision != current_source_revision ||
-		request.job.world_revision != current_world_revision ||
 		!is_latest_locked(request)) {
 		validation.status = WtGpuMeshingResidentValidationStatus::Stale;
 		validation.error =
@@ -493,10 +491,10 @@ bool WtGpuMeshingShadowQueue::supersedes_queued(
 ) noexcept {
 	if (capture.job.source_revision > queued.job.source_revision) return true;
 	if (capture.job.source_revision < queued.job.source_revision) return false;
+	if (capture.job.key != queued.job.key) return false;
 	if (capture.job.world_revision > queued.job.world_revision) return true;
 	if (capture.job.world_revision < queued.job.world_revision) return false;
-	return capture.job.key == queued.job.key &&
-		capture.job.generation.value > queued.job.generation.value;
+	return capture.job.generation.value > queued.job.generation.value;
 }
 
 bool WtGpuMeshingShadowQueue::same_job_version(
@@ -516,7 +514,8 @@ bool WtGpuMeshingShadowQueue::job_supersedes(
 	if (incoming.source_revision != queued.source_revision) {
 		return incoming.source_revision > queued.source_revision;
 	}
-	if (incoming.world_revision != queued.world_revision) {
+	if (incoming.key == queued.key &&
+		incoming.world_revision != queued.world_revision) {
 		return incoming.world_revision > queued.world_revision;
 	}
 	if (incoming.key == queued.key &&
@@ -533,11 +532,11 @@ bool WtGpuMeshingShadowQueue::job_version_supersedes(
 	if (incoming.source_revision != queued.source_revision) {
 		return incoming.source_revision > queued.source_revision;
 	}
+	if (incoming.key != queued.key) return false;
 	if (incoming.world_revision != queued.world_revision) {
 		return incoming.world_revision > queued.world_revision;
 	}
-	return incoming.key == queued.key &&
-		incoming.generation.value > queued.generation.value;
+	return incoming.generation.value > queued.generation.value;
 }
 
 bool WtGpuMeshingShadowQueue::job_precedes(

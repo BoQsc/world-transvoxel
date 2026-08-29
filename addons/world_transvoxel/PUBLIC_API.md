@@ -229,16 +229,19 @@ finishes, including failure and cancellation paths. The resident metrics expose
 `released_capture_slots`.
 
 Reservations carry the authoritative scheduler job identity and priority. A
-newer source/world revision, newer generation of the same chunk, or
-higher-priority job may replace a complete lower-priority queued job before CPU
-meshing starts. In-flight work is never cancelled by this queue, and captures
-whose job identity differs from their reservation are rejected.
+newer source revision, a newer world revision or generation of the same chunk,
+or a higher-priority job may replace a complete lower-priority queued job before
+CPU meshing starts. Lossless GPU-resident admission only permits version
+replacement of the same chunk. In-flight work is never cancelled by this queue,
+and captures whose job identity differs from their reservation are rejected.
 
 Dequeue follows the same authoritative source revision, world revision, job
 priority, generation, and sequence ordering as admission. Before handing a
-request to Godot, it removes queued requests from older global revisions and
-older generations of the selected chunk. Metrics expose `priority_dequeues` and
-`dequeue_superseded_requests`; this coalescing never cancels in-flight work.
+request to Godot, it removes queued requests from older source revisions and
+older world revisions or generations of the selected chunk. A terrain edit does
+not invalidate GPU work for unaffected chunk generations. Metrics expose
+`priority_dequeues` and `dequeue_superseded_requests`; this coalescing never
+cancels in-flight work.
 
 Admitted inputs are still recorded while the CPU Transvoxel mesher produces the
 authoritative chunk. Reservations and native packing remove rejected recording

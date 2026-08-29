@@ -19,10 +19,12 @@ The queue is explicitly bounded. Capacity includes queued and in-flight
 requests. Saturation increments `capacity_rejections`; it never blocks a
 meshing worker and never changes the CPU result.
 
-When capacity is full, a newer source/world revision or a newer generation of
-the same page may replace older work that is still queued. In-flight work is
-never revoked and still completes through normal stale validation. Queue
-capacity does not grow; `superseded_queued_requests` records every replacement.
+When capacity is full, a newer source revision may replace older queued work. A
+newer world revision or generation may replace older work for the same page.
+An unrelated terrain edit cannot discard another page's queued capture.
+In-flight work is never revoked and still completes through normal stale
+validation. Queue capacity does not grow; `superseded_queued_requests` records
+every replacement.
 
 ## Identity
 

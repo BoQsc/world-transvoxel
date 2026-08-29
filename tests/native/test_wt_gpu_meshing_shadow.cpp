@@ -441,6 +441,7 @@ int main() {
 	WtGpuMeshingShadowCapture unrelated_high_priority = capture_for(31);
 	unrelated_high_priority.capture_stage = WtGpuMeshingCaptureStage::PreMeshField;
 	unrelated_high_priority.job.key.x += 1;
+	unrelated_high_priority.job.world_revision = 1;
 	unrelated_high_priority.job.priority = 20;
 	require(
 		gpu_only_priority_queue.reserve_capture_slots(
@@ -497,8 +498,23 @@ int main() {
 		"dequeue did not select the newest world revision"
 	);
 	require(
-		dequeue_queue.metrics().dequeue_superseded_requests >= 2,
-		"dequeue did not coalesce obsolete queued revisions"
+		dequeue_queue.metrics().dequeue_superseded_requests == 1 &&
+			dequeue_queue.metrics().queued_requests == 1,
+		"dequeue discarded an unaffected older-revision chunk"
+	);
+	WtGpuMeshingShadowRequest unaffected_request;
+	require(
+		dequeue_queue.pop(unaffected_request) &&
+			unaffected_request.job.key.x == 1,
+		"dequeue did not retain the unaffected older-revision chunk"
+	);
+	require(
+		dequeue_queue.reject_resident(
+			unaffected_request.request_id,
+			identity_for(unaffected_request),
+			"test release"
+		).status == WtGpuMeshingResidentValidationStatus::Rejected,
+		"unaffected dequeue request did not release"
 	);
 
 	WtGpuMeshingShadowQueue queue;
@@ -647,8 +663,7 @@ int main() {
 		queue.validate_resident(
 			resident_request.request_id,
 			identity_for(resident_request),
-			7,
-			4
+			7
 		);
 	require(
 		resident_ready.status == WtGpuMeshingResidentValidationStatus::Ready,

@@ -150,8 +150,7 @@ public:
 	WtGpuMeshingResidentValidation validate_resident(
 		std::uint64_t request_id,
 		const WtGpuMeshingShadowIdentity &identity,
-		std::uint64_t current_source_revision,
-		std::uint64_t current_world_revision
+		std::uint64_t current_source_revision
 	);
 	WtGpuMeshingResidentValidation reject_resident(
 		std::uint64_t request_id,
