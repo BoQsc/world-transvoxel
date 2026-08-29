@@ -489,6 +489,16 @@ get_gpu_resident_render_activation_cohort(
 			region.retirements.size()
 		);
 		result["complete_coverage"] = complete_coverage;
+		if (!region_built) {
+			// The seed left both replacement sets before activation. Waiting cannot
+			// make this generation current again; the consumer must discard it and
+			// accept the authority's replacement request.
+			result["candidate_replacements"] = gpu_cohort_keys(candidates);
+			result["status"] = "STALE_APPLICATION";
+			result["error"] =
+				"GPU resident regional replacement seed is no longer pending";
+			return result;
+		}
 		if (!complete_coverage) {
 			result["candidate_replacements"] = gpu_cohort_keys(candidates);
 			result["region_replacements"] = gpu_cohort_keys(region.replacements);
@@ -674,9 +684,16 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 				std::unique(candidates.begin(), candidates.end()), candidates.end()
 			);
 			WtChunkPublicationRegion region;
-			if (!wt_build_chunk_publication_region(
-					seed.key, candidates, pending_chunk_retirements_, region
-				) || !publication_region_has_complete_authoritative_coverage(region)) {
+			const bool region_built = wt_build_chunk_publication_region(
+				seed.key, candidates, pending_chunk_retirements_, region
+			);
+			if (!region_built) {
+				result["status"] = "STALE_APPLICATION";
+				result["error"] =
+					"GPU resident authoritative cohort seed is no longer pending";
+				return result;
+			}
+			if (!publication_region_has_complete_authoritative_coverage(region)) {
 				result["status"] = "WAITING_COHORT";
 				result["error"] =
 					"GPU resident authoritative publication region is incomplete";
