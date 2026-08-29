@@ -237,7 +237,9 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 	prepared.cell_capture_callback = cell_capture_callback;
 	prepared.pre_mesh_field_capture = pre_mesh_field_capture;
 	prepared.gpu_resident_visual_only = pre_mesh_field_capture &&
-		visual_required && !collision_required;
+		visual_required;
+	prepared.gpu_resident_skip_cpu_meshing =
+		prepared.gpu_resident_visual_only && !collision_required;
 	prepared.dependencies.reserve(record->dependencies.size());
 	for (const Dependency &dependency : record->dependencies) {
 		if (!dependency.page) source_valid = false;
@@ -266,6 +268,8 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 	completion.prepared = std::move(prepared);
 	completion.gpu_resident_visual_only =
 		completion.prepared.gpu_resident_visual_only;
+	completion.gpu_resident_skip_cpu_meshing =
+		completion.prepared.gpu_resident_skip_cpu_meshing;
 	const auto primary = std::lower_bound(
 		completion.prepared.dependencies.begin(),
 		completion.prepared.dependencies.end(),
@@ -362,7 +366,7 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		completion.prepared.pre_mesh_field_capture) {
 		if (!capture_pre_mesh_field(WtGpuMeshingShadowSurface::Terrain)) {
 			terrain_status = WtChunkMeshingStatus::CellBackendFailure;
-		} else if (completion.prepared.gpu_resident_visual_only) {
+		} else if (completion.prepared.gpu_resident_skip_cpu_meshing) {
 			initialize_gpu_placeholder_mesh(*completion.mesh);
 			terrain_status = WtChunkMeshingStatus::Ok;
 		} else {
@@ -537,7 +541,7 @@ WtPageMeshingRuntimeService::accept_prepared_mesh_completion(
 		record - records_.begin()
 	);
 	if (completion.status == WtPageMeshingRuntimeStatus::Ok &&
-		!completion.gpu_resident_visual_only &&
+		!completion.gpu_resident_skip_cpu_meshing &&
 		completion.prepared.terrain_mesh_ready &&
 		!completion.prepared.terrain_mesh_ready({
 			record->key,

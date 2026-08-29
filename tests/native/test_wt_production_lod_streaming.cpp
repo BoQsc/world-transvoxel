@@ -629,6 +629,8 @@ bool run_collision_reactivation_eviction_regression(
 	bool initial_collision = false;
 	bool collision_deactivated = false;
 	bool collision_reactivated = false;
+	bool collision_reactivation_staged = false;
+	std::uint64_t initial_generation = 0;
 
 	check(runtime.update_viewer({ 1, 8.0, 8.0, 8.0, 1 }, 2, 0) ==
 		wt::WtReadOnlyRuntimeStatus::Ok,
@@ -639,6 +641,9 @@ bool run_collision_reactivation_eviction_regression(
 			if (publication.key != target) return;
 			initial_render = initial_render ||
 				publication.kind == wt::WtReadOnlyPublicationKind::RenderPayload;
+			if (publication.kind == wt::WtReadOnlyPublicationKind::RenderPayload) {
+				initial_generation = publication.generation.value;
+			}
 			initial_collision = initial_collision ||
 				publication.kind == wt::WtReadOnlyPublicationKind::CollisionPayload;
 		},
@@ -681,18 +686,29 @@ bool run_collision_reactivation_eviction_regression(
 				runtime,
 				[&](const wt::WtReadOnlyPublication &publication) {
 					if (publication.key == target && publication.kind ==
+							wt::WtReadOnlyPublicationKind::ExpectChunk &&
+						publication.generation.value > initial_generation &&
+						publication.collision_required &&
+						publication.visual_required &&
+						publication.staged_replacement) {
+						collision_reactivation_staged = true;
+					}
+					if (publication.key == target && publication.kind ==
 							wt::WtReadOnlyPublicationKind::CollisionPayload) {
 						collision_reactivated = true;
 					}
 				},
 				[&]() {
 				return collision_reactivated &&
+					collision_reactivation_staged &&
 					runtime.get_metrics().viewer_updates >= 3 &&
 					runtime_idle(runtime.get_metrics());
 				}
 			);
 			check(reactivated,
 				"collision cache miss did not recover required collision");
+			check(collision_reactivation_staged,
+				"collision reactivation did not stage its new generation");
 		}
 	}
 
@@ -702,7 +718,7 @@ bool run_collision_reactivation_eviction_regression(
 		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok,
 		"collision reactivation runtime did not stop cleanly");
 	return initial_render && initial_collision && collision_deactivated &&
-		collision_reactivated &&
+		collision_reactivated && collision_reactivation_staged &&
 		run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
 		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok;
 }

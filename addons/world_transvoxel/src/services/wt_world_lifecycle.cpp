@@ -524,6 +524,11 @@ std::size_t WtWorldLifecycleService::page_count() const noexcept {
 	return page_count_;
 }
 
+WtPageHierarchy WtWorldLifecycleService::page_hierarchy() const {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	return storage_ ? storage_->page_hierarchy() : WtPageHierarchy{};
+}
+
 bool WtWorldLifecycleService::wait_for_state(
 	WtWorldLifecycleState expected,
 	std::chrono::milliseconds timeout

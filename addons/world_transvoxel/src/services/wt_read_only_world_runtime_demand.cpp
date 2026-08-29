@@ -38,7 +38,7 @@ constexpr double kWtEditLodRetentionMergeDistance = 64.0;
 constexpr double kWtEditLodRetentionVisibilitySlackRoots = 1.0;
 constexpr std::size_t kWtEditLodRetentionAlwaysActiveRecentZones = 32;
 constexpr std::int32_t kWtCollisionInvokerPriorityMaximum =
-	std::numeric_limits<std::int32_t>::max();
+	kWtPlayerSupportPriority;
 
 bool chunk_coordinate(double position, std::int32_t &coordinate) noexcept {
 	if (!std::isfinite(position)) return false;

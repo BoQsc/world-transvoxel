@@ -294,6 +294,10 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 			return true;
 		}
 		if (record.generation == payload.generation) {
+			if (record.transition_mask == payload.transition_mask &&
+				record.gpu_resident_replaced) {
+				return true;
+			}
 			record.transition_mask = payload.transition_mask;
 			record.instance->set_mesh(godot::Ref<godot::Mesh>());
 			record.instance->set_visible(false);

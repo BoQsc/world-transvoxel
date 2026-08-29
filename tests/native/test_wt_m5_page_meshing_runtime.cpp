@@ -1640,7 +1640,8 @@ void test_runtime_lifecycle(
 		mesh_completion.key == fixture.coarse_key &&
 		mesh_completion.generation == sample.generation &&
 			mesh_completion.mesh != nullptr &&
-			!mesh_completion.gpu_resident_visual_only,
+			mesh_completion.gpu_resident_visual_only &&
+			!mesh_completion.mesh->regular.indices.empty(),
 		"runtime mesh completion ownership mismatch"
 	);
 	std::uint64_t mesh_hash = 14695981039346656037ULL;

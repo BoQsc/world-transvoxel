@@ -3,6 +3,7 @@
 #include "core/wt_chunk_key.h"
 #include "core/wt_chunk_state.h"
 
+#include <functional>
 #include <vector>
 
 namespace world_transvoxel {
@@ -27,6 +28,11 @@ bool wt_build_chunk_publication_region(
 bool wt_chunk_publication_region_has_complete_coverage(
 	const WtChunkPublicationRegion &region
 ) noexcept;
+
+bool wt_chunk_publication_region_has_complete_authoritative_coverage(
+	const WtChunkPublicationRegion &region,
+	const std::function<bool(const WtChunkKey &)> &is_authoritative
+);
 
 bool wt_collision_retirement_is_safe(
 	const WtChunkKey &retirement,

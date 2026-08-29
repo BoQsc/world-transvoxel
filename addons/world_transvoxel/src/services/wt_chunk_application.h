@@ -25,6 +25,8 @@ struct WtChunkApplicationRecord {
 	bool collision_ready = false;
 	bool staged_replacement = false;
 	bool external_visual_activation_required = false;
+	bool external_visual_prepared = false;
+	std::uint8_t external_visual_transition_mask = 0;
 
 	bool fully_ready() const noexcept;
 };
@@ -102,6 +104,11 @@ public:
 	WtApplicationStatus confirm_external_visual_activation(
 		const WtChunkKey &key,
 		WtGenerationToken generation
+	);
+	WtApplicationStatus confirm_external_visual_prepared(
+		const WtChunkKey &key,
+		WtGenerationToken generation,
+		std::uint8_t transition_mask
 	);
 	WtApplicationBatchResult apply(
 		std::size_t render_budget,

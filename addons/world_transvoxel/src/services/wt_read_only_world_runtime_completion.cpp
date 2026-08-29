@@ -145,6 +145,15 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			!application_record.visual_required) {
 			continue;
 		}
+		std::shared_ptr<WtCollisionPayload> replacement_collision;
+		if (application_record.staged_replacement &&
+			application_record.collision_required &&
+			!prepare_terrain_collision_payload(
+				{ completion.key, completion.generation, completion.mesh },
+				replacement_collision
+			)) {
+			break;
+		}
 		if (completion.gpu_resident_visual_only) {
 			auto render = std::make_shared<WtRenderPayload>();
 			render->key = completion.key;
@@ -173,20 +182,27 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 				}
 				break;
 			}
+			if (application_record.staged_replacement &&
+				application_record.collision_required && replacement_collision &&
+				!push_publication({
+					WtReadOnlyPublicationKind::CollisionPayload,
+					replacement_collision->key,
+					replacement_collision->generation,
+					true,
+					{},
+					replacement_collision,
+				})) {
+				if (!stop_requested_.load()) {
+					set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
+				}
+				break;
+			}
 			std::lock_guard<std::mutex> lock(metrics_mutex_);
 			++metrics_.mesh_completions;
 			if (completion.mesh->transition_mask != 0) {
 				++metrics_.transition_mesh_completions;
 			}
 			continue;
-		}
-		std::shared_ptr<WtCollisionPayload> collision;
-		if (application_record.staged_replacement &&
-			!prepare_terrain_collision_payload(
-				{ completion.key, completion.generation, completion.mesh },
-				collision
-			)) {
-			break;
 		}
 		auto render = std::make_shared<WtRenderPayload>();
 		const WtLodMapEntry *entry = find_plan_entry(
@@ -240,14 +256,14 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			break;
 		}
 		if (application_record.staged_replacement &&
-			application_record.collision_required && collision &&
+			application_record.collision_required && replacement_collision &&
 			!push_publication({
 				WtReadOnlyPublicationKind::CollisionPayload,
-				collision->key,
-				collision->generation,
+				replacement_collision->key,
+				replacement_collision->generation,
 				true,
 				{},
-				collision,
+				replacement_collision,
 			})) {
 			if (!stop_requested_.load()) {
 				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
@@ -357,7 +373,23 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 			set_failure(WtReadOnlyRuntimeStatus::PipelineCollisionRepairFailure);
 			return false;
 		}
-		if (!collision) continue;
+		if (!collision) {
+			// GPU-only visual generations intentionally omit CPU topology. When
+			// such a chunk enters the collision footprint, stage one collision-
+			// required generation through the normal remesh path.
+			if (status == WtChunkResourceCacheStatus::NotFound &&
+				desired != nullptr && desired->collision_required) {
+				queue_transition_remeshes({ *desired });
+				collision_readiness_repair_attempts_.push_back({
+					record.key,
+					record.generation,
+				});
+				progressed = true;
+				++repairs;
+				if (repairs >= kMaxCollisionRepairsPerPass) break;
+			}
+			continue;
+		}
 		if (!push_publication({
 				WtReadOnlyPublicationKind::CollisionPayload,
 				collision->key,

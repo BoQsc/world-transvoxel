@@ -9,6 +9,19 @@
 
 namespace world_transvoxel {
 
+bool WorldTransvoxelTerrain::
+publication_region_has_complete_authoritative_coverage(
+	const WtChunkPublicationRegion &region
+) const {
+	if (!lifecycle_) return false;
+	WtPageHierarchy hierarchy = lifecycle_->page_hierarchy();
+	if (!hierarchy.valid()) return false;
+	return wt_chunk_publication_region_has_complete_authoritative_coverage(
+		region,
+		[&hierarchy](const WtChunkKey &key) { return hierarchy.contains(key); }
+	);
+}
+
 void WorldTransvoxelTerrain::publish_ready_independent_collision_coverage() {
 	for (const WtChunkApplicationRecord &record : application_->get_records()) {
 		if (!wt_required_collision_can_publish_independently(
@@ -208,7 +221,7 @@ void WorldTransvoxelTerrain::flush_ready_independent_publication_regions() {
 				regional_replacement_candidates,
 				pending_chunk_retirements_,
 				region
-			) || !wt_chunk_publication_region_has_complete_coverage(region)) {
+			) || !publication_region_has_complete_authoritative_coverage(region)) {
 			++index;
 			continue;
 		}

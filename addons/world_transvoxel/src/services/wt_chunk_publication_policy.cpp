@@ -255,6 +255,52 @@ bool replacement_set_covers(
 	return true;
 }
 
+bool authoritative_replacement_set_covers(
+	const WtChunkKey &target,
+	const std::vector<WtChunkKey> &replacements,
+	const std::function<bool(const WtChunkKey &)> &is_authoritative
+) {
+	if (!is_authoritative(target)) return true;
+	for (const WtChunkKey &replacement : replacements) {
+		if (bounds_contains(replacement, target)) return true;
+	}
+	if (target.lod == 0) return false;
+	for (std::int32_t z = 0; z < 2; ++z) {
+		for (std::int32_t y = 0; y < 2; ++y) {
+			for (std::int32_t x = 0; x < 2; ++x) {
+				WtChunkKey child;
+				if (!key_child(target, x, y, z, child)) return false;
+				if (!is_authoritative(child)) continue;
+				if (!overlaps_any(child, replacements) ||
+						!authoritative_replacement_set_covers(
+							child, replacements, is_authoritative
+						)) {
+					return false;
+				}
+			}
+		}
+	}
+	return true;
+}
+
+bool valid_non_overlapping_region_replacements(
+	const WtChunkPublicationRegion &region
+) noexcept {
+	if (region.replacements.empty() || region.retirements.empty()) return false;
+	for (std::size_t left = 0; left < region.replacements.size(); ++left) {
+		if (!wt_is_valid_chunk_key(region.replacements[left])) return false;
+		for (std::size_t right = left + 1;
+				right < region.replacements.size(); ++right) {
+			if (bounds_overlap(
+					region.replacements[left], region.replacements[right]
+				)) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 } // namespace
 
 bool wt_chunk_replacement_requires_regional_publication(
@@ -347,20 +393,7 @@ bool wt_build_chunk_publication_region(
 bool wt_chunk_publication_region_has_complete_coverage(
 	const WtChunkPublicationRegion &region
 ) noexcept {
-	if (region.replacements.empty() || region.retirements.empty()) return false;
-	for (std::size_t left = 0; left < region.replacements.size(); ++left) {
-		if (!wt_is_valid_chunk_key(region.replacements[left])) return false;
-		for (std::size_t right = left + 1;
-				right < region.replacements.size();
-				++right) {
-			if (bounds_overlap(
-					region.replacements[left],
-					region.replacements[right]
-				)) {
-				return false;
-			}
-		}
-	}
+	if (!valid_non_overlapping_region_replacements(region)) return false;
 	for (const WtChunkKey &retirement : region.retirements) {
 		if (!wt_is_valid_chunk_key(retirement) ||
 				std::find(
@@ -371,6 +404,33 @@ bool wt_chunk_publication_region_has_complete_coverage(
 			return false;
 		}
 		if (!replacement_set_covers(retirement, region.replacements)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool wt_chunk_publication_region_has_complete_authoritative_coverage(
+	const WtChunkPublicationRegion &region,
+	const std::function<bool(const WtChunkKey &)> &is_authoritative
+) {
+	if (!is_authoritative ||
+			!valid_non_overlapping_region_replacements(region)) {
+		return false;
+	}
+	for (const WtChunkKey &replacement : region.replacements) {
+		if (!is_authoritative(replacement)) return false;
+	}
+	for (const WtChunkKey &retirement : region.retirements) {
+		if (!wt_is_valid_chunk_key(retirement) || !is_authoritative(retirement) ||
+				std::find(
+					region.replacements.begin(),
+					region.replacements.end(),
+					retirement
+				) != region.replacements.end() ||
+				!authoritative_replacement_set_covers(
+					retirement, region.replacements, is_authoritative
+				)) {
 			return false;
 		}
 	}

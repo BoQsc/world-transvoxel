@@ -94,6 +94,7 @@ godot::Dictionary wt_gpu_meshing_shadow_packed_input(
 		packed.page_field_input ? request.retained_pages.size() : 0
 	);
 	result["page_field_input"] = packed.page_field_input;
+	result["proven_empty"] = packed.proven_empty;
 	result["bounds_min"] = godot::Vector3(
 		packed.bounds_min.x, packed.bounds_min.y, packed.bounds_min.z
 	);

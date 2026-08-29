@@ -23,6 +23,7 @@ struct WtGpuMeshingInputPack {
 	std::size_t sample_count = 0;
 	std::size_t packed_byte_count = 0;
 	bool page_field_input = false;
+	bool proven_empty = false;
 };
 
 bool wt_pack_gpu_meshing_input(

@@ -69,6 +69,8 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 				record->visual_required = true;
 				record->visual_ready = false;
 				record->external_visual_activation_required = false;
+				record->external_visual_prepared = false;
+				record->external_visual_transition_mask = 0;
 				changed = true;
 			}
 			if (collision_required && !record->collision_required) {
@@ -144,6 +146,8 @@ WtApplicationStatus WtChunkApplicationService::set_visual_required(
 		record->visual_ready = false;
 		record->visual_generation = {};
 		record->external_visual_activation_required = false;
+		record->external_visual_prepared = false;
+		record->external_visual_transition_mask = 0;
 	}
 	return WtApplicationStatus::Ok;
 }
@@ -187,9 +191,40 @@ WtApplicationStatus WtChunkApplicationService::confirm_external_visual_activatio
 		return record->visual_ready ? WtApplicationStatus::AlreadyCurrent :
 			WtApplicationStatus::InvalidInput;
 	}
+	if (!record->external_visual_prepared) {
+		return WtApplicationStatus::InvalidInput;
+	}
 	record->external_visual_activation_required = false;
+	record->external_visual_prepared = false;
 	record->visual_ready = true;
 	if (record->fully_ready()) record->staged_replacement = false;
+	return WtApplicationStatus::Ok;
+}
+
+WtApplicationStatus WtChunkApplicationService::confirm_external_visual_prepared(
+	const WtChunkKey &key,
+	WtGenerationToken generation,
+	std::uint8_t transition_mask
+) {
+	std::lock_guard<std::mutex> lock(records_mutex_);
+	WtChunkApplicationRecord *record = find_record_mutable(key);
+	if (record == nullptr) return WtApplicationStatus::NotFound;
+	if (record->generation != generation ||
+		record->visual_generation != generation) {
+		return WtApplicationStatus::StaleGeneration;
+	}
+	if (!record->visual_required ||
+		record->external_visual_transition_mask != transition_mask) {
+		return WtApplicationStatus::InvalidInput;
+	}
+	if (!record->external_visual_activation_required) {
+		return record->visual_ready ? WtApplicationStatus::AlreadyCurrent :
+			WtApplicationStatus::InvalidInput;
+	}
+	if (record->external_visual_prepared) {
+		return WtApplicationStatus::AlreadyCurrent;
+	}
+	record->external_visual_prepared = true;
 	return WtApplicationStatus::Ok;
 }
 
@@ -332,6 +367,20 @@ std::size_t WtChunkApplicationService::apply_render(
 			}
 			continue;
 		}
+		const bool already_activated_gpu_placeholder =
+			payload->publication_source ==
+				WtRenderPublicationSource::GpuResidentPlaceholder &&
+			record->visual_generation == payload->generation &&
+			record->visual_ready &&
+			!record->external_visual_activation_required &&
+			record->external_visual_transition_mask == payload->transition_mask;
+		const bool already_prepared_gpu_placeholder =
+			payload->publication_source ==
+				WtRenderPublicationSource::GpuResidentPlaceholder &&
+			record->visual_generation == payload->generation &&
+			record->external_visual_activation_required &&
+			record->external_visual_prepared &&
+			record->external_visual_transition_mask == payload->transition_mask;
 		const bool trace_enabled = static_cast<bool>(trace_observer_);
 		const Clock::time_point sink_started = trace_enabled ?
 			Clock::now() : Clock::time_point{};
@@ -351,8 +400,14 @@ std::size_t WtChunkApplicationService::apply_render(
 		}
 		record->visual_generation = payload->generation;
 		record->external_visual_activation_required =
+			!already_activated_gpu_placeholder &&
 			payload->publication_source ==
 				WtRenderPublicationSource::GpuResidentPlaceholder;
+		record->external_visual_prepared = already_prepared_gpu_placeholder;
+		record->external_visual_transition_mask =
+			payload->publication_source ==
+				WtRenderPublicationSource::GpuResidentPlaceholder ?
+			payload->transition_mask : 0;
 		record->visual_ready = !record->external_visual_activation_required;
 		if (record->fully_ready()) {
 			record->staged_replacement = false;

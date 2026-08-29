@@ -137,6 +137,7 @@ public:
 	std::uint64_t source_revision() const noexcept;
 	std::uint64_t world_revision() const noexcept;
 	std::size_t page_count() const noexcept;
+	WtPageHierarchy page_hierarchy() const;
 	bool wait_for_state(
 		WtWorldLifecycleState expected,
 		std::chrono::milliseconds timeout

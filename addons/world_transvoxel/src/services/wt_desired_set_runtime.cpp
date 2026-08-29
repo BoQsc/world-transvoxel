@@ -164,19 +164,20 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 		++metrics_.capacity_rejections;
 		return WtDesiredSetRuntimeStatus::RecordCapacityExceeded;
 	}
-	std::size_t visual_promotions_requiring_remesh = 0;
+	std::size_t role_promotions_requiring_remesh = 0;
 	for (const WtDesiredChunk &item : delta.updated) {
 		const WtChunkRecord *record = scheduler.find_record(item.key);
 		WtChunkApplicationRecord application_record;
 		if (record != nullptr &&
 			application.copy_record(item.key, application_record) &&
-			!application_record.visual_required && item.visual_required &&
+			((!application_record.visual_required && item.visual_required) ||
+			(!application_record.collision_required && item.collision_required)) &&
 			record->lifecycle == WtChunkLifecycle::Ready) {
-			++visual_promotions_requiring_remesh;
+			++role_promotions_requiring_remesh;
 		}
 	}
 	if (scheduler.available_job_capacity() <
-			delta.added.size() + visual_promotions_requiring_remesh) {
+			delta.added.size() + role_promotions_requiring_remesh) {
 		++metrics_.capacity_rejections;
 		return WtDesiredSetRuntimeStatus::JobQueueCapacityExceeded;
 	}
@@ -209,6 +210,8 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 		const bool promote_visual =
 			application.copy_record(item.key, application_record) &&
 			!application_record.visual_required && item.visual_required;
+		const bool promote_collision =
+			!application_record.collision_required && item.collision_required;
 		const WtChunkRecord *record = scheduler.find_record(item.key);
 		const bool interactive_edit_in_flight =
 			record != nullptr &&
@@ -218,7 +221,7 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 		const std::int32_t effective_priority =
 			interactive_edit_in_flight ?
 				kWtInteractiveEditPriority : item.priority;
-		if (promote_visual && record != nullptr &&
+		if ((promote_visual || promote_collision) && record != nullptr &&
 			record->lifecycle == WtChunkLifecycle::Ready) {
 			if (page_meshing_runtime != nullptr) {
 				const WtPageMeshingRuntimeOwnerStatus release_status =
@@ -248,7 +251,10 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 					item.key,
 					record->generation,
 					item.collision_required,
-					item.visual_required
+					item.visual_required,
+					true,
+					application_record.collision_ready &&
+						item.collision_required
 				) != WtApplicationStatus::Ok) {
 				++metrics_.application_failures;
 				return WtDesiredSetRuntimeStatus::ApplicationFailure;

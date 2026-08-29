@@ -524,8 +524,31 @@ void test_gpu_placeholder_waits_for_external_activation(
 		"stale GPU activation was accepted");
 	check(service.confirm_external_visual_activation(
 			placeholder->key, { 41 }
+		) == wt::WtApplicationStatus::InvalidInput,
+		"unprepared GPU activation was accepted");
+	check(service.confirm_external_visual_prepared(
+			placeholder->key, { 41 }, placeholder->transition_mask ^ 1U
+		) == wt::WtApplicationStatus::InvalidInput,
+		"GPU preparation accepted the wrong transition mask");
+	check(service.confirm_external_visual_prepared(
+			placeholder->key, { 41 }, placeholder->transition_mask
 		) == wt::WtApplicationStatus::Ok,
-		"current GPU activation was rejected");
+		"current GPU preparation was rejected");
+	record = service.find_record(placeholder->key);
+	check(record != nullptr && record->external_visual_prepared &&
+		!record->visual_ready && record->staged_replacement,
+		"GPU preparation retired coverage before activation");
+	check(service.submit_render(placeholder) == wt::WtApplicationStatus::Ok,
+		"duplicate prepared GPU placeholder submission failed");
+	service.apply(1, 0, render_sink, collision_sink);
+	record = service.find_record(placeholder->key);
+	check(record != nullptr && record->external_visual_prepared &&
+		!record->visual_ready && record->external_visual_activation_required,
+		"duplicate current GPU placeholder revoked preparation");
+	check(service.confirm_external_visual_activation(
+			placeholder->key, { 41 }
+		) == wt::WtApplicationStatus::Ok,
+		"prepared GPU activation was rejected");
 	record = service.find_record(placeholder->key);
 	check(record != nullptr && record->visual_ready &&
 		!record->external_visual_activation_required &&
@@ -535,6 +558,28 @@ void test_gpu_placeholder_waits_for_external_activation(
 			placeholder->key, { 41 }
 		) == wt::WtApplicationStatus::AlreadyCurrent,
 		"repeated GPU activation was not idempotent");
+	check(service.submit_render(placeholder) == wt::WtApplicationStatus::Ok,
+		"duplicate current GPU placeholder submission failed");
+	service.apply(1, 0, render_sink, collision_sink);
+	record = service.find_record(placeholder->key);
+	check(record != nullptr && record->visual_ready &&
+		!record->external_visual_activation_required &&
+		record->external_visual_transition_mask == placeholder->transition_mask &&
+		record->visual_generation.value == 41 && record->fully_ready(),
+		"duplicate current GPU placeholder revoked external activation");
+	auto changed_transition = std::make_shared<wt::WtRenderPayload>(*placeholder);
+	changed_transition->transition_mask ^=
+		wt::wt_face_bit(wt::WtChunkFace::PositiveZ);
+	check(service.submit_render(changed_transition) == wt::WtApplicationStatus::Ok,
+		"changed-transition GPU placeholder submission failed");
+	service.apply(1, 0, render_sink, collision_sink);
+	record = service.find_record(placeholder->key);
+	check(record != nullptr && !record->visual_ready &&
+		record->external_visual_activation_required &&
+		!record->external_visual_prepared &&
+		record->external_visual_transition_mask == changed_transition->transition_mask &&
+		record->visual_generation.value == 41 && !record->fully_ready(),
+		"changed GPU transition mask retained stale visual readiness");
 }
 
 void test_cross_lod_replacement_publication_policy() {
@@ -732,6 +777,63 @@ void test_cross_lod_replacement_publication_policy() {
 		) != region.replacements.end() &&
 		wt::wt_chunk_publication_region_has_complete_coverage(region),
 		"publication region exposed an LOD1-to-LOD3 boundary without its LOD2 bridge"
+	);
+
+	std::vector<wt::WtChunkKey> finite_replacements;
+	for (std::int32_t z = 0; z < 4; ++z) {
+		for (std::int32_t y = 0; y < 4; ++y) {
+			for (std::int32_t x = 0; x < 4; ++x) {
+				finite_replacements.push_back({ x, y, z, 0 });
+			}
+		}
+	}
+	for (std::int32_t z = 0; z < 2; ++z) {
+		for (std::int32_t y = 0; y < 2; ++y) {
+			for (std::int32_t x = 2; x < 4; ++x) {
+				finite_replacements.push_back({ x, y, z, 1 });
+			}
+		}
+	}
+	finite_replacements.push_back({ 2, 0, 0, 2 });
+	std::sort(finite_replacements.begin(), finite_replacements.end());
+	const std::vector<wt::WtChunkKey> finite_retirements {
+		{ 0, 0, 0, 3 },
+		{ 1, 0, 0, 3 },
+	};
+	check(
+		wt::wt_build_chunk_publication_region(
+			{ 0, 0, 0, 0 },
+			finite_replacements,
+			finite_retirements,
+			region
+		) && region.replacements.size() == 73 &&
+			region.retirements.size() == 2 &&
+			!wt::wt_chunk_publication_region_has_complete_coverage(region),
+		"finite-world fixture unexpectedly covered the unbounded retirement cubes"
+	);
+	const auto finite_authority = [](const wt::WtChunkKey &key) {
+		if (!wt::wt_is_valid_chunk_key(key)) return false;
+		return key.x >= 0 && key.y >= 0 && key.z >= 0 &&
+			key.x <= ((12 - 1) >> key.lod) &&
+			key.y <= ((4 - 1) >> key.lod) &&
+			key.z <= ((4 - 1) >> key.lod);
+	};
+	check(
+		wt::wt_chunk_publication_region_has_complete_authoritative_coverage(
+			region, finite_authority
+		),
+		"complete finite-world authority coverage did not replace clipped coarse roots"
+	);
+	region.replacements.erase(std::find(
+		region.replacements.begin(),
+		region.replacements.end(),
+		wt::WtChunkKey { 3, 3, 3, 0 }
+	));
+	check(
+		!wt::wt_chunk_publication_region_has_complete_authoritative_coverage(
+			region, finite_authority
+		),
+		"finite-world authority coverage accepted a missing declared child"
 	);
 
 	std::vector<wt::WtChunkKey> backlog_replacements = replacements;

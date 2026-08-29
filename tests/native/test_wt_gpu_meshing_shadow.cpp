@@ -104,6 +104,12 @@ WtGpuMeshingShadowRequest page_field_request() {
 		page->samples[index].material = static_cast<std::uint16_t>(index % 9U);
 		page->samples[index].material_authored = (index % 3U) == 0;
 	}
+	WtChunkSurfaceShiftRecord shift;
+	shift.edge_index = 0;
+	shift.unit_offset = 0;
+	shift.sample_a = sample_for(-0.5F, 3);
+	shift.sample_b = sample_for(0.5F, 4);
+	page->surface_shift_records.push_back(shift);
 	request.retained_pages.push_back({ request.job.key, std::move(page) });
 	return request;
 }
@@ -152,7 +158,8 @@ int main() {
 		"valid resident request did not pack"
 	);
 	require(
-		packed.cell_count == 2 && packed.sample_count == 17,
+		packed.cell_count == 2 && packed.sample_count == 17 &&
+			!packed.proven_empty,
 		"packed resident dimensions changed"
 	);
 	require(
@@ -208,19 +215,48 @@ int main() {
 	require(
 		page_packed.page_field_input &&
 			page_packed.cell_count == 4608 &&
-			page_packed.sample_count == kWtChunkPageSampleCount &&
+			page_packed.sample_count == kWtChunkPageSampleCount + 2U &&
+			!page_packed.proven_empty &&
 			page_packed.config[2] == 1 && page_packed.config[3] == 1 &&
 			page_packed.config[15] == 5,
 		"page-field resident dimensions or mode changed"
 	);
+	WtGpuMeshingShadowRequest empty_page_request = page_field_request();
+	auto empty_page = std::make_shared<WtChunkPage>(
+		*empty_page_request.retained_pages[0].page
+	);
+	empty_page->surface_shift_records.clear();
+	for (WtScalarSample &sample : empty_page->samples) {
+		sample.density = 1.0F;
+	}
+	empty_page_request.retained_pages[0].page = std::move(empty_page);
+	WtGpuMeshingInputPack empty_page_packed;
 	require(
-		page_packed.field_values.size() == kWtChunkPageSampleCount * 4U &&
-			page_packed.field_meta.size() == kWtChunkPageSampleCount * 4U &&
+		wt_pack_gpu_meshing_input(
+			empty_page_request, empty_page_packed, packing_error
+		) && empty_page_packed.proven_empty,
+		"uniform signed page field was not proven empty"
+	);
+	require(
+		page_packed.field_values.size() == (kWtChunkPageSampleCount + 2U) * 4U &&
+			page_packed.field_meta.size() == (kWtChunkPageSampleCount + 2U) * 4U &&
 			page_packed.cell_headers.size() == 4 &&
 			page_packed.cell_origins.size() == 4 &&
 			page_packed.cell_options.size() == 4 &&
-			page_packed.sample_references.size() == 1,
+			page_packed.sample_references.size() == 5,
 		"page-field resident buffer inventory changed"
+	);
+	require(
+		page_packed.cell_headers[0] == 1 && page_packed.cell_headers[1] == 1 &&
+			page_packed.cell_headers[2] == 0 && page_packed.cell_headers[3] == 1 &&
+			page_packed.sample_references[1] == 0 &&
+			page_packed.sample_references[2] == 0 &&
+			page_packed.sample_references[3] ==
+				static_cast<std::int32_t>(kWtChunkPageSampleCount) &&
+			page_packed.sample_references[4] ==
+				static_cast<std::int32_t>(kWtChunkPageSampleCount + 1U) &&
+			page_packed.field_values[kWtChunkPageSampleCount * 4U] == -0.5F,
+		"page-field surface-shift authority layout changed"
 	);
 	require(
 		page_packed.bounds_min.x == 64.0F &&
@@ -377,6 +413,47 @@ int main() {
 		"higher-priority reserved capture failed"
 	);
 	priority_queue.release_capture_slots(priority_reservation);
+
+	WtGpuMeshingShadowQueue gpu_only_priority_queue;
+	require(
+		gpu_only_priority_queue.begin(
+			2, true, WtGpuMeshingCaptureStage::PreMeshField
+		),
+		"GPU-only priority reservation queue did not start"
+	);
+	WtGpuMeshingShadowCapture retained_low_priority = capture_for(30);
+	retained_low_priority.capture_stage = WtGpuMeshingCaptureStage::PreMeshField;
+	retained_low_priority.cpu_visual_mesh_omitted = true;
+	retained_low_priority.job.priority = 10;
+	const std::uint64_t retained_reservation =
+		gpu_only_priority_queue.reserve_capture_slots(
+			retained_low_priority.job
+		);
+	require(retained_reservation != 0,
+		"GPU-only retained reservation failed");
+	require(gpu_only_priority_queue.capture_reserved(
+			retained_reservation, retained_low_priority
+		), "GPU-only retained terrain capture failed");
+	retained_low_priority.surface = WtGpuMeshingShadowSurface::StaticWater;
+	require(gpu_only_priority_queue.capture_reserved(
+			retained_reservation, retained_low_priority
+		), "GPU-only retained water capture failed");
+	WtGpuMeshingShadowCapture unrelated_high_priority = capture_for(31);
+	unrelated_high_priority.capture_stage = WtGpuMeshingCaptureStage::PreMeshField;
+	unrelated_high_priority.job.key.x += 1;
+	unrelated_high_priority.job.priority = 20;
+	require(
+		gpu_only_priority_queue.reserve_capture_slots(
+			unrelated_high_priority.job
+		) == 0,
+		"GPU-only admission evicted an unrelated accepted chunk"
+	);
+	require(
+		gpu_only_priority_queue.metrics().queued_requests == 2 &&
+			gpu_only_priority_queue.metrics().superseded_queued_requests == 0 &&
+			gpu_only_priority_queue.metrics().capture_reservation_rejections == 1,
+		"GPU-only admission did not preserve lossless backpressure"
+	);
 
 	WtGpuMeshingShadowQueue dequeue_queue;
 	require(dequeue_queue.begin(4), "priority dequeue queue did not start");

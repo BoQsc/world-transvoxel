@@ -204,6 +204,25 @@ void WorldTransvoxelTerrain::bind_gpu_meshing_shadow_methods() {
 		&WorldTransvoxelTerrain::get_gpu_resident_render_chunk_readiness
 	);
 	godot::ClassDB::bind_method(
+		godot::D_METHOD("prepare_gpu_resident_render_chunk", "identities"),
+		&WorldTransvoxelTerrain::prepare_gpu_resident_render_chunk
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"get_gpu_resident_render_activation_cohort", "identity"
+		),
+		&WorldTransvoxelTerrain::get_gpu_resident_render_activation_cohort
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"activate_gpu_resident_render_cohort",
+			"chunk_surface_inventories",
+			"authoritative_seed"
+		),
+		&WorldTransvoxelTerrain::activate_gpu_resident_render_cohort,
+		DEFVAL(godot::Dictionary())
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD(
 			"reject_gpu_resident_render_request",
 			"request_id",

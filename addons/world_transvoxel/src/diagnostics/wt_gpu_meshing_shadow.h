@@ -88,6 +88,7 @@ struct WtGpuMeshingShadowMetrics {
 	std::uint64_t capture_reservation_attempts = 0;
 	std::uint64_t capture_reservation_rejections = 0;
 	std::uint64_t reserved_captures = 0;
+	std::uint64_t reserved_capture_failures = 0;
 	std::uint64_t released_capture_slots = 0;
 	std::uint64_t pre_mesh_field_captures = 0;
 	std::uint64_t cpu_visual_mesh_omitted_captures = 0;
@@ -179,6 +180,10 @@ private:
 		const WtChunkJob &right
 	) noexcept;
 	static bool job_supersedes(
+		const WtChunkJob &incoming,
+		const WtChunkJob &queued
+	) noexcept;
+	static bool job_version_supersedes(
 		const WtChunkJob &incoming,
 		const WtChunkJob &queued
 	) noexcept;

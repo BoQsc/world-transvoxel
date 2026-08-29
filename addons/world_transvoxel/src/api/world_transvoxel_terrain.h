@@ -26,6 +26,7 @@ class WtGodotRenderSink;
 class WtGpuMeshingShadowQueue;
 class WtM3IntegrationFixture;
 class WtM5ApplicationBenchmarkFixture;
+struct WtChunkPublicationRegion;
 
 constexpr std::size_t kWtDefaultRenderApplyBudget = 4;
 constexpr std::size_t kWtDefaultCollisionApplyBudget = 2;
@@ -237,6 +238,16 @@ public:
 	godot::Dictionary get_gpu_resident_render_chunk_readiness(
 		const godot::Dictionary &identity
 	);
+	godot::Dictionary prepare_gpu_resident_render_chunk(
+		const godot::Array &identities
+	);
+	godot::Dictionary get_gpu_resident_render_activation_cohort(
+		const godot::Dictionary &identity
+	);
+	godot::Dictionary activate_gpu_resident_render_cohort(
+		const godot::Array &chunk_surface_inventories,
+		const godot::Dictionary &authoritative_seed = godot::Dictionary()
+	);
 	godot::Dictionary reject_gpu_resident_render_request(
 		std::int64_t request_id,
 		const godot::Dictionary &identity,
@@ -317,6 +328,9 @@ private:
 	void flush_ready_render_retirements();
 	void update_visibility_staging_state();
 	void publish_staged_records_if_ready();
+	bool publication_region_has_complete_authoritative_coverage(
+		const WtChunkPublicationRegion &region
+	) const;
 	void reset_world_application(std::size_t capacity);
 
 	godot::Ref<WorldTransvoxelConfig> configuration_;
@@ -339,6 +353,9 @@ private:
 	std::uint64_t gpu_resident_render_readiness_waits_ = 0;
 	std::uint64_t gpu_resident_render_readiness_ready_ = 0;
 	std::uint64_t gpu_resident_render_readiness_stale_ = 0;
+	std::uint64_t gpu_resident_render_prepared_chunks_ = 0;
+	std::uint64_t gpu_resident_render_activation_cohorts_ = 0;
+	std::uint64_t gpu_resident_render_activation_cohort_chunks_ = 0;
 	std::uint64_t gpu_resident_render_activated_chunks_ = 0;
 	std::uint64_t gpu_resident_render_retired_chunks_ = 0;
 	std::uint64_t gpu_resident_render_reconciled_retires_ = 0;

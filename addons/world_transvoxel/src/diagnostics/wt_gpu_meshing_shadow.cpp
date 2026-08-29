@@ -89,8 +89,13 @@ std::uint64_t WtGpuMeshingShadowQueue::reserve_capture_slots(
 					return left.job.sequence < right.job.sequence;
 				}
 			);
+			const bool lossless_gpu_only_admission =
+				retain_publication_authority_ &&
+				capture_stage_ == WtGpuMeshingCaptureStage::PreMeshField;
 			if (candidate == queued_.end() ||
-				!job_supersedes(job, candidate->job)) {
+				!(lossless_gpu_only_admission ?
+					job_version_supersedes(job, candidate->job) :
+					job_supersedes(job, candidate->job))) {
 				break;
 			}
 			const WtChunkJob superseded_job = candidate->job;
@@ -131,10 +136,16 @@ bool WtGpuMeshingShadowQueue::capture_reserved(
 	std::uint64_t reservation_id,
 	WtGpuMeshingShadowCapture capture
 ) {
-	if (reservation_id == 0 ||
-		(capture.records.empty() && capture.retained_pages.empty())) return false;
 	std::lock_guard<std::mutex> lock(mutex_);
-	if (!enabled_ || capture.capture_stage != capture_stage_) return false;
+	if (reservation_id == 0 ||
+		(capture.records.empty() && capture.retained_pages.empty())) {
+		++metrics_.reserved_capture_failures;
+		return false;
+	}
+	if (!enabled_ || capture.capture_stage != capture_stage_) {
+		++metrics_.reserved_capture_failures;
+		return false;
+	}
 	const auto reservation = std::find_if(
 		capture_reservations_.begin(), capture_reservations_.end(),
 		[reservation_id](const CaptureReservation &candidate) {
@@ -144,6 +155,7 @@ bool WtGpuMeshingShadowQueue::capture_reserved(
 	if (reservation == capture_reservations_.end() ||
 		reservation->remaining_slots == 0 ||
 		!same_job_version(reservation->job, capture.job)) {
+		++metrics_.reserved_capture_failures;
 		return false;
 	}
 	const bool cpu_visual_mesh_omitted = capture.cpu_visual_mesh_omitted;
@@ -512,6 +524,20 @@ bool WtGpuMeshingShadowQueue::job_supersedes(
 		return incoming.generation.value > queued.generation.value;
 	}
 	return incoming.priority > queued.priority;
+}
+
+bool WtGpuMeshingShadowQueue::job_version_supersedes(
+	const WtChunkJob &incoming,
+	const WtChunkJob &queued
+) noexcept {
+	if (incoming.source_revision != queued.source_revision) {
+		return incoming.source_revision > queued.source_revision;
+	}
+	if (incoming.world_revision != queued.world_revision) {
+		return incoming.world_revision > queued.world_revision;
+	}
+	return incoming.key == queued.key &&
+		incoming.generation.value > queued.generation.value;
 }
 
 bool WtGpuMeshingShadowQueue::job_precedes(

@@ -183,14 +183,43 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 		const WtChunkRecord *record = scheduler_->find_record(item.key);
 		if (record == nullptr) return false;
 		if (previous->collision_required != item.collision_required &&
-			item.collision_required && !push_publication({
-				WtReadOnlyPublicationKind::SetCollisionRequired,
-				item.key,
-				record->generation,
-				true,
-				{},
-				{},
-			})) return false;
+			item.collision_required) {
+			const bool collision_source_missing =
+				!resource_cache_->find_collision(item.key, record->generation) &&
+				!resource_cache_->find_mesh(item.key, record->generation);
+			if (collision_source_missing) {
+				// GPU-only visual generations have no cached CPU topology. Queue
+				// their collision-required successor immediately; readiness repair
+				// intentionally waits for an idle application queue and is too late
+				// for a moving collision viewer.
+				queue_transition_remeshes({ item });
+			}
+			WtChunkApplicationRecord application_record;
+			const bool staged_collision_promotion =
+				application_->copy_record(item.key, application_record) &&
+				application_record.generation == record->generation &&
+				application_record.staged_replacement;
+			if (staged_collision_promotion) {
+				WtReadOnlyPublication expectation;
+				expectation.kind = WtReadOnlyPublicationKind::ExpectChunk;
+				expectation.key = item.key;
+				expectation.generation = record->generation;
+				expectation.collision_required = true;
+				expectation.visual_required = item.visual_required;
+				expectation.staged_replacement = true;
+				if (!push_publication(std::move(expectation))) return false;
+				queue_readiness_repair_candidate(item.key);
+			} else if (!push_publication({
+					WtReadOnlyPublicationKind::SetCollisionRequired,
+					item.key,
+					record->generation,
+					true,
+					{},
+					{},
+				})) {
+				return false;
+			}
+		}
 		if (previous->visual_required != item.visual_required) {
 			if (item.visual_required) {
 				WtReadOnlyPublication expectation;

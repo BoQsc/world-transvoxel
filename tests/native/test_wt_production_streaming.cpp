@@ -672,6 +672,22 @@ int main() {
 	check(counts.renders == renders_before_collision_invoker &&
 		counts.collision_only_expects >= 1,
 		"collision-only viewer published hidden render work");
+	const wt::WtCausalTraceSnapshot collision_invoker_trace =
+		runtime.causal_trace_snapshot(0, 1024);
+	bool collision_invoker_priority_seen = false;
+	for (const wt::WtCausalTraceEvent &event :
+			collision_invoker_trace.events) {
+		if (event.kind == wt::WtCausalTraceEventKind::ChunkDemandAccepted &&
+			event.has_chunk && event.key == wt::WtChunkKey{ 2, 0, 0, 0 } &&
+			event.auxiliary == static_cast<std::uint64_t>(
+				wt::kWtPlayerSupportPriority
+			)) {
+			collision_invoker_priority_seen = true;
+			break;
+		}
+	}
+	check(collision_invoker_priority_seen,
+		"collision-only viewer entered the committed-edit priority band");
 	check(runtime.remove_collision_viewer(1, 3) ==
 		wt::WtReadOnlyRuntimeStatus::Ok,
 		"collision-only viewer removal rejected");

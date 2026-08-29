@@ -39,6 +39,14 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	std::uint64_t non_retiring_records = 0;
 	std::uint64_t non_retiring_visual_ready_records = 0;
 	std::uint64_t non_retiring_fully_ready_records = 0;
+	std::uint64_t non_retiring_visual_not_ready_records = 0;
+	WtChunkKey first_visual_not_ready_key{};
+	std::uint64_t first_visual_not_ready_generation = 0;
+	std::uint64_t first_visual_not_ready_visual_generation = 0;
+	std::uint64_t first_visual_not_ready_render_generation = 0;
+	std::uint64_t first_visual_not_ready_staged_render_generation = 0;
+	bool first_visual_not_ready_staged = false;
+	bool first_visual_not_ready_external_activation_required = false;
 	std::uint64_t pending_retirement_records = 0;
 	std::uint64_t blocked_pending_replacements = 0;
 	WtChunkKey first_blocked_replacement_key{};
@@ -82,6 +90,22 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 			non_retiring_visual_ready_records +=
 				(!record.visual_required || record.visual_ready) ? 1U : 0U;
 			non_retiring_fully_ready_records += record.fully_ready() ? 1U : 0U;
+			if (record.visual_required && !record.visual_ready) {
+				if (non_retiring_visual_not_ready_records == 0) {
+					first_visual_not_ready_key = record.key;
+					first_visual_not_ready_generation = record.generation.value;
+					first_visual_not_ready_visual_generation =
+						record.visual_generation.value;
+					first_visual_not_ready_render_generation =
+						render_sink_->applied_generation(record.key).value;
+					first_visual_not_ready_staged_render_generation =
+						render_sink_->staged_generation(record.key).value;
+					first_visual_not_ready_staged = record.staged_replacement;
+					first_visual_not_ready_external_activation_required =
+						record.external_visual_activation_required;
+				}
+				++non_retiring_visual_not_ready_records;
+			}
 		}
 	}
 	for (const WtChunkKey &key : pending_chunk_replacements_) {
@@ -840,6 +864,43 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		"non_retiring_fully_ready_chunk_records",
 		non_retiring_fully_ready_records
 	);
+	set_metric(
+		output,
+		"non_retiring_visual_not_ready_chunk_records",
+		non_retiring_visual_not_ready_records
+	);
+	output["first_visual_not_ready_key_x"] =
+		static_cast<std::int64_t>(first_visual_not_ready_key.x);
+	output["first_visual_not_ready_key_y"] =
+		static_cast<std::int64_t>(first_visual_not_ready_key.y);
+	output["first_visual_not_ready_key_z"] =
+		static_cast<std::int64_t>(first_visual_not_ready_key.z);
+	output["first_visual_not_ready_key_lod"] =
+		static_cast<std::int64_t>(first_visual_not_ready_key.lod);
+	set_metric(
+		output,
+		"first_visual_not_ready_generation",
+		first_visual_not_ready_generation
+	);
+	set_metric(
+		output,
+		"first_visual_not_ready_visual_generation",
+		first_visual_not_ready_visual_generation
+	);
+	set_metric(
+		output,
+		"first_visual_not_ready_render_generation",
+		first_visual_not_ready_render_generation
+	);
+	set_metric(
+		output,
+		"first_visual_not_ready_staged_render_generation",
+		first_visual_not_ready_staged_render_generation
+	);
+	output["first_visual_not_ready_staged"] =
+		first_visual_not_ready_staged;
+	output["first_visual_not_ready_external_activation_required"] =
+		first_visual_not_ready_external_activation_required;
 	set_metric(output, "pending_retirement_records", pending_retirement_records);
 	set_metric(
 		output,
