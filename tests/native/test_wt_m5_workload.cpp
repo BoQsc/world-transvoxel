@@ -339,6 +339,75 @@ void test_ready_collision_promotion_requests_remesh() {
 		"ready collision promotion did not request a collision-capable generation");
 }
 
+void test_meshing_collision_promotion_requests_remesh() {
+	const wt::WtChunkKey key = { 7, 0, 0, 0 };
+	wt::WtStreamScheduler scheduler(1, 2, 2, 0);
+	wt::WtChunkApplicationService application(1, 2, 2);
+	wt::WtStoragePageCache page_cache({
+		1, wt::kWtMaximumContainerSize,
+		1, wt::kWtMaximumContainerSize,
+	});
+	wt::WtChunkResourceCache resource_cache({
+		1, wt::kWtMaximumResourceCacheBytes,
+		1, wt::kWtMaximumResourceCacheBytes,
+		1, wt::kWtMaximumResourceCacheBytes,
+	});
+	wt::WtDesiredSetRuntimeService runtime(1);
+	RecordingPageMeshingOwner page_meshing_owner;
+
+	check(scheduler.request_chunk_version(key, 9, 4, 10) ==
+		wt::WtSchedulerStatus::Ok,
+		"meshing promotion fixture request failed");
+	const wt::WtChunkRecord *record = scheduler.find_record(key);
+	check(record != nullptr && application.expect_chunk(
+		key, record->generation, false
+	) == wt::WtApplicationStatus::Ok,
+		"meshing promotion fixture expectation failed");
+	wt::WtChunkJob job;
+	check(scheduler.pop_job(job) &&
+		scheduler.submit_completion({
+			key, job.generation, wt::WtChunkJobStage::Sample, true,
+		}) == wt::WtSchedulerStatus::Ok &&
+		scheduler.apply_completions(1) == 1 &&
+		scheduler.pop_job(job) && job.stage == wt::WtChunkJobStage::Mesh,
+		"meshing promotion fixture did not enter meshing");
+	record = scheduler.find_record(key);
+	const wt::WtGenerationToken meshing_generation =
+		record == nullptr ? wt::WtGenerationToken{} : record->generation;
+
+	wt::WtDesiredSetDelta delta;
+	delta.updated = { { key, 25, 1, true } };
+	check(runtime.apply_delta(
+		delta, 9, 4, scheduler, page_cache, resource_cache, application,
+		&page_meshing_owner
+	) == wt::WtDesiredSetRuntimeStatus::Ok,
+		"meshing collision promotion failed");
+	record = scheduler.find_record(key);
+	const wt::WtChunkApplicationRecord *application_record =
+		application.find_record(key);
+	wt::WtChunkJob replacement_job;
+	check(record != nullptr && record->generation != meshing_generation &&
+		record->lifecycle == wt::WtChunkLifecycle::Sampling &&
+		application_record != nullptr &&
+		application_record->generation == record->generation &&
+		application_record->collision_required &&
+		application_record->staged_replacement &&
+		!application_record->collision_ready &&
+		page_meshing_owner.released == 1 &&
+		scheduler.pop_job(replacement_job) &&
+		replacement_job.stage == wt::WtChunkJobStage::Sample &&
+		replacement_job.generation == record->generation,
+		"meshing collision promotion retained a visual-only generation");
+
+	check(scheduler.submit_completion({
+		key, meshing_generation, wt::WtChunkJobStage::Mesh, true,
+	}) == wt::WtSchedulerStatus::Ok &&
+		scheduler.apply_completions(1) == 1 &&
+		scheduler.find_record(key)->generation == replacement_job.generation &&
+		scheduler.find_record(key)->lifecycle == wt::WtChunkLifecycle::Sampling,
+		"obsolete visual-only mesh completion replaced collision work");
+}
+
 void test_interactive_edit_priority_contract() {
 	const wt::WtChunkKey key = { 4, 0, 0, 0 };
 	wt::WtStreamScheduler scheduler(1, 2, 2, 0);
@@ -675,6 +744,7 @@ int main(int argc, char **argv) {
 	std::vector<std::uint8_t> evidence;
 	test_runtime_delta_contract(evidence);
 	test_ready_collision_promotion_requests_remesh();
+	test_meshing_collision_promotion_requests_remesh();
 	test_interactive_edit_priority_contract();
 	test_representative_workload(evidence, true);
 	if (failure_count != 0) {

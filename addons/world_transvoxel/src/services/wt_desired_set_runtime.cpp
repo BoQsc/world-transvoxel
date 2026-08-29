@@ -48,6 +48,13 @@ bool contains_key(
 	return std::binary_search(items.begin(), items.end(), key);
 }
 
+bool role_promotion_requires_remesh(
+	WtChunkLifecycle lifecycle
+) noexcept {
+	return lifecycle == WtChunkLifecycle::Meshing ||
+		lifecycle == WtChunkLifecycle::Ready;
+}
+
 } // namespace
 
 WtDesiredSetRuntimeService::WtDesiredSetRuntimeService(
@@ -172,7 +179,7 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 			application.copy_record(item.key, application_record) &&
 			((!application_record.visual_required && item.visual_required) ||
 			(!application_record.collision_required && item.collision_required)) &&
-			record->lifecycle == WtChunkLifecycle::Ready) {
+			role_promotion_requires_remesh(record->lifecycle)) {
 			++role_promotions_requiring_remesh;
 		}
 	}
@@ -222,7 +229,7 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 			interactive_edit_in_flight ?
 				kWtInteractiveEditPriority : item.priority;
 		if ((promote_visual || promote_collision) && record != nullptr &&
-			record->lifecycle == WtChunkLifecycle::Ready) {
+			role_promotion_requires_remesh(record->lifecycle)) {
 			if (page_meshing_runtime != nullptr) {
 				const WtPageMeshingRuntimeOwnerStatus release_status =
 					page_meshing_runtime->release_owned_chunk(item.key);
