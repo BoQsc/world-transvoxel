@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <string>
 
 namespace world_transvoxel {
@@ -103,6 +104,76 @@ godot::Array gpu_cohort_keys(const std::vector<WtChunkKey> &keys) {
 	godot::Array result;
 	for (const WtChunkKey &key : keys) result.push_back(gpu_cohort_key(key));
 	return result;
+}
+
+void append_gpu_transition_face_dependencies(
+	const WtChunkKey &key,
+	WtChunkFace face,
+	std::vector<WtChunkKey> &keys
+) {
+	if (key.lod == 0) return;
+	const std::int64_t base_x = static_cast<std::int64_t>(key.x) * 2;
+	const std::int64_t base_y = static_cast<std::int64_t>(key.y) * 2;
+	const std::int64_t base_z = static_cast<std::int64_t>(key.z) * 2;
+	for (std::int64_t first = 0; first < 2; ++first) {
+		for (std::int64_t second = 0; second < 2; ++second) {
+			std::int64_t x = base_x;
+			std::int64_t y = base_y;
+			std::int64_t z = base_z;
+			switch (face) {
+				case WtChunkFace::NegativeX:
+					x = base_x - 1; y += first; z += second; break;
+				case WtChunkFace::PositiveX:
+					x = base_x + 2; y += first; z += second; break;
+				case WtChunkFace::NegativeY:
+					y = base_y - 1; x += first; z += second; break;
+				case WtChunkFace::PositiveY:
+					y = base_y + 2; x += first; z += second; break;
+				case WtChunkFace::NegativeZ:
+					z = base_z - 1; x += first; y += second; break;
+				case WtChunkFace::PositiveZ:
+					z = base_z + 2; x += first; y += second; break;
+			}
+			const std::int64_t minimum = std::numeric_limits<std::int32_t>::min();
+			const std::int64_t maximum = std::numeric_limits<std::int32_t>::max();
+			if (x < minimum || x > maximum || y < minimum || y > maximum ||
+				z < minimum || z > maximum) {
+				continue;
+			}
+			const WtChunkKey dependency {
+				static_cast<std::int32_t>(x),
+				static_cast<std::int32_t>(y),
+				static_cast<std::int32_t>(z),
+				static_cast<std::uint8_t>(key.lod - 1),
+			};
+			if (std::find(keys.begin(), keys.end(), dependency) == keys.end()) {
+				keys.push_back(dependency);
+			}
+		}
+	}
+}
+
+std::size_t append_gpu_transition_dependencies(
+	WtChunkApplicationService &application,
+	std::vector<WtChunkKey> &keys
+) {
+	const std::size_t initial_size = keys.size();
+	for (std::size_t index = 0; index < keys.size() && keys.size() < 4096;
+			++index) {
+		WtChunkApplicationRecord record;
+		if (!application.copy_record(keys[index], record) || !record.visual_required) {
+			continue;
+		}
+		for (std::uint8_t face_index = 0; face_index < 6; ++face_index) {
+			const auto face = static_cast<WtChunkFace>(face_index);
+			if ((record.external_visual_transition_mask & wt_face_bit(face)) != 0) {
+				append_gpu_transition_face_dependencies(record.key, face, keys);
+			}
+		}
+	}
+	std::sort(keys.begin(), keys.end());
+	keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
+	return keys.size() - initial_size;
 }
 
 } // namespace
@@ -454,7 +525,7 @@ get_gpu_resident_render_activation_cohort(
 	std::vector<WtChunkKey> replacements { identity.key };
 	std::vector<WtChunkKey> retirements;
 	std::size_t retirement_count = 0;
-	const bool regional = seed_record.staged_replacement &&
+	bool regional = seed_record.staged_replacement &&
 		wt_chunk_replacement_requires_regional_publication(
 			identity.key, pending_chunk_retirements_
 		);
@@ -506,6 +577,9 @@ get_gpu_resident_render_activation_cohort(
 		retirements = std::move(region.retirements);
 		retirement_count = retirements.size();
 	}
+	const std::size_t transition_dependency_count =
+		append_gpu_transition_dependencies(*application_, replacements);
+	regional = regional || transition_dependency_count != 0;
 	godot::Array chunks;
 	std::int64_t activation_required_count = 0;
 	std::int64_t retained_active_count = 0;
@@ -602,6 +676,9 @@ get_gpu_resident_render_activation_cohort(
 	result["replacement_count"] = chunks.size();
 	result["activation_required_count"] = activation_required_count;
 	result["retained_active_count"] = retained_active_count;
+	result["transition_dependency_count"] = static_cast<std::int64_t>(
+		transition_dependency_count
+	);
 	result["error"] = "";
 	return result;
 }
@@ -699,6 +776,7 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 			selected_keys = std::move(region.replacements);
 			authoritative_retirements = std::move(region.retirements);
 		}
+		append_gpu_transition_dependencies(*application_, selected_keys);
 		for (const WtChunkKey &key : selected_keys) {
 			WtChunkApplicationRecord record;
 			if (!application_->copy_record(key, record)) {
@@ -794,8 +872,14 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 		WtChunkPublicationRegion region;
 		if (!wt_build_chunk_publication_region(
 				*regional_seed, candidates, pending_chunk_retirements_, region
-			) || !publication_region_has_complete_authoritative_coverage(region) ||
-			region.replacements != cohort_keys) {
+			) || !publication_region_has_complete_authoritative_coverage(region)) {
+			result["status"] = "STALE_APPLICATION";
+			result["error"] = "GPU resident activation cohort is not the authoritative region";
+			return result;
+		}
+		std::vector<WtChunkKey> authoritative_keys = region.replacements;
+		append_gpu_transition_dependencies(*application_, authoritative_keys);
+		if (authoritative_keys != cohort_keys) {
 			result["status"] = "STALE_APPLICATION";
 			result["error"] = "GPU resident activation cohort is not the authoritative region";
 			result["regional_seed"] = gpu_cohort_key(*regional_seed);
