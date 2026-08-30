@@ -214,6 +214,10 @@ void WorldTransvoxelTerrain::bind_gpu_meshing_shadow_methods() {
 		&WorldTransvoxelTerrain::get_gpu_resident_render_activation_cohort
 	);
 	godot::ClassDB::bind_method(
+		godot::D_METHOD("inspect_gpu_resident_publication", "coordinate", "lod"),
+		&WorldTransvoxelTerrain::inspect_gpu_resident_publication
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD(
 			"activate_gpu_resident_render_cohort",
 			"chunk_surface_inventories",

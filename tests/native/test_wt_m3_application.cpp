@@ -915,10 +915,13 @@ void test_gpu_reciprocal_publication_dependencies() {
 				"legacy overlap-only control unexpectedly included the transition neighbor");
 			std::uint8_t coarse_mask = 0;
 			bool coarse_compatible = false;
+			bool coarse_mask_known = true;
 			bool refining = true;
 			const auto lookup = [&](const wt::WtChunkKey &key, wt::WtGpuPublicationBoundary &state) {
 				if (key == coarse) {
-					state = { coarse_mask, coarse_compatible };
+					state = wt::wt_gpu_publication_boundary(
+						coarse_mask, coarse_mask_known, bit, coarse_compatible
+					);
 					return true;
 				}
 				if ((refining && std::binary_search(fine.begin(), fine.end(), key)) ||
@@ -951,6 +954,21 @@ void test_gpu_reciprocal_publication_dependencies() {
 				waiting.empty() && region.replacements == fine &&
 				region.retirements == std::vector<wt::WtChunkKey>{replaced},
 				"compatible active transition neighbor was needlessly republished");
+			// Expecting a successor resets the application mask before its mesh
+			// exists. The retained, already active transition still covers this face.
+			coarse_mask = 0;
+			coarse_mask_known = false;
+			check(wt::wt_build_gpu_chunk_publication_cohort(
+					fine.front(), candidates, { replaced }, lookup, region, waiting) &&
+				waiting.empty() && region.replacements == fine &&
+				wt::wt_chunk_publication_region_has_complete_coverage(region),
+				"unknown successor mask hid a compatible live boundary");
+			coarse_mask_known = true;
+			check(wt::wt_build_gpu_chunk_publication_cohort(
+					fine.front(), candidates, { replaced }, lookup, region, waiting) &&
+				waiting == std::vector<wt::WtChunkKey>{coarse},
+				"known incompatible successor mask bypassed reciprocal validation");
+			coarse_mask = bit;
 			coarse_compatible = false;
 			check(!wt::wt_build_gpu_chunk_publication_cohort(
 					fine.front(), candidates, { replaced }, lookup, region, waiting, 8),

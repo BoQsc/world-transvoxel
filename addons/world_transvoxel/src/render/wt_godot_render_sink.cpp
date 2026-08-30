@@ -795,10 +795,18 @@ bool WtGodotRenderSink::gpu_resident_boundary_matches(
 	const WtChunkKey &key,
 	std::uint8_t transition_mask
 ) const noexcept {
+	std::uint8_t active_mask = 0;
+	return get_gpu_resident_boundary_mask(key, active_mask) && active_mask == transition_mask;
+}
+
+bool WtGodotRenderSink::get_gpu_resident_boundary_mask(
+	const WtChunkKey &key, std::uint8_t &transition_mask
+) const noexcept {
 	const auto iterator = records_.find(key);
-	return iterator != records_.end() && iterator->second.instance != nullptr &&
-		iterator->second.transition_mask == transition_mask &&
-		!iterator->second.staged && iterator->second.gpu_resident_replaced;
+	if (iterator == records_.end() || iterator->second.instance == nullptr ||
+		iterator->second.staged || !iterator->second.gpu_resident_replaced) return false;
+	transition_mask = iterator->second.transition_mask;
+	return true;
 }
 
 std::size_t WtGodotRenderSink::restore_gpu_resident_replacements() noexcept {

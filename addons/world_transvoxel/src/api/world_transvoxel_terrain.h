@@ -244,6 +244,9 @@ public:
 	godot::Dictionary get_gpu_resident_render_activation_cohort(
 		const godot::Dictionary &identity
 	);
+	godot::Dictionary inspect_gpu_resident_publication(
+		const godot::Vector3i &coordinate, std::int64_t lod
+	);
 	godot::Dictionary activate_gpu_resident_render_cohort(
 		const godot::Array &chunk_surface_inventories,
 		const godot::Dictionary &authoritative_seed = godot::Dictionary()

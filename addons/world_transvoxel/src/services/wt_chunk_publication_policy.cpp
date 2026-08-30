@@ -374,6 +374,17 @@ void build_indexed_publication_region(
 
 } // namespace
 
+WtGpuPublicationBoundary wt_gpu_publication_boundary(
+	std::uint8_t candidate_mask, bool candidate_mask_known,
+	std::uint8_t active_mask, bool active_present
+) noexcept {
+	// An expectation's zero-initialized mask is not a new boundary. Until a
+	// candidate exists, use the complete mask of retained visible geometry.
+	const std::uint8_t mask = !candidate_mask_known && active_present ?
+		active_mask : candidate_mask;
+	return { mask, active_present && mask == active_mask };
+}
+
 bool wt_build_chunk_publication_region(
 	const WtChunkKey &seed_replacement,
 	const std::vector<WtChunkKey> &pending_replacements,

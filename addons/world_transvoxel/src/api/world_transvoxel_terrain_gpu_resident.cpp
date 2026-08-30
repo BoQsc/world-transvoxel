@@ -114,7 +114,8 @@ bool build_gpu_publication_cohort(
 	const std::vector<WtChunkKey> &ready,
 	const std::vector<WtChunkKey> &retirements,
 	WtChunkPublicationRegion &region,
-	std::vector<WtChunkKey> &waiting_masks
+	std::vector<WtChunkKey> &waiting_masks,
+	godot::Array *inspected_boundaries = nullptr
 ) {
 	std::vector<WtChunkKey> candidates = pending;
 	candidates.insert(candidates.end(), ready.begin(), ready.end());
@@ -122,19 +123,72 @@ bool build_gpu_publication_cohort(
 	candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
 	return wt_build_gpu_chunk_publication_cohort(
 		seed, candidates, retirements,
-		[&application, &render_sink](const WtChunkKey &key, WtGpuPublicationBoundary &boundary) {
+		[&application, &render_sink, inspected_boundaries](const WtChunkKey &key, WtGpuPublicationBoundary &boundary) {
 			WtChunkApplicationRecord record;
 			if (!application.copy_record(key, record) || !record.visual_required) return false;
-			boundary.transition_mask = record.external_visual_transition_mask;
-			boundary.compatible_active = render_sink.gpu_resident_boundary_matches(
-				key, record.external_visual_transition_mask
+			std::uint8_t active_mask = 0;
+			const bool active_present = render_sink.get_gpu_resident_boundary_mask(key, active_mask);
+			const bool candidate_mask_known = record.visual_generation == record.generation;
+			boundary = wt_gpu_publication_boundary(
+				record.external_visual_transition_mask, candidate_mask_known,
+				active_mask, active_present
 			);
+			if (inspected_boundaries) {
+				godot::Dictionary member = gpu_cohort_member(record);
+				member["compatible_active"] = boundary.compatible_active;
+				member["boundary_mask"] = boundary.transition_mask;
+				member["candidate_mask_known"] = candidate_mask_known;
+				member["active_present"] = active_present;
+				member["active_mask"] = active_mask;
+				member["visual_generation"] = static_cast<std::int64_t>(record.visual_generation.value);
+				member["visual_ready"] = record.visual_ready;
+				member["external_prepared"] = record.external_visual_prepared;
+				member["external_activation_required"] = record.external_visual_activation_required;
+				member["collision_required"] = record.collision_required;
+				member["collision_ready"] = record.collision_ready;
+				inspected_boundaries->push_back(member);
+			}
 			return true;
 		}, region, waiting_masks
 	);
 }
 
 } // namespace
+
+godot::Dictionary WorldTransvoxelTerrain::inspect_gpu_resident_publication(
+	const godot::Vector3i &coordinate, std::int64_t lod
+) {
+	godot::Dictionary result;
+	result["schema"] = "world_transvoxel.gpu_publication_inspection.v1";
+	result["read_only"] = true;
+	result["built"] = false;
+	if (!gpu_resident_render_publication_enabled_ || !application_ || !render_sink_ ||
+		lod < 0 || lod > kWtMaximumLod) return result;
+	const WtChunkKey seed { coordinate.x, coordinate.y, coordinate.z, static_cast<std::uint8_t>(lod) };
+	WtChunkPublicationRegion region;
+	std::vector<WtChunkKey> waiting_masks;
+	godot::Array boundaries;
+	const bool built = build_gpu_publication_cohort(
+		*application_, *render_sink_, seed, pending_chunk_replacements_,
+		ready_staged_chunk_replacements_, pending_chunk_retirements_,
+		region, waiting_masks, &boundaries
+	);
+	result["seed"] = gpu_cohort_key(seed);
+	result["built"] = built;
+	result["open_viewer_plan_publications"] = static_cast<std::int64_t>(open_viewer_plan_publications_);
+	result["authoritative_coverage_complete"] = built &&
+		(region.retirements.empty() || publication_region_has_complete_authoritative_coverage(region));
+	result["pending_replacements"] = gpu_cohort_keys(pending_chunk_replacements_);
+	result["ready_replacements"] = gpu_cohort_keys(ready_staged_chunk_replacements_);
+	result["pending_retirements"] = gpu_cohort_keys(pending_chunk_retirements_);
+	result["selected"] = gpu_cohort_keys(region.replacements);
+	result["retirements"] = gpu_cohort_keys(region.retirements);
+	result["waiting_masks"] = gpu_cohort_keys(waiting_masks);
+	// Only successful lookups are needed to replay the selector. Other keys are
+	// absent. No priority requests, activation, or GPU readback occurs here.
+	result["boundaries"] = boundaries;
+	return result;
+}
 
 bool WorldTransvoxelTerrain::begin_gpu_resident_render_publication(
 	std::int64_t capacity

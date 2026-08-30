@@ -202,7 +202,18 @@ Opt-in GPU-resident render publication:
 - `set_gpu_resident_render_chunk_active(identities, active) -> Dictionary`
 - `reconcile_gpu_resident_render_chunks(terrain_identities) -> Dictionary`
 - `get_gpu_resident_render_metrics() -> Dictionary`
+- `inspect_gpu_resident_publication(coordinate: Vector3i, lod: int) -> Dictionary`
 - `end_gpu_resident_render_publication()`
+
+`inspect_gpu_resident_publication` is an explicit, read-only diagnostic. It
+uses the publication selector without requesting priority, preparing or
+activating chunks, or reading GPU buffers. The result includes the seed,
+pending/ready replacements, pending retirements, selected cohort, unresolved
+masks, and successful boundary lookups. Absent lookups are omitted. Selection
+uses the existing 4,096-member cap; `built=false` must not be interpreted as a
+complete cohort. Capture at isolated failures, not every frame. A live mask
+may satisfy a neighbor boundary when a successor's mask is not yet known;
+this does not mark the successor's visual or collision generation ready.
 
 Resident request schema `world_transvoxel.gpu_resident_render_request.v6`
 captures immutable page-lattice inputs before CPU Transvoxel topology. It reports

@@ -64,6 +64,9 @@ public:
 		const WtChunkKey &key,
 		std::uint8_t transition_mask
 	) const noexcept;
+	bool get_gpu_resident_boundary_mask(
+		const WtChunkKey &key, std::uint8_t &transition_mask
+	) const noexcept;
 	std::size_t restore_gpu_resident_replacements() noexcept;
 	void set_shader_fade_parameter_enabled(bool enabled) noexcept;
 	bool is_shader_fade_parameter_enabled() const noexcept;
