@@ -515,9 +515,15 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			}
 		}
 		std::shared_ptr<GpuMeshingCaptureReservation> pre_mesh_reservation;
+		const bool resident_input = gpu_meshing_shadow_ &&
+			gpu_meshing_shadow_->captures_pre_mesh_field();
+		WtChunkApplicationRecord admission_record;
+		// Collision-only work has no resident visual to capture or activate.
 		if (next_job.stage == WtChunkJobStage::Mesh &&
-			gpu_meshing_shadow_ &&
-			gpu_meshing_shadow_->captures_pre_mesh_field()) {
+			resident_input &&
+			application_->copy_record(next_job.key, admission_record) &&
+			admission_record.generation == next_job.generation &&
+			admission_record.visual_required) {
 			const std::uint64_t reservation_id =
 				gpu_meshing_shadow_->reserve_capture_slots(next_job);
 			if (reservation_id == 0) {
@@ -633,7 +639,8 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 				) {
 					pre_mesh_reservation->capture(std::move(capture));
 				};
-			} else if (gpu_meshing_shadow_ && gpu_meshing_shadow_->enabled()) {
+			} else if (!resident_input && gpu_meshing_shadow_ &&
+				gpu_meshing_shadow_->enabled()) {
 				const std::shared_ptr<WtGpuMeshingShadowQueue> shadow =
 					gpu_meshing_shadow_;
 				const std::uint64_t reservation_id =
