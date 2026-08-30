@@ -154,6 +154,22 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			)) {
 			break;
 		}
+		const WtLodMapEntry *entry = find_plan_entry(
+			current_plan_.entries,
+			completion.key
+		);
+		const std::uint8_t render_transition_mask =
+			entry != nullptr ? entry->transition_mask :
+				completion.mesh->transition_mask;
+		if (render_transition_mask != completion.mesh->transition_mask) {
+			const WtDesiredChunk *desired = desired_->find_desired(
+				completion.key
+			);
+			if (desired != nullptr) {
+				queue_transition_remeshes({ *desired });
+			}
+			continue;
+		}
 		if (completion.gpu_resident_visual_only) {
 			auto render = std::make_shared<WtRenderPayload>();
 			render->key = completion.key;
@@ -205,22 +221,6 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			continue;
 		}
 		auto render = std::make_shared<WtRenderPayload>();
-		const WtLodMapEntry *entry = find_plan_entry(
-			current_plan_.entries,
-			completion.key
-		);
-		const std::uint8_t render_transition_mask =
-			entry != nullptr ? entry->transition_mask :
-				completion.mesh->transition_mask;
-		if (render_transition_mask != completion.mesh->transition_mask) {
-			const WtDesiredChunk *desired = desired_->find_desired(
-				completion.key
-			);
-			if (desired != nullptr) {
-				queue_transition_remeshes({ *desired });
-			}
-			continue;
-		}
 		if (resource_cache_->insert_mesh(
 				completion.mesh,
 				completion.water_mesh,
