@@ -417,6 +417,7 @@ get_gpu_resident_render_activation_cohort(
 	result["ready"] = false;
 	result["regional"] = false;
 	result["chunks"] = godot::Array();
+	result["retirements"] = godot::Array();
 	result["cpu_collision_publication_unchanged"] = true;
 	WtGpuMeshingShadowIdentity identity;
 	if (!gpu_resident_render_publication_enabled_ || !application_ || !render_sink_ ||
@@ -451,6 +452,7 @@ get_gpu_resident_render_activation_cohort(
 		identity.key
 	);
 	std::vector<WtChunkKey> replacements { identity.key };
+	std::vector<WtChunkKey> retirements;
 	std::size_t retirement_count = 0;
 	const bool regional = seed_record.staged_replacement &&
 		wt_chunk_replacement_requires_regional_publication(
@@ -501,7 +503,8 @@ get_gpu_resident_render_activation_cohort(
 			return result;
 		}
 		replacements = std::move(region.replacements);
-		retirement_count = region.retirements.size();
+		retirements = std::move(region.retirements);
+		retirement_count = retirements.size();
 	}
 	godot::Array chunks;
 	std::int64_t activation_required_count = 0;
@@ -595,6 +598,7 @@ get_gpu_resident_render_activation_cohort(
 	result["ready"] = true;
 	result["regional"] = regional;
 	result["chunks"] = chunks;
+	result["retirements"] = gpu_cohort_keys(retirements);
 	result["replacement_count"] = chunks.size();
 	result["activation_required_count"] = activation_required_count;
 	result["retained_active_count"] = retained_active_count;
@@ -610,6 +614,7 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 	result["schema"] = "world_transvoxel.gpu_resident_cohort_activation.v1";
 	result["status"] = "REJECTED";
 	result["active"] = false;
+	result["retirements"] = godot::Array();
 	result["cpu_collision_publication_unchanged"] = true;
 	if (!gpu_resident_render_publication_enabled_ || !application_ || !render_sink_ ||
 		chunk_surface_inventories.is_empty() ||
@@ -651,6 +656,7 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 		inventory_pool.push_back(inventory);
 	}
 	std::vector<ParsedGpuChunkInventory> inventories;
+	std::vector<WtChunkKey> authoritative_retirements;
 	bool authority_selected = false;
 	if (!authoritative_seed_dictionary.is_empty()) {
 		WtGpuMeshingShadowIdentity seed;
@@ -691,6 +697,7 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 				return result;
 			}
 			selected_keys = std::move(region.replacements);
+			authoritative_retirements = std::move(region.retirements);
 		}
 		for (const WtChunkKey &key : selected_keys) {
 			WtChunkApplicationRecord record;
@@ -808,6 +815,7 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 			);
 			return result;
 		}
+		authoritative_retirements = std::move(region.retirements);
 	} else if (!authority_selected && cohort_keys.size() != 1U) {
 		result["status"] = "STALE_APPLICATION";
 		result["error"] = "GPU resident independent activation is not a singleton";
@@ -863,6 +871,7 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 	result["status"] = "ACTIVE";
 	result["active"] = true;
 	result["chunks"] = activated_chunks;
+	result["retirements"] = gpu_cohort_keys(authoritative_retirements);
 	result["chunk_count"] = static_cast<std::int64_t>(inventories.size());
 	result["activated_chunk_count"] = static_cast<std::int64_t>(sink_activated);
 	result["retained_active_chunk_count"] = static_cast<std::int64_t>(
