@@ -106,74 +106,32 @@ godot::Array gpu_cohort_keys(const std::vector<WtChunkKey> &keys) {
 	return result;
 }
 
-void append_gpu_transition_face_dependencies(
-	const WtChunkKey &key,
-	WtChunkFace face,
-	std::vector<WtChunkKey> &keys
-) {
-	if (key.lod == 0) return;
-	const std::int64_t base_x = static_cast<std::int64_t>(key.x) * 2;
-	const std::int64_t base_y = static_cast<std::int64_t>(key.y) * 2;
-	const std::int64_t base_z = static_cast<std::int64_t>(key.z) * 2;
-	for (std::int64_t first = 0; first < 2; ++first) {
-		for (std::int64_t second = 0; second < 2; ++second) {
-			std::int64_t x = base_x;
-			std::int64_t y = base_y;
-			std::int64_t z = base_z;
-			switch (face) {
-				case WtChunkFace::NegativeX:
-					x = base_x - 1; y += first; z += second; break;
-				case WtChunkFace::PositiveX:
-					x = base_x + 2; y += first; z += second; break;
-				case WtChunkFace::NegativeY:
-					y = base_y - 1; x += first; z += second; break;
-				case WtChunkFace::PositiveY:
-					y = base_y + 2; x += first; z += second; break;
-				case WtChunkFace::NegativeZ:
-					z = base_z - 1; x += first; y += second; break;
-				case WtChunkFace::PositiveZ:
-					z = base_z + 2; x += first; y += second; break;
-			}
-			const std::int64_t minimum = std::numeric_limits<std::int32_t>::min();
-			const std::int64_t maximum = std::numeric_limits<std::int32_t>::max();
-			if (x < minimum || x > maximum || y < minimum || y > maximum ||
-				z < minimum || z > maximum) {
-				continue;
-			}
-			const WtChunkKey dependency {
-				static_cast<std::int32_t>(x),
-				static_cast<std::int32_t>(y),
-				static_cast<std::int32_t>(z),
-				static_cast<std::uint8_t>(key.lod - 1),
-			};
-			if (std::find(keys.begin(), keys.end(), dependency) == keys.end()) {
-				keys.push_back(dependency);
-			}
-		}
-	}
-}
-
-std::size_t append_gpu_transition_dependencies(
+bool build_gpu_publication_cohort(
 	WtChunkApplicationService &application,
-	std::vector<WtChunkKey> &keys
+	WtGodotRenderSink &render_sink,
+	const WtChunkKey &seed,
+	const std::vector<WtChunkKey> &pending,
+	const std::vector<WtChunkKey> &ready,
+	const std::vector<WtChunkKey> &retirements,
+	WtChunkPublicationRegion &region,
+	std::vector<WtChunkKey> &waiting_masks
 ) {
-	const std::size_t initial_size = keys.size();
-	for (std::size_t index = 0; index < keys.size() && keys.size() < 4096;
-			++index) {
-		WtChunkApplicationRecord record;
-		if (!application.copy_record(keys[index], record) || !record.visual_required) {
-			continue;
-		}
-		for (std::uint8_t face_index = 0; face_index < 6; ++face_index) {
-			const auto face = static_cast<WtChunkFace>(face_index);
-			if ((record.external_visual_transition_mask & wt_face_bit(face)) != 0) {
-				append_gpu_transition_face_dependencies(record.key, face, keys);
-			}
-		}
-	}
-	std::sort(keys.begin(), keys.end());
-	keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
-	return keys.size() - initial_size;
+	std::vector<WtChunkKey> candidates = pending;
+	candidates.insert(candidates.end(), ready.begin(), ready.end());
+	std::sort(candidates.begin(), candidates.end());
+	candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+	return wt_build_gpu_chunk_publication_cohort(
+		seed, candidates, retirements,
+		[&application, &render_sink](const WtChunkKey &key, WtGpuPublicationBoundary &boundary) {
+			WtChunkApplicationRecord record;
+			if (!application.copy_record(key, record) || !record.visual_required) return false;
+			boundary.transition_mask = record.external_visual_transition_mask;
+			boundary.compatible_active = render_sink.gpu_resident_boundary_matches(
+				key, record.external_visual_transition_mask
+			);
+			return true;
+		}, region, waiting_masks
+	);
 }
 
 } // namespace
@@ -499,6 +457,9 @@ get_gpu_resident_render_activation_cohort(
 	}
 	WtChunkApplicationRecord seed_record;
 	if (!application_->copy_record(identity.key, seed_record) ||
+		!seed_record.visual_required || std::binary_search(
+			pending_chunk_retirements_.begin(), pending_chunk_retirements_.end(), identity.key
+		) ||
 		seed_record.generation != identity.generation ||
 		seed_record.visual_generation != identity.generation ||
 		seed_record.external_visual_transition_mask != identity.transition_mask) {
@@ -522,64 +483,28 @@ get_gpu_resident_render_activation_cohort(
 		independently_publishable_chunk_replacements_.end(),
 		identity.key
 	);
-	std::vector<WtChunkKey> replacements { identity.key };
-	std::vector<WtChunkKey> retirements;
-	std::size_t retirement_count = 0;
-	bool regional = seed_record.staged_replacement &&
-		wt_chunk_replacement_requires_regional_publication(
-			identity.key, pending_chunk_retirements_
-		);
-	if (regional) {
-		std::vector<WtChunkKey> candidates = pending_chunk_replacements_;
-		candidates.insert(
-			candidates.end(),
-			ready_staged_chunk_replacements_.begin(),
-			ready_staged_chunk_replacements_.end()
-		);
-		std::sort(candidates.begin(), candidates.end());
-		candidates.erase(
-			std::unique(candidates.begin(), candidates.end()), candidates.end()
-		);
-		WtChunkPublicationRegion region;
-		const bool region_built = wt_build_chunk_publication_region(
-			identity.key, candidates, pending_chunk_retirements_, region
-		);
-		const bool complete_coverage = region_built &&
-			publication_region_has_complete_authoritative_coverage(region);
-		result["candidate_count"] = static_cast<std::int64_t>(candidates.size());
-		result["region_built"] = region_built;
-		result["region_replacement_count"] = static_cast<std::int64_t>(
-			region.replacements.size()
-		);
-		result["region_retirement_count"] = static_cast<std::int64_t>(
-			region.retirements.size()
-		);
-		result["complete_coverage"] = complete_coverage;
-		if (!region_built) {
-			// The seed left both replacement sets before activation. Waiting cannot
-			// make this generation current again; the consumer must discard it and
-			// accept the authority's replacement request.
-			result["candidate_replacements"] = gpu_cohort_keys(candidates);
-			result["status"] = "STALE_APPLICATION";
-			result["error"] =
-				"GPU resident regional replacement seed is no longer pending";
-			return result;
-		}
-		if (!complete_coverage) {
-			result["candidate_replacements"] = gpu_cohort_keys(candidates);
-			result["region_replacements"] = gpu_cohort_keys(region.replacements);
-			result["region_retirements"] = gpu_cohort_keys(region.retirements);
-			result["status"] = "WAITING_COHORT";
-			result["error"] = "GPU resident regional replacement is incomplete";
-			return result;
-		}
-		replacements = std::move(region.replacements);
-		retirements = std::move(region.retirements);
-		retirement_count = retirements.size();
+	if (open_viewer_plan_publications_ != 0) {
+		result["status"] = "WAITING_COHORT";
+		result["error"] = "GPU resident viewer plan is not complete";
+		return result;
 	}
-	const std::size_t transition_dependency_count =
-		append_gpu_transition_dependencies(*application_, replacements);
-	regional = regional || transition_dependency_count != 0;
+	WtChunkPublicationRegion region;
+	std::vector<WtChunkKey> waiting_masks;
+	if (!build_gpu_publication_cohort(
+			*application_, *render_sink_, identity.key,
+			pending_chunk_replacements_, ready_staged_chunk_replacements_,
+			pending_chunk_retirements_, region, waiting_masks
+		) || (!region.retirements.empty() &&
+			!publication_region_has_complete_authoritative_coverage(region))) {
+		result["status"] = "WAITING_COHORT";
+		result["error"] = "GPU resident boundary cohort is incomplete or exceeds capacity";
+		return result;
+	}
+	std::vector<WtChunkKey> replacements = std::move(region.replacements);
+	std::vector<WtChunkKey> retirements = std::move(region.retirements);
+	const std::size_t retirement_count = retirements.size();
+	const bool regional = replacements.size() > 1 || !retirements.empty();
+	result["boundary_mask_wait_count"] = static_cast<std::int64_t>(waiting_masks.size());
 	godot::Array chunks;
 	std::int64_t activation_required_count = 0;
 	std::int64_t retained_active_count = 0;
@@ -593,6 +518,9 @@ get_gpu_resident_render_activation_cohort(
 		const bool record_present = application_->copy_record(key, record);
 		const bool generation_matches = record_present &&
 			record.visual_generation == record.generation;
+		const bool boundary_mask_matches = !std::binary_search(
+			waiting_masks.begin(), waiting_masks.end(), key
+		);
 		const bool sink_can_set = record_present &&
 			render_sink_->can_set_gpu_resident_replacement(
 				key, record.generation, record.external_visual_transition_mask
@@ -601,11 +529,11 @@ get_gpu_resident_render_activation_cohort(
 			render_sink_->gpu_resident_replacement_matches(
 				key, record.generation, record.external_visual_transition_mask
 			);
-		const bool prepared_member = record_present && record.visual_required &&
+		const bool prepared_member = record_present && record.visual_required && boundary_mask_matches &&
 			generation_matches &&
 			record.external_visual_activation_required &&
 			record.external_visual_prepared && sink_can_set;
-		const bool retained_active_member = record_present &&
+		const bool retained_active_member = record_present && boundary_mask_matches &&
 			record.visual_required && record.visual_ready &&
 			generation_matches && !record.external_visual_activation_required &&
 			sink_matches;
@@ -676,9 +604,6 @@ get_gpu_resident_render_activation_cohort(
 	result["replacement_count"] = chunks.size();
 	result["activation_required_count"] = activation_required_count;
 	result["retained_active_count"] = retained_active_count;
-	result["transition_dependency_count"] = static_cast<std::int64_t>(
-		transition_dependency_count
-	);
 	result["error"] = "";
 	return result;
 }
@@ -732,80 +657,87 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 		}
 		inventory_pool.push_back(inventory);
 	}
-	std::vector<ParsedGpuChunkInventory> inventories;
-	std::vector<WtChunkKey> authoritative_retirements;
-	bool authority_selected = false;
+	if (open_viewer_plan_publications_ != 0) {
+		result["status"] = "WAITING_COHORT";
+		result["error"] = "GPU resident viewer plan is not complete";
+		return result;
+	}
+	WtChunkKey seed_key = inventory_pool.front().identity.key;
 	if (!authoritative_seed_dictionary.is_empty()) {
 		WtGpuMeshingShadowIdentity seed;
-		if (!wt_parse_gpu_meshing_shadow_identity(
-				authoritative_seed_dictionary, seed
-			) || seed.surface != WtGpuMeshingShadowSurface::Terrain) {
+		if (!wt_parse_gpu_meshing_shadow_identity(authoritative_seed_dictionary, seed) ||
+			seed.surface != WtGpuMeshingShadowSurface::Terrain) {
 			result["error"] = "GPU resident authoritative cohort seed is invalid";
 			return result;
 		}
-		std::vector<WtChunkKey> selected_keys { seed.key };
-		if (wt_chunk_replacement_requires_regional_publication(
-				seed.key, pending_chunk_retirements_
-			)) {
-			std::vector<WtChunkKey> candidates = pending_chunk_replacements_;
-			candidates.insert(
-				candidates.end(),
-				ready_staged_chunk_replacements_.begin(),
-				ready_staged_chunk_replacements_.end()
-			);
-			std::sort(candidates.begin(), candidates.end());
-			candidates.erase(
-				std::unique(candidates.begin(), candidates.end()), candidates.end()
-			);
-			WtChunkPublicationRegion region;
-			const bool region_built = wt_build_chunk_publication_region(
-				seed.key, candidates, pending_chunk_retirements_, region
-			);
-			if (!region_built) {
-				result["status"] = "STALE_APPLICATION";
-				result["error"] =
-					"GPU resident authoritative cohort seed is no longer pending";
-				return result;
-			}
-			if (!publication_region_has_complete_authoritative_coverage(region)) {
-				result["status"] = "WAITING_COHORT";
-				result["error"] =
-					"GPU resident authoritative publication region is incomplete";
-				return result;
-			}
-			selected_keys = std::move(region.replacements);
-			authoritative_retirements = std::move(region.retirements);
+		WtChunkApplicationRecord seed_record;
+		if (!application_->copy_record(seed.key, seed_record) ||
+			!seed_record.visual_required || std::binary_search(
+				pending_chunk_retirements_.begin(), pending_chunk_retirements_.end(), seed.key
+			) || seed_record.generation != seed.generation ||
+			seed_record.visual_generation != seed.generation ||
+			seed_record.external_visual_transition_mask != seed.transition_mask) {
+			result["status"] = "STALE_APPLICATION";
+			result["error"] = "GPU resident authoritative cohort seed became stale";
+			return result;
 		}
-		append_gpu_transition_dependencies(*application_, selected_keys);
-		for (const WtChunkKey &key : selected_keys) {
-			WtChunkApplicationRecord record;
-			if (!application_->copy_record(key, record)) {
-				result["status"] = "WAITING_COHORT";
-				result["error"] =
-					"GPU resident authoritative publication member has no application record";
-				result["waiting_member"] = gpu_cohort_key(key);
-				return result;
-			}
-			const auto inventory = std::find_if(
-				inventory_pool.begin(), inventory_pool.end(),
-				[&key, &record](const ParsedGpuChunkInventory &candidate) {
-					return candidate.identity.key == key &&
-						candidate.identity.generation == record.generation;
-				}
-			);
-			if (inventory == inventory_pool.end()) {
-				result["status"] = "WAITING_COHORT";
-				result["error"] =
-					"GPU resident authoritative publication member is not prepared";
-				result["waiting_member"] = gpu_cohort_key(key);
-				return result;
-			}
-			inventories.push_back(*inventory);
-		}
-		authority_selected = true;
-	} else {
-		inventories = std::move(inventory_pool);
+		seed_key = seed.key;
 	}
+	WtChunkPublicationRegion region;
+	std::vector<WtChunkKey> waiting_masks;
+	if (!build_gpu_publication_cohort(
+			*application_, *render_sink_, seed_key,
+			pending_chunk_replacements_, ready_staged_chunk_replacements_,
+			pending_chunk_retirements_, region, waiting_masks
+		) || (!region.retirements.empty() &&
+			!publication_region_has_complete_authoritative_coverage(region))) {
+		result["status"] = "WAITING_COHORT";
+		result["error"] = "GPU resident boundary cohort is incomplete or exceeds capacity";
+		return result;
+	}
+	if (!waiting_masks.empty()) {
+		result["status"] = "WAITING_COHORT";
+		result["waiting_member"] = gpu_cohort_key(waiting_masks.front());
+		result["error"] = "GPU resident boundary transition masks are incompatible";
+		return result;
+	}
+	if (authoritative_seed_dictionary.is_empty()) {
+		std::vector<WtChunkKey> submitted;
+		for (const ParsedGpuChunkInventory &inventory : inventory_pool) {
+			submitted.push_back(inventory.identity.key);
+		}
+		std::sort(submitted.begin(), submitted.end());
+		if (submitted != region.replacements) {
+			result["status"] = "WAITING_COHORT";
+			result["error"] = "GPU resident activation lacks reciprocal boundary members";
+			return result;
+		}
+	}
+	std::vector<ParsedGpuChunkInventory> inventories;
+	for (const WtChunkKey &key : region.replacements) {
+		WtChunkApplicationRecord record;
+		if (!application_->copy_record(key, record)) {
+			result["status"] = "WAITING_COHORT";
+			result["waiting_member"] = gpu_cohort_key(key);
+			result["error"] = "GPU resident publication member has no application record";
+			return result;
+		}
+		const auto inventory = std::find_if(
+			inventory_pool.begin(), inventory_pool.end(),
+			[&key, &record](const ParsedGpuChunkInventory &candidate) {
+				return candidate.identity.key == key &&
+					candidate.identity.generation == record.generation;
+			}
+		);
+		if (inventory == inventory_pool.end()) {
+			result["status"] = "WAITING_COHORT";
+			result["waiting_member"] = gpu_cohort_key(key);
+			result["error"] = "GPU resident publication member is not prepared";
+			return result;
+		}
+		inventories.push_back(*inventory);
+	}
+	std::vector<WtChunkKey> authoritative_retirements = std::move(region.retirements);
 	std::vector<bool> activation_required;
 	activation_required.reserve(inventories.size());
 	godot::Array activated_chunks;
@@ -843,67 +775,6 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 		member["activation_required"] = prepared_member;
 		activated_chunks.push_back(member);
 		activation_required.push_back(prepared_member);
-	}
-	std::vector<WtChunkKey> cohort_keys;
-	cohort_keys.reserve(inventories.size());
-	for (const ParsedGpuChunkInventory &inventory : inventories) {
-		cohort_keys.push_back(inventory.identity.key);
-	}
-	std::sort(cohort_keys.begin(), cohort_keys.end());
-	const auto regional_seed = std::find_if(
-		cohort_keys.begin(), cohort_keys.end(),
-		[this](const WtChunkKey &key) {
-			return wt_chunk_replacement_requires_regional_publication(
-				key, pending_chunk_retirements_
-			);
-		}
-	);
-	if (!authority_selected && regional_seed != cohort_keys.end()) {
-		std::vector<WtChunkKey> candidates = pending_chunk_replacements_;
-		candidates.insert(
-			candidates.end(),
-			ready_staged_chunk_replacements_.begin(),
-			ready_staged_chunk_replacements_.end()
-		);
-		std::sort(candidates.begin(), candidates.end());
-		candidates.erase(
-			std::unique(candidates.begin(), candidates.end()), candidates.end()
-		);
-		WtChunkPublicationRegion region;
-		if (!wt_build_chunk_publication_region(
-				*regional_seed, candidates, pending_chunk_retirements_, region
-			) || !publication_region_has_complete_authoritative_coverage(region)) {
-			result["status"] = "STALE_APPLICATION";
-			result["error"] = "GPU resident activation cohort is not the authoritative region";
-			return result;
-		}
-		std::vector<WtChunkKey> authoritative_keys = region.replacements;
-		append_gpu_transition_dependencies(*application_, authoritative_keys);
-		if (authoritative_keys != cohort_keys) {
-			result["status"] = "STALE_APPLICATION";
-			result["error"] = "GPU resident activation cohort is not the authoritative region";
-			result["regional_seed"] = gpu_cohort_key(*regional_seed);
-			result["submitted_replacements"] = gpu_cohort_keys(cohort_keys);
-			result["authoritative_replacements"] = gpu_cohort_keys(
-				region.replacements
-			);
-			result["authoritative_retirements"] = gpu_cohort_keys(
-				region.retirements
-			);
-			result["candidate_replacements"] = gpu_cohort_keys(candidates);
-			result["pending_retirements"] = gpu_cohort_keys(
-				pending_chunk_retirements_
-			);
-			result["open_viewer_plan_publications"] = static_cast<std::int64_t>(
-				open_viewer_plan_publications_
-			);
-			return result;
-		}
-		authoritative_retirements = std::move(region.retirements);
-	} else if (!authority_selected && cohort_keys.size() != 1U) {
-		result["status"] = "STALE_APPLICATION";
-		result["error"] = "GPU resident independent activation is not a singleton";
-		return result;
 	}
 	std::size_t sink_activated = 0;
 	for (std::size_t index = 0; index < inventories.size(); ++index) {
@@ -1220,6 +1091,33 @@ godot::Dictionary WorldTransvoxelTerrain::get_gpu_resident_render_metrics() cons
 	result["in_flight_requests"] = static_cast<std::int64_t>(
 		queue_metrics.in_flight_requests
 	);
+	result["oldest_in_flight_request_id"] = static_cast<std::int64_t>(
+		queue_metrics.oldest_in_flight_request_id
+	);
+	if (queue_metrics.has_oldest_in_flight_request) {
+		const WtGpuMeshingShadowIdentity &identity =
+			queue_metrics.oldest_in_flight_identity;
+		godot::Dictionary oldest_identity;
+		oldest_identity["page_x"] = identity.key.x;
+		oldest_identity["page_y"] = identity.key.y;
+		oldest_identity["page_z"] = identity.key.z;
+		oldest_identity["lod"] = identity.key.lod;
+		oldest_identity["generation"] = static_cast<std::int64_t>(
+			identity.generation.value
+		);
+		oldest_identity["source_revision"] = static_cast<std::int64_t>(
+			identity.source_revision
+		);
+		oldest_identity["world_revision"] = static_cast<std::int64_t>(
+			identity.world_revision
+		);
+		oldest_identity["transition_mask"] = identity.transition_mask;
+		oldest_identity["surface"] =
+			wt_gpu_meshing_shadow_surface_name(identity.surface);
+		result["oldest_in_flight_identity"] = oldest_identity;
+	} else {
+		result["oldest_in_flight_identity"] = godot::Dictionary();
+	}
 	result["coverage_staging_blocked"] =
 		open_viewer_plan_publications_ != 0U ||
 		!pending_chunk_replacements_.empty() ||

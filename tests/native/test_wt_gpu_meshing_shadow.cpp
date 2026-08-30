@@ -659,6 +659,17 @@ int main() {
 	require(queue.capture(capture_for(50, 4)), "resident capture failed");
 	WtGpuMeshingShadowRequest resident_request;
 	require(queue.pop(resident_request), "resident request did not pop");
+	const WtGpuMeshingShadowMetrics resident_in_flight_metrics = queue.metrics();
+	require(
+		resident_in_flight_metrics.has_oldest_in_flight_request &&
+			resident_in_flight_metrics.oldest_in_flight_request_id ==
+				resident_request.request_id &&
+			resident_in_flight_metrics.oldest_in_flight_identity.key ==
+				resident_request.job.key &&
+			resident_in_flight_metrics.oldest_in_flight_identity.generation ==
+				resident_request.job.generation,
+		"oldest in-flight resident identity was not observable"
+	);
 	const WtGpuMeshingResidentValidation resident_ready =
 		queue.validate_resident(
 			resident_request.request_id,

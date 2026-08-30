@@ -791,6 +791,16 @@ bool WtGodotRenderSink::gpu_resident_replacement_matches(
 		!iterator->second.staged && iterator->second.gpu_resident_replaced;
 }
 
+bool WtGodotRenderSink::gpu_resident_boundary_matches(
+	const WtChunkKey &key,
+	std::uint8_t transition_mask
+) const noexcept {
+	const auto iterator = records_.find(key);
+	return iterator != records_.end() && iterator->second.instance != nullptr &&
+		iterator->second.transition_mask == transition_mask &&
+		!iterator->second.staged && iterator->second.gpu_resident_replaced;
+}
+
 std::size_t WtGodotRenderSink::restore_gpu_resident_replacements() noexcept {
 	if (!on_owner_thread()) return 0;
 	std::size_t restored = 0;

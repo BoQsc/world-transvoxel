@@ -461,6 +461,20 @@ WtGpuMeshingShadowMetrics WtGpuMeshingShadowQueue::metrics() const noexcept {
 	result.capacity = capacity_;
 	result.queued_requests = queued_.size();
 	result.in_flight_requests = in_flight_.size();
+	if (!in_flight_.empty()) {
+		const WtGpuMeshingShadowRequest &oldest = in_flight_.front();
+		result.has_oldest_in_flight_request = true;
+		result.oldest_in_flight_request_id = oldest.request_id;
+		result.oldest_in_flight_identity.key = oldest.job.key;
+		result.oldest_in_flight_identity.generation = oldest.job.generation;
+		result.oldest_in_flight_identity.source_revision =
+			oldest.job.source_revision;
+		result.oldest_in_flight_identity.world_revision =
+			oldest.job.world_revision;
+		result.oldest_in_flight_identity.transition_mask =
+			oldest.transition_mask;
+		result.oldest_in_flight_identity.surface = oldest.surface;
+	}
 	return result;
 }
 

@@ -888,6 +888,145 @@ void test_cross_lod_replacement_publication_policy() {
 	);
 }
 
+void test_gpu_reciprocal_publication_dependencies() {
+	for (const wt::WtChunkKey coarse : { wt::WtChunkKey { 9, 0, 6, 3 },
+			wt::WtChunkKey { -2, -1, -2, 1 } }) {
+		for (std::uint8_t face_index = 0; face_index < 6; ++face_index) {
+			const auto face = static_cast<wt::WtChunkFace>(face_index);
+			const auto bit = wt::wt_face_bit(face);
+			const auto axis = face_index / 2;
+			const auto sign = (face_index & 1) == 0 ? -1 : 1;
+			std::int32_t coordinate[3] { coarse.x, coarse.y, coarse.z };
+			coordinate[axis] += sign;
+			const wt::WtChunkKey replaced { coordinate[0], coordinate[1], coordinate[2], coarse.lod };
+			std::vector<wt::WtChunkKey> fine;
+			for (std::int32_t z = 0; z < 2; ++z) {
+				for (std::int32_t y = 0; y < 2; ++y) {
+					for (std::int32_t x = 0; x < 2; ++x) {
+						fine.push_back({ replaced.x * 2 + x, replaced.y * 2 + y,
+							replaced.z * 2 + z, static_cast<std::uint8_t>(coarse.lod - 1) });
+					}
+				}
+			}
+			std::sort(fine.begin(), fine.end());
+			wt::WtChunkPublicationRegion legacy;
+			check(wt::wt_build_chunk_publication_region(fine.front(), fine, { replaced }, legacy) &&
+				std::find(legacy.replacements.begin(), legacy.replacements.end(), coarse) == legacy.replacements.end(),
+				"legacy overlap-only control unexpectedly included the transition neighbor");
+			std::uint8_t coarse_mask = 0;
+			bool coarse_compatible = false;
+			bool refining = true;
+			const auto lookup = [&](const wt::WtChunkKey &key, wt::WtGpuPublicationBoundary &state) {
+				if (key == coarse) {
+					state = { coarse_mask, coarse_compatible };
+					return true;
+				}
+				if ((refining && std::binary_search(fine.begin(), fine.end(), key)) ||
+					(!refining && key == replaced)) {
+					state = { 0, false };
+					return true;
+				}
+				return false;
+			};
+			std::vector<wt::WtChunkKey> candidates = fine;
+			candidates.push_back(coarse);
+			candidates.push_back({ 10000, 0, 0, 0 });
+			std::sort(candidates.begin(), candidates.end());
+			wt::WtChunkPublicationRegion region;
+			std::vector<wt::WtChunkKey> waiting;
+			check(wt::wt_build_gpu_chunk_publication_cohort(
+					fine.front(), candidates, { replaced }, lookup, region, waiting) &&
+				region.replacements.size() == 9 && region.retirements == std::vector<wt::WtChunkKey>{replaced} &&
+				waiting == std::vector<wt::WtChunkKey>{coarse},
+				"fine replacement did not wait for reciprocal coarse transition");
+			coarse_mask = bit;
+			check(wt::wt_build_gpu_chunk_publication_cohort(
+					fine.front(), candidates, { replaced }, lookup, region, waiting) &&
+				waiting.empty() && region.replacements.size() == 9 &&
+				wt::wt_chunk_publication_region_has_complete_coverage(region),
+				"refinement did not select both sides and their complete overlap region");
+			coarse_compatible = true;
+			check(wt::wt_build_gpu_chunk_publication_cohort(
+					fine.front(), candidates, { replaced }, lookup, region, waiting) &&
+				waiting.empty() && region.replacements == fine &&
+				region.retirements == std::vector<wt::WtChunkKey>{replaced},
+				"compatible active transition neighbor was needlessly republished");
+			coarse_compatible = false;
+			check(!wt::wt_build_gpu_chunk_publication_cohort(
+					fine.front(), candidates, { replaced }, lookup, region, waiting, 8),
+				"bounded GPU cohort silently truncated a required neighbor");
+			refining = false;
+			candidates = {coarse, replaced};
+			std::sort(candidates.begin(), candidates.end());
+			check(wt::wt_build_gpu_chunk_publication_cohort(
+					replaced, candidates, fine, lookup, region, waiting) &&
+				region.replacements == candidates && region.retirements == fine &&
+				waiting == std::vector<wt::WtChunkKey>{coarse},
+				"coarsening did not wait for obsolete transition removal");
+			coarse_mask = 0;
+			check(wt::wt_build_gpu_chunk_publication_cohort(
+					replaced, candidates, fine, lookup, region, waiting) &&
+				waiting.empty() && region.replacements == candidates &&
+				wt::wt_chunk_publication_region_has_complete_coverage(region),
+				"coarsening did not atomically remove fine coverage and its transition");
+		}
+	}
+}
+
+void test_gpu_publication_dependency_bounds() {
+	const wt::WtChunkKey seed { -1, 0, 0, 0 };
+	const wt::WtChunkKey retained { 0, 0, 0, 1 };
+	const wt::WtChunkKey unrelated { 1, 0, 0, 1 };
+	bool invalid_retained_fine = false;
+	const auto lookup = [&](const wt::WtChunkKey &key, wt::WtGpuPublicationBoundary &state) {
+		if (key == retained) {
+			state = { wt::wt_face_bit(wt::WtChunkFace::NegativeX), !invalid_retained_fine };
+			return true;
+		}
+		if (key == unrelated || key == seed) {
+			state = { static_cast<std::uint8_t>(invalid_retained_fine && key == seed ?
+				wt::wt_face_bit(wt::WtChunkFace::PositiveX) : 0), invalid_retained_fine };
+			return true;
+		}
+		if (key.lod == 0 && key.x == -1 && key.y >= 0 && key.y < 2 && key.z >= 0 && key.z < 2) {
+			state = { 0, true };
+			return true;
+		}
+		return false;
+	};
+	const wt::WtChunkKey obsolete_under_retained { 0, 0, 0, 0 };
+	std::vector<wt::WtChunkKey> pending { seed, unrelated };
+	std::sort(pending.begin(), pending.end());
+	wt::WtChunkPublicationRegion region;
+	std::vector<wt::WtChunkKey> waiting;
+	const std::vector<wt::WtChunkKey> expected { seed };
+	check(wt::wt_build_gpu_chunk_publication_cohort(
+			seed, pending, {obsolete_under_retained}, lookup, region, waiting) &&
+		region.replacements == expected && waiting.empty(),
+		"unchanged reciprocal neighbor expanded its unrelated overlap region");
+	invalid_retained_fine = true;
+	check(wt::wt_build_gpu_chunk_publication_cohort(retained, pending, {}, lookup, region, waiting) &&
+		std::binary_search(waiting.begin(), waiting.end(), seed),
+		"retained finer neighbor bypassed reciprocal transition-mask validation");
+	check(!wt::wt_build_gpu_chunk_publication_cohort(seed, pending, {seed}, lookup, region, waiting),
+		"retiring GPU seed was accepted as desired geometry");
+	check(!wt::wt_build_gpu_chunk_publication_cohort({4, 4, 4, 0}, pending, {}, lookup, region, waiting),
+		"missing GPU seed was accepted as desired geometry");
+	const wt::WtChunkKey limit { std::numeric_limits<std::int32_t>::max(), 0, 0, 1 };
+	bool transition_required = false;
+	const auto limit_lookup = [&](const wt::WtChunkKey &key, wt::WtGpuPublicationBoundary &state) {
+		if (key != limit) return false;
+		state = { static_cast<std::uint8_t>(transition_required ?
+			wt::wt_face_bit(wt::WtChunkFace::PositiveX) : 0), false };
+		return true;
+	};
+	check(wt::wt_build_gpu_chunk_publication_cohort(limit, {limit}, {}, limit_lookup, region, waiting),
+		"absent finer keys outside representable range rejected an independent chunk");
+	transition_required = true;
+	check(!wt::wt_build_gpu_chunk_publication_cohort(limit, {limit}, {}, limit_lookup, region, waiting),
+		"unrepresentable required finer keys silently removed a transition dependency");
+}
+
 void test_collision_deadline_bounds_frame_work(
 	const wt::WtRenderPayload &render_source
 ) {
@@ -956,13 +1095,15 @@ int main() {
 	test_gpu_placeholder_waits_for_external_activation(render);
 	test_empty_collision_does_not_wait_for_external_visual(render);
 	test_cross_lod_replacement_publication_policy();
+	test_gpu_reciprocal_publication_dependencies();
+	test_gpu_publication_dependency_bounds();
 	test_collision_deadline_bounds_frame_work(render);
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M3_APPLICATION_FAIL failures=%d\n", failure_count);
 		return 1;
 	}
 	std::printf(
-		"M3_APPLICATION_PASS stale_cycles=%zu cross_lod_publication=1\n",
+		"M3_APPLICATION_PASS stale_cycles=%zu cross_lod_publication=1 reciprocal_gpu_faces=12\n",
 		stale_cycles
 	);
 	return 0;

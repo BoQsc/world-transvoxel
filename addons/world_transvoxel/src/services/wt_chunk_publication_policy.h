@@ -3,6 +3,7 @@
 #include "core/wt_chunk_key.h"
 #include "core/wt_chunk_state.h"
 
+#include <cstddef>
 #include <functional>
 #include <vector>
 
@@ -12,6 +13,24 @@ struct WtChunkPublicationRegion {
 	std::vector<WtChunkKey> replacements;
 	std::vector<WtChunkKey> retirements;
 };
+
+struct WtGpuPublicationBoundary {
+	std::uint8_t transition_mask = 0;
+	bool compatible_active = false;
+};
+
+// Inputs are sorted unique keys. Lookup includes desired visual leaves only,
+// excluding pending retirements.
+// A successful build may still need newer masks or unprepared generations.
+bool wt_build_gpu_chunk_publication_cohort(
+	const WtChunkKey &seed,
+	const std::vector<WtChunkKey> &pending_replacements,
+	const std::vector<WtChunkKey> &pending_retirements,
+	const std::function<bool(const WtChunkKey &, WtGpuPublicationBoundary &)> &lookup,
+	WtChunkPublicationRegion &output,
+	std::vector<WtChunkKey> &waiting_masks,
+	std::size_t maximum_members = 4096
+);
 
 bool wt_chunk_replacement_requires_regional_publication(
 	const WtChunkKey &replacement,

@@ -81,6 +81,9 @@ struct WtGpuMeshingShadowMetrics {
 	std::size_t capacity = 0;
 	std::size_t queued_requests = 0;
 	std::size_t in_flight_requests = 0;
+	bool has_oldest_in_flight_request = false;
+	std::uint64_t oldest_in_flight_request_id = 0;
+	WtGpuMeshingShadowIdentity oldest_in_flight_identity;
 	std::uint64_t captured_requests = 0;
 	std::uint64_t capacity_rejections = 0;
 	std::uint64_t superseded_queued_requests = 0;

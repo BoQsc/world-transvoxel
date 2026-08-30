@@ -2,6 +2,9 @@
 
 #include <algorithm>
 #include <limits>
+#include <map>
+#include <memory>
+#include <set>
 
 namespace world_transvoxel {
 namespace {
@@ -313,36 +316,16 @@ bool wt_chunk_replacement_requires_regional_publication(
 	return false;
 }
 
-bool wt_build_chunk_publication_region(
+namespace {
+
+void build_indexed_publication_region(
 	const WtChunkKey &seed_replacement,
-	const std::vector<WtChunkKey> &pending_replacements,
 	const std::vector<WtChunkKey> &pending_retirements,
+	const ChunkHierarchyIndex &replacement_index,
+	const ChunkHierarchyIndex &retirement_index,
 	WtChunkPublicationRegion &output
 ) {
 	output = {};
-	if (!wt_is_valid_chunk_key(seed_replacement) ||
-			!std::binary_search(
-				pending_replacements.begin(),
-				pending_replacements.end(),
-				seed_replacement
-			)) {
-		return false;
-	}
-	std::uint8_t maximum_lod = seed_replacement.lod;
-	for (const WtChunkKey &key : pending_replacements) {
-		maximum_lod = std::max(maximum_lod, key.lod);
-	}
-	for (const WtChunkKey &key : pending_retirements) {
-		maximum_lod = std::max(maximum_lod, key.lod);
-	}
-	const ChunkHierarchyIndex replacement_index(
-		pending_replacements,
-		maximum_lod
-	);
-	const ChunkHierarchyIndex retirement_index(
-		pending_retirements,
-		maximum_lod
-	);
 	std::vector<WtChunkKey> replacement_queue { seed_replacement };
 	std::vector<WtChunkKey> retirement_queue;
 	output.replacements.push_back(seed_replacement);
@@ -387,6 +370,204 @@ bool wt_build_chunk_publication_region(
 			}
 		}
 	}
+}
+
+} // namespace
+
+bool wt_build_chunk_publication_region(
+	const WtChunkKey &seed_replacement,
+	const std::vector<WtChunkKey> &pending_replacements,
+	const std::vector<WtChunkKey> &pending_retirements,
+	WtChunkPublicationRegion &output
+) {
+	output = {};
+	if (!wt_is_valid_chunk_key(seed_replacement) || !std::binary_search(
+			pending_replacements.begin(), pending_replacements.end(), seed_replacement)) return false;
+	std::uint8_t maximum_lod = seed_replacement.lod;
+	for (const WtChunkKey &key : pending_replacements) maximum_lod = std::max(maximum_lod, key.lod);
+	for (const WtChunkKey &key : pending_retirements) maximum_lod = std::max(maximum_lod, key.lod);
+	const ChunkHierarchyIndex replacement_index(pending_replacements, maximum_lod);
+	const ChunkHierarchyIndex retirement_index(pending_retirements, maximum_lod);
+	build_indexed_publication_region(
+		seed_replacement, pending_retirements, replacement_index, retirement_index, output
+	);
+	return true;
+}
+
+bool wt_build_gpu_chunk_publication_cohort(
+	const WtChunkKey &seed,
+	const std::vector<WtChunkKey> &pending_replacements,
+	const std::vector<WtChunkKey> &pending_retirements,
+	const std::function<bool(const WtChunkKey &, WtGpuPublicationBoundary &)> &lookup,
+	WtChunkPublicationRegion &output,
+	std::vector<WtChunkKey> &waiting_masks,
+	std::size_t maximum_members
+) {
+	output = {};
+	waiting_masks.clear();
+	if (!lookup || !wt_is_valid_chunk_key(seed) || maximum_members == 0) return false;
+	std::map<WtChunkKey, WtGpuPublicationBoundary> boundaries;
+	std::set<WtChunkKey> absent;
+	const auto read = [&](const WtChunkKey &key, WtGpuPublicationBoundary &value) {
+		if (!wt_is_valid_chunk_key(key) || std::binary_search(
+				pending_retirements.begin(), pending_retirements.end(), key
+			) || absent.count(key) != 0) return false;
+		const auto existing = boundaries.find(key);
+		if (existing != boundaries.end()) {
+			value = existing->second;
+			return true;
+		}
+		if (!lookup(key, value)) {
+			absent.insert(key);
+			return false;
+		}
+		boundaries.emplace(key, value);
+		return true;
+	};
+	WtGpuPublicationBoundary seed_boundary;
+	if (!read(seed, seed_boundary)) return false;
+	const auto key_at = [](std::int64_t x, std::int64_t y, std::int64_t z,
+			std::uint8_t lod, WtChunkKey &key) {
+		const auto minimum = std::numeric_limits<std::int32_t>::min();
+		const auto maximum = std::numeric_limits<std::int32_t>::max();
+		if (x < minimum || x > maximum || y < minimum || y > maximum ||
+			z < minimum || z > maximum) return false;
+		key = { static_cast<std::int32_t>(x), static_cast<std::int32_t>(y),
+			static_cast<std::int32_t>(z), lod };
+		return wt_is_valid_chunk_key(key);
+	};
+	std::set<WtChunkKey> selected;
+	std::set<WtChunkKey> expanded_regions;
+	std::uint8_t indexed_maximum_lod = seed.lod;
+	for (const WtChunkKey &key : pending_replacements) indexed_maximum_lod = std::max(indexed_maximum_lod, key.lod);
+	for (const WtChunkKey &key : pending_retirements) indexed_maximum_lod = std::max(indexed_maximum_lod, key.lod);
+	std::unique_ptr<ChunkHierarchyIndex> replacement_index;
+	std::unique_ptr<ChunkHierarchyIndex> retirement_index;
+	std::vector<WtChunkKey> queue;
+	const auto add = [&](const WtChunkKey &key) {
+		if (selected.count(key) != 0) return true;
+		if (selected.size() >= maximum_members) return false;
+		selected.insert(key);
+		queue.push_back(key);
+		return true;
+	};
+	add(seed);
+	for (std::size_t cursor = 0; cursor < queue.size(); ++cursor) {
+		const WtChunkKey key = queue[cursor];
+		WtGpuPublicationBoundary boundary;
+		if (!read(key, boundary)) continue; // Readiness validation rejects missing members.
+		// Compatible active geometry already satisfies this boundary; content
+		// generation replacement can proceed without extending the cohort.
+		if (boundary.compatible_active) continue;
+		// Any newly required boundary member may itself replace retained chunks.
+		// Include that overlap component and its retirements in the same swap.
+		if (expanded_regions.count(key) == 0 &&
+			wt_chunk_replacement_requires_regional_publication(key, pending_retirements)) {
+			if (!std::binary_search(pending_replacements.begin(), pending_replacements.end(), key)) return false;
+			if (!replacement_index || key.lod > indexed_maximum_lod) {
+				indexed_maximum_lod = std::max(indexed_maximum_lod, key.lod);
+				replacement_index = std::make_unique<ChunkHierarchyIndex>(pending_replacements, indexed_maximum_lod);
+				retirement_index = std::make_unique<ChunkHierarchyIndex>(pending_retirements, indexed_maximum_lod);
+			}
+			WtChunkPublicationRegion region;
+			build_indexed_publication_region(
+				key, pending_retirements, *replacement_index, *retirement_index, region
+			);
+			for (const WtChunkKey &replacement : region.replacements) {
+				if (!add(replacement)) return false;
+				expanded_regions.insert(replacement);
+			}
+			for (const WtChunkKey &retirement : region.retirements) {
+				insert_key(output.retirements, retirement);
+			}
+			if (output.retirements.size() > maximum_members) return false;
+		}
+		for (std::uint8_t face_index = 0; face_index < 6; ++face_index) {
+			const auto face = static_cast<WtChunkFace>(face_index);
+			const auto opposite = wt_opposite_face(face);
+			const auto bit = wt_face_bit(face);
+			const auto opposite_bit = wt_face_bit(opposite);
+			const std::size_t axis = face_index / 2;
+			const std::int64_t sign = (face_index & 1U) == 0 ? -1 : 1;
+			std::int64_t coordinate[3] { key.x, key.y, key.z };
+			coordinate[axis] += sign;
+			WtChunkKey adjacent;
+			WtGpuPublicationBoundary neighbor;
+			if (key_at(coordinate[0], coordinate[1], coordinate[2], key.lod, adjacent) &&
+				read(adjacent, neighbor)) {
+				if ((boundary.transition_mask & bit) != 0) insert_key(waiting_masks, key);
+				if ((neighbor.transition_mask & opposite_bit) != 0) {
+					insert_key(waiting_masks, adjacent);
+				}
+				// Compatible active geometry creates no additional dependency.
+				if (!neighbor.compatible_active ||
+						(neighbor.transition_mask & opposite_bit) != 0) {
+					if (!add(adjacent)) return false;
+				}
+				continue;
+			}
+			if (key.lod < kWtMaximumLod) {
+				const WtChunkKey parent = wt_parent_chunk_key(key);
+				const std::int64_t parent_coordinate[3] { parent.x, parent.y, parent.z };
+				const std::int64_t own_coordinate[3] { key.x, key.y, key.z };
+				const std::int64_t parity = own_coordinate[axis] - 2 * parent_coordinate[axis];
+				if (parity == ((sign < 0) ? 0 : 1)) {
+					coordinate[0] = parent.x; coordinate[1] = parent.y; coordinate[2] = parent.z;
+					coordinate[axis] += sign;
+					if (key_at(coordinate[0], coordinate[1], coordinate[2], key.lod + 1, adjacent) &&
+						read(adjacent, neighbor)) {
+						if ((boundary.transition_mask & bit) != 0) insert_key(waiting_masks, key);
+						if ((neighbor.transition_mask & opposite_bit) == 0) {
+							insert_key(waiting_masks, adjacent);
+						}
+						if (!neighbor.compatible_active ||
+								(neighbor.transition_mask & opposite_bit) == 0) {
+							if (!add(adjacent)) return false;
+						}
+						continue;
+					}
+				}
+			}
+			if (key.lod == 0) continue;
+			std::vector<WtChunkKey> fine_keys;
+			std::size_t fine_present = 0;
+			bool fine_coordinates_valid = true;
+			for (std::int64_t first = 0; first < 2; ++first) {
+				for (std::int64_t second = 0; second < 2; ++second) {
+					coordinate[0] = 2LL * key.x;
+					coordinate[1] = 2LL * key.y;
+					coordinate[2] = 2LL * key.z;
+					coordinate[axis] += sign < 0 ? -1 : 2;
+					coordinate[(axis + 1) % 3] += first;
+					coordinate[(axis + 2) % 3] += second;
+					WtChunkKey fine;
+					if (!key_at(coordinate[0], coordinate[1], coordinate[2], key.lod - 1, fine)) {
+						fine_coordinates_valid = false;
+						continue;
+					}
+					fine_keys.push_back(fine);
+					if (read(fine, neighbor)) {
+						++fine_present;
+						if ((neighbor.transition_mask & opposite_bit) != 0) {
+							insert_key(waiting_masks, fine);
+						}
+					}
+				}
+			}
+			if (fine_present != 0 || (boundary.transition_mask & bit) != 0) {
+				if (!fine_coordinates_valid) return false;
+				if ((boundary.transition_mask & bit) == 0) insert_key(waiting_masks, key);
+				for (const WtChunkKey &fine : fine_keys) {
+					WtGpuPublicationBoundary fine_boundary;
+					if (!read(fine, fine_boundary) || !fine_boundary.compatible_active ||
+							(fine_boundary.transition_mask & opposite_bit) != 0) {
+						if (!add(fine)) return false;
+					}
+				}
+			}
+		}
+	}
+	output.replacements.assign(selected.begin(), selected.end());
 	return true;
 }
 
