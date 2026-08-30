@@ -162,6 +162,19 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			entry != nullptr ? entry->transition_mask :
 				completion.mesh->transition_mask;
 		if (render_transition_mask != completion.mesh->transition_mask) {
+			const WtApplicationStatus supersede_status =
+				application_->supersede_visual_generation(
+					completion.key,
+					completion.generation
+				);
+			if (supersede_status != WtApplicationStatus::Ok &&
+				supersede_status != WtApplicationStatus::AlreadyCurrent &&
+				supersede_status != WtApplicationStatus::StaleGeneration) {
+				set_failure(
+					WtReadOnlyRuntimeStatus::PipelineRenderCompletionFailure
+				);
+				break;
+			}
 			const WtDesiredChunk *desired = desired_->find_desired(
 				completion.key
 			);

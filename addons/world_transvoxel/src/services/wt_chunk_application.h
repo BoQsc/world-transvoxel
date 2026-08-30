@@ -27,6 +27,7 @@ struct WtChunkApplicationRecord {
 	bool external_visual_activation_required = false;
 	bool external_visual_prepared = false;
 	std::uint8_t external_visual_transition_mask = 0;
+	bool visual_generation_superseded = false;
 
 	bool fully_ready() const noexcept;
 };
@@ -109,6 +110,10 @@ public:
 		const WtChunkKey &key,
 		WtGenerationToken generation,
 		std::uint8_t transition_mask
+	);
+	WtApplicationStatus supersede_visual_generation(
+		const WtChunkKey &key,
+		WtGenerationToken generation
 	);
 	WtApplicationBatchResult apply(
 		std::size_t render_budget,

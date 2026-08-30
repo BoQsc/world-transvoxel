@@ -613,6 +613,51 @@ void test_empty_collision_does_not_wait_for_external_visual(
 		"empty collision waited for unrelated external visual activation");
 }
 
+void test_superseded_gpu_visual_generation(
+	const wt::WtRenderPayload &render_source
+) {
+	wt::WtChunkApplicationService service(1, 1, 1);
+	RenderSink render_sink;
+	CollisionSink collision_sink;
+	auto placeholder = std::make_shared<wt::WtRenderPayload>(render_source);
+	placeholder->generation = { 51 };
+	placeholder->publication_source =
+		wt::WtRenderPublicationSource::GpuResidentPlaceholder;
+	check(service.expect_chunk(
+			placeholder->key, { 51 }, false, true, true
+		) == wt::WtApplicationStatus::Ok &&
+		service.submit_render(placeholder) == wt::WtApplicationStatus::Ok,
+		"superseded GPU visual setup failed");
+	check(service.supersede_visual_generation(
+			placeholder->key, { 50 }
+		) == wt::WtApplicationStatus::StaleGeneration &&
+		service.supersede_visual_generation(
+			placeholder->key, { 51 }
+		) == wt::WtApplicationStatus::Ok &&
+		service.supersede_visual_generation(
+			placeholder->key, { 51 }
+		) == wt::WtApplicationStatus::AlreadyCurrent,
+		"GPU visual supersession was not exact and idempotent");
+	service.apply(1, 0, render_sink, collision_sink);
+	const wt::WtChunkApplicationRecord *record =
+		service.find_record(placeholder->key);
+	check(record != nullptr && record->visual_generation_superseded &&
+		!record->visual_ready && record->visual_generation.value == 0 &&
+		!record->fully_ready() && render_sink.calls == 0,
+		"superseded GPU placeholder reached the render sink");
+	check(service.confirm_external_visual_prepared(
+			placeholder->key, { 51 }, placeholder->transition_mask
+		) == wt::WtApplicationStatus::StaleGeneration,
+		"superseded GPU visual was prepared");
+	check(service.expect_chunk(
+			placeholder->key, { 52 }, false, true, true
+		) == wt::WtApplicationStatus::Ok,
+		"successor expectation after visual supersession failed");
+	record = service.find_record(placeholder->key);
+	check(record != nullptr && !record->visual_generation_superseded,
+		"successor generation inherited visual supersession");
+}
+
 void test_cross_lod_replacement_publication_policy() {
 	const wt::WtChunkKey fine { 2, 0, 0, 0 };
 	const wt::WtChunkKey containing_coarse { 1, 0, 0, 1 };
@@ -1111,6 +1156,7 @@ int main() {
 	test_application_service(render, stale_cycles);
 	test_staged_replacement_collision_waits_for_render(render);
 	test_gpu_placeholder_waits_for_external_activation(render);
+	test_superseded_gpu_visual_generation(render);
 	test_empty_collision_does_not_wait_for_external_visual(render);
 	test_cross_lod_replacement_publication_policy();
 	test_gpu_reciprocal_publication_dependencies();

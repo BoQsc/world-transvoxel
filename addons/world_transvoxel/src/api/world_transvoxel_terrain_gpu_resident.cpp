@@ -142,6 +142,7 @@ bool build_gpu_publication_cohort(
 				member["active_mask"] = active_mask;
 				member["visual_generation"] = static_cast<std::int64_t>(record.visual_generation.value);
 				member["visual_ready"] = record.visual_ready;
+				member["visual_generation_superseded"] = record.visual_generation_superseded;
 				member["external_prepared"] = record.external_visual_prepared;
 				member["external_activation_required"] = record.external_visual_activation_required;
 				member["collision_required"] = record.collision_required;
@@ -398,6 +399,13 @@ get_gpu_resident_render_chunk_readiness(
 		++gpu_resident_render_stale_skips_;
 		result["error"] =
 			"GPU resident geometry no longer matches the CPU chunk generation";
+		return result;
+	}
+	if (record.visual_generation_superseded) {
+		++gpu_resident_render_readiness_stale_;
+		++gpu_resident_render_stale_skips_;
+		result["error"] =
+			"GPU resident geometry was superseded by the current LOD boundary plan";
 		return result;
 	}
 	if (record.visual_generation != identity.generation ||

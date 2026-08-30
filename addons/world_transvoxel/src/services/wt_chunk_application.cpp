@@ -28,7 +28,8 @@ bool collision_deadline_reached(
 
 bool WtChunkApplicationRecord::fully_ready() const noexcept {
 	return (!visual_required ||
-			(visual_ready && visual_generation == generation)) &&
+			(visual_ready && visual_generation == generation &&
+				!visual_generation_superseded)) &&
 		(!collision_required ||
 			(collision_ready && collision_generation == generation));
 }
@@ -148,6 +149,7 @@ WtApplicationStatus WtChunkApplicationService::set_visual_required(
 		record->external_visual_activation_required = false;
 		record->external_visual_prepared = false;
 		record->external_visual_transition_mask = 0;
+		record->visual_generation_superseded = false;
 	}
 	return WtApplicationStatus::Ok;
 }
@@ -183,7 +185,8 @@ WtApplicationStatus WtChunkApplicationService::confirm_external_visual_activatio
 	WtChunkApplicationRecord *record = find_record_mutable(key);
 	if (record == nullptr) return WtApplicationStatus::NotFound;
 	if (record->generation != generation ||
-		record->visual_generation != generation) {
+		record->visual_generation != generation ||
+		record->visual_generation_superseded) {
 		return WtApplicationStatus::StaleGeneration;
 	}
 	if (!record->visual_required) return WtApplicationStatus::InvalidInput;
@@ -210,7 +213,8 @@ WtApplicationStatus WtChunkApplicationService::confirm_external_visual_prepared(
 	WtChunkApplicationRecord *record = find_record_mutable(key);
 	if (record == nullptr) return WtApplicationStatus::NotFound;
 	if (record->generation != generation ||
-		record->visual_generation != generation) {
+		record->visual_generation != generation ||
+		record->visual_generation_superseded) {
 		return WtApplicationStatus::StaleGeneration;
 	}
 	if (!record->visual_required ||
@@ -225,6 +229,21 @@ WtApplicationStatus WtChunkApplicationService::confirm_external_visual_prepared(
 		return WtApplicationStatus::AlreadyCurrent;
 	}
 	record->external_visual_prepared = true;
+	return WtApplicationStatus::Ok;
+}
+
+WtApplicationStatus WtChunkApplicationService::supersede_visual_generation(
+	const WtChunkKey &key,
+	WtGenerationToken generation
+) {
+	std::lock_guard<std::mutex> lock(records_mutex_);
+	WtChunkApplicationRecord *record = find_record_mutable(key);
+	if (record == nullptr) return WtApplicationStatus::NotFound;
+	if (record->generation != generation) return WtApplicationStatus::StaleGeneration;
+	if (!record->visual_required) return WtApplicationStatus::InvalidInput;
+	if (record->visual_generation_superseded) return WtApplicationStatus::AlreadyCurrent;
+	record->visual_generation_superseded = true;
+	record->external_visual_prepared = false;
 	return WtApplicationStatus::Ok;
 }
 
@@ -343,7 +362,8 @@ std::size_t WtChunkApplicationService::apply_render(
 			metrics_.render_latency_frames_maximum, latency
 		);
 		WtChunkApplicationRecord *record = find_record_mutable(payload->key);
-		if (record == nullptr || record->generation != payload->generation) {
+		if (record == nullptr || record->generation != payload->generation ||
+			record->visual_generation_superseded) {
 			metrics_.last_stale_render_key_x = payload->key.x;
 			metrics_.last_stale_render_key_y = payload->key.y;
 			metrics_.last_stale_render_key_z = payload->key.z;
