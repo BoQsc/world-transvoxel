@@ -7,6 +7,7 @@
 #include "services/wt_chunk_publication_policy.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -500,9 +501,22 @@ godot::Dictionary WorldTransvoxelTerrain::prepare_gpu_resident_render_chunk(
 
 godot::Dictionary WorldTransvoxelTerrain::
 get_gpu_resident_render_activation_cohort(
-	const godot::Dictionary &identity_dictionary
+	const godot::Dictionary &identity_dictionary,
+	bool measure_timing
 ) {
 	godot::Dictionary result;
+	using Clock = std::chrono::steady_clock;
+	auto phase_start = measure_timing ? Clock::now() : Clock::time_point{};
+	if (measure_timing) result["query_timing_usec"] = godot::Dictionary();
+	const auto record_phase = [&](const char *stage) {
+		if (!measure_timing) return;
+		const auto elapsed = Clock::now() - phase_start;
+		godot::Dictionary timing = result["query_timing_usec"];
+		timing[stage] = static_cast<std::int64_t>(
+			std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count()
+		);
+		phase_start = Clock::now();
+	};
 	result["schema"] = "world_transvoxel.gpu_resident_activation_cohort.v1";
 	result["status"] = "STALE_APPLICATION";
 	result["ready"] = false;
@@ -552,12 +566,17 @@ get_gpu_resident_render_activation_cohort(
 	}
 	WtChunkPublicationRegion region;
 	std::vector<WtChunkKey> waiting_masks;
-	if (!build_gpu_publication_cohort(
+	record_phase("seed_validation");
+	const bool built = build_gpu_publication_cohort(
 			*application_, *render_sink_, identity.key,
 			pending_chunk_replacements_, ready_staged_chunk_replacements_,
 			pending_chunk_retirements_, region, waiting_masks
-		) || (!region.retirements.empty() &&
-			!publication_region_has_complete_authoritative_coverage(region))) {
+		);
+	record_phase("selection");
+	const bool covered = built && (region.retirements.empty() ||
+		publication_region_has_complete_authoritative_coverage(region));
+	record_phase("coverage");
+	if (!covered) {
 		result["status"] = "WAITING_COHORT";
 		result["error"] = "GPU resident boundary cohort is incomplete or exceeds capacity";
 		return result;
@@ -617,12 +636,14 @@ get_gpu_resident_render_activation_cohort(
 		activation_required_count += prepared_member ? 1 : 0;
 		retained_active_count += retained_active_member ? 1 : 0;
 	}
+	record_phase("member_readiness");
 	if (has_waiting_member) {
 		request_visibility_coverage_priority_batch(
 			missing_records,
 			replacements.size(),
 			retirement_count
 		);
+		record_phase("priority");
 		result["status"] = "WAITING_COHORT";
 		result["error"] = "GPU resident replacement cohort is not fully prepared";
 		result["waiting_member"] = first_waiting_record_present ?
@@ -655,6 +676,7 @@ get_gpu_resident_render_activation_cohort(
 			);
 		result["priority_requested_member_count"] =
 			static_cast<std::int64_t>(missing_records.size());
+		record_phase("response");
 		return result;
 	}
 	// A waiting cohort never exposes a partial inventory. Avoid constructing
@@ -674,6 +696,7 @@ get_gpu_resident_render_activation_cohort(
 	result["activation_required_count"] = activation_required_count;
 	result["retained_active_count"] = retained_active_count;
 	result["error"] = "";
+	record_phase("response");
 	return result;
 }
 

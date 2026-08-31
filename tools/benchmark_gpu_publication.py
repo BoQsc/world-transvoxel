@@ -73,7 +73,7 @@ def main() -> int:
     passed = all(all(item["matches_capture"].values()) for item in results)
     report = {
         "schema": "world_transvoxel.gpu_publication_replay.v1",
-        "claim_boundary": "Exact selector output and isolated CPU query timing only; not GPU, frame-time or gameplay acceptance.",
+        "claim_boundary": "Exact selector output, G23-clipped coverage versus an all-pairs oracle, and isolated CPU timing only; not GPU, frame-time or gameplay acceptance.",
         "capture_sha256": hashlib.sha256(source).hexdigest(),
         "binary_sha256": hashlib.sha256(args.binary.read_bytes()).hexdigest(),
         "passed": passed, "results": results,
@@ -82,7 +82,9 @@ def main() -> int:
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"passed": passed, "snapshots": len(results), "timing": [
         {"seed": item["seed"], "members": len(item["measurement"]["selected"]),
-         "median_us": item["measurement"]["median_us"]} for item in results
+         "median_us": item["measurement"]["median_us"],
+         "coverage_median_us": item["measurement"].get("coverage_median_us"),
+         "reference_coverage_median_us": item["measurement"].get("reference_coverage_median_us")} for item in results
     ]}, indent=2))
     return 0 if passed else 1
 

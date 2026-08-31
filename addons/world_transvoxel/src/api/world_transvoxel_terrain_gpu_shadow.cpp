@@ -209,9 +209,9 @@ void WorldTransvoxelTerrain::bind_gpu_meshing_shadow_methods() {
 	);
 	godot::ClassDB::bind_method(
 		godot::D_METHOD(
-			"get_gpu_resident_render_activation_cohort", "identity"
+			"get_gpu_resident_render_activation_cohort", "identity", "measure_timing"
 		),
-		&WorldTransvoxelTerrain::get_gpu_resident_render_activation_cohort
+		&WorldTransvoxelTerrain::get_gpu_resident_render_activation_cohort, DEFVAL(false)
 	);
 	godot::ClassDB::bind_method(
 		godot::D_METHOD("inspect_gpu_resident_publication", "coordinate", "lod"),

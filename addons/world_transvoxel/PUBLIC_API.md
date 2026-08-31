@@ -198,12 +198,21 @@ Opt-in GPU-resident render publication:
 - `pop_gpu_resident_render_request() -> Dictionary`
 - `validate_gpu_resident_render_request(request_id, identity) -> Dictionary`
 - `get_gpu_resident_render_chunk_readiness(identity) -> Dictionary`
+- `get_gpu_resident_render_activation_cohort(identity, measure_timing=false) -> Dictionary`
 - `reject_gpu_resident_render_request(request_id, identity, error) -> Dictionary`
 - `set_gpu_resident_render_chunk_active(identities, active) -> Dictionary`
 - `reconcile_gpu_resident_render_chunks(terrain_identities) -> Dictionary`
 - `get_gpu_resident_render_metrics() -> Dictionary`
 - `inspect_gpu_resident_publication(coordinate: Vector3i, lod: int) -> Dictionary`
 - `end_gpu_resident_render_publication()`
+
+The cohort query optionally returns `query_timing_usec`, containing elapsed
+microseconds for completed seed validation, selection, coverage, member readiness,
+priority handling, and response construction phases. Timing is disabled by default
+and does not alter the cohort or readiness checks. These nested diagnostic costs
+are not GPU execution or frame time; do not add them to whole-query timing.
+Unlike the read-only inspection below, normal cohort readiness queries can request
+priority for missing members, whether or not timing is enabled.
 
 `inspect_gpu_resident_publication` is an explicit, read-only diagnostic. It
 uses the publication selector without requesting priority, preparing or

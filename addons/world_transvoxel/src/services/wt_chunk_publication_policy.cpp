@@ -147,6 +147,29 @@ public:
 		append_descendants(key, output);
 	}
 
+	bool covers(const WtChunkKey &key) const noexcept {
+		WtChunkKey ancestor = key;
+		while (ancestor.lod <= maximum_lod_) {
+			if (contains(keys_, ancestor)) return true;
+			if (ancestor.lod == maximum_lod_) break;
+			ancestor = wt_parent_chunk_key(ancestor);
+		}
+		return false;
+	}
+
+	bool overlaps(const WtChunkKey &key) const noexcept {
+		return contains(closure_, key) || covers(key);
+	}
+
+	bool non_overlapping() const noexcept {
+		if (std::adjacent_find(keys_.begin(), keys_.end()) != keys_.end()) return false;
+		// Aligned dyadic chunks intersect only when one is an ancestor of the other.
+		for (const WtChunkKey &key : keys_) {
+			if (key.lod < maximum_lod_ && covers(wt_parent_chunk_key(key))) return false;
+		}
+		return true;
+	}
+
 private:
 	static bool contains(
 		const std::vector<WtChunkKey> &keys,
@@ -260,13 +283,11 @@ bool replacement_set_covers(
 
 bool authoritative_replacement_set_covers(
 	const WtChunkKey &target,
-	const std::vector<WtChunkKey> &replacements,
+	const ChunkHierarchyIndex &replacements,
 	const std::function<bool(const WtChunkKey &)> &is_authoritative
 ) {
 	if (!is_authoritative(target)) return true;
-	for (const WtChunkKey &replacement : replacements) {
-		if (bounds_contains(replacement, target)) return true;
-	}
+	if (replacements.covers(target)) return true;
 	if (target.lod == 0) return false;
 	for (std::int32_t z = 0; z < 2; ++z) {
 		for (std::int32_t y = 0; y < 2; ++y) {
@@ -274,7 +295,7 @@ bool authoritative_replacement_set_covers(
 				WtChunkKey child;
 				if (!key_child(target, x, y, z, child)) return false;
 				if (!is_authoritative(child)) continue;
-				if (!overlaps_any(child, replacements) ||
+				if (!replacements.overlaps(child) ||
 						!authoritative_replacement_set_covers(
 							child, replacements, is_authoritative
 						)) {
@@ -606,22 +627,27 @@ bool wt_chunk_publication_region_has_complete_authoritative_coverage(
 	const WtChunkPublicationRegion &region,
 	const std::function<bool(const WtChunkKey &)> &is_authoritative
 ) {
-	if (!is_authoritative ||
-			!valid_non_overlapping_region_replacements(region)) {
+	if (!is_authoritative || region.replacements.empty() || region.retirements.empty()) {
 		return false;
 	}
+	std::uint8_t maximum_lod = 0;
 	for (const WtChunkKey &replacement : region.replacements) {
-		if (!is_authoritative(replacement)) return false;
+		if (!wt_is_valid_chunk_key(replacement) || !is_authoritative(replacement)) return false;
+		maximum_lod = std::max(maximum_lod, replacement.lod);
 	}
 	for (const WtChunkKey &retirement : region.retirements) {
-		if (!wt_is_valid_chunk_key(retirement) || !is_authoritative(retirement) ||
-				std::find(
-					region.replacements.begin(),
-					region.replacements.end(),
-					retirement
-				) != region.replacements.end() ||
+		if (!wt_is_valid_chunk_key(retirement) || !is_authoritative(retirement)) return false;
+		maximum_lod = std::max(maximum_lod, retirement.lod);
+	}
+	// Inputs need not be sorted. Keep duplicates so overlap validation rejects them.
+	std::vector<WtChunkKey> replacements = region.replacements;
+	std::sort(replacements.begin(), replacements.end());
+	const ChunkHierarchyIndex index(replacements, maximum_lod);
+	if (!index.non_overlapping()) return false;
+	for (const WtChunkKey &retirement : region.retirements) {
+		if (std::binary_search(replacements.begin(), replacements.end(), retirement) ||
 				!authoritative_replacement_set_covers(
-					retirement, region.replacements, is_authoritative
+					retirement, index, is_authoritative
 				)) {
 			return false;
 		}

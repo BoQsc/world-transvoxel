@@ -242,7 +242,8 @@ public:
 		const godot::Array &identities
 	);
 	godot::Dictionary get_gpu_resident_render_activation_cohort(
-		const godot::Dictionary &identity
+		const godot::Dictionary &identity,
+		bool measure_timing = false
 	);
 	godot::Dictionary inspect_gpu_resident_publication(
 		const godot::Vector3i &coordinate, std::int64_t lod
