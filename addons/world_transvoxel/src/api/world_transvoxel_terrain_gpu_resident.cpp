@@ -395,6 +395,8 @@ get_gpu_resident_render_chunk_readiness(
 			"GPU resident geometry is waiting for its CPU application record";
 		return result;
 	}
+	result["collision_required"] = record.collision_required;
+	result["collision_ready"] = record.collision_ready;
 	if (record.generation != identity.generation || !record.visual_required) {
 		++gpu_resident_render_readiness_stale_;
 		++gpu_resident_render_stale_skips_;
