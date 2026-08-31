@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import shutil
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 from build import build
@@ -16,8 +18,12 @@ from wt_script_common import REPO_ROOT, addon_binary_path, native_test_path
 ARTIFACT_ROOT = REPO_ROOT / "artifacts" / "m3"
 
 
-def run_application_test(configuration: str) -> None:
-    executable = native_test_path(configuration, "test_wt_m3_application")
+def run_application_test(
+    configuration: str,
+    test_name: str = "test_wt_m3_application",
+    marker: str = "M3_APPLICATION_PASS",
+) -> None:
+    executable = native_test_path(configuration, test_name)
     if not executable.is_file():
         raise RuntimeError(f"Missing M3 native test executable: {executable}")
     result = subprocess.run(
@@ -30,9 +36,20 @@ def run_application_test(configuration: str) -> None:
     combined = result.stdout + result.stderr
     print(combined, end="" if combined.endswith("\n") else "\n")
     if result.returncode != 0:
-        raise RuntimeError(f"M3 application contract failed for {configuration}.")
-    if "M3_APPLICATION_PASS" not in combined:
-        raise RuntimeError(f"M3 pass marker missing for {configuration}.")
+        raise RuntimeError(f"{test_name} contract failed for {configuration}.")
+    if marker not in combined:
+        raise RuntimeError(f"{test_name} pass marker missing for {configuration}.")
+
+
+def run_publication_replay_test(configuration: str) -> None:
+    ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="publication-replay-", dir=ARTIFACT_ROOT) as output:
+        subprocess.run([
+            sys.executable, str(REPO_ROOT / "tools" / "benchmark_gpu_publication.py"),
+            "--capture", str(REPO_ROOT / "tests" / "fixtures" / "gpu_publication_cohorts_20260830.json"),
+            "--binary", str(native_test_path(configuration, "test_wt_publication_policy")),
+            "--output", str(Path(output) / "result.json"), "--iterations", "1",
+        ], cwd=REPO_ROOT, check=True, timeout=60)
 
 
 def run_godot_integration(engine: Path, name: str) -> None:
@@ -88,6 +105,8 @@ def test_m3(skip_build: bool = False, skip_engine_download: bool = False) -> Non
         build("all")
     for configuration in ("template_debug", "template_release"):
         run_application_test(configuration)
+        run_application_test(configuration, "test_wt_publication_policy", "PUBLICATION_POLICY_PASS")
+        run_publication_replay_test(configuration)
     test_m2(skip_build=True, skip_engine_download=skip_engine_download)
     run_godot_matrix()
     print("M3 validation passed with native contracts and the full Godot resource matrix.")

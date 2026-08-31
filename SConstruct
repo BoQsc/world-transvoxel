@@ -165,6 +165,21 @@ m2_mesh_test = native_test_env.Program(
     ],
 )
 
+publication_policy_test = native_test_env.Program(
+    os.path.join(
+        "build", "native-tests",
+        "test_wt_publication_policy.{}.{}{}".format(
+            env["target"], env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_publication_policy.cpp",
+        "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/services/wt_chunk_publication_policy.cpp",
+    ],
+)
+
 m3_application_test = native_test_env.Program(
     os.path.join(
         "build",
@@ -1077,6 +1092,11 @@ if env["platform"] == "windows":
     )
 
     env.AddPostAction(
+        publication_policy_test,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
+    env.AddPostAction(
         m4_storage_test,
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
@@ -1232,6 +1252,7 @@ Default([
     m2_core_test,
     m2_mesh_test,
     m3_application_test,
+    publication_policy_test,
     m4_storage_test,
     m4_bake_test,
     m4_world_test,

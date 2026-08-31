@@ -567,7 +567,8 @@ get_gpu_resident_render_activation_cohort(
 	const std::size_t retirement_count = retirements.size();
 	const bool regional = replacements.size() > 1 || !retirements.empty();
 	result["boundary_mask_wait_count"] = static_cast<std::int64_t>(waiting_masks.size());
-	godot::Array chunks;
+	std::vector<WtChunkApplicationRecord> ready_records;
+	ready_records.reserve(replacements.size());
 	std::int64_t activation_required_count = 0;
 	std::int64_t retained_active_count = 0;
 	std::vector<WtChunkApplicationRecord> missing_records;
@@ -612,9 +613,7 @@ get_gpu_resident_render_activation_cohort(
 			}
 			continue;
 		}
-		godot::Dictionary member = gpu_cohort_member(record);
-		member["activation_required"] = prepared_member;
-		chunks.push_back(member);
+		ready_records.push_back(record);
 		activation_required_count += prepared_member ? 1 : 0;
 		retained_active_count += retained_active_member ? 1 : 0;
 	}
@@ -657,6 +656,14 @@ get_gpu_resident_render_activation_cohort(
 		result["priority_requested_member_count"] =
 			static_cast<std::int64_t>(missing_records.size());
 		return result;
+	}
+	// A waiting cohort never exposes a partial inventory. Avoid constructing
+	// Godot dictionaries that would be discarded on every readiness retry.
+	godot::Array chunks;
+	for (const WtChunkApplicationRecord &record : ready_records) {
+		godot::Dictionary member = gpu_cohort_member(record);
+		member["activation_required"] = record.external_visual_activation_required;
+		chunks.push_back(member);
 	}
 	result["status"] = "READY";
 	result["ready"] = true;
