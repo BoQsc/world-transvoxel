@@ -495,6 +495,14 @@ void WtWorldLifecycleService::notify_application_progress() noexcept {
 	}
 }
 
+bool WtWorldLifecycleService::has_visual_generation(
+	const WtChunkKey &key, WtGenerationToken generation
+) const {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	return state_ == WtWorldLifecycleState::Running && runtime_ &&
+		runtime_->has_visual_generation(key, generation);
+}
+
 bool WtWorldLifecycleService::pop_publication(
 	WtReadOnlyPublication &publication
 ) {

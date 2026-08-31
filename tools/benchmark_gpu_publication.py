@@ -59,7 +59,9 @@ def main() -> int:
         if not snapshot["built"]:
             parser.error("failed builds have incomplete lookup inventories; cannot replay")
         snapshot = dict(snapshot)
-        snapshot["candidates"] = snapshot["pending_replacements"] + snapshot["ready_replacements"]
+        snapshot["candidates"] = snapshot.get(
+            "visual_candidates", snapshot["pending_replacements"] + snapshot["ready_replacements"]
+        )
         execution = subprocess.run(
             [str(args.binary.resolve()), "--replay", str(args.iterations)],
             input=encode(snapshot), text=True, capture_output=True, check=True, timeout=60,

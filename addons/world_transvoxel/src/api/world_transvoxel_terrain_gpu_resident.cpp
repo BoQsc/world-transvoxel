@@ -116,12 +116,22 @@ bool build_gpu_publication_cohort(
 	const std::vector<WtChunkKey> &retirements,
 	WtChunkPublicationRegion &region,
 	std::vector<WtChunkKey> &waiting_masks,
-	godot::Array *inspected_boundaries = nullptr
+	godot::Array *inspected_boundaries = nullptr,
+	std::vector<WtChunkKey> *inspected_candidates = nullptr
 ) {
 	std::vector<WtChunkKey> candidates = pending;
 	candidates.insert(candidates.end(), ready.begin(), ready.end());
 	std::sort(candidates.begin(), candidates.end());
 	candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+	// The shared staging queues also contain collision-only LOD0 records. They
+	// may spatially overlap a desired visual parent and are not visual coverage.
+	// Preserve missing records so genuinely incomplete publication still waits.
+	candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
+		[&application](const WtChunkKey &key) {
+			WtChunkApplicationRecord record;
+			return application.copy_record(key, record) && !record.visual_required;
+		}), candidates.end());
+	if (inspected_candidates) *inspected_candidates = candidates;
 	return wt_build_gpu_chunk_publication_cohort(
 		seed, candidates, retirements,
 		[&application, &render_sink, inspected_boundaries](const WtChunkKey &key, WtGpuPublicationBoundary &boundary) {
@@ -170,10 +180,11 @@ godot::Dictionary WorldTransvoxelTerrain::inspect_gpu_resident_publication(
 	WtChunkPublicationRegion region;
 	std::vector<WtChunkKey> waiting_masks;
 	godot::Array boundaries;
+	std::vector<WtChunkKey> visual_candidates;
 	const bool built = build_gpu_publication_cohort(
 		*application_, *render_sink_, seed, pending_chunk_replacements_,
 		ready_staged_chunk_replacements_, pending_chunk_retirements_,
-		region, waiting_masks, &boundaries
+		region, waiting_masks, &boundaries, &visual_candidates
 	);
 	result["seed"] = gpu_cohort_key(seed);
 	result["built"] = built;
@@ -182,6 +193,7 @@ godot::Dictionary WorldTransvoxelTerrain::inspect_gpu_resident_publication(
 		(region.retirements.empty() || publication_region_has_complete_authoritative_coverage(region));
 	result["pending_replacements"] = gpu_cohort_keys(pending_chunk_replacements_);
 	result["ready_replacements"] = gpu_cohort_keys(ready_staged_chunk_replacements_);
+	result["visual_candidates"] = gpu_cohort_keys(visual_candidates);
 	result["pending_retirements"] = gpu_cohort_keys(pending_chunk_retirements_);
 	result["selected"] = gpu_cohort_keys(region.replacements);
 	result["retirements"] = gpu_cohort_keys(region.retirements);
@@ -388,7 +400,18 @@ get_gpu_resident_render_chunk_readiness(
 		return result;
 	}
 	WtChunkApplicationRecord record;
-	if (!application_->copy_record(identity.key, record)) {
+	if (!application_->copy_record(identity.key, record) ||
+		record.generation != identity.generation || !record.visual_required) {
+		// Captures can arrive before the front-end expectation, or outlive its
+		// removal. Only the native generation can distinguish those two cases.
+		if (!lifecycle_ || !lifecycle_->has_visual_generation(
+				identity.key, identity.generation
+			)) {
+			++gpu_resident_render_readiness_stale_;
+			++gpu_resident_render_stale_skips_;
+			result["error"] = "GPU resident native visual generation is no longer required";
+			return result;
+		}
 		++gpu_resident_render_readiness_waits_;
 		result["status"] = "WAITING_APPLICATION";
 		result["error"] =
@@ -397,13 +420,6 @@ get_gpu_resident_render_chunk_readiness(
 	}
 	result["collision_required"] = record.collision_required;
 	result["collision_ready"] = record.collision_ready;
-	if (record.generation != identity.generation || !record.visual_required) {
-		++gpu_resident_render_readiness_stale_;
-		++gpu_resident_render_stale_skips_;
-		result["error"] =
-			"GPU resident geometry no longer matches the CPU chunk generation";
-		return result;
-	}
 	if (record.visual_generation_superseded) {
 		++gpu_resident_render_readiness_stale_;
 		++gpu_resident_render_stale_skips_;

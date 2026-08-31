@@ -1027,11 +1027,14 @@ void test_gpu_reciprocal_publication_dependencies() {
 				waiting == std::vector<wt::WtChunkKey>{coarse},
 				"coarsening did not wait for obsolete transition removal");
 			coarse_mask = 0;
+			// The successor's zero mask is not the mask currently on screen.
+			coarse_compatible = true;
 			check(wt::wt_build_gpu_chunk_publication_cohort(
 					replaced, candidates, fine, lookup, region, waiting) &&
 				waiting.empty() && region.replacements == candidates &&
+				region.retirements == fine &&
 				wt::wt_chunk_publication_region_has_complete_coverage(region),
-				"coarsening did not atomically remove fine coverage and its transition");
+				"coarsening left the retained neighbor's obsolete transition on screen");
 		}
 	}
 }
@@ -1088,6 +1091,52 @@ void test_gpu_publication_dependency_bounds() {
 	transition_required = true;
 	check(!wt::wt_build_gpu_chunk_publication_cohort(limit, {limit}, {}, limit_lookup, region, waiting),
 		"unrepresentable required finer keys silently removed a transition dependency");
+}
+
+void test_gpu_same_lod_candidates_preserve_retained_boundaries() {
+	const wt::WtChunkKey left_parent { 0, 0, 0, 1 };
+	const wt::WtChunkKey right_parent { 1, 0, 0, 1 };
+	std::vector<wt::WtChunkKey> left_children;
+	std::vector<wt::WtChunkKey> right_children;
+	for (std::int32_t z = 0; z < 2; ++z) {
+		for (std::int32_t y = 0; y < 2; ++y) {
+			for (std::int32_t x = 0; x < 2; ++x) {
+				left_children.push_back({ x, y, z, 0 });
+				right_children.push_back({ 2 + x, y, z, 0 });
+			}
+		}
+	}
+	std::vector<wt::WtChunkKey> candidates = left_children;
+	candidates.insert(
+		candidates.end(), right_children.begin(), right_children.end()
+	);
+	std::sort(candidates.begin(), candidates.end());
+	const auto lookup = [&candidates](
+			const wt::WtChunkKey &key,
+			wt::WtGpuPublicationBoundary &boundary
+		) {
+		if (!std::binary_search(candidates.begin(), candidates.end(), key)) {
+			return false;
+		}
+		boundary = { 0, false };
+		return true;
+	};
+	wt::WtChunkPublicationRegion region;
+	std::vector<wt::WtChunkKey> waiting;
+	check(
+		wt::wt_build_gpu_chunk_publication_cohort(
+			left_children.front(),
+			candidates,
+			{ left_parent, right_parent },
+			lookup,
+			region,
+			waiting
+		) && region.replacements == candidates &&
+			region.retirements == std::vector<wt::WtChunkKey> { left_parent, right_parent } &&
+			waiting.empty() &&
+			wt::wt_chunk_publication_region_has_complete_coverage(region),
+		"same-LOD candidates exposed an unstitched retained coarse neighbor"
+	);
 }
 
 void test_collision_deadline_bounds_frame_work(
@@ -1161,6 +1210,7 @@ int main() {
 	test_cross_lod_replacement_publication_policy();
 	test_gpu_reciprocal_publication_dependencies();
 	test_gpu_publication_dependency_bounds();
+	test_gpu_same_lod_candidates_preserve_retained_boundaries();
 	test_collision_deadline_bounds_frame_work(render);
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M3_APPLICATION_FAIL failures=%d\n", failure_count);

@@ -380,8 +380,10 @@ bool WtReadOnlyWorldRuntime::process_pending_transition_remeshes() {
 		}
 		const WtDesiredChunk item = pending_transition_remeshes_[index];
 		const WtDesiredChunk *desired = desired_->find_desired(item.key);
-		if (desired == nullptr ||
-			find_plan_entry(current_plan_.entries, item.key) == nullptr) {
+		// This queue also repairs missing local collision topology. Collision-only
+		// LOD0 demand is deliberately absent from the visual LOD plan.
+		if (desired == nullptr || (!desired->collision_required &&
+			find_plan_entry(current_plan_.entries, item.key) == nullptr)) {
 			pending_transition_remeshes_.erase(
 				pending_transition_remeshes_.begin() + index
 			);

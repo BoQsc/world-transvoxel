@@ -177,6 +177,15 @@ WtReadOnlyWorldRuntime::~WtReadOnlyWorldRuntime() {
 	}
 }
 
+bool WtReadOnlyWorldRuntime::has_visual_generation(
+	const WtChunkKey &key, WtGenerationToken generation
+) const {
+	WtChunkApplicationRecord record;
+	return application_ && application_->copy_record(key, record) &&
+		record.generation == generation && record.visual_required &&
+		!record.visual_generation_superseded;
+}
+
 bool WtReadOnlyWorldRuntime::valid() const noexcept {
 	return valid_;
 }

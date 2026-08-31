@@ -875,6 +875,67 @@ void test_collision_retirement_locality_modes() {
 	}
 }
 
+void test_gpu_native_visual_generation_lifecycle() {
+	const int failures_before = failure_count;
+	FixtureRoot fixture;
+	std::filesystem::path world_path;
+	check(wtt::wt_write_production_streaming_fixture(
+		fixture.path, 7005, 12, world_path
+	), "GPU generation lifecycle fixture failed");
+	wt::WtAsyncStorageService storage({16, 16, wt::kWtMaximumContainerSize});
+	check(storage.open(world_path, fixture.path) == wt::WtAsyncStorageStatus::Ok,
+		"GPU generation lifecycle storage failed");
+	auto gpu = std::make_shared<wt::WtGpuMeshingShadowQueue>();
+	check(gpu->begin(4, true, wt::WtGpuMeshingCaptureStage::PreMeshField),
+		"GPU generation lifecycle queue failed");
+	wt::WtRuntimeConfig config;
+	config.active_chunk_capacity = 8;
+	config.viewer_capacity = 1;
+	config.demand_capacity_per_viewer = 8;
+	config.visual_viewer_collision_enabled = false;
+	config.meshing_worker_count = 0;
+	wt::WtReadOnlyWorldRuntime runtime(config, storage, nullptr, gpu);
+	std::atomic<wt::WtReadOnlyRuntimeStatus> status {wt::WtReadOnlyRuntimeStatus::Ok};
+	std::thread worker([&]() { status.store(runtime.run()); });
+	check(runtime.update_viewer(viewer(1, 1, 8.0, 8.0), 0) ==
+		wt::WtReadOnlyRuntimeStatus::Ok, "GPU generation lifecycle viewer rejected");
+	PublicationCounts counts;
+	std::vector<std::uint8_t> evidence;
+	check(collect_until(runtime, counts, 1, 0, evidence),
+		"GPU generation lifecycle did not produce a visual generation");
+	check(counts.first_expect_generation.value != 0 &&
+		runtime.has_visual_generation(
+			counts.first_expect_key, counts.first_expect_generation
+		), "current GPU visual generation was not authoritative");
+	check(runtime.remove_viewer(1, 2) == wt::WtReadOnlyRuntimeStatus::Ok,
+		"GPU generation lifecycle removal rejected");
+	bool removed = false;
+	const auto deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(5);
+	while (!removed && std::chrono::steady_clock::now() < deadline) {
+		wt::WtReadOnlyPublication publication;
+		while (runtime.pop_publication(publication)) {
+			removed = removed || (
+				publication.kind == wt::WtReadOnlyPublicationKind::RemoveChunk &&
+				publication.key == counts.first_expect_key
+			);
+		}
+		if (!removed) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	check(removed && !runtime.has_visual_generation(
+		counts.first_expect_key, counts.first_expect_generation
+	), "retired GPU visual generation remained authoritative");
+	runtime.request_stop();
+	worker.join();
+	check(status.load() == wt::WtReadOnlyRuntimeStatus::Ok,
+		"GPU generation lifecycle runtime did not stop cleanly");
+	gpu->end();
+	storage.close();
+	if (failure_count == failures_before) {
+		std::printf("GPU_NATIVE_VISUAL_GENERATION_LIFECYCLE_PASS\n");
+	}
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -887,9 +948,14 @@ int main(int argc, char **argv) {
 		test_collision_promotion_before_mesh(1);
 		return failure_count == 0 ? 0 : 1;
 	}
+	if (argc == 2 && std::string(argv[1]) == "--gpu-generation-lifecycle") {
+		test_gpu_native_visual_generation_lifecycle();
+		return failure_count == 0 ? 0 : 1;
+	}
 	test_collision_promotion_before_mesh(0);
 	test_collision_promotion_before_mesh(1);
 	test_collision_retirement_locality_modes();
+	test_gpu_native_visual_generation_lifecycle();
 	test_collision_only_with_full_gpu_queue(0);
 	test_collision_only_with_full_gpu_queue(1);
 	test_g8_2000x2000_window_planning();

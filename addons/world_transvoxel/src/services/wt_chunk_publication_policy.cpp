@@ -527,13 +527,18 @@ bool wt_build_gpu_chunk_publication_cohort(
 			WtGpuPublicationBoundary neighbor;
 			if (key_at(coordinate[0], coordinate[1], coordinate[2], key.lod, adjacent) &&
 				read(adjacent, neighbor)) {
-				if ((boundary.transition_mask & bit) != 0) insert_key(waiting_masks, key);
-				if ((neighbor.transition_mask & opposite_bit) != 0) {
+				const bool key_requires_transition =
+					(boundary.transition_mask & bit) != 0;
+				const bool neighbor_requires_transition =
+					(neighbor.transition_mask & opposite_bit) != 0;
+				if (key_requires_transition) insert_key(waiting_masks, key);
+				if (neighbor_requires_transition) {
 					insert_key(waiting_masks, adjacent);
 				}
-				// Compatible active geometry creates no additional dependency.
-				if (!neighbor.compatible_active ||
-						(neighbor.transition_mask & opposite_bit) != 0) {
+				// Candidate masks describe the future layout, not retained geometry.
+				// Until that neighbor is compatible on screen, keep its replacement
+				// in the atomic swap even if both future masks are zero.
+				if (!neighbor.compatible_active || neighbor_requires_transition) {
 					if (!add(adjacent)) return false;
 				}
 				continue;

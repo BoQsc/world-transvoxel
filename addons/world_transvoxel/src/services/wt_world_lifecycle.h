@@ -101,6 +101,9 @@ public:
 		std::uint64_t &request_id
 	);
 	void notify_application_progress() noexcept;
+	bool has_visual_generation(
+		const WtChunkKey &key, WtGenerationToken generation
+	) const;
 	bool pop_publication(WtReadOnlyPublication &publication);
 	bool pop_unbudgeted_publication(WtReadOnlyPublication &publication);
 

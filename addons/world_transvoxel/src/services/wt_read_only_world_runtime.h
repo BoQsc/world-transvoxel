@@ -197,6 +197,9 @@ public:
 	bool pop_publication(WtReadOnlyPublication &publication);
 	bool pop_unbudgeted_publication(WtReadOnlyPublication &publication);
 	void notify_application_progress() noexcept;
+	bool has_visual_generation(
+		const WtChunkKey &key, WtGenerationToken generation
+	) const;
 
 	WtReadOnlyRuntimeStatus last_status() const noexcept;
 	WtReadOnlyRuntimeMetrics get_metrics() const noexcept;
