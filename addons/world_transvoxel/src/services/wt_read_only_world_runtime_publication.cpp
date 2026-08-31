@@ -187,11 +187,13 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 			const bool collision_source_missing =
 				!resource_cache_->find_collision(item.key, record->generation) &&
 				!resource_cache_->find_mesh(item.key, record->generation);
-			if (collision_source_missing) {
+			if (collision_source_missing &&
+					record->lifecycle == WtChunkLifecycle::Ready) {
 				// GPU-only visual generations have no cached CPU topology. Queue
-				// their collision-required successor immediately; readiness repair
-				// intentionally waits for an idle application queue and is too late
-				// for a moving collision viewer.
+				// a successor only if no generation is already preparing the newly
+				// required collision. Desired-set role promotion creates that
+				// successor for executing/completed GPU-only generations and lets a
+				// queued mesh absorb the role before it captures application state.
 				queue_transition_remeshes({ item });
 			}
 			WtChunkApplicationRecord application_record;

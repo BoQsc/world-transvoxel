@@ -28,6 +28,15 @@ public:
 		WtGenerationToken generation,
 		std::int32_t priority
 	) = 0;
+	// True only while the mesh job has not captured its visual/collision roles.
+	virtual bool owned_generation_accepts_role_promotion(
+		const WtChunkKey &key,
+		WtGenerationToken generation
+	) const noexcept {
+		(void)key;
+		(void)generation;
+		return false;
+	}
 };
 
 } // namespace world_transvoxel

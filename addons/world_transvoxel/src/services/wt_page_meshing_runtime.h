@@ -265,6 +265,10 @@ public:
 		WtGenerationToken generation,
 		std::int32_t priority
 	) override;
+	bool owned_generation_accepts_role_promotion(
+		const WtChunkKey &key,
+		WtGenerationToken generation
+	) const noexcept override;
 
 	std::vector<WtPageMeshingRuntimeRecordSnapshot>
 	get_records() const;

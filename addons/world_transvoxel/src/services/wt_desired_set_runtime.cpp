@@ -49,10 +49,17 @@ bool contains_key(
 }
 
 bool role_promotion_requires_remesh(
-	WtChunkLifecycle lifecycle
+	WtChunkLifecycle lifecycle,
+	const WtChunkKey &key,
+	WtGenerationToken generation,
+	const WtPageMeshingRuntimeOwner *page_meshing_runtime
 ) noexcept {
-	return lifecycle == WtChunkLifecycle::Meshing ||
-		lifecycle == WtChunkLifecycle::Ready;
+	if (lifecycle == WtChunkLifecycle::Ready) return true;
+	if (lifecycle != WtChunkLifecycle::Meshing) return false;
+	return page_meshing_runtime == nullptr ||
+		!page_meshing_runtime->owned_generation_accepts_role_promotion(
+			key, generation
+		);
 }
 
 } // namespace
@@ -179,7 +186,12 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 			application.copy_record(item.key, application_record) &&
 			((!application_record.visual_required && item.visual_required) ||
 			(!application_record.collision_required && item.collision_required)) &&
-			role_promotion_requires_remesh(record->lifecycle)) {
+			role_promotion_requires_remesh(
+				record->lifecycle,
+				item.key,
+				record->generation,
+				page_meshing_runtime
+			)) {
 			++role_promotions_requiring_remesh;
 		}
 	}
@@ -229,7 +241,12 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 			interactive_edit_in_flight ?
 				kWtInteractiveEditPriority : item.priority;
 		if ((promote_visual || promote_collision) && record != nullptr &&
-			role_promotion_requires_remesh(record->lifecycle)) {
+			role_promotion_requires_remesh(
+				record->lifecycle,
+				item.key,
+				record->generation,
+				page_meshing_runtime
+			)) {
 			if (page_meshing_runtime != nullptr) {
 				const WtPageMeshingRuntimeOwnerStatus release_status =
 					page_meshing_runtime->release_owned_chunk(item.key);

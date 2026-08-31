@@ -268,6 +268,15 @@ bool WtPageMeshingRuntimeService::pop_mesh_completion(
 	return false;
 }
 
+bool WtPageMeshingRuntimeService::owned_generation_accepts_role_promotion(
+	const WtChunkKey &key,
+	WtGenerationToken generation
+) const noexcept {
+	const auto record = find_record(key);
+	return record != records_.end() && record->generation == generation &&
+		record->phase == WtPageMeshingRuntimePhase::AwaitingMesh;
+}
+
 std::vector<WtPageMeshingRuntimeService::Record>::iterator
 WtPageMeshingRuntimeService::find_record(const WtChunkKey &key) noexcept {
 	const auto record = std::lower_bound(
