@@ -1,0 +1,23 @@
+GPU_QUEUED_COLLISION_PROMOTION workers=0 generation=1 mesh_jobs=1 remeshes=0 render=1 collision=1
+GPU_QUEUED_COLLISION_PROMOTION_PASS workers=0
+GPU_QUEUED_COLLISION_PROMOTION workers=1 generation=1 mesh_jobs=1 remeshes=0 render=1 collision=1
+GPU_QUEUED_COLLISION_PROMOTION_PASS workers=1
+COLLISION_RETIREMENT_LOCALITY workers=0 gpu=0 visual_collision=0 promotions=0 payloads=0 faces=0 support_faces=1536
+COLLISION_RETIREMENT_LOCALITY_PASS
+COLLISION_RETIREMENT_LOCALITY workers=0 gpu=1 visual_collision=0 promotions=0 payloads=0 faces=0 support_faces=1536
+COLLISION_RETIREMENT_LOCALITY_PASS
+COLLISION_RETIREMENT_LOCALITY workers=0 gpu=0 visual_collision=1 promotions=2 payloads=2 faces=3072 support_faces=1536
+COLLISION_RETIREMENT_LOCALITY_PASS
+COLLISION_RETIREMENT_LOCALITY workers=1 gpu=0 visual_collision=0 promotions=0 payloads=0 faces=0 support_faces=1536
+COLLISION_RETIREMENT_LOCALITY_PASS
+COLLISION_RETIREMENT_LOCALITY workers=1 gpu=1 visual_collision=0 promotions=0 payloads=0 faces=0 support_faces=1536
+COLLISION_RETIREMENT_LOCALITY_PASS
+COLLISION_RETIREMENT_LOCALITY workers=1 gpu=0 visual_collision=1 promotions=2 payloads=2 faces=3072 support_faces=1536
+COLLISION_RETIREMENT_LOCALITY_PASS
+GPU_COLLISION_ADMISSION_PASS mesh_workers=0
+GPU_COLLISION_ADMISSION_PASS mesh_workers=1
+PRODUCTION_G8_2000X2000_WINDOW_PASS pages=93 samples=5 max_window=25
+FOREGROUND_PRIORITY_LEASE_PASS sources=2 active=1 support=1 focus=0
+FOREGROUND_RUNTIME_METRICS updates=3 active=2 support=1 focus=1 changed=2 matched=5 missing=1
+PRODUCTION_STREAMING_HASH 39db05c67fc2f4b8d8beaab2e7da927ae968efb3d75118bcd80c5523116d9b3b
+PRODUCTION_STREAMING_PASS pages=4 viewers=2 movement=4 backend=MIT meshing_workers=2

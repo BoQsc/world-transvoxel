@@ -1,0 +1,12 @@
+COLLISION_RETIREMENT_LOCALITY workers=0 gpu=0 visual_collision=0 promotions=3 payloads=3 faces=4608 support_faces=1536
+COLLISION_RETIREMENT_LOCALITY workers=0 gpu=1 visual_collision=0 promotions=1 payloads=1 faces=1536 support_faces=1536
+COLLISION_RETIREMENT_LOCALITY workers=0 gpu=0 visual_collision=1 promotions=2 payloads=2 faces=3072 support_faces=1536
+COLLISION_RETIREMENT_LOCALITY_PASS
+COLLISION_RETIREMENT_LOCALITY workers=1 gpu=0 visual_collision=0 promotions=3 payloads=3 faces=4608 support_faces=1536
+COLLISION_RETIREMENT_LOCALITY workers=1 gpu=1 visual_collision=0 promotions=1 payloads=1 faces=1536 support_faces=1536
+COLLISION_RETIREMENT_LOCALITY workers=1 gpu=0 visual_collision=1 promotions=2 payloads=2 faces=3072 support_faces=1536
+COLLISION_RETIREMENT_LOCALITY_PASS
+FAIL: explicit collision demand was expanded by visual-only retirement
+FAIL: explicit collision demand was expanded by visual-only retirement
+FAIL: explicit collision demand was expanded by visual-only retirement
+FAIL: explicit collision demand was expanded by visual-only retirement

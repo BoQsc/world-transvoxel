@@ -1,0 +1,2 @@
+PUBLICATION_POLICY_PASS random_cases=250 coordinate_limit_cases=30
+AUTHORITATIVE_COVERAGE_PASS partition_cases=180 authorities=3 mutations=6 coordinate_limits=both

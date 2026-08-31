@@ -745,9 +745,143 @@ void test_collision_promotion_before_mesh(std::size_t mesh_workers) {
 	if (failure_count == failures_before) std::printf("GPU_QUEUED_COLLISION_PROMOTION_PASS workers=%zu\n", mesh_workers);
 }
 
+void test_collision_retirement_locality(std::size_t mesh_workers, bool gpu_enabled,
+		bool visual_collision_enabled) {
+	const int failures_before = failure_count;
+	FixtureRoot fixture;
+	std::filesystem::path world_path;
+	check(wtt::wt_write_production_streaming_fixture(fixture.path, 7004, 12, world_path),
+		"collision locality fixture failed");
+	wt::WtAsyncStorageService storage({16, 16, wt::kWtMaximumContainerSize});
+	check(storage.open(world_path, fixture.path) == wt::WtAsyncStorageStatus::Ok,
+		"collision locality storage failed");
+	std::shared_ptr<wt::WtGpuMeshingShadowQueue> gpu;
+	if (gpu_enabled) {
+		gpu = std::make_shared<wt::WtGpuMeshingShadowQueue>();
+		check(gpu->begin(16, true, wt::WtGpuMeshingCaptureStage::PreMeshField),
+			"collision locality GPU queue failed");
+	}
+	wt::WtRuntimeConfig config;
+	config.active_chunk_capacity = 16;
+	config.viewer_capacity = 4;
+	config.demand_capacity_per_viewer = 125;
+	config.visual_viewer_collision_enabled = visual_collision_enabled;
+	config.collision_activation_distance = 1.0;
+	config.collision_deactivation_distance = 2.0;
+	config.meshing_worker_count = mesh_workers;
+	wt::WtReadOnlyWorldRuntime runtime(config, storage, nullptr, gpu);
+	check(runtime.valid(), "collision locality runtime invalid");
+	std::atomic<wt::WtReadOnlyRuntimeStatus> status {wt::WtReadOnlyRuntimeStatus::Ok};
+	std::thread worker([&]() { status.store(runtime.run()); });
+	const wt::WtChunkKey original_support {0, 0, 0, 0};
+	const wt::WtChunkKey new_support {2, 0, 0, 0};
+	check(runtime.update_collision_viewer(viewer(2, 1, 8.0, 8.0), 0) == wt::WtReadOnlyRuntimeStatus::Ok,
+		"collision locality initial support rejected");
+	check(runtime.update_viewer(viewer(1, 1, 8.0, 8.0), 1) == wt::WtReadOnlyRuntimeStatus::Ok,
+		"collision locality initial visuals rejected");
+	PublicationCounts initial;
+	std::vector<std::uint8_t> evidence;
+	check(collect_until(runtime, initial, 3, 1, evidence), "collision locality initial readiness failed");
+	check(!gpu_enabled || (initial.render_vertices == 0 && initial.render_indices == 0),
+		"GPU collision locality leaked CPU visual triangles");
+
+	// Move physical demand first. The old visual chunk now has real cached CPU
+	// triangles from its earlier support role, even with GPU-only rendering.
+	check(runtime.update_collision_viewer(viewer(2, 2, 40.0, 8.0), 0) == wt::WtReadOnlyRuntimeStatus::Ok,
+		"collision locality support relocation rejected");
+	bool old_demoted = false;
+	bool new_collision_ready = false;
+	std::size_t new_collision_faces = 0;
+	const auto support_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+	while ((!new_collision_ready || (!visual_collision_enabled && !old_demoted)) &&
+			std::chrono::steady_clock::now() < support_deadline) {
+		wt::WtReadOnlyPublication publication;
+		while (runtime.pop_publication(publication)) {
+			old_demoted |= publication.key == original_support &&
+				publication.kind == wt::WtReadOnlyPublicationKind::SetCollisionRequired &&
+				!publication.collision_required;
+			if (publication.key == new_support &&
+					publication.kind == wt::WtReadOnlyPublicationKind::CollisionPayload && publication.collision) {
+				new_collision_faces = publication.collision->faces.size();
+				new_collision_ready = new_collision_faces != 0;
+			}
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	check(new_collision_ready && (visual_collision_enabled || old_demoted),
+		"collision locality did not establish relocated support and demote old local demand");
+
+	check(runtime.update_viewer(viewer(1, 2, 40.0, 8.0), 0) == wt::WtReadOnlyRuntimeStatus::Ok,
+		"collision locality visual relocation rejected");
+	std::size_t outgoing_promotions = 0;
+	std::size_t outgoing_payloads = 0;
+	std::size_t outgoing_faces = 0;
+	bool old_removed = false;
+	bool new_visual_ready = false;
+	bool new_support_lost = false;
+	const auto visual_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+	const auto collect = [&]() {
+		wt::WtReadOnlyPublication publication;
+		while (runtime.pop_publication(publication)) {
+			if (publication.key.x < 2) {
+				outgoing_promotions += publication.kind == wt::WtReadOnlyPublicationKind::SetCollisionRequired &&
+					publication.collision_required;
+				if (publication.kind == wt::WtReadOnlyPublicationKind::CollisionPayload && publication.collision) {
+					++outgoing_payloads;
+					outgoing_faces += publication.collision->faces.size();
+				}
+			}
+			old_removed |= publication.key == original_support &&
+				publication.kind == wt::WtReadOnlyPublicationKind::RemoveChunk;
+			if (publication.key != new_support) continue;
+			new_support_lost |= publication.kind == wt::WtReadOnlyPublicationKind::RemoveChunk ||
+				(publication.kind == wt::WtReadOnlyPublicationKind::SetCollisionRequired && !publication.collision_required);
+			if (publication.kind == wt::WtReadOnlyPublicationKind::RenderPayload && publication.render) {
+				new_visual_ready = true;
+				check(!gpu_enabled || (publication.render->vertices.empty() && publication.render->indices.empty()),
+					"GPU support promotion published CPU visual triangles");
+			}
+		}
+	};
+	while ((!old_removed || !new_visual_ready) && std::chrono::steady_clock::now() < visual_deadline) {
+		collect();
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	runtime.request_stop();
+	worker.join();
+	collect();
+	check(old_removed && new_visual_ready && !new_support_lost,
+		"collision locality changed visual completion or removed current physical demand");
+	if (visual_collision_enabled) {
+		check(outgoing_promotions > 0 && outgoing_payloads > 0 && outgoing_faces > 0,
+			"legacy visual collision handover lost its safety geometry");
+	} else {
+		check(outgoing_promotions == 0 && outgoing_payloads == 0 && outgoing_faces == 0,
+			"explicit collision demand was expanded by visual-only retirement");
+	}
+	check(status.load() == wt::WtReadOnlyRuntimeStatus::Ok, "collision locality runtime did not stop cleanly");
+	std::printf("COLLISION_RETIREMENT_LOCALITY workers=%zu gpu=%d visual_collision=%d promotions=%zu payloads=%zu faces=%zu support_faces=%zu\n",
+		mesh_workers, gpu_enabled, visual_collision_enabled, outgoing_promotions, outgoing_payloads, outgoing_faces, new_collision_faces);
+	if (gpu) gpu->end();
+	storage.close();
+	if (failure_count == failures_before) std::printf("COLLISION_RETIREMENT_LOCALITY_PASS\n");
+}
+
+void test_collision_retirement_locality_modes() {
+	for (std::size_t workers : {0U, 1U}) {
+		test_collision_retirement_locality(workers, false, false);
+		test_collision_retirement_locality(workers, true, false);
+		test_collision_retirement_locality(workers, false, true);
+	}
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
+	if (argc == 2 && std::string(argv[1]) == "--collision-locality") {
+		test_collision_retirement_locality_modes();
+		return failure_count == 0 ? 0 : 1;
+	}
 	if (argc == 2 && std::string(argv[1]) == "--collision-promotion") {
 		test_collision_promotion_before_mesh(0);
 		test_collision_promotion_before_mesh(1);
@@ -755,6 +889,7 @@ int main(int argc, char **argv) {
 	}
 	test_collision_promotion_before_mesh(0);
 	test_collision_promotion_before_mesh(1);
+	test_collision_retirement_locality_modes();
 	test_collision_only_with_full_gpu_queue(0);
 	test_collision_only_with_full_gpu_queue(1);
 	test_g8_2000x2000_window_planning();

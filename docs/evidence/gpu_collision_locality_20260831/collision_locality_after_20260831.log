@@ -1,0 +1,12 @@
+COLLISION_RETIREMENT_LOCALITY workers=0 gpu=0 visual_collision=0 promotions=0 payloads=0 faces=0 support_faces=1536
+COLLISION_RETIREMENT_LOCALITY_PASS
+COLLISION_RETIREMENT_LOCALITY workers=0 gpu=1 visual_collision=0 promotions=0 payloads=0 faces=0 support_faces=1536
+COLLISION_RETIREMENT_LOCALITY_PASS
+COLLISION_RETIREMENT_LOCALITY workers=0 gpu=0 visual_collision=1 promotions=2 payloads=2 faces=3072 support_faces=1536
+COLLISION_RETIREMENT_LOCALITY_PASS
+COLLISION_RETIREMENT_LOCALITY workers=1 gpu=0 visual_collision=0 promotions=0 payloads=0 faces=0 support_faces=1536
+COLLISION_RETIREMENT_LOCALITY_PASS
+COLLISION_RETIREMENT_LOCALITY workers=1 gpu=1 visual_collision=0 promotions=0 payloads=0 faces=0 support_faces=1536
+COLLISION_RETIREMENT_LOCALITY_PASS
+COLLISION_RETIREMENT_LOCALITY workers=1 gpu=0 visual_collision=1 promotions=2 payloads=2 faces=3072 support_faces=1536
+COLLISION_RETIREMENT_LOCALITY_PASS

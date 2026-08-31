@@ -233,16 +233,27 @@ collision authority is unchanged.
 The default-off v6 request returns 13 native-packed GPU input buffers, cell and
 byte counts, and the exact page/generation/revision/surface identity. It does
 not export the diagnostic `cell_batch`, invoke a fallback mesher, or replace CPU
-collision authority. `cpu_visual_mesh_omitted=true` proves that a non-collision
-chunk did not build CPU visual topology. Collision-required chunks report
-`false` and retain CPU topology only for targeted physics. Native packing and
+collision authority. `cpu_visual_mesh_omitted=true` identifies the GPU visual
+placeholder path; it does not assert that physics needed no CPU triangles.
+Visual chunks without collision demand skip CPU topology. Collision-required
+chunks retain CPU topology for targeted physics but still publish only an empty
+CPU visual placeholder. Native packing and
 resident allocation failures are rejected immediately so they cannot retain
 bounded queue capacity.
 
+Set `WtRuntimeConfig.visual_viewer_collision_enabled=false` when explicit local
+collision viewers should own physical demand. Outgoing visual-only retirement
+then does not promote collision demand or rebuild cached collision triangles.
+Already-required collision continues through the existing retirement/coverage
+handover. The default `true` retains the legacy broad visual-collision
+preservation behavior. Visual LOD selection, retained rendering, transition-mask
+validation, and terrain/water activation rules are unchanged.
+
 Before CPU meshing begins, the runtime reserves one bounded capture slot for a
 single-surface queue or two slots when the queue can represent the atomic
-terrain/static-water pair. If the reservation fails, CPU meshing proceeds
-without the recording wrapper. Unused slots are released when the prepared job
+terrain/static-water pair. A lossless resident visual job waits when the
+reservation fails; it does not fall back to CPU visual meshing. Collision-only
+jobs do not consume GPU capture slots. Unused slots are released when the prepared job
 finishes, including failure and cancellation paths. The resident metrics expose
 `reserved_capture_slots`, `capture_reservation_attempts`,
 `capture_reservation_rejections`, `reserved_captures`, and
@@ -263,11 +274,11 @@ not invalidate GPU work for unaffected chunk generations. Metrics expose
 `priority_dequeues` and `dequeue_superseded_requests`; this coalescing never
 cancels in-flight work.
 
-Admitted inputs are still recorded while the CPU Transvoxel mesher produces the
-authoritative chunk. Reservations and native packing remove rejected recording
-work, per-cell Godot Dictionaries, and synchronous GDScript packing from
-production resident submission, but they do not eliminate duplicate CPU
-meshing or establish GPU field-generation authority.
+Resident inputs retain authoritative page data and identities. Reservations and
+native packing avoid rejected recording work, per-cell Godot Dictionaries, and
+synchronous GDScript packing. CPU topology remains necessary for requested
+Godot physics, not for GPU-only visual chunks. This boundary does not constitute
+a performance claim or a GPU physics backend.
 
 The metrics dictionary includes `pending_chunk_retirements`, the number of old
 chunk records/resources retained until the current replacement set is fully

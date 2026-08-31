@@ -683,13 +683,12 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			page_runtime_.get()
 		);
 	};
-	// The front-end stages every outgoing render until replacement readiness is
-	// satisfied, including removals that arrive in a later viewer update than
-	// their additions. An outgoing visual-only chunk must therefore gain
-	// collision for the same interval. Capture its generation and collision
-	// payload before apply_delta erases the worker-side record and cache entries.
+	// Broad visual-collision mode preserves support for retained outgoing visuals.
+	// With explicit collision viewers, visual retirement must not resurrect a
+	// withdrawn physical demand from cached geometry. Existing required collision
+	// still follows the unchanged front-end retirement/coverage handover.
 	std::vector<WtReadOnlyPublication> outgoing_collision_publications;
-	if (!delta.removed.empty()) {
+	if (config_.visual_viewer_collision_enabled && !delta.removed.empty()) {
 		outgoing_collision_publications.reserve(delta.removed.size() * 2U);
 		const WtCollisionPolicy outgoing_collision_policy {
 			kWtDefaultCollisionThinRatioSquared,
