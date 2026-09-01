@@ -59,7 +59,7 @@ godot::Dictionary wt_gpu_meshing_shadow_packed_input(
 	const WtGpuMeshingShadowRequest &request
 ) {
 	godot::Dictionary result;
-	result["schema"] = "world_transvoxel.gpu_meshing_input_buffers.v3";
+	result["schema"] = "world_transvoxel.gpu_meshing_input_buffers.v4";
 	result["position_space"] = "world";
 	result["status"] = "FAIL";
 	result["fallback_used"] = false;
@@ -71,20 +71,22 @@ godot::Dictionary wt_gpu_meshing_shadow_packed_input(
 	}
 	const WtTransvoxelTablePack &tables = wt_get_transvoxel_mit_table_pack();
 	godot::Array buffers;
-	buffers.resize(13);
-	buffers[0] = to_bytes(packed.field_values);
-	buffers[1] = to_bytes(packed.field_meta);
-	buffers[2] = to_bytes(packed.cell_headers);
-	buffers[3] = to_bytes(packed.cell_origins);
-	buffers[4] = to_bytes(packed.cell_options);
-	buffers[5] = to_bytes(packed.sample_references);
-	buffers[6] = to_bytes(packed.config);
-	buffers[7] = to_bytes(tables.regular_cell_class);
-	buffers[8] = to_bytes(tables.regular_cell_data);
-	buffers[9] = to_bytes(tables.regular_vertex_data);
-	buffers[10] = to_bytes(tables.transition_cell_class);
-	buffers[11] = to_bytes(tables.transition_cell_data);
-	buffers[12] = to_bytes(tables.transition_vertex_data);
+	if (!packed.proven_empty || !packed.page_field_input) {
+		buffers.resize(13);
+		buffers[0] = to_bytes(packed.field_values);
+		buffers[1] = to_bytes(packed.field_meta);
+		buffers[2] = to_bytes(packed.cell_headers);
+		buffers[3] = to_bytes(packed.cell_origins);
+		buffers[4] = to_bytes(packed.cell_options);
+		buffers[5] = to_bytes(packed.sample_references);
+		buffers[6] = to_bytes(packed.config);
+		buffers[7] = to_bytes(tables.regular_cell_class);
+		buffers[8] = to_bytes(tables.regular_cell_data);
+		buffers[9] = to_bytes(tables.regular_vertex_data);
+		buffers[10] = to_bytes(tables.transition_cell_class);
+		buffers[11] = to_bytes(tables.transition_cell_data);
+		buffers[12] = to_bytes(tables.transition_vertex_data);
+	}
 	result["status"] = "PASS";
 	result["error"] = "";
 	result["input_buffers"] = buffers;

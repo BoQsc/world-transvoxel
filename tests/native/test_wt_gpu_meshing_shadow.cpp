@@ -234,12 +234,73 @@ int main() {
 	require(
 		wt_pack_gpu_meshing_input(
 			empty_page_request, empty_page_packed, packing_error
-		) && empty_page_packed.proven_empty,
+		) && empty_page_packed.proven_empty &&
+			empty_page_packed.field_values.empty() &&
+			empty_page_packed.field_meta.empty() &&
+			empty_page_packed.cell_headers.empty() &&
+			empty_page_packed.cell_origins.empty() &&
+			empty_page_packed.cell_options.empty() &&
+			empty_page_packed.sample_references.empty() &&
+			empty_page_packed.packed_byte_count == 0,
 		"uniform signed page field was not proven empty"
 	);
+	WtGpuMeshingShadowRequest solid_page_request = empty_page_request;
+	auto solid_page = std::make_shared<WtChunkPage>(
+		*solid_page_request.retained_pages[0].page
+	);
+	for (WtScalarSample &sample : solid_page->samples) {
+		sample.density = -1.0F;
+	}
+	solid_page_request.retained_pages[0].page = std::move(solid_page);
+	WtGpuMeshingInputPack solid_page_packed;
 	require(
-		page_packed.field_values.size() == (kWtChunkPageSampleCount + 2U) * 4U &&
-			page_packed.field_meta.size() == (kWtChunkPageSampleCount + 2U) * 4U &&
+		wt_pack_gpu_meshing_input(
+			solid_page_request, solid_page_packed, packing_error
+		) && solid_page_packed.proven_empty &&
+			solid_page_packed.packed_byte_count == 0,
+		"uniform solid page field was not proven empty"
+	);
+	WtGpuMeshingShadowRequest empty_water_request = page_field_request();
+	empty_water_request.surface = WtGpuMeshingShadowSurface::StaticWater;
+	WtGpuMeshingInputPack empty_water_packed;
+	require(
+		wt_pack_gpu_meshing_input(
+			empty_water_request, empty_water_packed, packing_error
+		) && empty_water_packed.proven_empty &&
+			empty_water_packed.packed_byte_count == 0,
+		"uniform static-water field was not proven empty independently of terrain"
+	);
+	WtGpuMeshingShadowRequest mixed_water_request = empty_water_request;
+	auto mixed_water_page = std::make_shared<WtChunkPage>(
+		*mixed_water_request.retained_pages[0].page
+	);
+	mixed_water_page->samples[0].static_water_density = -1.0F;
+	mixed_water_request.retained_pages[0].page = std::move(mixed_water_page);
+	WtGpuMeshingInputPack mixed_water_packed;
+	require(
+		wt_pack_gpu_meshing_input(
+			mixed_water_request, mixed_water_packed, packing_error
+		) && !mixed_water_packed.proven_empty &&
+			!mixed_water_packed.field_values.empty(),
+		"mixed static-water field was incorrectly proven empty"
+	);
+	WtGpuMeshingShadowRequest invalid_water_request = empty_water_request;
+	auto invalid_water_page = std::make_shared<WtChunkPage>(
+		*invalid_water_request.retained_pages[0].page
+	);
+	invalid_water_page->samples[0].static_water_density =
+		std::numeric_limits<float>::infinity();
+	invalid_water_request.retained_pages[0].page = std::move(invalid_water_page);
+	WtGpuMeshingInputPack invalid_water_packed;
+	require(
+		!wt_pack_gpu_meshing_input(
+			invalid_water_request, invalid_water_packed, packing_error
+		),
+		"non-finite static-water page field was accepted"
+	);
+	require(
+		page_packed.field_values.size() == kWtChunkPageSampleCount * 2U + 8U &&
+			page_packed.field_meta.size() == (kWtChunkPageSampleCount + 2U) * 2U &&
 			page_packed.cell_headers.size() == 4 &&
 			page_packed.cell_origins.size() == 4 &&
 			page_packed.cell_options.size() == 4 &&
@@ -255,7 +316,7 @@ int main() {
 				static_cast<std::int32_t>(kWtChunkPageSampleCount) &&
 			page_packed.sample_references[4] ==
 				static_cast<std::int32_t>(kWtChunkPageSampleCount + 1U) &&
-			page_packed.field_values[kWtChunkPageSampleCount * 4U] == -0.5F,
+			page_packed.field_values[kWtChunkPageSampleCount * 2U] == -0.5F,
 		"page-field surface-shift authority layout changed"
 	);
 	require(

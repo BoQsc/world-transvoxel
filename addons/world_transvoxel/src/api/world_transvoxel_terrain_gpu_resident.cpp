@@ -251,7 +251,7 @@ void WorldTransvoxelTerrain::end_gpu_resident_render_publication() {
 godot::Dictionary WorldTransvoxelTerrain::pop_gpu_resident_render_request() {
 	godot::Dictionary result;
 	result["schema"] =
-		"world_transvoxel.gpu_resident_render_request.v6";
+		"world_transvoxel.gpu_resident_render_request.v7";
 	result["position_space"] = "world";
 	result["input_stage"] = "pre_mesh_field";
 	result["status"] = "EMPTY";

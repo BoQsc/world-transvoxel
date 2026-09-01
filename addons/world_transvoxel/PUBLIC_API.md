@@ -235,15 +235,19 @@ native visual lifecycle (`STALE_APPLICATION`). A cancelled generation does not
 consume the pending-generation timeout. This does not relax readiness for a
 current generation or imply that any CPU visual triangle array is required.
 
-Resident request schema `world_transvoxel.gpu_resident_render_request.v6`
+Resident request schema `world_transvoxel.gpu_resident_render_request.v7`
 captures immutable page-lattice inputs before CPU Transvoxel topology. It reports
 `input_stage=pre_mesh_field`, `cpu_topology_input_dependency=false`,
 `cpu_field_sampling=false`, and GPU density/material field generation. CPU
 collision authority is unchanged.
 
-The default-off v6 request returns 13 native-packed GPU input buffers, cell and
-byte counts, and the exact page/generation/revision/surface identity. It does
-not export the diagnostic `cell_batch`, invoke a fallback mesher, or replace CPU
+The default-off v7 request uses input-buffer schema
+`world_transvoxel.gpu_meshing_input_buffers.v4`. Nonempty page fields return 13
+native-packed GPU input buffers with compact two-scalar density/water and
+material/provenance sample records, cell and byte counts, and the exact
+page/generation/revision/surface identity. A uniformly signed page field is
+proven empty upstream and returns no input buffers or packed bytes. It does not
+export the diagnostic `cell_batch`, invoke a fallback mesher, or replace CPU
 collision authority. `cpu_visual_mesh_omitted=true` identifies the GPU visual
 placeholder path; it does not assert that physics needed no CPU triangles.
 Visual chunks without collision demand skip CPU topology. Collision-required

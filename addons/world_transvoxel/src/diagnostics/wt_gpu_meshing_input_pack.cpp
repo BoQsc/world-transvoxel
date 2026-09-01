@@ -40,7 +40,6 @@ std::int32_t i32_bits(float value) noexcept {
 
 void append_packed_field_sample(
 	const WtCellSample &sample,
-	std::int32_t page_index,
 	WtGpuMeshingInputPack &output
 ) {
 	output.field_values.insert(output.field_values.end(), {
@@ -52,8 +51,6 @@ void append_packed_field_sample(
 	output.field_meta.insert(output.field_meta.end(), {
 		static_cast<std::int32_t>(sample.material),
 		sample.material_authored ? 1 : 0,
-		page_index,
-		1,
 	});
 }
 
@@ -270,17 +267,66 @@ bool pack_page_field_input(
 		surface_shift_record_count += retained->page->surface_shift_records.size();
 	}
 	output.sample_count = pages.size() * kWtChunkPageSampleCount;
+	bool has_inside_sample = false;
+	bool has_outside_sample = false;
+	for (const WtGpuMeshingShadowPage *retained : pages) {
+		for (const WtScalarSample &sample : retained->page->samples) {
+			if (!finite(sample.density) || !finite(sample.static_water_density)) {
+				error = "GPU page-field sample is non-finite";
+				return false;
+			}
+			const float surface_density =
+				request.surface == WtGpuMeshingShadowSurface::StaticWater ?
+					sample.static_water_density : sample.density;
+			has_inside_sample = has_inside_sample || surface_density < 0.0F;
+			has_outside_sample = has_outside_sample || surface_density >= 0.0F;
+		}
+	}
+	output.proven_empty = !(has_inside_sample && has_outside_sample);
+	if (output.proven_empty) {
+		output.sample_count += surface_shift_record_count * 2U;
+		const WtChunkBounds chunk_bounds_value = wt_chunk_bounds(request.job.key);
+		output.bounds_min = {
+			static_cast<float>(chunk_bounds_value.minimum.x),
+			static_cast<float>(chunk_bounds_value.minimum.y),
+			static_cast<float>(chunk_bounds_value.minimum.z),
+		};
+		output.bounds_max = {
+			static_cast<float>(chunk_bounds_value.maximum.x),
+			static_cast<float>(chunk_bounds_value.maximum.y),
+			static_cast<float>(chunk_bounds_value.maximum.z),
+		};
+		const std::uint64_t source_revision = request.job.source_revision;
+		const std::uint64_t world_revision = request.job.world_revision;
+		output.config = {
+			static_cast<std::int32_t>(output.cell_count),
+			static_cast<std::int32_t>(output.sample_count),
+			static_cast<std::int32_t>(pages.size()),
+			1,
+			request.job.key.x,
+			request.job.key.y,
+			request.job.key.z,
+			static_cast<std::int32_t>(request.job.key.lod),
+			i32_bits(static_cast<std::uint32_t>(request.job.generation.value)),
+			i32_bits(static_cast<std::uint32_t>(source_revision)),
+			i32_bits(static_cast<std::uint32_t>(source_revision >> 32U)),
+			i32_bits(static_cast<std::uint32_t>(world_revision)),
+			i32_bits(static_cast<std::uint32_t>(world_revision >> 32U)),
+			static_cast<std::int32_t>(request.transition_mask),
+			request.surface == WtGpuMeshingShadowSurface::StaticWater ? 1 : 0,
+			static_cast<std::int32_t>(request.cached_transition_mask),
+		};
+		return true;
+	}
 	output.field_values.reserve(
-		(output.sample_count + surface_shift_record_count * 2U) * 4U
+		output.sample_count * 2U + surface_shift_record_count * 8U
 	);
 	output.field_meta.reserve(
-		(output.sample_count + surface_shift_record_count * 2U) * 4U
+		(output.sample_count + surface_shift_record_count * 2U) * 2U
 	);
 	output.cell_headers.reserve(pages.size() * 4U);
 	output.cell_origins.reserve(pages.size() * 4U);
 	output.cell_options.reserve(pages.size() * 4U);
-	bool has_inside_sample = false;
-	bool has_outside_sample = false;
 	for (std::size_t page_index = 0; page_index < pages.size(); ++page_index) {
 		const WtChunkPage &page = *pages[page_index]->page;
 		const WtGridPoint minimum = wt_chunk_bounds(page.metadata.key).minimum;
@@ -304,27 +350,15 @@ bool pack_page_field_input(
 			static_cast<float>(page.metadata.sample_maximum),
 		});
 		for (const WtScalarSample &sample : page.samples) {
-			if (!finite(sample.density) || !finite(sample.static_water_density)) {
-				error = "GPU page-field sample is non-finite";
-				return false;
-			}
-			const float surface_density =
-				request.surface == WtGpuMeshingShadowSurface::StaticWater ?
-					sample.static_water_density : sample.density;
-			has_inside_sample = has_inside_sample || surface_density < 0.0F;
-			has_outside_sample = has_outside_sample || surface_density >= 0.0F;
 			output.field_values.insert(output.field_values.end(), {
-				sample.density, sample.static_water_density, 0.0F, 0.0F,
+				sample.density, sample.static_water_density,
 			});
 			output.field_meta.insert(output.field_meta.end(), {
 				static_cast<std::int32_t>(sample.material),
 				sample.material_authored ? 1 : 0,
-				static_cast<std::int32_t>(page_index),
-				1,
 			});
 		}
 	}
-	output.proven_empty = !(has_inside_sample && has_outside_sample);
 	// Binding 5 carries the authoritative baked surface-shift records in
 	// page-field mode. The leading sentinel keeps the stable buffer non-empty
 	// for LOD0 pages, which correctly have no shift records.
@@ -344,13 +378,13 @@ bool pack_page_field_input(
 				output.sample_count++
 			);
 			append_packed_field_sample(
-				record.sample_a, static_cast<std::int32_t>(page_index), output
+				record.sample_a, output
 			);
 			const std::int32_t sample_b_index = static_cast<std::int32_t>(
 				output.sample_count++
 			);
 			append_packed_field_sample(
-				record.sample_b, static_cast<std::int32_t>(page_index), output
+				record.sample_b, output
 			);
 			output.sample_references.insert(output.sample_references.end(), {
 				static_cast<std::int32_t>(record.edge_index),
