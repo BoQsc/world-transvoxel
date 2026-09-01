@@ -60,6 +60,17 @@ public:
 		WtBalancedLodPlan &output,
 		bool visual_viewer_collision_enabled = true
 	) const;
+	WtBalancedLodPlannerStatus stage_toward(
+		const WtBalancedLodPlan &target,
+		const WtBalancedLodPlan &current,
+		const std::vector<WtChunkKey> &visually_ready,
+		std::uint8_t staging_root_lod,
+		std::size_t maximum_topology_changes,
+		WtBalancedLodPlan &output,
+		bool &complete,
+		const std::vector<WtChunkKey> &preferred_refinement_keys = {},
+		bool preferred_refinement_only = false
+	) const;
 
 	std::size_t active_capacity() const noexcept;
 	std::size_t catalog_size() const noexcept;

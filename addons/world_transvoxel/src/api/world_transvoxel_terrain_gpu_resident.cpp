@@ -928,6 +928,12 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 			result["error"] = "GPU resident cohort readiness commit failed";
 			return result;
 		}
+		if (lifecycle_) {
+			lifecycle_->notify_visual_activation(
+				inventory.identity.key,
+				inventory.identity.generation
+			);
+		}
 	}
 	++gpu_resident_render_activation_cohorts_;
 	gpu_resident_render_activation_cohort_chunks_ += inventories.size();
@@ -1097,6 +1103,12 @@ godot::Dictionary WorldTransvoxelTerrain::set_gpu_resident_render_chunk_active(
 			"GPU resident activation did not commit application readiness";
 		return result;
 	}
+	if (lifecycle_) {
+		lifecycle_->notify_visual_activation(
+			chunk_identity.key,
+			chunk_identity.generation
+		);
+	}
 	++gpu_resident_render_activated_chunks_;
 	result["status"] = "ACTIVE";
 	result["active"] = true;
@@ -1171,6 +1183,11 @@ godot::Dictionary WorldTransvoxelTerrain::reconcile_gpu_resident_render_chunks(
 				);
 			valid = activation_status == WtApplicationStatus::Ok ||
 				activation_status == WtApplicationStatus::AlreadyCurrent;
+			if (valid && lifecycle_) {
+				lifecycle_->notify_visual_activation(
+					identity.key, identity.generation
+				);
+			}
 		}
 		if (valid) continue;
 		if (render_sink_) {

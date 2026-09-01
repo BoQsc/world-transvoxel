@@ -67,6 +67,21 @@ const WtLodMapEntry *find_plan_entry(
 		nullptr;
 }
 
+bool same_plan_topology(
+	const WtBalancedLodPlan &left,
+	const WtBalancedLodPlan &right
+) noexcept {
+	if (left.entries.size() != right.entries.size()) return false;
+	for (std::size_t index = 0; index < left.entries.size(); ++index) {
+		if (left.entries[index].key != right.entries[index].key ||
+			left.entries[index].transition_mask !=
+				right.entries[index].transition_mask) {
+			return false;
+		}
+	}
+	return true;
+}
+
 double bounds_center_axis(
 	std::int64_t minimum,
 	std::int64_t maximum
@@ -344,11 +359,37 @@ std::size_t WtReadOnlyWorldRuntime::append_edit_lod_retention_viewers(
 
 bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	ViewerEvent event;
+	bool staging_event = false;
+	bool retention_refresh_event = false;
 	{
 		std::lock_guard<std::mutex> lock(input_mutex_);
-		if (viewer_events_.empty()) return false;
-		event = viewer_events_.front();
-		viewer_events_.erase(viewer_events_.begin());
+		if (viewer_events_.empty()) {
+			if (edit_lod_retention_refresh_pending_) {
+				edit_lod_retention_refresh_pending_ = false;
+				retention_refresh_event = true;
+				event.kind = ViewerEventKind::RefreshEditLodRetention;
+					event.snapshot = planner_viewers_.empty() ?
+					WtViewerSnapshot { 1, 0.0, 0.0, 0.0, plan_revision_ + 1 } :
+					planner_viewers_.front().snapshot;
+			} else {
+				const std::uint64_t visual_activation_sequence =
+					visual_activation_sequence_.load(std::memory_order_relaxed);
+				if (!config_.hierarchical_lod_staging_enabled ||
+					!staging_pending_ || visual_activation_sequence ==
+						staging_observed_visual_activation_sequence_) {
+					return false;
+				}
+				staging_event = true;
+				event.kind = ViewerEventKind::AdvanceStaging;
+				event.snapshot = planner_viewers_.empty() ?
+					WtViewerSnapshot { 1, 0.0, 0.0, 0.0, plan_revision_ + 1 } :
+					planner_viewers_.front().snapshot;
+			}
+		} else {
+			event = viewer_events_.front();
+			viewer_events_.erase(viewer_events_.begin());
+			staging_event = event.kind == ViewerEventKind::AdvanceStaging;
+		}
 	}
 	const bool trace_enabled = causal_trace_.enabled();
 	if (trace_enabled) {
@@ -369,7 +410,12 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	const bool collision_event =
 		event.kind == ViewerEventKind::UpdateCollision ||
 		event.kind == ViewerEventKind::RemoveCollision;
-	if (!collision_event) {
+	if (staging_event || retention_refresh_event) {
+		// Application progress advances the already accepted visual target. It
+		// does not mutate or revise an external viewer. An edit-retention refresh
+		// likewise replans the retained internal viewers without fabricating a
+		// newer external viewer revision.
+	} else if (!collision_event) {
 		const auto viewer = std::lower_bound(
 			candidate_viewers.begin(),
 			candidate_viewers.end(),
@@ -458,6 +504,12 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	std::vector<WtLodPlannerViewer> planning_viewers;
 	std::size_t edit_retention_viewers = 0;
 	WtBalancedLodPlan candidate_plan;
+	WtBalancedLodPlan candidate_staging_target;
+	bool staged_plan = false;
+	bool staging_complete = true;
+	std::uint8_t candidate_staging_root_lod = staging_root_lod_;
+	std::uint64_t candidate_visual_activation_sequence =
+		staging_observed_visual_activation_sequence_;
 	WtBalancedLodPlannerStatus plan_status = WtBalancedLodPlannerStatus::Ok;
 	if (collision_event) {
 		// Collision viewers are an independent working-set overlay. Reusing the
@@ -465,6 +517,9 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		// visual LOD tree for a movement that cannot change visual topology.
 		planning_viewers = candidate_viewers;
 		candidate_plan = current_plan_;
+	} else if (staging_event) {
+		planning_viewers = candidate_viewers;
+		candidate_plan = staging_target_plan_;
 	} else {
 		const std::size_t retention_viewer_capacity =
 			kWtEditLodRetentionCapacity;
@@ -543,6 +598,80 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		std::lock_guard<std::mutex> lock(metrics_mutex_);
 		++metrics_.rejected_events;
 		return true;
+	}
+	if (!collision_event && config_.hierarchical_lod_staging_enabled) {
+		candidate_staging_target = staging_event ?
+			staging_target_plan_ : candidate_plan;
+		const bool unchanged_external_target = !staging_event &&
+			same_plan_topology(candidate_staging_target, staging_target_plan_);
+		if (!staging_event) {
+			candidate_staging_root_lod = 0;
+			for (const WtLodPlannerViewer &viewer : planning_viewers) {
+				candidate_staging_root_lod = std::max(
+					candidate_staging_root_lod, viewer.maximum_lod
+				);
+			}
+		}
+		std::vector<VisualActivation> visual_activations;
+		{
+			std::lock_guard<std::mutex> lock(visual_activation_mutex_);
+			visual_activations = visual_activations_;
+			candidate_visual_activation_sequence =
+				visual_activation_sequence_.load(std::memory_order_relaxed);
+		}
+		std::vector<WtChunkKey> visually_ready;
+		for (const VisualActivation &activation : visual_activations) {
+			WtChunkApplicationRecord record;
+			if (application_->copy_record(activation.key, record) &&
+				record.visual_required &&
+				record.generation == activation.generation &&
+				!record.visual_generation_superseded) {
+				visually_ready.push_back(activation.key);
+			}
+		}
+		std::vector<WtChunkKey> preferred_refinement_keys;
+		preferred_refinement_keys.reserve(1U);
+		const auto newest_edit = std::max_element(
+			edit_lod_retention_zones_.begin(),
+			edit_lod_retention_zones_.end(),
+			[](const EditLodRetentionZone &left,
+				const EditLodRetentionZone &right) {
+				return left.revision < right.revision;
+			}
+		);
+		if (newest_edit != edit_lod_retention_zones_.end()) {
+			WtChunkKey key;
+			if (chunk_coordinate(newest_edit->x, key.x) &&
+				chunk_coordinate(newest_edit->y, key.y) &&
+				chunk_coordinate(newest_edit->z, key.z)) {
+				preferred_refinement_keys.push_back(key);
+				std::lock_guard<std::mutex> lock(metrics_mutex_);
+				metrics_.edit_lod_retention_preferred_key_valid = 1;
+				metrics_.edit_lod_retention_preferred_key_x = key.x;
+				metrics_.edit_lod_retention_preferred_key_y = key.y;
+				metrics_.edit_lod_retention_preferred_key_z = key.z;
+			}
+		}
+		WtBalancedLodPlan staged;
+		plan_status = lod_planner_->stage_toward(
+			candidate_staging_target,
+			current_plan_,
+			visually_ready,
+			candidate_staging_root_lod,
+			1,
+			staged,
+			staging_complete,
+			preferred_refinement_keys,
+			!config_.hierarchical_lod_background_activation_enabled &&
+				(staging_event || unchanged_external_target)
+		);
+		if (plan_status != WtBalancedLodPlannerStatus::Ok) {
+			std::lock_guard<std::mutex> lock(metrics_mutex_);
+			++metrics_.rejected_events;
+			return true;
+		}
+		candidate_plan = std::move(staged);
+		staged_plan = true;
 	}
 
 	std::vector<WtViewerChunkDemand> combined_demands =
@@ -743,8 +872,13 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	const WtDesiredSetRuntimeStatus delta_status = apply_delta(delta);
 	if (delta_status == WtDesiredSetRuntimeStatus::JobQueueCapacityExceeded &&
 		scheduler_->queued_job_count() != 0) {
-		std::lock_guard<std::mutex> lock(input_mutex_);
-		viewer_events_.insert(viewer_events_.begin(), event);
+		if (staging_event) {
+			staging_observed_visual_activation_sequence_ =
+				candidate_visual_activation_sequence;
+		} else {
+			std::lock_guard<std::mutex> lock(input_mutex_);
+			viewer_events_.insert(viewer_events_.begin(), event);
+		}
 		return true;
 	}
 	if (delta_status != WtDesiredSetRuntimeStatus::Ok) {
@@ -796,6 +930,26 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	planner_viewers_ = std::move(candidate_viewers);
 	collision_viewers_ = std::move(candidate_collision_viewers);
 	current_plan_ = std::move(candidate_plan);
+	{
+		std::lock_guard<std::mutex> lock(visual_activation_mutex_);
+		visual_activations_.erase(
+			std::remove_if(
+				visual_activations_.begin(), visual_activations_.end(),
+				[this](const VisualActivation &activation) {
+					return find_plan_entry(current_plan_.entries, activation.key) ==
+						nullptr;
+				}
+			),
+			visual_activations_.end()
+		);
+	}
+	if (staged_plan) {
+		staging_target_plan_ = std::move(candidate_staging_target);
+		staging_pending_ = !staging_complete;
+		staging_root_lod_ = candidate_staging_root_lod;
+		staging_observed_visual_activation_sequence_ =
+			candidate_visual_activation_sequence;
+	}
 	for (const WtLodMapEntry &entry : transition_mask_updates) {
 		const WtDesiredChunk *desired = desired_->find_desired(entry.key);
 		if (desired != nullptr &&
@@ -887,14 +1041,24 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		} else if (event.kind == ViewerEventKind::UpdateCollision) {
 			++metrics_.collision_viewer_updates;
 			metrics_.planned_demands += planned_demand_count;
-		} else {
+		} else if (event.kind == ViewerEventKind::RemoveCollision) {
 			++metrics_.collision_viewer_removals;
+		}
+		if (staged_plan) {
+			++metrics_.hierarchical_lod_staging_plans;
+			if (staging_complete) {
+				++metrics_.hierarchical_lod_staging_completed;
+			}
+			metrics_.hierarchical_lod_staging_pending =
+				staging_pending_ ? 1U : 0U;
 		}
 		if (!collision_event) {
 			metrics_.edit_lod_retention_zones =
 				edit_lod_retention_zones_.size();
-			metrics_.edit_lod_retention_active_viewers =
-				edit_retention_viewers;
+			if (!staging_event) {
+				metrics_.edit_lod_retention_active_viewers =
+					edit_retention_viewers;
+			}
 			if (edit_retention_fallback) {
 				++metrics_.edit_lod_retention_fallbacks;
 			}

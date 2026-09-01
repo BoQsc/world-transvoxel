@@ -151,6 +151,21 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	set_metric(output, "collision_viewer_removals", runtime.collision_viewer_removals);
 	set_metric(output, "coalesced_viewer_events", runtime.coalesced_viewer_events);
 	set_metric(output, "planned_demands", runtime.planned_demands);
+	set_metric(
+		output,
+		"hierarchical_lod_staging_plans",
+		runtime.hierarchical_lod_staging_plans
+	);
+	set_metric(
+		output,
+		"hierarchical_lod_staging_completed",
+		runtime.hierarchical_lod_staging_completed
+	);
+	set_metric(
+		output,
+		"hierarchical_lod_staging_pending",
+		runtime.hierarchical_lod_staging_pending
+	);
 	set_metric(output, "sample_jobs", runtime.sample_jobs);
 	set_metric(output, "mesh_jobs", runtime.mesh_jobs);
 	set_metric(output, "sample_job_time_ns_last", runtime.sample_job_time_ns_last);
@@ -342,6 +357,17 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		"edit_lod_retention_fallbacks",
 		runtime.edit_lod_retention_fallbacks
 	);
+	set_metric(
+		output,
+		"edit_lod_retention_preferred_key_valid",
+		runtime.edit_lod_retention_preferred_key_valid
+	);
+	output["edit_lod_retention_preferred_key_x"] =
+		runtime.edit_lod_retention_preferred_key_x;
+	output["edit_lod_retention_preferred_key_y"] =
+		runtime.edit_lod_retention_preferred_key_y;
+	output["edit_lod_retention_preferred_key_z"] =
+		runtime.edit_lod_retention_preferred_key_z;
 	set_metric(output, "sample_queries", runtime.sample_queries);
 	set_metric(
 		output, "sample_query_rejections", runtime.sample_query_rejections

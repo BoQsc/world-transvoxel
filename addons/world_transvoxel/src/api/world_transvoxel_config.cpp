@@ -128,6 +128,43 @@ void WorldTransvoxelConfig::_bind_methods() {
 		"set_global_coarse_lod_coverage",
 		"is_global_coarse_lod_coverage"
 	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("set_hierarchical_lod_staging_enabled", "enabled"),
+		&WorldTransvoxelConfig::set_hierarchical_lod_staging_enabled
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("is_hierarchical_lod_staging_enabled"),
+		&WorldTransvoxelConfig::is_hierarchical_lod_staging_enabled
+	);
+	ADD_PROPERTY(
+		godot::PropertyInfo(
+			godot::Variant::BOOL, "hierarchical_lod_staging_enabled"
+		),
+		"set_hierarchical_lod_staging_enabled",
+		"is_hierarchical_lod_staging_enabled"
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"set_hierarchical_lod_background_activation_enabled", "enabled"
+		),
+		&WorldTransvoxelConfig::
+			set_hierarchical_lod_background_activation_enabled
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"is_hierarchical_lod_background_activation_enabled"
+		),
+		&WorldTransvoxelConfig::
+			is_hierarchical_lod_background_activation_enabled
+	);
+	ADD_PROPERTY(
+		godot::PropertyInfo(
+			godot::Variant::BOOL,
+			"hierarchical_lod_background_activation_enabled"
+		),
+		"set_hierarchical_lod_background_activation_enabled",
+		"is_hierarchical_lod_background_activation_enabled"
+	);
 }
 
 #undef WT_BIND_FLOAT_PROPERTY
@@ -176,6 +213,10 @@ WtRuntimeConfig WorldTransvoxelConfig::to_native() const noexcept {
 	result.visual_viewer_collision_enabled =
 		visual_viewer_collision_enabled_;
 	result.global_coarse_lod_coverage = global_coarse_lod_coverage_;
+	result.hierarchical_lod_staging_enabled =
+		hierarchical_lod_staging_enabled_;
+	result.hierarchical_lod_background_activation_enabled =
+		hierarchical_lod_background_activation_enabled_;
 	return result;
 }
 
@@ -296,6 +337,29 @@ void WorldTransvoxelConfig::set_global_coarse_lod_coverage(bool value) {
 
 bool WorldTransvoxelConfig::is_global_coarse_lod_coverage() const noexcept {
 	return global_coarse_lod_coverage_;
+}
+
+void WorldTransvoxelConfig::set_hierarchical_lod_staging_enabled(bool value) {
+	if (hierarchical_lod_staging_enabled_ == value) return;
+	hierarchical_lod_staging_enabled_ = value;
+	emit_changed();
+}
+
+bool WorldTransvoxelConfig::is_hierarchical_lod_staging_enabled() const noexcept {
+	return hierarchical_lod_staging_enabled_;
+}
+
+void WorldTransvoxelConfig::set_hierarchical_lod_background_activation_enabled(
+	bool value
+) {
+	if (hierarchical_lod_background_activation_enabled_ == value) return;
+	hierarchical_lod_background_activation_enabled_ = value;
+	emit_changed();
+}
+
+bool WorldTransvoxelConfig::
+	is_hierarchical_lod_background_activation_enabled() const noexcept {
+	return hierarchical_lod_background_activation_enabled_;
 }
 
 } // namespace world_transvoxel

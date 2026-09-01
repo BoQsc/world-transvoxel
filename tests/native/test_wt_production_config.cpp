@@ -60,7 +60,9 @@ void test_defaults(std::vector<std::uint8_t> &evidence) {
 		config.render_apply_budget == 4 &&
 		config.collision_apply_budget == 2 &&
 		config.collision_activation_distance == 96.0 &&
-		config.collision_deactivation_distance == 128.0,
+		config.collision_deactivation_distance == 128.0 &&
+		!config.hierarchical_lod_staging_enabled &&
+		config.hierarchical_lod_background_activation_enabled,
 		"default runtime config values changed");
 	append_u64(evidence, config.active_chunk_capacity);
 	append_u64(evidence, config.viewer_capacity);
@@ -76,6 +78,11 @@ void test_defaults(std::vector<std::uint8_t> &evidence) {
 	append_u64(evidence, config.trace_event_capacity);
 	append_u64(evidence, config.render_apply_budget);
 	append_u64(evidence, config.collision_apply_budget);
+	append_u64(evidence, config.hierarchical_lod_staging_enabled ? 1U : 0U);
+	append_u64(
+		evidence,
+		config.hierarchical_lod_background_activation_enabled ? 1U : 0U
+	);
 }
 
 void expect_status(
@@ -175,7 +182,7 @@ int main() {
 	std::printf(
 		"PRODUCTION_CONFIG_PASS schema=1 rejection_cases=14 "
 		"lod_refinement_radius=1 procedural_generation_workers=2 "
-		"meshing_workers_default=0\n"
+		"meshing_workers_default=0 hierarchical_lod_staging_default=0\n"
 	);
 	return 0;
 }

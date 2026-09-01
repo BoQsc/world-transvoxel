@@ -39,6 +39,8 @@ struct WtRuntimeConfig {
 	double collision_deactivation_distance = 128.0;
 	bool visual_viewer_collision_enabled = true;
 	bool global_coarse_lod_coverage = false;
+	bool hierarchical_lod_staging_enabled = false;
+	bool hierarchical_lod_background_activation_enabled = true;
 };
 
 enum class WtRuntimeConfigStatus : std::uint8_t {

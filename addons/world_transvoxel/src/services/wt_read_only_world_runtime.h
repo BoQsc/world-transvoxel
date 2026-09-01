@@ -197,6 +197,10 @@ public:
 	bool pop_publication(WtReadOnlyPublication &publication);
 	bool pop_unbudgeted_publication(WtReadOnlyPublication &publication);
 	void notify_application_progress() noexcept;
+	void notify_visual_activation(
+		const WtChunkKey &key,
+		WtGenerationToken generation
+	) noexcept;
 	bool has_visual_generation(
 		const WtChunkKey &key, WtGenerationToken generation
 	) const;
@@ -236,6 +240,8 @@ private:
 		Remove,
 		UpdateCollision,
 		RemoveCollision,
+		RefreshEditLodRetention,
+		AdvanceStaging,
 	};
 	struct ViewerEvent {
 		ViewerEventKind kind = ViewerEventKind::Update;
@@ -364,7 +370,13 @@ private:
 	std::atomic<WtReadOnlyRuntimeStatus> last_status_{
 		WtReadOnlyRuntimeStatus::Ok
 	};
-	std::atomic<std::uint64_t> application_progress_sequence_{ 0 };
+	std::atomic<std::uint64_t> visual_activation_sequence_{ 0 };
+	struct VisualActivation {
+		WtChunkKey key;
+		WtGenerationToken generation;
+	};
+	mutable std::mutex visual_activation_mutex_;
+	std::vector<VisualActivation> visual_activations_;
 
 	mutable std::mutex input_mutex_;
 	std::vector<ViewerEvent> viewer_events_;
@@ -397,6 +409,7 @@ private:
 	std::vector<WtLodPlannerViewer> planner_viewers_;
 	std::vector<CollisionViewer> collision_viewers_;
 	std::vector<EditLodRetentionZone> edit_lod_retention_zones_;
+	bool edit_lod_retention_refresh_pending_ = false;
 	std::vector<WtDesiredChunk> pending_transition_remeshes_;
 	std::vector<WtChunkKey> readiness_repair_candidate_keys_;
 	std::vector<CollisionReadinessRepairAttempt>
@@ -406,6 +419,10 @@ private:
 	std::uint64_t next_edit_lod_retention_revision_ = 1;
 	std::uint64_t next_edit_lod_retention_viewer_id_ = 1;
 	WtBalancedLodPlan current_plan_;
+	WtBalancedLodPlan staging_target_plan_;
+	bool staging_pending_ = false;
+	std::uint8_t staging_root_lod_ = 0;
+	std::uint64_t staging_observed_visual_activation_sequence_ = 0;
 	std::uint64_t plan_revision_ = 0;
 	std::unique_ptr<WtStreamScheduler> scheduler_;
 	std::unique_ptr<WtChunkApplicationService> application_;

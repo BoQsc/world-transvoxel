@@ -193,6 +193,11 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 		metrics_.edit_replacements +=
 			edit_replacement_->get_last_replacements().size();
 	}
+	{
+		std::lock_guard<std::mutex> lock(input_mutex_);
+		edit_lod_retention_refresh_pending_ = true;
+	}
+	notify_work();
 	causal_trace_.record(
 		WtCausalTraceEventKind::EditCommitted,
 		WtCausalTraceThreadRole::Runtime,

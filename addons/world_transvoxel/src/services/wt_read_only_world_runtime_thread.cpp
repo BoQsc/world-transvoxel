@@ -252,8 +252,37 @@ bool WtReadOnlyWorldRuntime::is_priority_publication(
 }
 
 void WtReadOnlyWorldRuntime::notify_application_progress() noexcept {
-	application_progress_sequence_.fetch_add(1, std::memory_order_relaxed);
 	notify_work();
+}
+
+void WtReadOnlyWorldRuntime::notify_visual_activation(
+	const WtChunkKey &key,
+	WtGenerationToken generation
+) noexcept {
+	if (!wt_is_valid_chunk_key(key) || generation.value == 0) return;
+	bool changed = false;
+	{
+		std::lock_guard<std::mutex> lock(visual_activation_mutex_);
+		const auto iterator = std::lower_bound(
+			visual_activations_.begin(), visual_activations_.end(), key,
+			[](const VisualActivation &item, const WtChunkKey &value) {
+				return item.key < value;
+			}
+		);
+		if (iterator != visual_activations_.end() && iterator->key == key) {
+			if (iterator->generation.value != generation.value) {
+				iterator->generation = generation;
+				changed = true;
+			}
+		} else {
+			visual_activations_.insert(iterator, { key, generation });
+			changed = true;
+		}
+		if (changed) {
+			visual_activation_sequence_.fetch_add(1, std::memory_order_relaxed);
+		}
+	}
+	if (changed) notify_work();
 }
 
 void WtReadOnlyWorldRuntime::notify_work() noexcept {

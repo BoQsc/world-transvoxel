@@ -77,6 +77,10 @@ public:
 	bool is_shader_fade_parameter_enabled() const noexcept;
 	void set_global_coarse_lod_coverage(bool value);
 	bool is_global_coarse_lod_coverage() const noexcept;
+	void set_hierarchical_lod_staging_enabled(bool value);
+	bool is_hierarchical_lod_staging_enabled() const noexcept;
+	void set_hierarchical_lod_background_activation_enabled(bool value);
+	bool is_hierarchical_lod_background_activation_enabled() const noexcept;
 
 private:
 	std::int64_t active_chunk_capacity_ = 256;
@@ -107,6 +111,8 @@ private:
 	std::int64_t render_transition_frames_ = 0;
 	bool shader_fade_parameter_enabled_ = false;
 	bool global_coarse_lod_coverage_ = false;
+	bool hierarchical_lod_staging_enabled_ = false;
+	bool hierarchical_lod_background_activation_enabled_ = true;
 };
 
 } // namespace world_transvoxel

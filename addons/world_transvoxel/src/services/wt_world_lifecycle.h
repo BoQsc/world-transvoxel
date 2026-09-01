@@ -101,6 +101,10 @@ public:
 		std::uint64_t &request_id
 	);
 	void notify_application_progress() noexcept;
+	void notify_visual_activation(
+		const WtChunkKey &key,
+		WtGenerationToken generation
+	) noexcept;
 	bool has_visual_generation(
 		const WtChunkKey &key, WtGenerationToken generation
 	) const;

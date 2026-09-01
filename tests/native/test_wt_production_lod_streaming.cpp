@@ -109,6 +109,360 @@ std::vector<wt::WtDesiredChunk> desired_from_plan(
 	return desired;
 }
 
+bool plan_from_keys(
+	const std::vector<wt::WtChunkKey> &keys,
+	wt::WtBalancedLodPlan &plan
+) {
+	wt::WtLodMap map(64);
+	if (map.set_active_chunks(keys) != wt::WtLodMapStatus::Ok) return false;
+	plan.clear();
+	plan.entries = map.get_entries();
+	plan.demands.reserve(plan.entries.size());
+	for (std::size_t index = 0; index < plan.entries.size(); ++index) {
+		plan.demands.push_back({
+			plan.entries[index].key,
+			static_cast<std::int32_t>(1000 - index),
+			false,
+			true,
+		});
+	}
+	return true;
+}
+
+bool plans_equal(
+	const wt::WtBalancedLodPlan &left,
+	const wt::WtBalancedLodPlan &right
+) {
+	if (left.entries.size() != right.entries.size() ||
+		left.demands.size() != right.demands.size()) return false;
+	for (std::size_t index = 0; index < left.entries.size(); ++index) {
+		if (left.entries[index].key != right.entries[index].key ||
+			left.entries[index].transition_mask !=
+				right.entries[index].transition_mask) return false;
+	}
+	for (std::size_t index = 0; index < left.demands.size(); ++index) {
+		const wt::WtViewerChunkDemand &a = left.demands[index];
+		const wt::WtViewerChunkDemand &b = right.demands[index];
+		if (a.key != b.key || a.priority != b.priority ||
+			a.collision_required != b.collision_required ||
+			a.visual_required != b.visual_required) return false;
+	}
+	return true;
+}
+
+bool run_hierarchical_staging_regression() {
+	std::vector<wt::WtChunkKey> catalog;
+	for (std::int32_t root_x = 0; root_x < 3; ++root_x) {
+		catalog.push_back({ root_x, 0, 0, 1 });
+		for (std::int32_t z = 0; z < 2; ++z) {
+			for (std::int32_t y = 0; y < 2; ++y) {
+				for (std::int32_t x = 0; x < 2; ++x) {
+					catalog.push_back({ root_x * 2 + x, y, z, 0 });
+				}
+			}
+		}
+	}
+	wt::WtBalancedLodPlanner planner(64, catalog);
+	std::vector<wt::WtChunkKey> target_keys;
+	for (std::int32_t z = 0; z < 2; ++z) {
+		for (std::int32_t y = 0; y < 2; ++y) {
+			for (std::int32_t x = 0; x < 4; ++x) {
+				target_keys.push_back({ x, y, z, 0 });
+			}
+		}
+	}
+	std::sort(target_keys.begin(), target_keys.end());
+	wt::WtBalancedLodPlan target;
+	wt::WtBalancedLodPlan empty;
+	wt::WtBalancedLodPlan coarse;
+	bool complete = false;
+	check(planner.valid() && plan_from_keys(target_keys, target) &&
+		planner.stage_toward(target, empty, {}, 1, 1, coarse, complete) ==
+			wt::WtBalancedLodPlannerStatus::Ok &&
+		!complete && coarse.entries.size() == 2 &&
+		find_entry(coarse, { 0, 0, 0, 1 }) != nullptr &&
+		find_entry(coarse, { 1, 0, 0, 1 }) != nullptr,
+		"hierarchical staging did not establish coarse coverage first");
+
+	std::vector<wt::WtChunkKey> coarse_ready;
+	for (const wt::WtLodMapEntry &entry : coarse.entries) {
+		coarse_ready.push_back(entry.key);
+	}
+	wt::WtBalancedLodPlan refined;
+	check(planner.stage_toward(
+		target, coarse, coarse_ready, 1, 1, refined, complete
+	) == wt::WtBalancedLodPlannerStatus::Ok && !complete &&
+		refined.entries.size() == 9,
+		"hierarchical staging did not refine exactly one parent family");
+	const wt::WtLodMapEntry *boundary = find_entry(
+		refined, { 1, 0, 0, 1 }
+	);
+	check(boundary != nullptr &&
+		(boundary->transition_mask &
+			wt::wt_face_bit(wt::WtChunkFace::NegativeX)) != 0,
+		"hierarchical staging omitted the fine-to-retained-coarse transition");
+
+	std::vector<wt::WtChunkKey> refined_ready;
+	for (const wt::WtLodMapEntry &entry : refined.entries) {
+		refined_ready.push_back(entry.key);
+	}
+	wt::WtBalancedLodPlan completed;
+	check(planner.stage_toward(
+		target, refined, refined_ready, 1, 1, completed, complete
+	) == wt::WtBalancedLodPlannerStatus::Ok && complete &&
+		plans_equal(completed, target),
+		"hierarchical staging did not converge to the authoritative target");
+
+	wt::WtBalancedLodPlan coarse_target;
+	check(plan_from_keys(
+		{ { 0, 0, 0, 1 }, { 1, 0, 0, 1 } }, coarse_target
+	), "hierarchical coarsening target is invalid");
+	wt::WtBalancedLodPlan collapsed_once;
+	check(planner.stage_toward(
+		coarse_target, target, refined_ready, 1, 1, collapsed_once, complete
+	) == wt::WtBalancedLodPlannerStatus::Ok && !complete &&
+		collapsed_once.entries.size() == 9,
+		"hierarchical staging did not bound coarsening to one sibling family");
+	std::vector<wt::WtChunkKey> collapsed_ready;
+	for (const wt::WtLodMapEntry &entry : collapsed_once.entries) {
+		collapsed_ready.push_back(entry.key);
+	}
+	wt::WtBalancedLodPlan collapsed;
+	check(planner.stage_toward(
+		coarse_target, collapsed_once, collapsed_ready, 1, 1, collapsed, complete
+	) == wt::WtBalancedLodPlannerStatus::Ok && complete &&
+		plans_equal(collapsed, coarse_target),
+		"hierarchical staging did not converge after bounded coarsening");
+
+	wt::WtBalancedLodPlan relocation_target;
+	check(plan_from_keys({ { 2, 0, 0, 1 } }, relocation_target),
+		"hierarchical relocation target is invalid");
+	wt::WtBalancedLodPlan relocating;
+	check(planner.stage_toward(
+		relocation_target, coarse_target,
+		{ { 0, 0, 0, 1 }, { 1, 0, 0, 1 } }, 1, 1,
+		relocating, complete
+	) == wt::WtBalancedLodPlannerStatus::Ok && !complete &&
+		relocating.entries.size() == 3,
+		"hierarchical relocation retired old coverage before the new root was ready");
+	wt::WtBalancedLodPlan relocated;
+	check(planner.stage_toward(
+		relocation_target, relocating,
+		{ { 0, 0, 0, 1 }, { 1, 0, 0, 1 }, { 2, 0, 0, 1 } }, 1, 1,
+		relocated, complete
+	) == wt::WtBalancedLodPlannerStatus::Ok && complete &&
+		plans_equal(relocated, relocation_target),
+		"hierarchical relocation did not retire superseded coverage after handoff");
+	wt::WtBalancedLodPlan repeated;
+	bool repeated_complete = false;
+	check(planner.stage_toward(
+		relocation_target, relocating,
+		{ { 0, 0, 0, 1 }, { 1, 0, 0, 1 }, { 2, 0, 0, 1 } }, 1, 1,
+		repeated, repeated_complete
+	) == wt::WtBalancedLodPlannerStatus::Ok &&
+		repeated_complete == complete && plans_equal(repeated, relocated),
+		"hierarchical staging is not deterministic");
+
+	const wt::WtChunkKey fine_parent { 1, 0, 0, 1 };
+	const wt::WtChunkKey coarse_neighbor { 1, 0, 0, 2 };
+	std::vector<wt::WtChunkKey> deep_catalog { fine_parent, coarse_neighbor };
+	std::vector<wt::WtChunkKey> deep_target_keys;
+	for (std::int32_t z = 0; z < 2; ++z) {
+		for (std::int32_t y = 0; y < 2; ++y) {
+			for (std::int32_t x = 0; x < 2; ++x) {
+				const wt::WtChunkKey fine {
+					2 + x, y, z, 0
+				};
+				const wt::WtChunkKey coarse_child {
+					2 + x, y, z, 1
+				};
+				deep_catalog.push_back(fine);
+				deep_catalog.push_back(coarse_child);
+				deep_target_keys.push_back(fine);
+				deep_target_keys.push_back(coarse_child);
+			}
+		}
+	}
+	std::sort(deep_catalog.begin(), deep_catalog.end());
+	deep_catalog.erase(
+		std::unique(deep_catalog.begin(), deep_catalog.end()),
+		deep_catalog.end()
+	);
+	std::sort(deep_target_keys.begin(), deep_target_keys.end());
+	wt::WtBalancedLodPlanner deep_planner(64, deep_catalog);
+	wt::WtBalancedLodPlan deep_current;
+	wt::WtBalancedLodPlan deep_target;
+	wt::WtBalancedLodPlan deep_stage;
+	bool deep_complete = false;
+	check(plan_from_keys({ fine_parent, coarse_neighbor }, deep_current) &&
+		plan_from_keys(deep_target_keys, deep_target) &&
+		deep_planner.stage_toward(
+			deep_target,
+			deep_current,
+			{ fine_parent, coarse_neighbor },
+			2,
+			1,
+			deep_stage,
+			deep_complete
+		) == wt::WtBalancedLodPlannerStatus::Ok && !deep_complete &&
+		find_entry(deep_stage, fine_parent) != nullptr &&
+		find_entry(deep_stage, coarse_neighbor) == nullptr &&
+		deep_stage.entries.size() == 9,
+		"hierarchical staging refined across a coarser boundary in one stage");
+	wt::WtBalancedLodPlan deep_preferred_stage;
+	bool deep_preferred_complete = false;
+	check(deep_planner.stage_toward(
+		deep_target,
+		deep_current,
+		{ fine_parent, coarse_neighbor },
+		2,
+		1,
+		deep_preferred_stage,
+		deep_preferred_complete,
+		{ { 2, 0, 0, 0 } },
+		true
+	) == wt::WtBalancedLodPlannerStatus::Ok && deep_preferred_complete &&
+		plans_equal(deep_preferred_stage, deep_target),
+		"preferred hierarchical refinement did not include mandatory 2:1 support");
+
+	const wt::WtChunkKey refinement_root { 0, 0, 0, 2 };
+	const wt::WtChunkKey background_root { 2, 0, 0, 2 };
+	std::vector<wt::WtChunkKey> depth_catalog {
+		refinement_root, background_root,
+	};
+	std::vector<wt::WtChunkKey> depth_target_keys;
+	for (const wt::WtChunkKey &root : { refinement_root, background_root }) {
+		for (std::int32_t z = 0; z < 2; ++z) {
+			for (std::int32_t y = 0; y < 2; ++y) {
+				for (std::int32_t x = 0; x < 2; ++x) {
+					const wt::WtChunkKey child {
+						root.x * 2 + x, root.y * 2 + y, root.z * 2 + z, 1
+					};
+					depth_catalog.push_back(child);
+					if (root == refinement_root &&
+						child == wt::WtChunkKey { 0, 0, 0, 1 }) {
+						for (std::int32_t fine_z = 0; fine_z < 2; ++fine_z) {
+							for (std::int32_t fine_y = 0; fine_y < 2; ++fine_y) {
+								for (std::int32_t fine_x = 0; fine_x < 2; ++fine_x) {
+									const wt::WtChunkKey fine {
+										fine_x, fine_y, fine_z, 0
+									};
+									depth_catalog.push_back(fine);
+									depth_target_keys.push_back(fine);
+								}
+							}
+						}
+					} else {
+						depth_target_keys.push_back(child);
+					}
+				}
+			}
+		}
+	}
+	std::sort(depth_catalog.begin(), depth_catalog.end());
+	std::sort(depth_target_keys.begin(), depth_target_keys.end());
+	wt::WtBalancedLodPlanner depth_planner(64, depth_catalog);
+	wt::WtBalancedLodPlan depth_current;
+	wt::WtBalancedLodPlan depth_target;
+	wt::WtBalancedLodPlan depth_background_stage;
+	wt::WtBalancedLodPlan depth_stage;
+	bool depth_complete = false;
+	check(plan_from_keys({ refinement_root, background_root }, depth_current) &&
+		plan_from_keys(depth_target_keys, depth_target),
+		"hierarchical refinement-depth fixture is invalid");
+	for (wt::WtViewerChunkDemand &demand : depth_target.demands) {
+		demand.priority = demand.key.lod == 0 ? 10 :
+			(demand.key.x >= 4 ? 100000020 : 100000010);
+	}
+	check(depth_planner.stage_toward(
+		depth_target,
+		depth_current,
+		{ refinement_root, background_root },
+		2,
+		1,
+		depth_background_stage,
+		depth_complete
+	) == wt::WtBalancedLodPlannerStatus::Ok && !depth_complete &&
+		find_entry(depth_background_stage, refinement_root) != nullptr &&
+		find_entry(depth_background_stage, background_root) == nullptr,
+		"hierarchical background staging did not remain coarse-first");
+	check(depth_planner.stage_toward(
+		depth_target,
+		depth_current,
+		{ refinement_root, background_root },
+		2,
+		1,
+		depth_stage,
+		depth_complete,
+		{ { 0, 0, 0, 0 } }
+	) == wt::WtBalancedLodPlannerStatus::Ok && !depth_complete &&
+		find_entry(depth_stage, refinement_root) == nullptr &&
+		find_entry(depth_stage, background_root) != nullptr,
+		"hierarchical staging preferred coarse background over the LOD0 path");
+	const wt::WtChunkKey breadth_coarse { 0, 0, 0, 2 };
+	const wt::WtChunkKey breadth_fine { 4, 0, 0, 1 };
+	std::vector<wt::WtChunkKey> breadth_catalog {
+		breadth_coarse, breadth_fine,
+	};
+	std::vector<wt::WtChunkKey> breadth_target_keys;
+	for (const wt::WtChunkKey &root : { breadth_coarse, breadth_fine }) {
+		for (std::int32_t z = 0; z < 2; ++z) {
+			for (std::int32_t y = 0; y < 2; ++y) {
+				for (std::int32_t x = 0; x < 2; ++x) {
+					const wt::WtChunkKey child {
+						root.x * 2 + x, root.y * 2 + y, root.z * 2 + z,
+						static_cast<std::uint8_t>(root.lod - 1U)
+					};
+					breadth_catalog.push_back(child);
+					breadth_target_keys.push_back(child);
+				}
+			}
+		}
+	}
+	std::sort(breadth_catalog.begin(), breadth_catalog.end());
+	std::sort(breadth_target_keys.begin(), breadth_target_keys.end());
+	wt::WtBalancedLodPlanner breadth_planner(32, breadth_catalog);
+	wt::WtBalancedLodPlan breadth_current;
+	wt::WtBalancedLodPlan breadth_target;
+	wt::WtBalancedLodPlan breadth_stage;
+	bool breadth_complete = false;
+	check(plan_from_keys({ breadth_coarse, breadth_fine }, breadth_current) &&
+		plan_from_keys(breadth_target_keys, breadth_target),
+		"hierarchical breadth-first fixture is invalid");
+	for (wt::WtViewerChunkDemand &demand : breadth_target.demands) {
+		demand.priority = demand.key.lod == 0 ? 100000020 : 10;
+	}
+	check(breadth_planner.stage_toward(
+		breadth_target,
+		breadth_current,
+		{ breadth_coarse, breadth_fine },
+		2,
+		1,
+		breadth_stage,
+		breadth_complete
+	) == wt::WtBalancedLodPlannerStatus::Ok && !breadth_complete &&
+		find_entry(breadth_stage, breadth_coarse) == nullptr &&
+		find_entry(breadth_stage, breadth_fine) != nullptr,
+		"hierarchical background staging refined fine LOD before coarse coverage");
+	wt::WtBalancedLodPlan preferred_only_stage;
+	check(breadth_planner.stage_toward(
+		breadth_target,
+		breadth_current,
+		{ breadth_coarse, breadth_fine },
+		2,
+		1,
+		preferred_only_stage,
+		breadth_complete,
+		{},
+		true
+	) == wt::WtBalancedLodPlannerStatus::Ok && !breadth_complete &&
+		preferred_only_stage.entries.size() == breadth_current.entries.size() &&
+		find_entry(preferred_only_stage, breadth_coarse) != nullptr &&
+		find_entry(preferred_only_stage, breadth_fine) != nullptr,
+		"preferred-only staging advanced background topology without a focus");
+	return complete && repeated_complete;
+}
+
 bool run_lod_hysteresis_regression() {
 	std::vector<wt::WtChunkKey> keys;
 	for (std::int32_t root_x = 0; root_x <= 2; ++root_x) {
@@ -430,6 +784,339 @@ bool collect_runtime_until(
 	wt::WtReadOnlyPublication publication;
 	while (runtime.pop_publication(publication)) collector(publication);
 	return predicate();
+}
+
+bool run_hierarchical_runtime_regression(
+	wt::WtAsyncStorageService &storage
+) {
+	wt::WtRuntimeConfig config;
+	config.active_chunk_capacity = 40;
+	config.viewer_capacity = 2;
+	config.demand_capacity_per_viewer = 125;
+	config.storage_request_capacity = 64;
+	config.storage_completion_capacity = 64;
+	config.encoded_page_entry_capacity = 40;
+	config.decoded_page_entry_capacity = 40;
+	config.mesh_entry_capacity = 40;
+	config.render_entry_capacity = 40;
+	config.collision_entry_capacity = 40;
+	config.visual_viewer_collision_enabled = true;
+	config.hierarchical_lod_staging_enabled = true;
+	wt::WtReadOnlyWorldRuntime runtime(config, storage);
+	check(runtime.valid(), "hierarchical runtime configuration rejected");
+	std::atomic<wt::WtReadOnlyRuntimeStatus> run_status {
+		wt::WtReadOnlyRuntimeStatus::Ok
+	};
+	std::thread worker([&]() { run_status.store(runtime.run()); });
+	check(runtime.update_viewer({ 1, 8.0, 8.0, 8.0, 1 }, 1, 1) ==
+		wt::WtReadOnlyRuntimeStatus::Ok,
+		"hierarchical runtime viewer was rejected");
+	std::vector<wt::WtChunkKey> active;
+	std::size_t render_count = 0;
+	const bool converged = collect_runtime_until(
+		runtime,
+		[&](const wt::WtReadOnlyPublication &publication) {
+			if (publication.kind ==
+					wt::WtReadOnlyPublicationKind::RenderPayload &&
+				publication.render) {
+				++render_count;
+				runtime.notify_visual_activation(
+					publication.key, publication.generation
+				);
+				const auto at = std::lower_bound(
+					active.begin(), active.end(), publication.key
+				);
+				if (at == active.end() || *at != publication.key) {
+					active.insert(at, publication.key);
+				}
+			} else if (publication.kind ==
+					wt::WtReadOnlyPublicationKind::RemoveChunk) {
+				const auto at = std::lower_bound(
+					active.begin(), active.end(), publication.key
+				);
+				if (at != active.end() && *at == publication.key) {
+					active.erase(at);
+				}
+			}
+		},
+		[&]() {
+			const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+			return metrics.hierarchical_lod_staging_completed != 0 &&
+				metrics.hierarchical_lod_staging_pending == 0 &&
+				active.size() == 9 && render_count > 9 &&
+				runtime_idle(metrics);
+		}
+	);
+	wt::WtBalancedLodPlanner planner(40, storage.page_keys());
+	wt::WtBalancedLodPlan target;
+	const bool target_ok = planner.plan(
+		{ planner_viewer(1, 1, 8.0) }, {}, {}, target, false
+	) == wt::WtBalancedLodPlannerStatus::Ok;
+	std::vector<wt::WtChunkKey> target_keys;
+	for (const wt::WtLodMapEntry &entry : target.entries) {
+		target_keys.push_back(entry.key);
+	}
+	const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+	runtime.request_stop();
+	worker.join();
+	if (!(converged && target_ok && active == target_keys && render_count >
+			target.entries.size() && metrics.hierarchical_lod_staging_plans >= 2 &&
+			run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok)) {
+		std::fprintf(
+			stderr,
+			"hierarchical runtime evidence: converged=%d target_ok=%d "
+			"active=%zu target=%zu renders=%zu plans=%llu completed=%llu "
+			"pending=%llu status=%d last=%d rejected=%llu\n",
+			converged ? 1 : 0,
+			target_ok ? 1 : 0,
+			active.size(),
+			target_keys.size(),
+			render_count,
+			static_cast<unsigned long long>(
+				metrics.hierarchical_lod_staging_plans
+			),
+			static_cast<unsigned long long>(
+				metrics.hierarchical_lod_staging_completed
+			),
+			static_cast<unsigned long long>(
+				metrics.hierarchical_lod_staging_pending
+			),
+			static_cast<int>(run_status.load()),
+			static_cast<int>(runtime.last_status()),
+			static_cast<unsigned long long>(metrics.rejected_events)
+		);
+	}
+	check(converged && target_ok && active == target_keys && render_count >
+		target.entries.size() && metrics.hierarchical_lod_staging_plans >= 2 &&
+		run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok,
+		"hierarchical runtime did not autonomously converge through visible stages");
+	return converged && target_ok && active == target_keys &&
+		metrics.hierarchical_lod_staging_plans >= 2 &&
+		run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok;
+}
+
+bool run_hierarchical_bounded_edit_planning_regression(
+	wt::WtAsyncStorageService &storage,
+	const std::filesystem::path &root
+) {
+	wt::WtEditJournalStore journal;
+	const std::filesystem::path journal_path =
+		root / "hierarchical_bounded_edit.wtedit";
+	check(journal.open(
+		journal_path,
+		storage.source_revision(),
+		storage.world_revision()
+	) == wt::WtEditJournalStoreStatus::Ok,
+		"bounded hierarchical edit journal open failed");
+	if (!journal.is_open()) return false;
+
+	wt::WtRuntimeConfig config;
+	config.active_chunk_capacity = 64;
+	config.viewer_capacity = 2;
+	config.demand_capacity_per_viewer = 125;
+	config.storage_request_capacity = 64;
+	config.storage_completion_capacity = 64;
+	config.encoded_page_entry_capacity = 64;
+	config.decoded_page_entry_capacity = 64;
+	config.mesh_entry_capacity = 64;
+	config.render_entry_capacity = 64;
+	config.collision_entry_capacity = 64;
+	config.visual_viewer_collision_enabled = false;
+	config.hierarchical_lod_staging_enabled = true;
+	config.hierarchical_lod_background_activation_enabled = false;
+	wt::WtReadOnlyWorldRuntime runtime(config, storage, &journal);
+	check(runtime.valid(), "bounded hierarchical edit configuration rejected");
+	if (!runtime.valid()) {
+		journal.close();
+		return false;
+	}
+	wt::WtBalancedLodPlanner planner(64, storage.page_keys());
+	wt::WtBalancedLodPlan initial_target;
+	wt::WtBalancedLodPlan initial_stage;
+	bool initial_stage_complete = false;
+	bool initial_fixture_ok = planner.plan(
+		{ planner_viewer(1, 1, 8.0) }, {}, {}, initial_target, true
+	) == wt::WtBalancedLodPlannerStatus::Ok &&
+		planner.stage_toward(
+			initial_target,
+			{},
+			{},
+			1,
+			1,
+			initial_stage,
+			initial_stage_complete
+		) == wt::WtBalancedLodPlannerStatus::Ok &&
+		!initial_stage_complete;
+	std::vector<wt::WtChunkKey> initial_stage_keys;
+	for (const wt::WtLodMapEntry &entry : initial_stage.entries) {
+		initial_stage_keys.push_back(entry.key);
+	}
+	check(initial_fixture_ok && !initial_stage_keys.empty(),
+		"bounded hierarchical edit initial-stage fixture is invalid");
+
+	std::atomic<wt::WtReadOnlyRuntimeStatus> run_status {
+		wt::WtReadOnlyRuntimeStatus::Ok
+	};
+	std::thread worker([&]() { run_status.store(runtime.run()); });
+	bool ok = initial_fixture_ok &&
+		runtime.update_viewer({ 1, 8.0, 8.0, 8.0, 1 }, 1, 1) ==
+		wt::WtReadOnlyRuntimeStatus::Ok;
+	check(ok, "bounded hierarchical edit viewer was rejected");
+
+	std::vector<wt::WtChunkKey> active;
+	const auto collect_publication =
+		[&](const wt::WtReadOnlyPublication &publication) {
+			if (publication.kind ==
+					wt::WtReadOnlyPublicationKind::RenderPayload &&
+				publication.render) {
+				runtime.notify_visual_activation(
+					publication.key, publication.generation
+				);
+				const auto at = std::lower_bound(
+					active.begin(), active.end(), publication.key
+				);
+				if (at == active.end() || *at != publication.key) {
+					active.insert(at, publication.key);
+				}
+			} else if (publication.kind ==
+					wt::WtReadOnlyPublicationKind::RemoveChunk) {
+				const auto at = std::lower_bound(
+					active.begin(), active.end(), publication.key
+				);
+				if (at != active.end() && *at == publication.key) {
+					active.erase(at);
+				}
+			}
+		};
+	if (ok) {
+		ok = collect_runtime_until(
+			runtime,
+			collect_publication,
+			[&]() {
+				const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+				return active == initial_stage_keys &&
+					metrics.hierarchical_lod_staging_pending != 0 &&
+					runtime_idle(metrics);
+			}
+		);
+		check(ok, "bounded hierarchical edit coarse coverage did not activate");
+	}
+
+	const wt::WtChunkKey edited_key { 1, 0, 0, 0 };
+	const wt::WtEditTransaction transaction = carve_transaction(
+		storage.source_revision(), runtime.world_revision(), 231, 24.0
+	);
+	if (ok) {
+		ok = runtime.submit_edit(transaction) ==
+			wt::WtReadOnlyRuntimeStatus::Ok;
+		check(ok, "bounded hierarchical edit submission was rejected");
+	}
+	bool edit_committed = false;
+	bool edited_visual_expected = false;
+	bool edited_visual_activated = false;
+	std::vector<wt::WtChunkKey> post_edit_expected_keys;
+	std::vector<wt::WtChunkKey> post_edit_render_keys;
+	if (ok) {
+		ok = collect_runtime_until(
+			runtime,
+			[&](const wt::WtReadOnlyPublication &publication) {
+				collect_publication(publication);
+				if (publication.kind ==
+						wt::WtReadOnlyPublicationKind::EditCommitted &&
+					publication.world_revision ==
+						transaction.committed_revision) {
+					edit_committed = true;
+				}
+				if (publication.kind ==
+						wt::WtReadOnlyPublicationKind::ExpectChunk &&
+					publication.visual_required) {
+					post_edit_expected_keys.push_back(publication.key);
+					if (publication.key == edited_key) {
+						edited_visual_expected = true;
+					}
+				}
+				if (publication.kind ==
+						wt::WtReadOnlyPublicationKind::RenderPayload &&
+					publication.render) {
+					post_edit_render_keys.push_back(publication.key);
+					if (publication.key == edited_key) {
+						edited_visual_activated = true;
+					}
+				}
+			},
+			[&]() {
+				const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+				return edit_committed &&
+					metrics.edit_lod_retention_zones != 0 &&
+					metrics.edit_lod_retention_active_viewers != 0 &&
+					metrics.edit_lod_retention_plans != 0;
+			}
+		);
+	}
+	const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+	runtime.request_stop();
+	worker.join();
+	journal.close();
+	const bool passed = ok && edit_committed &&
+		metrics.edit_commits == 1 && metrics.edit_rejections == 0 &&
+		metrics.edit_lod_retention_zones != 0 &&
+		metrics.edit_lod_retention_active_viewers != 0 &&
+		metrics.edit_lod_retention_plans != 0 &&
+		metrics.edit_lod_retention_fallbacks == 0 &&
+		metrics.edit_lod_retention_preferred_key_valid != 0 &&
+		metrics.edit_lod_retention_preferred_key_x == edited_key.x &&
+		metrics.edit_lod_retention_preferred_key_y == edited_key.y &&
+		metrics.edit_lod_retention_preferred_key_z == edited_key.z &&
+		metrics.rejected_events == 0 &&
+		run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok;
+	if (!passed) {
+		std::fprintf(
+			stderr,
+			"bounded hierarchical edit evidence: ok=%d committed=%d "
+			"expected=%d visual=%d edits=%llu rejected=%llu zones=%llu viewers=%llu "
+			"plans=%llu fallbacks=%llu events=%llu hierarchy=%llu/%llu/%llu "
+			"renders=%zu status=%d last=%d\n",
+			ok ? 1 : 0,
+			edit_committed ? 1 : 0,
+			edited_visual_expected ? 1 : 0,
+			edited_visual_activated ? 1 : 0,
+			static_cast<unsigned long long>(metrics.edit_commits),
+			static_cast<unsigned long long>(metrics.edit_rejections),
+			static_cast<unsigned long long>(metrics.edit_lod_retention_zones),
+			static_cast<unsigned long long>(
+				metrics.edit_lod_retention_active_viewers
+			),
+			static_cast<unsigned long long>(metrics.edit_lod_retention_plans),
+			static_cast<unsigned long long>(metrics.edit_lod_retention_fallbacks),
+			static_cast<unsigned long long>(metrics.rejected_events),
+			static_cast<unsigned long long>(
+				metrics.hierarchical_lod_staging_plans
+			),
+			static_cast<unsigned long long>(
+				metrics.hierarchical_lod_staging_completed
+			),
+			static_cast<unsigned long long>(
+				metrics.hierarchical_lod_staging_pending
+			),
+			post_edit_render_keys.size(),
+			static_cast<int>(run_status.load()),
+			static_cast<int>(runtime.last_status())
+		);
+		for (const wt::WtChunkKey &key : post_edit_render_keys) {
+			std::fprintf(stderr, " [%d:%d:%d:l%u]", key.x, key.y, key.z,
+				static_cast<unsigned int>(key.lod));
+		}
+		std::fprintf(stderr, "\n expects:");
+		for (const wt::WtChunkKey &key : post_edit_expected_keys) {
+			std::fprintf(stderr, " [%d:%d:%d:l%u]", key.x, key.y, key.z,
+				static_cast<unsigned int>(key.lod));
+		}
+		std::fprintf(stderr, "\n");
+	}
+	check(passed,
+		"bounded hierarchical staging did not refresh retained edit planning");
+	return passed;
 }
 
 template <typename Collector, typename Predicate>
@@ -1607,6 +2294,8 @@ bool run_edit_viewer_update_second_edit_regression(
 } // namespace
 
 int main() {
+	const bool hierarchical_staging_ok =
+		run_hierarchical_staging_regression();
 	FixtureRoot fixture;
 	std::filesystem::path world_path;
 	check(wtt::wt_write_production_transition_fixture(
@@ -1858,6 +2547,10 @@ int main() {
 		run_collision_publication_priority_regression(storage);
 	const bool collision_publication_coalescing_ok =
 		run_collision_publication_coalescing_regression(storage);
+	const bool hierarchical_runtime_ok =
+		run_hierarchical_runtime_regression(storage);
+	const bool hierarchical_bounded_edit_planning_ok =
+		run_hierarchical_bounded_edit_planning_regression(storage, fixture.path);
 	storage.close();
 
 	std::vector<std::uint8_t> evidence;
@@ -1895,6 +2588,9 @@ int main() {
 	append_u64(evidence, replacement_collision_continuity_ok ? 1U : 0U);
 	append_u64(evidence, collision_publication_priority_ok ? 1U : 0U);
 	append_u64(evidence, collision_publication_coalescing_ok ? 1U : 0U);
+	append_u64(evidence, hierarchical_staging_ok ? 1U : 0U);
+	append_u64(evidence, hierarchical_runtime_ok ? 1U : 0U);
+	append_u64(evidence, hierarchical_bounded_edit_planning_ok ? 1U : 0U);
 	append_u64(
 		evidence,
 		static_cast<std::uint64_t>(g21_nearest_coarse_distance)
@@ -1915,6 +2611,8 @@ int main() {
 		"edit_viewer_second_edit=%d collision_reactivation=%d "
 		"replacement_collision_continuity=%d "
 		"collision_publication_priority=%d collision_publication_coalescing=%d "
+		"hierarchical_staging=%d hierarchical_runtime=%d "
+		"hierarchical_bounded_edit_planning=%d "
 		"g21_entries=%zu "
 		"g21_nearest_coarse=%.1f transition_completions=%llu\n",
 		plan.entries.size(),
@@ -1946,6 +2644,9 @@ int main() {
 		replacement_collision_continuity_ok ? 1 : 0,
 		collision_publication_priority_ok ? 1 : 0,
 		collision_publication_coalescing_ok ? 1 : 0,
+		hierarchical_staging_ok ? 1 : 0,
+		hierarchical_runtime_ok ? 1 : 0,
+		hierarchical_bounded_edit_planning_ok ? 1 : 0,
 		g21_entry_count,
 		g21_nearest_coarse_distance,
 		static_cast<unsigned long long>(metrics.transition_mesh_completions)
@@ -1958,6 +2659,9 @@ int main() {
 		"edit_viewer_second_edit=1 "
 		"replacement_collision_continuity=1 collision_publication_priority=1 "
 		"collision_publication_coalescing=1 "
+		"hierarchical_staging=1 "
+		"hierarchical_runtime=1 "
+		"hierarchical_bounded_edit_planning=1 "
 		"g21_near_field=1 backend=MIT\n"
 	);
 	return 0;

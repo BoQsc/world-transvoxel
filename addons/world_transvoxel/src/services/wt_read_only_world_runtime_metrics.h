@@ -11,6 +11,9 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t collision_viewer_removals = 0;
 	std::uint64_t coalesced_viewer_events = 0;
 	std::uint64_t planned_demands = 0;
+	std::uint64_t hierarchical_lod_staging_plans = 0;
+	std::uint64_t hierarchical_lod_staging_completed = 0;
+	std::uint64_t hierarchical_lod_staging_pending = 0;
 	std::uint64_t sample_jobs = 0;
 	std::uint64_t mesh_jobs = 0;
 	std::uint64_t sample_job_time_ns_last = 0;
@@ -63,6 +66,10 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t edit_lod_retention_active_viewers = 0;
 	std::uint64_t edit_lod_retention_plans = 0;
 	std::uint64_t edit_lod_retention_fallbacks = 0;
+	std::uint64_t edit_lod_retention_preferred_key_valid = 0;
+	std::int64_t edit_lod_retention_preferred_key_x = 0;
+	std::int64_t edit_lod_retention_preferred_key_y = 0;
+	std::int64_t edit_lod_retention_preferred_key_z = 0;
 	std::uint64_t visibility_coverage_priority_requests = 0;
 	std::uint64_t visibility_coverage_priority_applied = 0;
 	std::uint64_t visibility_coverage_priority_stale = 0;
