@@ -16,6 +16,10 @@ constexpr std::int32_t kWtCommittedEditPriority =
 	std::numeric_limits<std::int32_t>::max();
 constexpr std::int32_t kWtPlayerSupportPriority =
 	std::numeric_limits<std::int32_t>::max() - 1;
+// Coverage repair must preempt ordinary visual streaming without overtaking
+// committed edits or collision support required at the player.
+constexpr std::int32_t kWtVisibilityCoveragePriority =
+	std::numeric_limits<std::int32_t>::max() - 1000001;
 // Every collision-planner priority remains above pre-click interaction focus.
 constexpr std::int32_t kWtInteractionFocusPriority =
 	std::numeric_limits<std::int32_t>::max() - 1000002;

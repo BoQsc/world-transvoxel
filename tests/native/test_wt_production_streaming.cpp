@@ -331,7 +331,9 @@ void test_foreground_priority_lease_contract() {
 	wt::WtForegroundPriorityLeaseSet leases;
 	check(
 		wt::kWtCommittedEditPriority > wt::kWtPlayerSupportPriority &&
-		wt::kWtPlayerSupportPriority > wt::kWtInteractionFocusPriority,
+		wt::kWtPlayerSupportPriority > wt::kWtVisibilityCoveragePriority &&
+		wt::kWtVisibilityCoveragePriority >
+			wt::kWtInteractionFocusPriority,
 		"foreground priority class order is invalid"
 	);
 	check(leases.update({
