@@ -230,7 +230,7 @@ bool WtReadOnlyWorldRuntime::process_visibility_coverage_priority_operation(
 		const WtSchedulerStatus scheduler_status =
 			scheduler_->reprioritize_chunk(
 				request.key,
-				kWtVisibilityCoveragePriority
+				kWtInteractiveEditPriority
 			);
 		if (scheduler_status != WtSchedulerStatus::Ok &&
 			scheduler_status != WtSchedulerStatus::AlreadyCurrent) {
@@ -244,7 +244,7 @@ bool WtReadOnlyWorldRuntime::process_visibility_coverage_priority_operation(
 			page_runtime_->reprioritize_owned_chunk(
 				request.key,
 				request.generation,
-				kWtVisibilityCoveragePriority
+				kWtInteractiveEditPriority
 			);
 		if (page_status == WtPageMeshingRuntimeOwnerStatus::StaleGeneration) {
 			std::lock_guard<std::mutex> lock(metrics_mutex_);
