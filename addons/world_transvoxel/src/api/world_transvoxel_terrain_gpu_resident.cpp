@@ -152,7 +152,13 @@ bool build_gpu_publication_cohort(
 	}
 	return wt_build_gpu_chunk_publication_cohort(
 		seed, candidates, visual_retirements,
-		[&application, &render_sink, inspected_boundaries](const WtChunkKey &key, WtGpuPublicationBoundary &boundary) {
+		[&application, &render_sink, &retirements, inspected_boundaries](const WtChunkKey &key, WtGpuPublicationBoundary &boundary) {
+			// A shared pending retirement is no longer desired visual coverage,
+			// even when it has no active GPU surface and therefore is not part of
+			// the atomic visual retirement set above.
+			if (std::binary_search(retirements.begin(), retirements.end(), key)) {
+				return false;
+			}
 			WtChunkApplicationRecord record;
 			if (!application.copy_record(key, record) || !record.visual_required) return false;
 			std::uint8_t active_mask = 0;
