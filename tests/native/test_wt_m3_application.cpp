@@ -281,12 +281,20 @@ void test_application_service(
 	auto collision1 = std::make_shared<wt::WtCollisionPayload>();
 	check(wt::wt_build_collision_payload(*render1, {}, *collision1) ==
 		wt::WtCollisionBuildStatus::Ok, "application collision payload failed");
-	check(service.expect_chunk(key, { 1 }, true) == wt::WtApplicationStatus::Ok,
+	check(service.expect_chunk(key, { 1 }, true, true, false, false, 41) ==
+		wt::WtApplicationStatus::Ok,
 		"initial application expectation failed");
+	{
+		wt::WtChunkApplicationRecord revision_record;
+		check(service.copy_record(key, revision_record) &&
+			revision_record.world_revision == 41,
+			"application expectation lost its world revision");
+	}
 	check(service.submit_render(render1) == wt::WtApplicationStatus::Ok &&
 		service.submit_collision(collision1) == wt::WtApplicationStatus::Ok,
 		"initial application submission failed");
-	check(service.expect_chunk(key, { 2 }, true) == wt::WtApplicationStatus::Ok,
+	check(service.expect_chunk(key, { 2 }, true, true, false, false, 42) ==
+		wt::WtApplicationStatus::Ok,
 		"application supersession failed");
 	const wt::WtApplicationBatchResult stale = service.apply(
 		1, 1, render_sink, collision_sink

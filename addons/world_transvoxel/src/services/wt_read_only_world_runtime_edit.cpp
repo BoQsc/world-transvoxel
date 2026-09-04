@@ -159,6 +159,7 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 		publication.kind = WtReadOnlyPublicationKind::ExpectChunk;
 		publication.key = replacement.key;
 		publication.generation = replacement.replacement_generation;
+		publication.world_revision = transaction.committed_revision;
 		publication.collision_required = replacement.collision_required;
 		publication.visual_required = replacement.visual_required;
 		publication.staged_replacement = true;

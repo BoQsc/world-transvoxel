@@ -24,6 +24,10 @@ void WorldTransvoxelChunkState::_bind_methods() {
 		&WorldTransvoxelChunkState::get_generation
 	);
 	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_world_revision"),
+		&WorldTransvoxelChunkState::get_world_revision
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD("get_render_generation"),
 		&WorldTransvoxelChunkState::get_render_generation
 	);
@@ -78,6 +82,10 @@ std::int64_t WorldTransvoxelChunkState::get_generation() const noexcept {
 	return static_cast<std::int64_t>(generation_.value);
 }
 
+std::int64_t WorldTransvoxelChunkState::get_world_revision() const noexcept {
+	return static_cast<std::int64_t>(world_revision_);
+}
+
 std::int64_t
 WorldTransvoxelChunkState::get_render_generation() const noexcept {
 	return static_cast<std::int64_t>(render_generation_.value);
@@ -130,6 +138,7 @@ void WorldTransvoxelChunkState::set_snapshot(
 	key_ = key;
 	present_ = record != nullptr;
 	generation_ = record != nullptr ? record->generation : WtGenerationToken{};
+	world_revision_ = record != nullptr ? record->world_revision : 0;
 	render_generation_ = render_generation;
 	staged_render_generation_ = staged_render_generation;
 	collision_generation_ = collision_generation;

@@ -17,6 +17,7 @@ namespace world_transvoxel {
 struct WtChunkApplicationRecord {
 	WtChunkKey key;
 	WtGenerationToken generation;
+	std::uint64_t world_revision = 0;
 	WtGenerationToken visual_generation;
 	WtGenerationToken collision_generation;
 	bool collision_required = false;
@@ -89,7 +90,8 @@ public:
 		bool collision_required,
 		bool visual_required = true,
 		bool staged_replacement = false,
-		bool preserve_collision_ready = false
+		bool preserve_collision_ready = false,
+		std::uint64_t world_revision = 0
 	);
 	WtApplicationStatus set_visual_required(
 		const WtChunkKey &key,

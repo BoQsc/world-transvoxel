@@ -23,6 +23,7 @@ public:
 	godot::Vector3i get_chunk_coordinate() const noexcept;
 	std::int64_t get_lod() const noexcept;
 	std::int64_t get_generation() const noexcept;
+	std::int64_t get_world_revision() const noexcept;
 	std::int64_t get_render_generation() const noexcept;
 	std::int64_t get_staged_render_generation() const noexcept;
 	std::int64_t get_collision_generation() const noexcept;
@@ -47,6 +48,7 @@ private:
 
 	WtChunkKey key_;
 	WtGenerationToken generation_;
+	std::uint64_t world_revision_ = 0;
 	WtGenerationToken render_generation_;
 	WtGenerationToken staged_render_generation_;
 	WtGenerationToken collision_generation_;

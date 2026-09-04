@@ -573,7 +573,8 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 						item.collision_required,
 						item.visual_required,
 						true,
-						item.collision_required
+						item.collision_required,
+						record->world_revision
 					);
 				if (application_status != WtApplicationStatus::Ok &&
 					application_status != WtApplicationStatus::AlreadyCurrent) {
@@ -584,6 +585,7 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 				publication.kind = WtReadOnlyPublicationKind::ExpectChunk;
 				publication.key = item.key;
 				publication.generation = record->generation;
+				publication.world_revision = record->world_revision;
 				publication.collision_required = item.collision_required;
 				publication.visual_required = item.visual_required;
 				publication.staged_replacement = true;
@@ -661,7 +663,8 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 				item.collision_required,
 				item.visual_required,
 				false,
-				false
+				false,
+				record->world_revision
 			);
 		if (application_status != WtApplicationStatus::Ok &&
 			application_status != WtApplicationStatus::AlreadyCurrent) {
@@ -672,6 +675,7 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 		publication.kind = WtReadOnlyPublicationKind::ExpectChunk;
 		publication.key = item.key;
 		publication.generation = record->generation;
+		publication.world_revision = record->world_revision;
 		publication.collision_required = item.collision_required;
 		publication.visual_required = item.visual_required;
 		publication.staged_replacement = false;

@@ -278,7 +278,8 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 					item.visual_required,
 					true,
 					application_record.collision_ready &&
-						item.collision_required
+						item.collision_required,
+					record->world_revision
 				) != WtApplicationStatus::Ok) {
 				++metrics_.application_failures;
 				return WtDesiredSetRuntimeStatus::ApplicationFailure;
@@ -367,7 +368,10 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 				item.key,
 				record->generation,
 				item.collision_required,
-				item.visual_required
+				item.visual_required,
+				false,
+				false,
+				record->world_revision
 			) != WtApplicationStatus::Ok) {
 			++metrics_.application_failures;
 			return WtDesiredSetRuntimeStatus::ApplicationFailure;

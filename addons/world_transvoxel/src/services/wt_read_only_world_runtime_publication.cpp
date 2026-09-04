@@ -123,6 +123,7 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 		publication.kind = WtReadOnlyPublicationKind::ExpectChunk;
 		publication.key = item.key;
 		publication.generation = record->generation;
+		publication.world_revision = record->world_revision;
 		publication.collision_required = item.collision_required;
 		publication.visual_required = item.visual_required;
 		publication.staged_replacement = addition_staged_replacement;
@@ -135,7 +136,8 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 					item.collision_required,
 					item.visual_required,
 					true,
-					item.collision_required
+					item.collision_required,
+					record->world_revision
 				);
 			if (application_status != WtApplicationStatus::Ok &&
 				application_status != WtApplicationStatus::AlreadyCurrent) {
@@ -206,6 +208,7 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 				expectation.kind = WtReadOnlyPublicationKind::ExpectChunk;
 				expectation.key = item.key;
 				expectation.generation = record->generation;
+				expectation.world_revision = record->world_revision;
 				expectation.collision_required = true;
 				expectation.visual_required = item.visual_required;
 				expectation.staged_replacement = true;
@@ -228,6 +231,7 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 				expectation.kind = WtReadOnlyPublicationKind::ExpectChunk;
 				expectation.key = item.key;
 				expectation.generation = record->generation;
+				expectation.world_revision = record->world_revision;
 				expectation.collision_required = item.collision_required;
 				expectation.visual_required = true;
 				expectation.staged_replacement = true;
@@ -238,7 +242,8 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 						item.collision_required,
 						true,
 						true,
-						item.collision_required
+						item.collision_required,
+						record->world_revision
 					);
 				if (application_status != WtApplicationStatus::Ok &&
 					application_status != WtApplicationStatus::AlreadyCurrent) {
@@ -435,7 +440,8 @@ bool WtReadOnlyWorldRuntime::process_pending_transition_remeshes() {
 				desired->collision_required,
 				desired->visual_required,
 				true,
-				desired->collision_required
+				desired->collision_required,
+				record->world_revision
 			);
 		if (application_status != WtApplicationStatus::Ok &&
 			application_status != WtApplicationStatus::AlreadyCurrent) {
@@ -446,6 +452,7 @@ bool WtReadOnlyWorldRuntime::process_pending_transition_remeshes() {
 		expectation.kind = WtReadOnlyPublicationKind::ExpectChunk;
 		expectation.key = item.key;
 		expectation.generation = record->generation;
+		expectation.world_revision = record->world_revision;
 		expectation.collision_required = desired->collision_required;
 		expectation.visual_required = desired->visual_required;
 		expectation.staged_replacement = true;

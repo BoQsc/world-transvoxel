@@ -255,7 +255,8 @@ WtEditRuntimeReplacementService::apply_prepared(
 				replacement.collision_required,
 				replacement.visual_required,
 				true,
-				replacement.collision_required
+				replacement.collision_required,
+				current->world_revision
 			) != WtApplicationStatus::Ok) {
 			++metrics_.application_failures;
 			return WtEditRuntimeReplacementStatus::ApplicationFailure;

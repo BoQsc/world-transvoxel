@@ -52,7 +52,8 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 	bool collision_required,
 	bool visual_required,
 	bool staged_replacement,
-	bool preserve_collision_ready
+	bool preserve_collision_ready,
+	std::uint64_t world_revision
 ) {
 	std::lock_guard<std::mutex> lock(records_mutex_);
 	if (!wt_is_valid_chunk_key(key) || generation.value == 0 ||
@@ -66,6 +67,10 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 		}
 		if (generation == record->generation) {
 			bool changed = false;
+			if (world_revision != 0 && record->world_revision == 0) {
+				record->world_revision = world_revision;
+				changed = true;
+			}
 			if (visual_required && !record->visual_required) {
 				record->visual_required = true;
 				record->visual_ready = false;
@@ -97,6 +102,7 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 		*record = {
 			key,
 			generation,
+			world_revision,
 			{},
 			carried_collision_generation,
 			collision_required,
@@ -113,6 +119,7 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 	records_.push_back({
 		key,
 		generation,
+		world_revision,
 		{},
 		{},
 		collision_required,
