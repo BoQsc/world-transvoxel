@@ -19,6 +19,23 @@ godot::PackedByteArray to_bytes(const Container &values) {
 	return result;
 }
 
+const godot::Array &transvoxel_table_buffers() {
+	static const godot::Array buffers = []() {
+		const world_transvoxel::WtTransvoxelTablePack &tables =
+			world_transvoxel::wt_get_transvoxel_mit_table_pack();
+		godot::Array result;
+		result.resize(6);
+		result[0] = to_bytes(tables.regular_cell_class);
+		result[1] = to_bytes(tables.regular_cell_data);
+		result[2] = to_bytes(tables.regular_vertex_data);
+		result[3] = to_bytes(tables.transition_cell_class);
+		result[4] = to_bytes(tables.transition_cell_data);
+		result[5] = to_bytes(tables.transition_vertex_data);
+		return result;
+	}();
+	return buffers;
+}
+
 } // namespace
 
 namespace world_transvoxel {
@@ -69,9 +86,9 @@ godot::Dictionary wt_gpu_meshing_shadow_packed_input(
 		result["error"] = error.c_str();
 		return result;
 	}
-	const WtTransvoxelTablePack &tables = wt_get_transvoxel_mit_table_pack();
 	godot::Array buffers;
 	if (!packed.proven_empty || !packed.page_field_input) {
+		const godot::Array &table_buffers = transvoxel_table_buffers();
 		buffers.resize(13);
 		buffers[0] = to_bytes(packed.field_values);
 		buffers[1] = to_bytes(packed.field_meta);
@@ -80,12 +97,9 @@ godot::Dictionary wt_gpu_meshing_shadow_packed_input(
 		buffers[4] = to_bytes(packed.cell_options);
 		buffers[5] = to_bytes(packed.sample_references);
 		buffers[6] = to_bytes(packed.config);
-		buffers[7] = to_bytes(tables.regular_cell_class);
-		buffers[8] = to_bytes(tables.regular_cell_data);
-		buffers[9] = to_bytes(tables.regular_vertex_data);
-		buffers[10] = to_bytes(tables.transition_cell_class);
-		buffers[11] = to_bytes(tables.transition_cell_data);
-		buffers[12] = to_bytes(tables.transition_vertex_data);
+		for (std::int64_t index = 0; index < table_buffers.size(); ++index) {
+			buffers[index + 7] = table_buffers[index];
+		}
 	}
 	result["status"] = "PASS";
 	result["error"] = "";

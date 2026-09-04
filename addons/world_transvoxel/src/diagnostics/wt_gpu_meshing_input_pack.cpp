@@ -38,22 +38,6 @@ std::int32_t i32_bits(float value) noexcept {
 	return result;
 }
 
-void append_packed_field_sample(
-	const WtCellSample &sample,
-	WtGpuMeshingInputPack &output
-) {
-	output.field_values.insert(output.field_values.end(), {
-		sample.density,
-		sample.gradient.x,
-		sample.gradient.y,
-		sample.gradient.z,
-	});
-	output.field_meta.insert(output.field_meta.end(), {
-		static_cast<std::int32_t>(sample.material),
-		sample.material_authored ? 1 : 0,
-	});
-}
-
 void append_sample(
 	const WtCellSample &sample,
 	std::int32_t sample_index,
@@ -318,56 +302,62 @@ bool pack_page_field_input(
 		};
 		return true;
 	}
-	output.field_values.reserve(
-		output.sample_count * 2U + surface_shift_record_count * 8U
+	const std::size_t page_sample_count = output.sample_count;
+	output.field_values.resize(
+		page_sample_count * 2U + surface_shift_record_count * 8U
 	);
-	output.field_meta.reserve(
-		(output.sample_count + surface_shift_record_count * 2U) * 2U
+	output.field_meta.resize(
+		(page_sample_count + surface_shift_record_count * 2U) * 2U
 	);
-	output.cell_headers.reserve(pages.size() * 4U);
-	output.cell_origins.reserve(pages.size() * 4U);
-	output.cell_options.reserve(pages.size() * 4U);
+	output.cell_headers.resize(pages.size() * 4U);
+	output.cell_origins.resize(pages.size() * 4U);
+	output.cell_options.resize(pages.size() * 4U);
 	for (std::size_t page_index = 0; page_index < pages.size(); ++page_index) {
 		const WtChunkPage &page = *pages[page_index]->page;
 		const WtGridPoint minimum = wt_chunk_bounds(page.metadata.key).minimum;
 		const std::size_t sample_offset = page_index * kWtChunkPageSampleCount;
-		output.cell_headers.insert(output.cell_headers.end(), {
-			0,
-			0,
-			i32_bits(page.surface_shift_isovalue),
-			1,
-		});
-		output.cell_origins.insert(output.cell_origins.end(), {
-			static_cast<float>(minimum.x),
-			static_cast<float>(minimum.y),
-			static_cast<float>(minimum.z),
-			static_cast<float>(page.metadata.cell_spacing),
-		});
-		output.cell_options.insert(output.cell_options.end(), {
-			static_cast<float>(sample_offset),
-			static_cast<float>(page.metadata.dimension_x),
-			static_cast<float>(page.metadata.sample_minimum),
-			static_cast<float>(page.metadata.sample_maximum),
-		});
-		for (const WtScalarSample &sample : page.samples) {
-			output.field_values.insert(output.field_values.end(), {
-				sample.density, sample.static_water_density,
-			});
-			output.field_meta.insert(output.field_meta.end(), {
-				static_cast<std::int32_t>(sample.material),
-				sample.material_authored ? 1 : 0,
-			});
+		const std::size_t header_offset = page_index * 4U;
+		output.cell_headers[header_offset] = 0;
+		output.cell_headers[header_offset + 1U] = 0;
+		output.cell_headers[header_offset + 2U] =
+			i32_bits(page.surface_shift_isovalue);
+		output.cell_headers[header_offset + 3U] = 1;
+		output.cell_origins[header_offset] = static_cast<float>(minimum.x);
+		output.cell_origins[header_offset + 1U] = static_cast<float>(minimum.y);
+		output.cell_origins[header_offset + 2U] = static_cast<float>(minimum.z);
+		output.cell_origins[header_offset + 3U] =
+			static_cast<float>(page.metadata.cell_spacing);
+		output.cell_options[header_offset] = static_cast<float>(sample_offset);
+		output.cell_options[header_offset + 1U] =
+			static_cast<float>(page.metadata.dimension_x);
+		output.cell_options[header_offset + 2U] =
+			static_cast<float>(page.metadata.sample_minimum);
+		output.cell_options[header_offset + 3U] =
+			static_cast<float>(page.metadata.sample_maximum);
+		for (std::size_t local_index = 0;
+				local_index < page.samples.size(); ++local_index) {
+			const WtScalarSample &sample = page.samples[local_index];
+			const std::size_t packed_offset = (sample_offset + local_index) * 2U;
+			output.field_values[packed_offset] = sample.density;
+			output.field_values[packed_offset + 1U] = sample.static_water_density;
+			output.field_meta[packed_offset] =
+				static_cast<std::int32_t>(sample.material);
+			output.field_meta[packed_offset + 1U] =
+				sample.material_authored ? 1 : 0;
 		}
 	}
 	// Binding 5 carries the authoritative baked surface-shift records in
 	// page-field mode. The leading sentinel keeps the stable buffer non-empty
 	// for LOD0 pages, which correctly have no shift records.
-	output.sample_references.push_back(0);
+	output.sample_references.resize(1U + surface_shift_record_count * 4U);
+	output.sample_references[0] = 0;
+	std::size_t reference_offset = 1U;
+	std::size_t shifted_sample_count = 0;
 	for (std::size_t page_index = 0; page_index < pages.size(); ++page_index) {
 		const WtChunkPage &page = *pages[page_index]->page;
 		const std::size_t header_offset = page_index * 4U;
 		output.cell_headers[header_offset] = static_cast<std::int32_t>(
-			output.sample_references.size()
+			reference_offset
 		);
 		output.cell_headers[header_offset + 1U] = static_cast<std::int32_t>(
 			page.surface_shift_records.size()
@@ -375,25 +365,43 @@ bool pack_page_field_input(
 		for (const WtChunkSurfaceShiftRecord &record :
 				page.surface_shift_records) {
 			const std::int32_t sample_a_index = static_cast<std::int32_t>(
-				output.sample_count++
-			);
-			append_packed_field_sample(
-				record.sample_a, output
+				page_sample_count + shifted_sample_count++
 			);
 			const std::int32_t sample_b_index = static_cast<std::int32_t>(
-				output.sample_count++
+				page_sample_count + shifted_sample_count++
 			);
-			append_packed_field_sample(
-				record.sample_b, output
-			);
-			output.sample_references.insert(output.sample_references.end(), {
-				static_cast<std::int32_t>(record.edge_index),
-				static_cast<std::int32_t>(record.unit_offset),
-				sample_a_index,
-				sample_b_index,
-			});
+			const std::size_t value_offset = page_sample_count * 2U +
+				(shifted_sample_count - 2U) * 4U;
+			const std::size_t meta_a_offset =
+				static_cast<std::size_t>(sample_a_index) * 2U;
+			const std::size_t meta_b_offset =
+				static_cast<std::size_t>(sample_b_index) * 2U;
+			output.field_values[value_offset] = record.sample_a.density;
+			output.field_values[value_offset + 1U] = record.sample_a.gradient.x;
+			output.field_values[value_offset + 2U] = record.sample_a.gradient.y;
+			output.field_values[value_offset + 3U] = record.sample_a.gradient.z;
+			output.field_values[value_offset + 4U] = record.sample_b.density;
+			output.field_values[value_offset + 5U] = record.sample_b.gradient.x;
+			output.field_values[value_offset + 6U] = record.sample_b.gradient.y;
+			output.field_values[value_offset + 7U] = record.sample_b.gradient.z;
+			output.field_meta[meta_a_offset] =
+				static_cast<std::int32_t>(record.sample_a.material);
+			output.field_meta[meta_a_offset + 1U] =
+				record.sample_a.material_authored ? 1 : 0;
+			output.field_meta[meta_b_offset] =
+				static_cast<std::int32_t>(record.sample_b.material);
+			output.field_meta[meta_b_offset + 1U] =
+				record.sample_b.material_authored ? 1 : 0;
+			output.sample_references[reference_offset] =
+				static_cast<std::int32_t>(record.edge_index);
+			output.sample_references[reference_offset + 1U] =
+				static_cast<std::int32_t>(record.unit_offset);
+			output.sample_references[reference_offset + 2U] = sample_a_index;
+			output.sample_references[reference_offset + 3U] = sample_b_index;
+			reference_offset += 4U;
 		}
 	}
+	output.sample_count = page_sample_count + shifted_sample_count;
 	const WtChunkBounds chunk_bounds_value = wt_chunk_bounds(request.job.key);
 	output.bounds_min = {
 		static_cast<float>(chunk_bounds_value.minimum.x),
