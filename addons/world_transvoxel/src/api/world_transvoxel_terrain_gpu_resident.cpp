@@ -282,6 +282,7 @@ godot::Dictionary WorldTransvoxelTerrain::pop_gpu_resident_render_request() {
 	result["position_space"] = "world";
 	result["input_stage"] = "pre_mesh_field";
 	result["status"] = "EMPTY";
+	result["job_priority"] = 0;
 	result["gpu_resident_render_publication"] = true;
 	result["cpu_render_visible_until_activation"] = false;
 	result["cpu_visual_mesh_omitted"] = false;
@@ -323,6 +324,7 @@ godot::Dictionary WorldTransvoxelTerrain::pop_gpu_resident_render_request() {
 	}
 	result["status"] = "PASS";
 	result["request_id"] = static_cast<std::int64_t>(request.request_id);
+	result["job_priority"] = static_cast<std::int64_t>(request.job.priority);
 	result["cpu_visual_mesh_omitted"] = request.cpu_visual_mesh_omitted;
 	result["cpu_render_visible_until_activation"] =
 		!request.cpu_visual_mesh_omitted;
