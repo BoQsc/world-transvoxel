@@ -475,6 +475,11 @@ bool WtReadOnlyWorldRuntime::enqueue_viewer_event(
 		viewer_events_.begin(),
 		viewer_events_.end(),
 		[&](const ViewerEvent &queued) {
+			// Internal retries borrow a viewer snapshot for planning, but are
+			// not updates of that viewer. Coalescing an external update into
+			// one would silently discard the committed edit's refresh.
+			if (queued.kind == ViewerEventKind::RefreshEditLodRetention ||
+				queued.kind == ViewerEventKind::AdvanceStaging) return false;
 			const bool queued_collision =
 				queued.kind == ViewerEventKind::UpdateCollision ||
 				queued.kind == ViewerEventKind::RemoveCollision;

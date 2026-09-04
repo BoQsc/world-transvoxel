@@ -645,8 +645,14 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 		}
 
 		WtLodMap current_map(active_capacity_);
-		if (current_map.set_active_chunks(leaves) != WtLodMapStatus::Ok) {
-			return WtBalancedLodPlannerStatus::InvalidLodMap;
+		// A preferred split can require adjacent support families. Restore
+		// 2:1 balance before selecting the next split in a direct refinement
+		// batch; otherwise a valid intermediate step is rejected before the
+		// final balance pass can run. No intermediate map is published.
+		const WtBalancedLodPlannerStatus intermediate_balance =
+			balance(leaves, current_map);
+		if (intermediate_balance != WtBalancedLodPlannerStatus::Ok) {
+			return intermediate_balance;
 		}
 		const std::vector<WtLodMapEntry> current_entries =
 			current_map.get_entries();

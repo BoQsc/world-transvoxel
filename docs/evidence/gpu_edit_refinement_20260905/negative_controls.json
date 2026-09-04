@@ -1,0 +1,17 @@
+[
+  {
+    "variant": "lost_classification",
+    "expected_failure_observed": true,
+    "exit_code": 1
+  },
+  {
+    "variant": "coalesced_refresh",
+    "expected_failure_observed": true,
+    "exit_code": 1
+  },
+  {
+    "variant": "both_fixes",
+    "passed": true,
+    "exit_code": 0
+  }
+]

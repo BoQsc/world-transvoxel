@@ -23,6 +23,8 @@
 
 namespace world_transvoxel {
 
+namespace testing { struct WtRuntimeEventTestAccess; }
+
 constexpr std::size_t kWtProductionWorldOperationCapacity = 16;
 
 class WtAsyncStorageService;
@@ -235,6 +237,7 @@ public:
 	);
 
 private:
+	friend struct testing::WtRuntimeEventTestAccess;
 	enum class ViewerEventKind : std::uint8_t {
 		Update,
 		Remove,

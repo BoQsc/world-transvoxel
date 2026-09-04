@@ -4,6 +4,7 @@
 #include "storage/wt_hash256.h"
 #include "storage/wt_procedural_world_source.h"
 #include "streaming/wt_balanced_lod_planner.h"
+#include "streaming/wt_stream_scheduler.h"
 #include "wt_production_world_fixture.h"
 
 #include <algorithm>
@@ -19,6 +20,67 @@
 
 namespace wt = world_transvoxel;
 namespace wtt = world_transvoxel::testing;
+
+namespace world_transvoxel::testing {
+
+// Step the runtime without worker timing so a full queue and its retry are
+// deterministic. No test-only public runtime API or production branch is needed.
+struct WtRuntimeEventTestAccess {
+	static bool refresh_survives_full_queue(
+		WtAsyncStorageService &storage, std::size_t mesh_workers
+	) {
+		WtRuntimeConfig config;
+		config.active_chunk_capacity = 40;
+		config.viewer_capacity = 2;
+		config.demand_capacity_per_viewer = 125;
+		config.meshing_worker_count = mesh_workers;
+		WtReadOnlyWorldRuntime runtime(config, storage);
+		if (!runtime.valid()) return false;
+		runtime.planner_viewers_.push_back({ { 1, 8.0, 8.0, 8.0, 1 }, 1, 1 });
+		runtime.edit_lod_retention_refresh_pending_ = true;
+		const WtChunkKey blocker { 1000, 0, 0, 0 };
+		for (std::size_t i = 0; i < config.active_chunk_capacity; ++i) {
+			if (runtime.scheduler_->request_chunk_version(
+					blocker, storage.source_revision(), storage.world_revision(),
+					0, true) != WtSchedulerStatus::Ok) return false;
+		}
+		const auto before = runtime.plan_revision_;
+		if (!runtime.process_viewer_event() ||
+			runtime.viewer_events_.size() != 1 ||
+			runtime.viewer_events_.front().kind !=
+				WtReadOnlyWorldRuntime::ViewerEventKind::RefreshEditLodRetention ||
+			runtime.plan_revision_ != before ||
+			runtime.metrics_.rejected_events != 0) {
+			std::fprintf(stderr, "refresh did not requeue atomically\n");
+			return false;
+		}
+		if (runtime.update_viewer({ 1, 8.0, 8.0, 8.0, 2 }, 1, 1) !=
+				WtReadOnlyRuntimeStatus::Ok) return false;
+		WtChunkJob job;
+		while (runtime.scheduler_->pop_job(job)) {}
+		runtime.scheduler_->cancel_chunk(blocker);
+		runtime.scheduler_->forget_chunk(blocker);
+		if (!runtime.process_viewer_event() ||
+			runtime.metrics_.rejected_events != 0 ||
+			runtime.plan_revision_ != before + 1 ||
+			runtime.current_plan_.entries.empty() ||
+			runtime.planner_viewers_.size() != 1 ||
+			runtime.planner_viewers_.front().snapshot.revision != 1 ||
+			runtime.viewer_events_.size() != 1) {
+			std::fprintf(stderr,
+				"refresh retry lost its plan or the subsequent external update\n");
+			return false;
+		}
+		if (!runtime.process_viewer_event()) return false;
+		return runtime.metrics_.rejected_events == 0 &&
+			runtime.planner_viewers_.size() == 1 &&
+			runtime.planner_viewers_.front().snapshot.revision == 2 &&
+			runtime.viewer_events_.empty() &&
+			runtime.last_status() == WtReadOnlyRuntimeStatus::Ok;
+	}
+};
+
+} // namespace world_transvoxel::testing
 
 namespace {
 
@@ -324,6 +386,38 @@ bool run_hierarchical_staging_regression() {
 	) == wt::WtBalancedLodPlannerStatus::Ok && deep_preferred_complete &&
 		plans_equal(deep_preferred_stage, deep_target),
 		"preferred hierarchical refinement did not include mandatory 2:1 support");
+
+	// A direct edit can perform more than one split. The first preferred split
+	// may temporarily border a leaf two LODs coarser; balance its mandatory
+	// neighbors before the next selection, not only after the entire loop.
+	for (int axis = 0; axis < 3; ++axis) {
+		for (int sign : { -1, 1 }) {
+			for (int offset : { 0, -16 }) {
+				const auto orient = [=](wt::WtChunkKey key) {
+					std::int32_t values[] = { key.x, key.y, key.z };
+					std::swap(values[0], values[axis]);
+					if (sign < 0) values[axis] = -values[axis] - 1;
+					const auto shift = offset / (1 << key.lod);
+					return wt::WtChunkKey { values[0] + shift, values[1] + shift,
+						values[2] + shift, key.lod };
+				};
+				std::vector<wt::WtChunkKey> oriented_catalog, oriented_target;
+				for (const auto &key : deep_catalog) oriented_catalog.push_back(orient(key));
+				for (const auto &key : deep_target_keys) oriented_target.push_back(orient(key));
+				std::sort(oriented_catalog.begin(), oriented_catalog.end());
+				wt::WtBalancedLodPlanner oriented_planner(64, oriented_catalog);
+				wt::WtBalancedLodPlan initial, target_plan, direct;
+				bool finished = false;
+				check(plan_from_keys({ orient(fine_parent), orient(coarse_neighbor) }, initial) &&
+					plan_from_keys(oriented_target, target_plan) &&
+					oriented_planner.stage_toward(target_plan, initial, {}, 2, 2,
+						direct, finished, { orient({ 2, 0, 0, 0 }) }, true, true) ==
+						wt::WtBalancedLodPlannerStatus::Ok && finished &&
+					plans_equal(direct, target_plan),
+					"multi-split preferred refinement rejected a temporary unbalanced map");
+			}
+		}
+	}
 
 	const wt::WtChunkKey refinement_root { 0, 0, 0, 2 };
 	const wt::WtChunkKey background_root { 2, 0, 0, 2 };
@@ -2330,6 +2424,10 @@ int main() {
 		storage.has_page({ 5, 1, 1, 0 }) &&
 		!storage.has_page({ 6, 0, 0, 0 }),
 		"transition page catalog mismatch");
+	check(wtt::WtRuntimeEventTestAccess::refresh_survives_full_queue(storage, 0),
+		"queued edit-retention refresh lost identity or external viewer (zero workers)");
+	check(wtt::WtRuntimeEventTestAccess::refresh_survives_full_queue(storage, 1),
+		"queued edit-retention refresh lost identity or external viewer (one worker)");
 
 	const std::vector<wt::WtLodPlannerViewer> first_viewer = {
 		planner_viewer(1, 1, 8.0),

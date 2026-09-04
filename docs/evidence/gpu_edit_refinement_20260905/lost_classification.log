@@ -1,0 +1,5 @@
+refresh retried plan failed events=1 plan=0 rejected=1 status=0 viewers=1 entries=0
+FAIL: queued edit-retention refresh lost identity or external viewer (zero workers)
+refresh retried plan failed events=1 plan=0 rejected=1 status=0 viewers=1 entries=0
+FAIL: queued edit-retention refresh lost identity or external viewer (one worker)
+PRODUCTION_LOD_STREAMING_FAIL failures=2
