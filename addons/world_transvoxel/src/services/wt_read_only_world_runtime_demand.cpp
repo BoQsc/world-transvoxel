@@ -368,7 +368,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 				edit_lod_retention_refresh_pending_ = false;
 				retention_refresh_event = true;
 				event.kind = ViewerEventKind::RefreshEditLodRetention;
-					event.snapshot = planner_viewers_.empty() ?
+				event.snapshot = planner_viewers_.empty() ?
 					WtViewerSnapshot { 1, 0.0, 0.0, 0.0, plan_revision_ + 1 } :
 					planner_viewers_.front().snapshot;
 			} else {
@@ -389,6 +389,8 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			event = viewer_events_.front();
 			viewer_events_.erase(viewer_events_.begin());
 			staging_event = event.kind == ViewerEventKind::AdvanceStaging;
+			retention_refresh_event =
+				event.kind == ViewerEventKind::RefreshEditLodRetention;
 		}
 	}
 	const bool trace_enabled = causal_trace_.enabled();
