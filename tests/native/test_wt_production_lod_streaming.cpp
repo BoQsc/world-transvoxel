@@ -572,6 +572,32 @@ bool run_hierarchical_staging_regression() {
 		find_entry(preferred_only_stage, breadth_coarse) != nullptr &&
 		find_entry(preferred_only_stage, breadth_fine) != nullptr,
 		"preferred-only staging advanced background topology without a focus");
+	std::vector<wt::WtChunkKey> mixed_current_keys { breadth_coarse };
+	std::vector<wt::WtChunkKey> mixed_target_keys { breadth_fine };
+	for (const auto &key : breadth_target_keys) {
+		(key.lod == 0 ? mixed_current_keys : mixed_target_keys).push_back(key);
+	}
+	wt::WtBalancedLodPlan mixed_current, mixed_target, mixed_stage;
+	check(plan_from_keys(mixed_current_keys, mixed_current) &&
+		plan_from_keys(mixed_target_keys, mixed_target),
+		"mixed edit-refinement/coarsening fixture is invalid");
+	check(breadth_planner.stage_toward(mixed_target, mixed_current,
+		mixed_current_keys, 2, 1, mixed_stage, breadth_complete,
+		{ { 0, 0, 0, 1 } }, true, true) == wt::WtBalancedLodPlannerStatus::Ok &&
+		!breadth_complete && mixed_stage.entries.size() == 16 &&
+		find_entry(mixed_stage, breadth_coarse) == nullptr &&
+		find_entry(mixed_stage, breadth_fine) == nullptr,
+		"edit-only refinement spent its budget coarsening unrelated siblings");
+	check(breadth_planner.stage_toward(mixed_target, mixed_current,
+		mixed_current_keys, 2, 1, mixed_stage, breadth_complete,
+		{}, true, true) == wt::WtBalancedLodPlannerStatus::Ok &&
+		!breadth_complete && mixed_stage.entries.size() == mixed_current.entries.size() &&
+		std::all_of(mixed_current.entries.begin(), mixed_current.entries.end(),
+			[&](const wt::WtLodMapEntry &entry) {
+				const auto *retained = find_entry(mixed_stage, entry.key);
+				return retained != nullptr && retained->transition_mask == entry.transition_mask;
+			}),
+		"preferred-only staging coarsened background without an edit focus");
 	return complete && repeated_complete;
 }
 

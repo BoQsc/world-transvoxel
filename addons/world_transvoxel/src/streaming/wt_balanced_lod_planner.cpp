@@ -609,6 +609,9 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 		// its parent. This is the inverse of refinement and keeps relocation
 		// coarsening bounded by the same publication unit.
 		for (const WtChunkKey &leaf : leaves) {
+			// An edit-only batch must not spend its refinement budget on
+			// unrelated background coarsening or enlarge its publication set.
+			if (preferred_refinement_only) break;
 			if (leaf.lod >= kWtMaximumLod) continue;
 			const WtChunkKey parent = wt_parent_chunk_key(leaf);
 			const bool target_contains_parent = std::any_of(
