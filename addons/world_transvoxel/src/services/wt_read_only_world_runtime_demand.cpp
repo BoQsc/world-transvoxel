@@ -653,17 +653,22 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			}
 		}
 		WtBalancedLodPlan staged;
+		const bool direct_edit_refinement =
+			retention_refresh_event && !preferred_refinement_keys.empty();
 		plan_status = lod_planner_->stage_toward(
 			candidate_staging_target,
 			current_plan_,
 			visually_ready,
 			candidate_staging_root_lod,
-			1,
+			direct_edit_refinement ?
+				std::max<std::size_t>(1U, candidate_staging_root_lod) : 1U,
 			staged,
 			staging_complete,
 			preferred_refinement_keys,
-			!config_.hierarchical_lod_background_activation_enabled &&
-				(staging_event || unchanged_external_target)
+			direct_edit_refinement ||
+				(!config_.hierarchical_lod_background_activation_enabled &&
+					(staging_event || unchanged_external_target)),
+			direct_edit_refinement
 		);
 		if (plan_status != WtBalancedLodPlannerStatus::Ok) {
 			std::lock_guard<std::mutex> lock(metrics_mutex_);

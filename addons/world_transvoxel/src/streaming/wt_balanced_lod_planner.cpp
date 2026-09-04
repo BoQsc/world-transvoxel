@@ -503,7 +503,8 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 	WtBalancedLodPlan &output,
 	bool &complete,
 	const std::vector<WtChunkKey> &preferred_refinement_keys,
-	bool preferred_refinement_only
+	bool preferred_refinement_only,
+	bool allow_unready_preferred_refinement
 ) const {
 	output.clear();
 	complete = false;
@@ -655,17 +656,20 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 		std::int32_t selected_priority = std::numeric_limits<std::int32_t>::min();
 		for (const WtLodMapEntry &entry : current_entries) {
 			const WtChunkKey &leaf = entry.key;
-			if (leaf.lod == 0 ||
-				!std::binary_search(ready.begin(), ready.end(), leaf)) {
-				continue;
-			}
-			const WtChunkBounds leaf_bounds = wt_chunk_bounds(leaf);
 			const bool preferred_refinement = std::any_of(
 				preferred.begin(), preferred.end(),
 				[&](const WtChunkKey &key) {
 					return bounds_contain(leaf, key);
 				}
 			);
+			const bool visually_ready_leaf =
+				std::binary_search(ready.begin(), ready.end(), leaf);
+			if (leaf.lod == 0 || (!visually_ready_leaf &&
+					!(allow_unready_preferred_refinement &&
+						preferred_refinement))) {
+				continue;
+			}
+			const WtChunkBounds leaf_bounds = wt_chunk_bounds(leaf);
 			const bool borders_coarser = std::any_of(
 				current_entries.begin(), current_entries.end(),
 				[&](const WtLodMapEntry &neighbor) {

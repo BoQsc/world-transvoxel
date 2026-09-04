@@ -69,7 +69,8 @@ public:
 		WtBalancedLodPlan &output,
 		bool &complete,
 		const std::vector<WtChunkKey> &preferred_refinement_keys = {},
-		bool preferred_refinement_only = false
+		bool preferred_refinement_only = false,
+		bool allow_unready_preferred_refinement = false
 	) const;
 
 	std::size_t active_capacity() const noexcept;

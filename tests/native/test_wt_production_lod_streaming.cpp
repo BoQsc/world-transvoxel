@@ -399,6 +399,24 @@ bool run_hierarchical_staging_regression() {
 		find_entry(depth_stage, refinement_root) == nullptr &&
 		find_entry(depth_stage, background_root) != nullptr,
 		"hierarchical staging preferred coarse background over the LOD0 path");
+	wt::WtBalancedLodPlan direct_depth_stage;
+	bool direct_depth_complete = false;
+	check(depth_planner.stage_toward(
+		depth_target,
+		depth_current,
+		{ refinement_root, background_root },
+		2,
+		2,
+		direct_depth_stage,
+		direct_depth_complete,
+		{ { 0, 0, 0, 0 } },
+		true,
+		true
+	) == wt::WtBalancedLodPlannerStatus::Ok && !direct_depth_complete &&
+		find_entry(direct_depth_stage, { 0, 0, 0, 0 }) != nullptr &&
+		find_entry(direct_depth_stage, refinement_root) == nullptr &&
+		find_entry(direct_depth_stage, background_root) != nullptr,
+		"direct preferred staging did not request the final edit LOD at once");
 	const wt::WtChunkKey breadth_coarse { 0, 0, 0, 2 };
 	const wt::WtChunkKey breadth_fine { 4, 0, 0, 1 };
 	std::vector<wt::WtChunkKey> breadth_catalog {
