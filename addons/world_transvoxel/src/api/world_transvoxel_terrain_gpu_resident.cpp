@@ -117,7 +117,8 @@ bool build_gpu_publication_cohort(
 	WtChunkPublicationRegion &region,
 	std::vector<WtChunkKey> &waiting_masks,
 	godot::Array *inspected_boundaries = nullptr,
-	std::vector<WtChunkKey> *inspected_candidates = nullptr
+	std::vector<WtChunkKey> *inspected_candidates = nullptr,
+	std::vector<WtChunkKey> *inspected_visual_retirements = nullptr
 ) {
 	std::vector<WtChunkKey> candidates = pending;
 	candidates.insert(candidates.end(), ready.begin(), ready.end());
@@ -131,9 +132,26 @@ bool build_gpu_publication_cohort(
 			WtChunkApplicationRecord record;
 			return application.copy_record(key, record) && !record.visual_required;
 		}), candidates.end());
+	// Chunk retirement is shared by visual and collision-only records. Only a
+	// replacement currently active in the GPU render sink contributes visible
+	// coverage and therefore belongs to the atomic visual publication region.
+	// Collision-local LOD0 retirements must remain in the collision lifecycle,
+	// but admitting them here can connect an unrelated visual cohort through the
+	// unsafe-LOD-boundary closure and prevent that visual cohort from publishing.
+	std::vector<WtChunkKey> visual_retirements;
+	visual_retirements.reserve(retirements.size());
+	for (const WtChunkKey &key : retirements) {
+		std::uint8_t active_mask = 0;
+		if (render_sink.get_gpu_resident_boundary_mask(key, active_mask)) {
+			visual_retirements.push_back(key);
+		}
+	}
 	if (inspected_candidates) *inspected_candidates = candidates;
+	if (inspected_visual_retirements) {
+		*inspected_visual_retirements = visual_retirements;
+	}
 	return wt_build_gpu_chunk_publication_cohort(
-		seed, candidates, retirements,
+		seed, candidates, visual_retirements,
 		[&application, &render_sink, inspected_boundaries](const WtChunkKey &key, WtGpuPublicationBoundary &boundary) {
 			WtChunkApplicationRecord record;
 			if (!application.copy_record(key, record) || !record.visual_required) return false;
@@ -181,10 +199,12 @@ godot::Dictionary WorldTransvoxelTerrain::inspect_gpu_resident_publication(
 	std::vector<WtChunkKey> waiting_masks;
 	godot::Array boundaries;
 	std::vector<WtChunkKey> visual_candidates;
+	std::vector<WtChunkKey> visual_retirements;
 	const bool built = build_gpu_publication_cohort(
 		*application_, *render_sink_, seed, pending_chunk_replacements_,
 		ready_staged_chunk_replacements_, pending_chunk_retirements_,
-		region, waiting_masks, &boundaries, &visual_candidates
+		region, waiting_masks, &boundaries, &visual_candidates,
+		&visual_retirements
 	);
 	result["seed"] = gpu_cohort_key(seed);
 	result["built"] = built;
@@ -195,6 +215,7 @@ godot::Dictionary WorldTransvoxelTerrain::inspect_gpu_resident_publication(
 	result["ready_replacements"] = gpu_cohort_keys(ready_staged_chunk_replacements_);
 	result["visual_candidates"] = gpu_cohort_keys(visual_candidates);
 	result["pending_retirements"] = gpu_cohort_keys(pending_chunk_retirements_);
+	result["pending_visual_retirements"] = gpu_cohort_keys(visual_retirements);
 	result["selected"] = gpu_cohort_keys(region.replacements);
 	result["retirements"] = gpu_cohort_keys(region.retirements);
 	result["waiting_masks"] = gpu_cohort_keys(waiting_masks);
@@ -584,16 +605,23 @@ get_gpu_resident_render_activation_cohort(
 	}
 	WtChunkPublicationRegion region;
 	std::vector<WtChunkKey> waiting_masks;
+	std::vector<WtChunkKey> visual_retirements;
 	record_phase("seed_validation");
 	const bool built = build_gpu_publication_cohort(
 			*application_, *render_sink_, identity.key,
 			pending_chunk_replacements_, ready_staged_chunk_replacements_,
-			pending_chunk_retirements_, region, waiting_masks
+			pending_chunk_retirements_, region, waiting_masks,
+			nullptr, nullptr, &visual_retirements
 		);
 	record_phase("selection");
 	const bool covered = built && (region.retirements.empty() ||
 		publication_region_has_complete_authoritative_coverage(region));
 	record_phase("coverage");
+	result["pending_visual_retirement_count"] = static_cast<std::int64_t>(
+		visual_retirements.size()
+	);
+	result["cohort_built"] = built;
+	result["authoritative_coverage_complete"] = covered;
 	if (!covered) {
 		result["status"] = "WAITING_COHORT";
 		result["error"] = "GPU resident boundary cohort is incomplete or exceeds capacity";
