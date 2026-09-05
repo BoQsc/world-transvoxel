@@ -266,7 +266,7 @@ bool WorldTransvoxelTerrain::begin_gpu_resident_render_publication(
 			render_sink_->restore_gpu_resident_replacements();
 	}
 	if (!gpu_meshing_shadow_ || !gpu_meshing_shadow_->begin(
-			static_cast<std::size_t>(std::clamp<std::int64_t>(capacity, 0, 16)),
+			static_cast<std::size_t>(std::clamp<std::int64_t>(capacity, 0, 32)),
 			true,
 			WtGpuMeshingCaptureStage::PreMeshField
 		)) {
