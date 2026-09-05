@@ -21,7 +21,8 @@ struct WtGpuPublicationBoundary {
 
 WtGpuPublicationBoundary wt_gpu_publication_boundary(
 	std::uint8_t candidate_mask, bool candidate_mask_known,
-	std::uint8_t active_mask, bool active_present
+	std::uint8_t active_mask, bool active_present,
+	bool active_content_current = true
 ) noexcept;
 
 // Inputs are sorted unique keys. Lookup includes desired visual leaves only,

@@ -114,6 +114,7 @@ bool build_gpu_publication_cohort(
 	const std::vector<WtChunkKey> &pending,
 	const std::vector<WtChunkKey> &ready,
 	const std::vector<WtChunkKey> &retirements,
+	const std::vector<WtChunkKey> &edit_replacements,
 	WtChunkPublicationRegion &region,
 	std::vector<WtChunkKey> &waiting_masks,
 	godot::Array *inspected_boundaries = nullptr,
@@ -152,7 +153,7 @@ bool build_gpu_publication_cohort(
 	}
 	return wt_build_gpu_chunk_publication_cohort(
 		seed, candidates, visual_retirements,
-		[&application, &render_sink, &retirements, inspected_boundaries](const WtChunkKey &key, WtGpuPublicationBoundary &boundary) {
+		[&application, &render_sink, &retirements, &edit_replacements, inspected_boundaries](const WtChunkKey &key, WtGpuPublicationBoundary &boundary) {
 			// A shared pending retirement is no longer desired visual coverage,
 			// even when it has no active GPU surface and therefore is not part of
 			// the atomic visual retirement set above.
@@ -164,9 +165,16 @@ bool build_gpu_publication_cohort(
 			std::uint8_t active_mask = 0;
 			const bool active_present = render_sink.get_gpu_resident_boundary_mask(key, active_mask);
 			const bool candidate_mask_known = record.visual_generation == record.generation;
+			const bool edit_pending = std::binary_search(
+				edit_replacements.begin(), edit_replacements.end(), key
+			);
+			const bool active_content_current = !edit_pending ||
+				render_sink.gpu_resident_replacement_matches(
+					key, record.generation, active_mask
+				);
 			boundary = wt_gpu_publication_boundary(
 				record.external_visual_transition_mask, candidate_mask_known,
-				active_mask, active_present
+				active_mask, active_present, active_content_current
 			);
 			if (inspected_boundaries) {
 				godot::Dictionary member = gpu_cohort_member(record);
@@ -175,6 +183,8 @@ bool build_gpu_publication_cohort(
 				member["candidate_mask_known"] = candidate_mask_known;
 				member["active_present"] = active_present;
 				member["active_mask"] = active_mask;
+				member["edit_pending"] = edit_pending;
+				member["active_content_current"] = active_content_current;
 				member["visual_generation"] = static_cast<std::int64_t>(record.visual_generation.value);
 				member["visual_ready"] = record.visual_ready;
 				member["visual_generation_superseded"] = record.visual_generation_superseded;
@@ -209,7 +219,7 @@ godot::Dictionary WorldTransvoxelTerrain::inspect_gpu_resident_publication(
 	const bool built = build_gpu_publication_cohort(
 		*application_, *render_sink_, seed, pending_chunk_replacements_,
 		ready_staged_chunk_replacements_, pending_chunk_retirements_,
-		region, waiting_masks, &boundaries, &visual_candidates,
+		independently_publishable_chunk_replacements_, region, waiting_masks, &boundaries, &visual_candidates,
 		&visual_retirements
 	);
 	result["seed"] = gpu_cohort_key(seed);
@@ -616,7 +626,8 @@ get_gpu_resident_render_activation_cohort(
 	const bool built = build_gpu_publication_cohort(
 			*application_, *render_sink_, identity.key,
 			pending_chunk_replacements_, ready_staged_chunk_replacements_,
-			pending_chunk_retirements_, region, waiting_masks,
+			pending_chunk_retirements_, independently_publishable_chunk_replacements_,
+			region, waiting_masks,
 			nullptr, nullptr, &visual_retirements
 		);
 	record_phase("selection");
@@ -832,7 +843,8 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 	if (!build_gpu_publication_cohort(
 			*application_, *render_sink_, seed_key,
 			pending_chunk_replacements_, ready_staged_chunk_replacements_,
-			pending_chunk_retirements_, region, waiting_masks
+			pending_chunk_retirements_, independently_publishable_chunk_replacements_,
+			region, waiting_masks
 		) || (!region.retirements.empty() &&
 			!publication_region_has_complete_authoritative_coverage(region))) {
 		result["status"] = "WAITING_COHORT";

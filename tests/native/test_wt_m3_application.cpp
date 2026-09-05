@@ -1047,6 +1047,31 @@ void test_gpu_reciprocal_publication_dependencies() {
 	}
 }
 
+void test_gpu_edit_content_boundaries() {
+	// A brush spanning this face must never show only one edited half, even
+	// while the neighbor has only an expectation and no candidate mask yet.
+	const wt::WtChunkKey left { -1, 0, 0, 0 };
+	const wt::WtChunkKey right { 0, 0, 0, 0 };
+	const wt::WtChunkKey unchanged { 1, 0, 0, 0 };
+	for (const bool candidate_known : { false, true }) {
+		const auto lookup = [&](const wt::WtChunkKey &key, wt::WtGpuPublicationBoundary &state) {
+			if (key != left && key != right && key != unchanged) return false;
+			state = wt::wt_gpu_publication_boundary(0, candidate_known, 0, true, key == unchanged);
+			return true;
+		};
+		wt::WtChunkPublicationRegion region;
+		std::vector<wt::WtChunkKey> waiting;
+		check(wt::wt_build_gpu_chunk_publication_cohort(
+			left, {left, right}, {}, lookup, region, waiting) &&
+			region.replacements == std::vector<wt::WtChunkKey> { left, right } && waiting.empty(),
+			"matching masks published only half of a cross-chunk edit");
+		check(wt::wt_build_gpu_chunk_publication_cohort(
+			right, {left, right}, {}, lookup, region, waiting) &&
+			region.replacements == std::vector<wt::WtChunkKey> { left, right },
+			"edit cohort depended on which edited half became ready first");
+	}
+}
+
 void test_gpu_publication_dependency_bounds() {
 	const wt::WtChunkKey seed { -1, 0, 0, 0 };
 	const wt::WtChunkKey retained { 0, 0, 0, 1 };
@@ -1218,6 +1243,7 @@ int main() {
 	test_cross_lod_replacement_publication_policy();
 	test_gpu_reciprocal_publication_dependencies();
 	test_gpu_publication_dependency_bounds();
+	test_gpu_edit_content_boundaries();
 	test_gpu_same_lod_candidates_preserve_retained_boundaries();
 	test_collision_deadline_bounds_frame_work(render);
 	if (failure_count != 0) {
