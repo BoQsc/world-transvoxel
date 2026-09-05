@@ -580,6 +580,18 @@ int main() {
 
 	WtGpuMeshingShadowQueue queue;
 	require(!queue.begin(0), "zero capacity was accepted");
+	require(!queue.begin(33), "unbounded capture capacity was accepted");
+	require(queue.begin(32), "32-request pipeline was rejected");
+	std::vector<std::uint64_t> pipeline_reservations;
+	for (std::size_t index = 0; index < 16; ++index) {
+		const auto reservation = queue.reserve_capture_slots(capture_for(index + 1, 1).job);
+		require(reservation != 0, "bounded pipeline reservation failed early");
+		pipeline_reservations.push_back(reservation);
+	}
+	require(queue.reserve_capture_slots(capture_for(18, 1).job) == 0,
+		"bounded pipeline admitted beyond 32 reserved surfaces");
+	for (const auto reservation : pipeline_reservations) queue.release_capture_slots(reservation);
+	queue.end();
 	require(queue.begin(1), "bounded queue did not start");
 	require(queue.capture(capture_for(11)), "first capture failed");
 	WtGpuMeshingShadowRequest first;

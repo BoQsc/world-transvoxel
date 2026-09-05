@@ -10,7 +10,7 @@ bool WtGpuMeshingShadowQueue::begin(
 	bool retain_publication_authority,
 	WtGpuMeshingCaptureStage capture_stage
 ) {
-	if (capacity == 0 || capacity > 16) return false;
+	if (capacity == 0 || capacity > 32) return false;
 	std::lock_guard<std::mutex> lock(mutex_);
 	enabled_ = true;
 	retain_publication_authority_ = retain_publication_authority;
