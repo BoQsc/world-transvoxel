@@ -506,6 +506,8 @@ WtChunkEditStatus WtChunkEditState::initialize(
 	current_world_revision_ = 0;
 	next_sequence_ = 0;
 	changed_sample_count_ = 0;
+	surface_shift_dirty_bounds_ = {};
+	has_surface_shift_dirty_bounds_ = false;
 	procedural_descriptor_ = {};
 	has_procedural_descriptor_ = false;
 	if (!valid_page(page)) {
@@ -581,6 +583,18 @@ WtChunkEditStatus WtChunkEditState::apply_command(
 	);
 	if (invalidates_surface_shift) {
 		page_.surface_shift_valid = false;
+		if (!has_surface_shift_dirty_bounds_) {
+			surface_shift_dirty_bounds_ = command.bounds;
+			has_surface_shift_dirty_bounds_ = true;
+		} else {
+			auto &bounds = surface_shift_dirty_bounds_;
+			bounds.minimum.x = std::min(bounds.minimum.x, command.bounds.minimum.x);
+			bounds.minimum.y = std::min(bounds.minimum.y, command.bounds.minimum.y);
+			bounds.minimum.z = std::min(bounds.minimum.z, command.bounds.minimum.z);
+			bounds.maximum.x = std::max(bounds.maximum.x, command.bounds.maximum.x);
+			bounds.maximum.y = std::max(bounds.maximum.y, command.bounds.maximum.y);
+			bounds.maximum.z = std::max(bounds.maximum.z, command.bounds.maximum.z);
+		}
 	}
 	next_sequence_ = command.sequence + 1;
 	last_status_ = WtChunkEditStatus::Ok;
@@ -605,6 +619,10 @@ std::uint64_t WtChunkEditState::current_world_revision() const noexcept {
 
 std::uint32_t WtChunkEditState::next_sequence() const noexcept {
 	return next_sequence_;
+}
+
+const WtEditBounds *WtChunkEditState::surface_shift_dirty_bounds() const noexcept {
+	return has_surface_shift_dirty_bounds_ ? &surface_shift_dirty_bounds_ : nullptr;
 }
 
 std::size_t WtChunkEditState::changed_sample_count() const noexcept {

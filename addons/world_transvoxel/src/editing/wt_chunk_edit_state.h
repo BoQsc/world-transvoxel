@@ -48,6 +48,7 @@ public:
 	std::uint64_t current_world_revision() const noexcept;
 	std::uint32_t next_sequence() const noexcept;
 	std::size_t changed_sample_count() const noexcept;
+	const WtEditBounds *surface_shift_dirty_bounds() const noexcept;
 	WtChunkEditStatus last_status() const noexcept;
 
 private:
@@ -56,6 +57,8 @@ private:
 	std::uint64_t current_world_revision_ = 0;
 	std::uint32_t next_sequence_ = 0;
 	std::size_t changed_sample_count_ = 0;
+	WtEditBounds surface_shift_dirty_bounds_;
+	bool has_surface_shift_dirty_bounds_ = false;
 	WtProceduralWorldDescriptor procedural_descriptor_;
 	bool has_procedural_descriptor_ = false;
 	WtChunkEditStatus last_status_ = WtChunkEditStatus::NotInitialized;

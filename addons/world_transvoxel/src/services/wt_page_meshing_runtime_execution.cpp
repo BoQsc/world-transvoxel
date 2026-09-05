@@ -2,6 +2,7 @@
 
 #include "bake/wt_chunk_baker.h"
 #include "editing/wt_chunk_edit_state.h"
+#include "editing/wt_edit_surface_shift_source.h"
 #include "meshing/wt_material_volume_sample_source.h"
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_chunk_page_sample_source.h"
@@ -197,10 +198,14 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 			}
 			WtChunkPage edited_page = edit_state.page();
 			if (!edited_page.surface_shift_valid) {
+				const WtChunkPageSampleSource retained_source(*dependency.page);
+				const WtEditSurfaceShiftSource local_source(
+					edited_source ? static_cast<const WtChunkSampleSource &>(*edited_source) : retained_source,
+					*dependency.page, edit_state.surface_shift_dirty_bounds());
 				if (!edited_source || !edited_source->valid() ||
 					wt_build_surface_shift_records(
 						edited_page,
-						*edited_source,
+						local_source,
 						preparation_scratch_.multiresolution
 					) != WtSurfaceShiftBuildStatus::Ok) {
 					source_valid = false;

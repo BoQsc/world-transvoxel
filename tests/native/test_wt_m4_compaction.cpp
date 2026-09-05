@@ -1,5 +1,6 @@
 #include "bake/wt_snapshot_compactor.h"
 #include "editing/wt_chunk_edit_state.h"
+#include "editing/wt_edit_surface_shift_source.h"
 #include "meshing/wt_multiresolution_vertex_resolver.h"
 #include "storage/wt_chunk_surface_shift.h"
 
@@ -486,6 +487,81 @@ void test_multiresolution_compaction() {
 	}
 }
 
+void test_local_surface_shift_rebuild() {
+	class EditedSource final : public wt::WtChunkSampleSource {
+	public:
+		std::vector<wt::WtEditCommand> commands;
+		mutable std::size_t samples = 0;
+		bool sample(const wt::WtGridPoint &point, wt::WtScalarSample &output) const noexcept override {
+			++samples;
+			if (!Source().sample(point, output)) return false;
+			for (const auto &command : commands) {
+				bool changed = false;
+				if (!wt::wt_apply_edit_command_to_sample(command, point, output, changed)) return false;
+			}
+			return true;
+		}
+	};
+	std::size_t full_samples = 0, local_samples = 0;
+	for (std::uint8_t lod = 1; lod <= 3; ++lod) {
+		for (int negative = 0; negative <= 1; ++negative) {
+			const wt::WtChunkKey key {negative ? -1 : 0, 0, 0, lod};
+			std::vector<wt::WtBakedChunkPage> baked;
+			check(wt::WtChunkBaker(1).bake({key}, 100, Source(), baked) == wt::WtChunkBakeStatus::Ok,
+				"local correction fixture bake failed");
+			if (baked.empty()) return;
+			const auto original = decode_page(baked.front());
+			wt::WtChunkEditState edits;
+			check(edits.initialize(original, 100, 0) == wt::WtChunkEditStatus::Ok,
+				"local correction edit state failed");
+			EditedSource source;
+			for (int step = 0; step < 4; ++step) {
+				// The first brush changes a finest gradient sample outside the
+				// chunk; later brushes create/remove crossings and author material.
+				auto command = sphere(static_cast<std::uint8_t>(step + 40), 0, step + 1,
+					step == 0 ? -1 : 0, step % 2 ? -4.0F : 3.0F);
+				if (step != 0) {
+					command.sphere.center_y_q16 = 8 * wt::kWtEditCoordinateScale;
+					command.sphere.center_z_q16 = 8 * wt::kWtEditCoordinateScale;
+					command.sphere.radius_q16 = 3 * wt::kWtEditCoordinateScale;
+				}
+				if (step == 3) {
+					command.operation = wt::WtEditOperation::PaintMaterial;
+					command.material = 5;
+					command.density_value = 0.0F;
+				}
+				if (step == 0) {
+					command.shape = wt::WtEditShape::AxisAlignedBox;
+					command.box = {-wt::kWtEditCoordinateScale, 0, 0, -wt::kWtEditCoordinateScale, 0, 0};
+					check(wt::wt_edit_box_bounds(command.box, command.bounds), "local box bounds failed");
+				} else {
+					check(wt::wt_edit_sphere_bounds(command.sphere, command.bounds), "local brush bounds failed");
+				}
+				check(edits.apply_command(command) == wt::WtChunkEditStatus::Ok, "local brush replay failed");
+				source.commands.push_back(command);
+				auto full = edits.page();
+				auto local = edits.page();
+				wt::WtMultiresolutionVertexScratch scratch;
+				source.samples = 0;
+				check(wt::wt_build_surface_shift_records(full, source, scratch) == wt::WtSurfaceShiftBuildStatus::Ok,
+					"full correction rebuild failed");
+				full_samples += source.samples;
+				source.samples = 0;
+				const wt::WtEditSurfaceShiftSource retained(source, original, edits.surface_shift_dirty_bounds());
+				check(wt::wt_build_surface_shift_records(local, retained, scratch) == wt::WtSurfaceShiftBuildStatus::Ok,
+					"local correction rebuild failed");
+				local_samples += source.samples;
+				std::vector<std::uint8_t> full_bytes, local_bytes;
+				check(wt::wt_write_chunk_page(full, full_bytes) == wt::WtChunkPageStatus::Ok &&
+					wt::wt_write_chunk_page(local, local_bytes) == wt::WtChunkPageStatus::Ok && full_bytes == local_bytes,
+					"local correction differs from full rebuild including normals/materials");
+			}
+		}
+	}
+	check(local_samples * 4 < full_samples, "local correction did not avoid unaffected sampling");
+	std::printf("LOCAL_SURFACE_SHIFT samples_full=%zu samples_local=%zu exact_cases=24\n", full_samples, local_samples);
+}
+
 void test_failures() {
 	const std::vector<wt::WtBakedChunkPage> pages = bake_pages();
 	const std::vector<std::uint8_t> world = write_world(pages);
@@ -572,6 +648,7 @@ int main() {
 	wt::WtCompactedSnapshot compacted;
 	test_compaction(compacted);
 	test_multiresolution_compaction();
+	test_local_surface_shift_rebuild();
 	test_failures();
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M4_COMPACTION_FAIL failures=%d\n", failure_count);
