@@ -165,6 +165,28 @@ void WorldTransvoxelConfig::_bind_methods() {
 		"set_hierarchical_lod_background_activation_enabled",
 		"is_hierarchical_lod_background_activation_enabled"
 	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"set_hierarchical_lod_viewer_activation_enabled", "enabled"
+		),
+		&WorldTransvoxelConfig::
+			set_hierarchical_lod_viewer_activation_enabled
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD(
+			"is_hierarchical_lod_viewer_activation_enabled"
+		),
+		&WorldTransvoxelConfig::
+			is_hierarchical_lod_viewer_activation_enabled
+	);
+	ADD_PROPERTY(
+		godot::PropertyInfo(
+			godot::Variant::BOOL,
+			"hierarchical_lod_viewer_activation_enabled"
+		),
+		"set_hierarchical_lod_viewer_activation_enabled",
+		"is_hierarchical_lod_viewer_activation_enabled"
+	);
 }
 
 #undef WT_BIND_FLOAT_PROPERTY
@@ -217,6 +239,8 @@ WtRuntimeConfig WorldTransvoxelConfig::to_native() const noexcept {
 		hierarchical_lod_staging_enabled_;
 	result.hierarchical_lod_background_activation_enabled =
 		hierarchical_lod_background_activation_enabled_;
+	result.hierarchical_lod_viewer_activation_enabled =
+		hierarchical_lod_viewer_activation_enabled_;
 	return result;
 }
 
@@ -360,6 +384,19 @@ void WorldTransvoxelConfig::set_hierarchical_lod_background_activation_enabled(
 bool WorldTransvoxelConfig::
 	is_hierarchical_lod_background_activation_enabled() const noexcept {
 	return hierarchical_lod_background_activation_enabled_;
+}
+
+void WorldTransvoxelConfig::set_hierarchical_lod_viewer_activation_enabled(
+	bool value
+) {
+	if (hierarchical_lod_viewer_activation_enabled_ == value) return;
+	hierarchical_lod_viewer_activation_enabled_ = value;
+	emit_changed();
+}
+
+bool WorldTransvoxelConfig::
+	is_hierarchical_lod_viewer_activation_enabled() const noexcept {
+	return hierarchical_lod_viewer_activation_enabled_;
 }
 
 } // namespace world_transvoxel

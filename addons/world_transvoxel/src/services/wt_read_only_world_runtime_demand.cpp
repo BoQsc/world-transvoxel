@@ -681,6 +681,36 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		WtBalancedLodPlan staged;
 		const bool direct_edit_refinement =
 			retention_refresh_event && !preferred_refinement_keys.empty();
+		if (config_.hierarchical_lod_viewer_activation_enabled &&
+			!direct_edit_refinement) {
+			// Progress the viewer's immediate neighborhood without activating
+			// the entire distant target. Balance adds the necessary 2:1 support.
+			for (const WtLodPlannerViewer &viewer : candidate_viewers) {
+				WtChunkKey center;
+				if (!chunk_coordinate(viewer.snapshot.x, center.x) ||
+					!chunk_coordinate(viewer.snapshot.y, center.y) ||
+					!chunk_coordinate(viewer.snapshot.z, center.z)) continue;
+				for (int z = -1; z <= 1; ++z) {
+					for (int y = -1; y <= 1; ++y) {
+						for (int x = -1; x <= 1; ++x) {
+							if (std::abs(x) + std::abs(y) + std::abs(z) > 1) continue;
+							const std::int64_t px = static_cast<std::int64_t>(center.x) + x;
+							const std::int64_t py = static_cast<std::int64_t>(center.y) + y;
+							const std::int64_t pz = static_cast<std::int64_t>(center.z) + z;
+							const auto valid_coordinate = [](std::int64_t value) {
+								return value >= std::numeric_limits<std::int32_t>::min() &&
+									value <= std::numeric_limits<std::int32_t>::max();
+							};
+							if (valid_coordinate(px) && valid_coordinate(py) && valid_coordinate(pz)) {
+								preferred_refinement_keys.push_back({
+									static_cast<std::int32_t>(px), static_cast<std::int32_t>(py),
+									static_cast<std::int32_t>(pz), 0 });
+							}
+						}
+					}
+				}
+			}
+		}
 		plan_status = lod_planner_->stage_toward(
 			candidate_staging_target,
 			current_plan_,
@@ -694,7 +724,8 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			direct_edit_refinement ||
 				(!config_.hierarchical_lod_background_activation_enabled &&
 					(staging_event || unchanged_external_target)),
-			direct_edit_refinement
+			direct_edit_refinement,
+			config_.hierarchical_lod_viewer_activation_enabled && !direct_edit_refinement
 		);
 		if (plan_status != WtBalancedLodPlannerStatus::Ok) {
 			std::lock_guard<std::mutex> lock(metrics_mutex_);

@@ -598,6 +598,13 @@ bool run_hierarchical_staging_regression() {
 				return retained != nullptr && retained->transition_mask == entry.transition_mask;
 			}),
 		"preferred-only staging coarsened background without an edit focus");
+	check(breadth_planner.stage_toward(mixed_target, mixed_current,
+		mixed_current_keys, 2, 1, mixed_stage, breadth_complete,
+		{}, true, false, true) == wt::WtBalancedLodPlannerStatus::Ok &&
+		!breadth_complete && mixed_stage.entries.size() == 2 &&
+		find_entry(mixed_stage, breadth_coarse) != nullptr &&
+		find_entry(mixed_stage, breadth_fine) != nullptr,
+		"viewer-only activation failed to retire distant refinement or activated background");
 	return complete && repeated_complete;
 }
 

@@ -64,6 +64,15 @@ project for years.
 
 ## 3. Production strategy and backend policy
 
+The optional staged runtime can activate the visual viewer's immediate
+seven-chunk neighborhood independently of distant background refinement through
+`hierarchical_lod_viewer_activation_enabled` (default false). This changes work
+admission, not meshing or authority: target-plan demand, visual readiness,
+2:1 balancing, and atomic publication remain required. Viewer activation may
+coarsen obsolete distant detail; direct edit refinement retains its existing
+content-first behavior. GPU integration must measure movement and edit latency
+before qualifying this opt-in policy.
+
 The first production backend uses Eric Lengyel's official MIT-licensed
 Transvoxel implementation and lookup data.
 

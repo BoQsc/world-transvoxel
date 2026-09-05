@@ -62,7 +62,8 @@ void test_defaults(std::vector<std::uint8_t> &evidence) {
 		config.collision_activation_distance == 96.0 &&
 		config.collision_deactivation_distance == 128.0 &&
 		!config.hierarchical_lod_staging_enabled &&
-		config.hierarchical_lod_background_activation_enabled,
+		config.hierarchical_lod_background_activation_enabled &&
+		!config.hierarchical_lod_viewer_activation_enabled,
 		"default runtime config values changed");
 	append_u64(evidence, config.active_chunk_capacity);
 	append_u64(evidence, config.viewer_capacity);
