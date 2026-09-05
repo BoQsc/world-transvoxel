@@ -662,10 +662,8 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			current_plan_,
 			visually_ready,
 			candidate_staging_root_lod,
-			// Admit one edit-local split, then let its activation advance the
-			// next step. A multi-level jump joins the first visible edit to all
-			// balancing families required by final LOD0 detail.
-			1U,
+			direct_edit_refinement ?
+				std::max<std::size_t>(1U, candidate_staging_root_lod) : 1U,
 			staged,
 			staging_complete,
 			preferred_refinement_keys,
