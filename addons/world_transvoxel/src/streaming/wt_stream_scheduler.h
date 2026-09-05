@@ -111,8 +111,9 @@ public:
 		const WtChunkKey &key,
 		std::int32_t priority
 	);
-	bool peek_job(WtChunkJob &job) const;
-	bool pop_job(WtChunkJob &job);
+	// Filters must not call back into the scheduler. Rejected jobs stay queued.
+	bool peek_job(WtChunkJob &job, const std::function<bool(const WtChunkJob &)> &admit = {}) const;
+	bool pop_job(WtChunkJob &job, const std::function<bool(const WtChunkJob &)> &admit = {});
 	WtSchedulerStatus submit_completion(const WtChunkJobResult &result);
 	std::size_t apply_completions(std::size_t maximum_count);
 	WtSchedulerStatus update_viewer(const WtViewerSnapshot &snapshot);
@@ -138,9 +139,10 @@ private:
 		);
 		bool pop(
 			WtChunkJob &job,
-			WtSchedulerQueueTraceEvent *trace_event = nullptr
+			WtSchedulerQueueTraceEvent *trace_event = nullptr,
+			const std::function<bool(const WtChunkJob &)> &admit = {}
 		);
-		bool peek(WtChunkJob &job) const;
+		bool peek(WtChunkJob &job, const std::function<bool(const WtChunkJob &)> &admit = {}) const;
 		bool reprioritize(
 			const WtChunkKey &key,
 			WtGenerationToken generation,

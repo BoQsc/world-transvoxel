@@ -521,9 +521,10 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 		}
 		if (page_runtime_->asynchronous_meshing_enabled() &&
 			!page_runtime_->asynchronous_mesh_admission_available()) {
-			if (next_job.stage == WtChunkJobStage::Mesh) {
-				break;
-			}
+			if (next_job.stage == WtChunkJobStage::Mesh &&
+				!scheduler_->peek_job(next_job, [](const WtChunkJob &candidate) {
+					return candidate.stage == WtChunkJobStage::Sample;
+				})) break;
 		}
 		std::shared_ptr<GpuMeshingCaptureReservation> pre_mesh_reservation;
 		const bool resident_input = gpu_meshing_shadow_ &&
@@ -538,13 +539,23 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			const std::uint64_t reservation_id =
 				gpu_meshing_shadow_->reserve_capture_slots(next_job);
 			if (reservation_id == 0) {
-				break;
+				// GPU backpressure must not stop sampling or collision-only work.
+				// Leave every blocked visual job in its original queue position.
+				if (!scheduler_->peek_job(next_job, [this](const WtChunkJob &candidate) {
+					if (candidate.stage == WtChunkJobStage::Sample) return true;
+					WtChunkApplicationRecord record;
+					return application_->copy_record(candidate.key, record) &&
+						record.generation == candidate.generation && !record.visual_required;
+				})) break;
+			} else {
+				pre_mesh_reservation = std::make_shared<GpuMeshingCaptureReservation>(
+					gpu_meshing_shadow_, reservation_id
+				);
 			}
-			pre_mesh_reservation = std::make_shared<
-				GpuMeshingCaptureReservation
-			>(gpu_meshing_shadow_, reservation_id);
 		}
-		if (!scheduler_->pop_job(job)) {
+		if (!scheduler_->pop_job(job, [&next_job](const WtChunkJob &candidate) {
+			return candidate.sequence == next_job.sequence;
+		})) {
 			break;
 		}
 		progressed = true;

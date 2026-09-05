@@ -671,7 +671,7 @@ void test_collision_promotion_before_mesh(std::size_t mesh_workers) {
 	check(reservation != 0, "queued collision promotion admission barrier failed");
 	wt::WtRuntimeConfig config;
 	config.active_chunk_capacity = 8;
-	config.viewer_capacity = 2;
+	config.viewer_capacity = 3;
 	config.demand_capacity_per_viewer = 125;
 	config.visual_viewer_collision_enabled = false;
 	config.meshing_worker_count = mesh_workers;
@@ -685,9 +685,14 @@ void test_collision_promotion_before_mesh(std::size_t mesh_workers) {
 	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
 	wt::WtGenerationToken initial_generation;
 	std::vector<wt::WtReadOnlyPublication> publications;
+	bool independent_collision = false;
 	const auto collect = [&]() {
 		wt::WtReadOnlyPublication publication;
 		while (runtime.pop_publication(publication)) {
+			if (publication.key == wt::WtChunkKey{0, 0, 0, 0} &&
+				publication.kind == wt::WtReadOnlyPublicationKind::CollisionPayload) {
+				independent_collision = true;
+			}
 			if (publication.key == target) {
 				if (publication.kind == wt::WtReadOnlyPublicationKind::ExpectChunk &&
 					initial_generation.value == 0) initial_generation = publication.generation;
@@ -700,13 +705,24 @@ void test_collision_promotion_before_mesh(std::size_t mesh_workers) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 	check(gpu->metrics().capture_reservation_rejections != 0, "visual mesh never reached admission barrier");
-	check(runtime.update_collision_viewer(viewer(2, 1, 40.0, 8.0), 0) == wt::WtReadOnlyRuntimeStatus::Ok,
-		"queued collision promotion collision viewer rejected");
-	while (runtime.get_metrics().collision_viewer_updates == 0 && std::chrono::steady_clock::now() < deadline) {
+	check(runtime.update_foreground_priority_lease({
+		91, 1, wt::WtForegroundPriorityClass::PlayerSupport, {target}
+	}) == wt::WtReadOnlyRuntimeStatus::Ok, "blocked visual priority lease failed");
+	check(runtime.update_collision_viewer(viewer(3, 1, 8.0, 8.0), 0) == wt::WtReadOnlyRuntimeStatus::Ok,
+		"independent collision viewer rejected during GPU saturation");
+	while (!independent_collision && std::chrono::steady_clock::now() < deadline) {
 		collect();
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
-	check(runtime.get_metrics().collision_viewer_updates == 1, "collision promotion was not applied before meshing");
+	check(independent_collision && gpu->metrics().reserved_capture_slots == 2,
+		"blocked visual head stalled independent collision work");
+	check(runtime.update_collision_viewer(viewer(2, 1, 40.0, 8.0), 0) == wt::WtReadOnlyRuntimeStatus::Ok,
+		"queued collision promotion collision viewer rejected");
+	while (runtime.get_metrics().collision_viewer_updates < 2 && std::chrono::steady_clock::now() < deadline) {
+		collect();
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	check(runtime.get_metrics().collision_viewer_updates == 2, "collision promotion was not applied before meshing");
 	gpu->release_capture_slots(reservation);
 	bool consumed = false;
 	while (!consumed && std::chrono::steady_clock::now() < deadline) {

@@ -51,29 +51,32 @@ bool WtStreamScheduler::JobQueue::push(
 
 bool WtStreamScheduler::JobQueue::pop(
 	WtChunkJob &job,
-	WtSchedulerQueueTraceEvent *trace_event
+	WtSchedulerQueueTraceEvent *trace_event,
+	const std::function<bool(const WtChunkJob &)> &admit
 ) {
 	std::lock_guard<std::mutex> lock(mutex_);
-	if (jobs_.empty()) {
-		return false;
-	}
-	job = jobs_.front();
+	const auto selected = admit ? std::find_if(jobs_.begin(), jobs_.end(), admit) : jobs_.begin();
+	if (selected == jobs_.end()) return false;
+	job = *selected;
 	if (trace_event != nullptr) {
 		trace_event->kind = WtSchedulerQueueTraceEventKind::Dequeued;
 		trace_event->job = job;
 		trace_event->queue_depth_before = jobs_.size();
 		trace_event->queue_depth_after = jobs_.size() - 1U;
-		trace_event->jobs_ahead = 0;
-		trace_event->same_priority_jobs_ahead = 0;
+		trace_event->jobs_ahead = static_cast<std::size_t>(selected - jobs_.begin());
+		trace_event->same_priority_jobs_ahead = static_cast<std::size_t>(std::count_if(
+			jobs_.begin(), selected, [&](const WtChunkJob &queued) { return queued.priority == job.priority; }
+		));
 	}
-	jobs_.erase(jobs_.begin());
+	jobs_.erase(selected);
 	return true;
 }
 
-bool WtStreamScheduler::JobQueue::peek(WtChunkJob &job) const {
+bool WtStreamScheduler::JobQueue::peek(WtChunkJob &job, const std::function<bool(const WtChunkJob &)> &admit) const {
 	std::lock_guard<std::mutex> lock(mutex_);
-	if (jobs_.empty()) return false;
-	job = jobs_.front();
+	const auto selected = admit ? std::find_if(jobs_.begin(), jobs_.end(), admit) : jobs_.begin();
+	if (selected == jobs_.end()) return false;
+	job = *selected;
 	return true;
 }
 
@@ -380,18 +383,18 @@ WtSchedulerStatus WtStreamScheduler::reprioritize_chunk(
 	return WtSchedulerStatus::Ok;
 }
 
-bool WtStreamScheduler::peek_job(WtChunkJob &job) const {
-	return jobs_.peek(job);
+bool WtStreamScheduler::peek_job(WtChunkJob &job, const std::function<bool(const WtChunkJob &)> &admit) const {
+	return jobs_.peek(job, admit);
 }
 
-bool WtStreamScheduler::pop_job(WtChunkJob &job) {
+bool WtStreamScheduler::pop_job(WtChunkJob &job, const std::function<bool(const WtChunkJob &)> &admit) {
 	const bool trace_enabled = queue_trace_enabled_.load(
 		std::memory_order_acquire
 	);
 	WtSchedulerQueueTraceEvent trace_event;
 	const bool popped = jobs_.pop(
 		job,
-		trace_enabled ? &trace_event : nullptr
+		trace_enabled ? &trace_event : nullptr, admit
 	);
 	if (trace_enabled && popped) {
 		notify_queue_trace(trace_event);
