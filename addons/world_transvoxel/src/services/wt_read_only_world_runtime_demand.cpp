@@ -358,6 +358,29 @@ std::size_t WtReadOnlyWorldRuntime::append_edit_lod_retention_viewers(
 }
 
 bool WtReadOnlyWorldRuntime::process_viewer_event() {
+	bool edit_content_waiting = false;
+	{
+		std::lock_guard<std::mutex> lock(visual_activation_mutex_);
+		edit_content_activation_waits_.erase(std::remove_if(
+			edit_content_activation_waits_.begin(), edit_content_activation_waits_.end(),
+			[this](const VisualActivation &waiting) {
+				if (find_plan_entry(current_plan_.entries, waiting.key) == nullptr) return true;
+				const WtChunkRecord *scheduled = scheduler_->find_record(waiting.key);
+				// Baked coarse pages may require finer authority to rebuild edited
+				// surface shifts. A failed coarse attempt must not block refinement.
+				if (scheduled == nullptr || scheduled->generation != waiting.generation ||
+					scheduled->lifecycle == WtChunkLifecycle::Failed ||
+					scheduled->lifecycle == WtChunkLifecycle::Cancelled) return true;
+				WtChunkApplicationRecord record;
+				if (!application_->copy_record(waiting.key, record) ||
+					record.generation != waiting.generation || !record.visual_required) return true;
+				return std::any_of(visual_activations_.begin(), visual_activations_.end(),
+					[&](const VisualActivation &active) {
+						return active.key == waiting.key && active.generation == waiting.generation;
+					});
+			}), edit_content_activation_waits_.end());
+		edit_content_waiting = !edit_content_activation_waits_.empty();
+	}
 	ViewerEvent event;
 	bool staging_event = false;
 	bool retention_refresh_event = false;
@@ -365,6 +388,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		std::lock_guard<std::mutex> lock(input_mutex_);
 		if (viewer_events_.empty()) {
 			if (edit_lod_retention_refresh_pending_) {
+				if (edit_content_waiting) return false;
 				edit_lod_retention_refresh_pending_ = false;
 				retention_refresh_event = true;
 				event.kind = ViewerEventKind::RefreshEditLodRetention;

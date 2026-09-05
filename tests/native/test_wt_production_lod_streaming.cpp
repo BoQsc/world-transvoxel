@@ -1209,6 +1209,8 @@ bool run_hierarchical_bounded_edit_planning_regression(
 		run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
 		runtime.last_status() == wt::WtReadOnlyRuntimeStatus::Ok;
 	if (!passed) {
+		std::fprintf(stderr, "coarse wait jobs=%llu meshing=%llu failed=%llu samples=%llu meshes=%llu storage=%llu loading=%llu awaiting=%llu unresolved=%llu\n", static_cast<unsigned long long>(metrics.scheduler_queued_jobs), static_cast<unsigned long long>(metrics.scheduler_meshing_records), static_cast<unsigned long long>(metrics.scheduler_failed_records), static_cast<unsigned long long>(metrics.page_sample_failures), static_cast<unsigned long long>(metrics.page_mesh_failures), static_cast<unsigned long long>(metrics.page_storage_failures), static_cast<unsigned long long>(metrics.page_loading_records), static_cast<unsigned long long>(metrics.page_awaiting_mesh_records), static_cast<unsigned long long>(metrics.page_unresolved_dependencies));
+
 		std::fprintf(
 			stderr,
 			"bounded hierarchical edit evidence: ok=%d committed=%d "
@@ -2431,7 +2433,7 @@ bool run_edit_viewer_update_second_edit_regression(
 
 } // namespace
 
-int main() {
+int main(int argc, char **argv) {
 	const bool hierarchical_staging_ok =
 		run_hierarchical_staging_regression();
 	FixtureRoot fixture;
@@ -2444,6 +2446,9 @@ int main() {
 	check(storage.open(world_path, fixture.path) ==
 		wt::WtAsyncStorageStatus::Ok,
 		"transition fixture open failed");
+	if (argc == 2 && std::string(argv[1]) == "--bounded-edit") {
+		return run_hierarchical_bounded_edit_planning_regression(storage, fixture.path) ? 0 : 1;
+	}
 	check(storage.page_count() == 28 &&
 		storage.has_page({ 0, 0, 0, 1 }) &&
 		storage.has_page({ 3, 0, 0, 1 }) &&

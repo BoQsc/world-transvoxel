@@ -9,6 +9,7 @@
 #include "storage/wt_storage_page_cache.h"
 #include "streaming/wt_stream_scheduler.h"
 
+#include <algorithm>
 #include <utility>
 #include <vector>
 
@@ -165,6 +166,22 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 		publication.staged_replacement = true;
 		publication.preserve_collision_ready = replacement.collision_required;
 		publication.independently_publishable_replacement = true;
+		if (replacement.visual_required && replacement.key.lod != 0) {
+			std::lock_guard<std::mutex> lock(visual_activation_mutex_);
+			const auto visible = std::find_if(visual_activations_.begin(), visual_activations_.end(),
+				[&](const VisualActivation &entry) { return entry.key == replacement.key; });
+			if (visible != visual_activations_.end()) {
+				const auto waiting = std::find_if(edit_content_activation_waits_.begin(),
+					edit_content_activation_waits_.end(), [&](const VisualActivation &entry) {
+						return entry.key == replacement.key;
+					});
+				if (waiting == edit_content_activation_waits_.end()) {
+					edit_content_activation_waits_.push_back({replacement.key, replacement.replacement_generation});
+				} else {
+					waiting->generation = replacement.replacement_generation;
+				}
+			}
+		}
 		if (!push_publication(std::move(publication))) {
 			if (!stop_requested_.load()) {
 				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);

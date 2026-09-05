@@ -380,6 +380,7 @@ private:
 	};
 	mutable std::mutex visual_activation_mutex_;
 	std::vector<VisualActivation> visual_activations_;
+	std::vector<VisualActivation> edit_content_activation_waits_;
 
 	mutable std::mutex input_mutex_;
 	std::vector<ViewerEvent> viewer_events_;
