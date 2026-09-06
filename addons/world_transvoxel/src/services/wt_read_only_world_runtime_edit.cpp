@@ -166,7 +166,8 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 		publication.staged_replacement = true;
 		publication.preserve_collision_ready = replacement.collision_required;
 		publication.independently_publishable_replacement = true;
-		if (replacement.visual_required && replacement.key.lod != 0) {
+		if (!config_.hierarchical_lod_viewer_activation_enabled &&
+			replacement.visual_required && replacement.key.lod != 0) {
 			std::lock_guard<std::mutex> lock(visual_activation_mutex_);
 			const auto visible = std::find_if(visual_activations_.begin(), visual_activations_.end(),
 				[&](const VisualActivation &entry) { return entry.key == replacement.key; });

@@ -75,6 +75,12 @@ public:
 	) const;
 
 	std::size_t active_capacity() const noexcept;
+	WtBalancedLodPlannerStatus stage_foreground(
+		const WtBalancedLodPlan &target, const WtBalancedLodPlan &current,
+		const std::vector<WtChunkKey> &visually_ready, std::uint8_t staging_root_lod,
+		const std::vector<WtChunkKey> &foreground_keys,
+		WtBalancedLodPlan &output, bool &complete
+	) const;
 	std::size_t catalog_size() const noexcept;
 	WtPageHierarchyMetrics hierarchy_metrics() const noexcept;
 

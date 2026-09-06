@@ -788,6 +788,71 @@ std::size_t WtBalancedLodPlanner::active_capacity() const noexcept {
 	return active_capacity_;
 }
 
+WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_foreground(
+	const WtBalancedLodPlan &target, const WtBalancedLodPlan &current,
+	const std::vector<WtChunkKey> &visually_ready, std::uint8_t staging_root_lod,
+	const std::vector<WtChunkKey> &foreground_keys,
+	WtBalancedLodPlan &output, bool &complete
+) const {
+	// Establish coverage and admit at most one obsolete family for coarsening.
+	// Foreground refinement itself is a tree projection, not a sequence of
+	// publish/wait/refine cycles. Only the final balanced map is requested.
+	output.clear();
+	complete = false;
+	for (const auto &key : foreground_keys) {
+		if (!wt_is_valid_chunk_key(key)) return WtBalancedLodPlannerStatus::InvalidLodMap;
+	}
+	WtBalancedLodPlan base;
+	const auto status = stage_toward(target, current, visually_ready, staging_root_lod,
+		1, base, complete, {}, true, false, true);
+	if (status != WtBalancedLodPlannerStatus::Ok) return status;
+	std::vector<WtChunkKey> refined_ancestors;
+	for (const auto &entry : target.entries) {
+		for (auto ancestor = entry.key; ancestor.lod < staging_root_lod;) {
+			ancestor = wt_parent_chunk_key(ancestor);
+			refined_ancestors.push_back(ancestor);
+		}
+	}
+	std::sort(refined_ancestors.begin(), refined_ancestors.end());
+	refined_ancestors.erase(std::unique(refined_ancestors.begin(), refined_ancestors.end()), refined_ancestors.end());
+	std::vector<WtChunkKey> work, leaves;
+	for (const auto &entry : base.entries) work.push_back(entry.key);
+	for (std::size_t cursor = 0; cursor < work.size(); ++cursor) {
+		const auto key = work[cursor];
+		const bool foreground = std::any_of(foreground_keys.begin(), foreground_keys.end(),
+			[&](const WtChunkKey &focus) { return bounds_contain(key, focus); });
+		if (foreground && key.lod > 0 && std::binary_search(refined_ancestors.begin(), refined_ancestors.end(), key)) {
+			std::array<WtChunkKey, 8> children{};
+			if (!page_hierarchy_.complete_children(key, children)) return WtBalancedLodPlannerStatus::IncompleteHierarchy;
+			// Pending leaves plus completed leaves are the actual output bound.
+			if (leaves.size() + work.size() - cursor - 1 + children.size() > active_capacity_) {
+				return WtBalancedLodPlannerStatus::CapacityExceeded;
+			}
+			work.insert(work.end(), children.begin(), children.end());
+		} else {
+			leaves.push_back(key);
+		}
+	}
+	std::sort(leaves.begin(), leaves.end());
+	WtLodMap map(active_capacity_);
+	const auto balanced = balance(leaves, map);
+	if (balanced != WtBalancedLodPlannerStatus::Ok) return balanced;
+	output.clear();
+	output.entries = map.get_entries();
+	complete = same_lod_plan(output, target);
+	if (complete) {
+		output = target;
+		return WtBalancedLodPlannerStatus::Ok;
+	}
+	for (const auto &entry : output.entries) {
+		if (!append_staged_demand(entry.key, target, current, output.demands)) {
+			output.clear();
+			return WtBalancedLodPlannerStatus::InvalidLodMap;
+		}
+	}
+	return WtBalancedLodPlannerStatus::Ok;
+}
+
 std::size_t WtBalancedLodPlanner::catalog_size() const noexcept {
 	return page_hierarchy_.page_count();
 }

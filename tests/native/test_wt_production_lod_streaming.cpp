@@ -2441,6 +2441,33 @@ bool run_edit_viewer_update_second_edit_regression(
 } // namespace
 
 int main(int argc, char **argv) {
+	{
+		std::vector<wt::WtChunkKey> catalog, fine_keys, focus;
+		for (std::uint8_t lod = 0; lod <= 3; ++lod) {
+			const int side = 1 << (3 - lod);
+			for (int z = 0; z < side; ++z) for (int y = 0; y < side; ++y) for (int x = 0; x < 3 * side; ++x) {
+				catalog.push_back({x, y, z, lod});
+				if (lod == 0) fine_keys.push_back({x, y, z, lod});
+			}
+		}
+		wt::WtLodMap target_map(2048);
+		check(target_map.set_active_chunks(fine_keys) == wt::WtLodMapStatus::Ok, "foreground target invalid");
+		wt::WtBalancedLodPlan target, empty, projected;
+		target.entries = target_map.get_entries();
+		for (const auto &entry : target.entries) target.demands.push_back({entry.key, 1, false, true});
+		for (int z = 2; z <= 4; ++z) for (int y = 2; y <= 4; ++y) for (int x = 2; x <= 4; ++x) focus.push_back({x,y,z,0});
+		wt::WtBalancedLodPlanner planner(2048, catalog);
+		bool complete = false;
+		check(planner.stage_foreground(target, empty, {}, 3, focus, projected, complete) == wt::WtBalancedLodPlannerStatus::Ok,
+			"foreground projection failed without intermediate visual acknowledgements");
+		for (const auto &key : focus) check(find_entry(projected, key) != nullptr, "foreground projection omitted LOD0 interaction coverage");
+		check(!complete && find_entry(projected, {2,0,0,3}) != nullptr, "foreground projection refined distant target unnecessarily");
+		wt::WtBalancedLodPlanner bounded(32, catalog);
+		wt::WtBalancedLodPlan rejected;
+		check(bounded.stage_foreground(target, empty, {}, 3, focus, rejected, complete) == wt::WtBalancedLodPlannerStatus::CapacityExceeded,
+			"foreground projection exceeded configured capacity");
+		std::printf("FOREGROUND_PROJECTION_PASS full_resolution_keys=%zu requested_leaves=%zu intermediate_publications=0\n", focus.size(), projected.entries.size());
+	}
 	const bool hierarchical_staging_ok =
 		run_hierarchical_staging_regression();
 	FixtureRoot fixture;

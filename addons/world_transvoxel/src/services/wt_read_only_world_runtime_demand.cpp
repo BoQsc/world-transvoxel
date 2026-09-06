@@ -681,10 +681,8 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		WtBalancedLodPlan staged;
 		const bool direct_edit_refinement =
 			retention_refresh_event && !preferred_refinement_keys.empty();
-		if (config_.hierarchical_lod_viewer_activation_enabled &&
-			!direct_edit_refinement) {
-			// Progress the viewer's immediate neighborhood without activating
-			// the entire distant target. Balance adds the necessary 2:1 support.
+		if (config_.hierarchical_lod_viewer_activation_enabled) {
+			// Full interaction coverage includes corners, not only face neighbors.
 			for (const WtLodPlannerViewer &viewer : candidate_viewers) {
 				WtChunkKey center;
 				if (!chunk_coordinate(viewer.snapshot.x, center.x) ||
@@ -693,7 +691,6 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 				for (int z = -1; z <= 1; ++z) {
 					for (int y = -1; y <= 1; ++y) {
 						for (int x = -1; x <= 1; ++x) {
-							if (std::abs(x) + std::abs(y) + std::abs(z) > 1) continue;
 							const std::int64_t px = static_cast<std::int64_t>(center.x) + x;
 							const std::int64_t py = static_cast<std::int64_t>(center.y) + y;
 							const std::int64_t pz = static_cast<std::int64_t>(center.z) + z;
@@ -711,6 +708,11 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 				}
 			}
 		}
+		if (config_.hierarchical_lod_viewer_activation_enabled) {
+			plan_status = lod_planner_->stage_foreground(candidate_staging_target,
+				current_plan_, visually_ready, candidate_staging_root_lod,
+				preferred_refinement_keys, staged, staging_complete);
+		} else {
 		plan_status = lod_planner_->stage_toward(
 			candidate_staging_target,
 			current_plan_,
@@ -727,6 +729,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			direct_edit_refinement,
 			config_.hierarchical_lod_viewer_activation_enabled && !direct_edit_refinement
 		);
+		}
 		if (plan_status != WtBalancedLodPlannerStatus::Ok) {
 			std::lock_guard<std::mutex> lock(metrics_mutex_);
 			++metrics_.rejected_events;

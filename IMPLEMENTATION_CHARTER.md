@@ -79,12 +79,14 @@ transition masks are never cached by this graph. Membership changes invalidate
 the affected index; ending the GPU session releases its retained storage.
 
 The optional staged runtime can activate the visual viewer's immediate
-seven-chunk neighborhood independently of distant background refinement through
+27-chunk interaction neighborhood independently of distant background refinement through
 `hierarchical_lod_viewer_activation_enabled` (default false). This changes work
 admission, not meshing or authority: target-plan demand, visual readiness,
 2:1 balancing, and atomic publication remain required. Viewer activation may
-coarsen obsolete distant detail; direct edit refinement retains its existing
-content-first behavior. GPU integration must measure movement and edit latency
+coarsen obsolete distant detail. This mode projects all foreground paths to the
+target resolution in one balanced request, without waiting for intermediate LOD
+publication. It does not delay edit refinement for coarse edited feedback. The
+legacy staged mode retains its content-first behavior. GPU integration must measure movement and edit latency
 before qualifying this opt-in policy.
 
 The first production backend uses Eric Lengyel's official MIT-licensed
