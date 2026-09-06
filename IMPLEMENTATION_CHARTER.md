@@ -1312,6 +1312,13 @@ Ordered work:
 M6 compute acceleration remains optional. Do not let it delay the measured CPU
 production path unless an end-to-end workload proves that it is required.
 
+The opt-in GPU interaction qualification records the authoritative journal
+commit, dirty-page admission, collision preparation/publication, GPU dispatch,
+readback, preparation, activation, first draw, queue age, regenerated cell
+count, and transferred bytes on one bounded timeline. Instrumentation is
+disabled by default and cannot alter scheduling or publication. Optimization
+claims require matching traced and untraced deterministic routes.
+
 ## 24. Final definition of success
 
 Success is a maintainable native Godot terrain addon, not merely generated

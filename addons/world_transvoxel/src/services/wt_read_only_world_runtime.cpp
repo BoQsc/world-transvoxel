@@ -302,13 +302,17 @@ void WtReadOnlyWorldRuntime::record_frontend_sink(
 	std::uint64_t duration_ns,
 	bool applied
 ) {
+	WtChunkApplicationRecord record;
+	const std::uint64_t world_revision = application_ &&
+		application_->copy_record(key, record) &&
+		record.generation == generation ? record.world_revision : 0;
 	causal_trace_.record(
 		collision ? WtCausalTraceEventKind::CollisionSinkApplied :
 			WtCausalTraceEventKind::RenderSinkApplied,
 		WtCausalTraceThreadRole::Frontend,
 		&key,
 		generation,
-		0,
+		world_revision,
 		0,
 		duration_ns,
 		applied ? 0 : 1

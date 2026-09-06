@@ -134,6 +134,14 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 		return true;
 	}
 	world_revision_.store(transaction.committed_revision);
+	causal_trace_.record(
+		WtCausalTraceEventKind::EditJournalCommitted,
+		WtCausalTraceThreadRole::Runtime,
+		nullptr,
+		{},
+		transaction.committed_revision,
+		transaction.commands.size()
+	);
 	remember_edit_lod_retention_zones(transaction);
 	if (edit_replacement_->apply_prepared(
 			transaction,
@@ -155,6 +163,15 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 			replacement.replacement_generation,
 			transaction.committed_revision,
 			1
+		);
+		causal_trace_.record(
+			WtCausalTraceEventKind::EditDirtyPageAdmitted,
+			WtCausalTraceThreadRole::Runtime,
+			&replacement.key,
+			replacement.replacement_generation,
+			transaction.committed_revision,
+			(replacement.visual_required ? 1U : 0U) |
+				(replacement.collision_required ? 2U : 0U)
 		);
 		WtReadOnlyPublication publication;
 		publication.kind = WtReadOnlyPublicationKind::ExpectChunk;

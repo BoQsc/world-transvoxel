@@ -157,6 +157,8 @@ const char *wt_causal_trace_event_kind_name(
 		case WtCausalTraceEventKind::ChunkDemandAccepted: return "chunk_demand_accepted";
 		case WtCausalTraceEventKind::EditSubmitted: return "edit_submitted";
 		case WtCausalTraceEventKind::EditProcessingStarted: return "edit_processing_started";
+		case WtCausalTraceEventKind::EditJournalCommitted: return "edit_journal_committed";
+		case WtCausalTraceEventKind::EditDirtyPageAdmitted: return "edit_dirty_page_admitted";
 		case WtCausalTraceEventKind::EditCommitted: return "edit_committed";
 		case WtCausalTraceEventKind::EditRejected: return "edit_rejected";
 		case WtCausalTraceEventKind::StorageRequested: return "storage_requested";
@@ -176,6 +178,7 @@ const char *wt_causal_trace_event_kind_name(
 		case WtCausalTraceEventKind::FrontendPublicationProcessed: return "frontend_publication_processed";
 		case WtCausalTraceEventKind::RenderSinkApplied: return "render_sink_applied";
 		case WtCausalTraceEventKind::CollisionSinkApplied: return "collision_sink_applied";
+		case WtCausalTraceEventKind::CollisionPayloadPrepared: return "collision_payload_prepared";
 		case WtCausalTraceEventKind::VisibilityReplacementReady: return "visibility_replacement_ready";
 		case WtCausalTraceEventKind::VisibilityStagingBlocked: return "visibility_staging_blocked";
 		case WtCausalTraceEventKind::VisibilityBatchPublished: return "visibility_batch_published";

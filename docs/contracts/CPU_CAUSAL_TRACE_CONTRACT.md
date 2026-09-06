@@ -56,6 +56,16 @@ normal viewer/edit demand. The repair event uses auxiliary `1` for a staged
 replacement and `0` for an unstaged repair. Both events carry the current world
 revision as `cause_id`.
 
+`edit_journal_committed` marks the exact authoritative revision advance.
+`edit_dirty_page_admitted` follows once per affected loaded replacement and
+carries visual/collision demand bits in `auxiliary` (`1` visual, `2`
+collision). `collision_payload_prepared` marks completion of authoritative CPU
+collision construction before publication; its `auxiliary` value is the output
+triangle count. Together with `collision_sink_applied`, these events distinguish
+collision generation from front-end publication latency. Render and collision
+sink events carry the current record's world revision as `cause_id` when the
+generation is still authoritative.
+
 `scheduler_job_queued`, `scheduler_job_priority_observed`, and
 `scheduler_job_dequeued` carry an explicit `job_stage`, `effective_priority`,
 `job_sequence`, queue depth before and after the operation, jobs ahead, and

@@ -55,6 +55,9 @@ enum class WtCausalTraceEventKind : std::uint16_t {
 	ForegroundPriorityLeaseApplied,
 	ForegroundPriorityLeaseRejected,
 	ForegroundPriorityChanged,
+	EditJournalCommitted,
+	EditDirtyPageAdmitted,
+	CollisionPayloadPrepared,
 };
 
 enum class WtVisibilityCoveragePriorityOutcome : std::int64_t {

@@ -78,6 +78,14 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 		);
 		return false;
 	}
+	causal_trace_.record(
+		WtCausalTraceEventKind::CollisionPayloadPrepared,
+		WtCausalTraceThreadRole::Runtime,
+		&completion.key,
+		completion.generation,
+		record->world_revision,
+		collision->metrics.output_triangles
+	);
 	return true;
 }
 

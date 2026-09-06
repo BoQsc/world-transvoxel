@@ -25,6 +25,15 @@ int main() {
 	const wt::WtChunkKey first_key{ 4, -2, 7, 1 };
 	check(
 		std::string_view(wt::wt_causal_trace_event_kind_name(
+			wt::WtCausalTraceEventKind::EditJournalCommitted
+		)) == "edit_journal_committed" &&
+		std::string_view(wt::wt_causal_trace_event_kind_name(
+			wt::WtCausalTraceEventKind::EditDirtyPageAdmitted
+		)) == "edit_dirty_page_admitted" &&
+		std::string_view(wt::wt_causal_trace_event_kind_name(
+			wt::WtCausalTraceEventKind::CollisionPayloadPrepared
+		)) == "collision_payload_prepared" &&
+		std::string_view(wt::wt_causal_trace_event_kind_name(
 			wt::WtCausalTraceEventKind::VisibilityRegionDesiredSnapshot
 		)) == "visibility_region_desired_snapshot",
 		"desired ownership snapshot event name mismatch"
