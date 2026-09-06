@@ -259,6 +259,7 @@ bool WtPageMeshingRuntimeService::pop_mesh_completion(
 				record.mesh,
 				record.water_mesh,
 				record.gpu_resident_visual_only,
+				record.collision_completed_early,
 			};
 			record.mesh.reset();
 			record.water_mesh.reset();

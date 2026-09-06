@@ -16,6 +16,7 @@ struct WtPageMeshingRuntimeService::PreparedMeshJob {
 	bool visual_required = true;
 	bool gpu_resident_visual_only = false;
 	bool gpu_resident_skip_cpu_meshing = false;
+	bool defer_gpu_capture = false;
 	std::vector<PreparedDependency> dependencies;
 	WtTerrainMeshReadyCallback terrain_mesh_ready;
 	WtMeshExecutionCallback execution_callback;
@@ -36,6 +37,7 @@ struct WtPageMeshingRuntimeService::PreparedMeshCompletion {
 	std::uint64_t execute_time_ns = 0;
 	bool gpu_resident_visual_only = false;
 	bool gpu_resident_skip_cpu_meshing = false;
+	std::vector<WtGpuMeshingShadowCapture> deferred_gpu_captures;
 };
 
 } // namespace world_transvoxel

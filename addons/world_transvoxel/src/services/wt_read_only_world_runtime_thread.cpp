@@ -41,6 +41,7 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 			4
 		) != 0 || progressed;
 		progressed = process_async_mesh_completions() || progressed;
+		progressed = process_deferred_gpu_captures() || progressed;
 		progressed = page_runtime_->flush_scheduler_results(*scheduler_) != 0 ||
 			progressed;
 		progressed = scheduler_->apply_completions(
@@ -49,6 +50,7 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 		progressed = process_pending_transition_remeshes() || progressed;
 		progressed = process_scheduler_jobs() || progressed;
 		progressed = process_async_mesh_completions() || progressed;
+		progressed = process_deferred_gpu_captures() || progressed;
 		progressed = scheduler_->apply_completions(
 			static_cast<std::size_t>(config_.active_chunk_capacity)
 		) != 0 || progressed;

@@ -28,6 +28,7 @@ enum class WtPageMeshingRuntimePhase : std::uint8_t {
 	SampleFailedReady,
 	AwaitingMesh,
 	Meshing,
+	AwaitingGpuCapture,
 	MeshReady,
 	MeshFailedReady,
 	Ready,
@@ -78,6 +79,7 @@ struct WtPageMeshCompletion {
 	std::shared_ptr<const WtChunkMeshResult> mesh;
 	std::shared_ptr<const WtChunkMeshResult> water_mesh;
 	bool gpu_resident_visual_only = false;
+	bool collision_completed_early = false;
 };
 
 struct WtTerrainMeshCompletion {
@@ -204,7 +206,8 @@ public:
 		bool visual_required = true,
 		const WtMeshCellCaptureCallback &cell_capture_callback = {},
 		bool pre_mesh_field_capture = false,
-		bool collision_required = false
+		bool collision_required = false,
+		bool defer_gpu_capture = false
 	);
 	WtPageMeshingRuntimeStatus dispatch_mesh_job(
 		const WtChunkJob &job,
@@ -217,7 +220,8 @@ public:
 		const WtMeshExecutionCallback &execution_callback = {},
 		const WtMeshCellCaptureCallback &cell_capture_callback = {},
 		bool pre_mesh_field_capture = false,
-		bool collision_required = false
+		bool collision_required = false,
+		bool defer_gpu_capture = false
 	);
 	WtPageMeshingRuntimeStatus process_async_mesh_completions(
 		WtStreamScheduler &scheduler,
@@ -227,6 +231,17 @@ public:
 	void set_mesh_completion_notifier(std::function<void()> notifier);
 	bool asynchronous_meshing_enabled() const noexcept;
 	bool asynchronous_mesh_admission_available() const noexcept;
+	bool peek_deferred_gpu_capture(WtChunkJob &job) const noexcept;
+	WtPageMeshingRuntimeStatus submit_deferred_gpu_capture(
+		const WtChunkJob &job,
+		const WtMeshCellCaptureCallback &cell_capture_callback,
+		WtStreamScheduler &scheduler
+	);
+	WtPageMeshingRuntimeStatus discard_deferred_gpu_capture(
+		const WtChunkJob &job,
+		WtStreamScheduler &scheduler
+	);
+	std::size_t deferred_gpu_capture_count() const noexcept;
 
 	std::size_t flush_scheduler_results(
 		WtStreamScheduler &scheduler
@@ -308,6 +323,8 @@ private:
 		std::shared_ptr<const WtChunkMeshResult> mesh;
 		std::shared_ptr<const WtChunkMeshResult> water_mesh;
 		bool gpu_resident_visual_only = false;
+		bool collision_completed_early = false;
+		std::vector<WtGpuMeshingShadowCapture> deferred_gpu_captures;
 	};
 	struct LoadingRetryCandidate {
 		WtChunkKey key;
@@ -355,6 +372,7 @@ private:
 		const WtMeshCellCaptureCallback &cell_capture_callback,
 		bool pre_mesh_field_capture,
 		bool collision_required,
+		bool defer_gpu_capture,
 		PreparedMeshJob &prepared
 	);
 	static PreparedMeshCompletion execute_prepared_mesh_job(

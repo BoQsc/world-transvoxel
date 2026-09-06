@@ -54,6 +54,9 @@ WtPageMeshingRuntimeStatus WtPageMeshingRuntimeService::reprioritize(
 		return WtPageMeshingRuntimeStatus::StaleCompletion;
 	}
 	record->priority = priority;
+	for (WtGpuMeshingShadowCapture &capture : record->deferred_gpu_captures) {
+		capture.job.priority = priority;
+	}
 	reprioritize_async_work(key, generation, priority);
 	return WtPageMeshingRuntimeStatus::Ok;
 }
@@ -221,6 +224,7 @@ WtPageMeshingRuntimeService::get_metrics() const noexcept {
 				++snapshot.awaiting_mesh_records;
 				break;
 			case WtPageMeshingRuntimePhase::Meshing:
+			case WtPageMeshingRuntimePhase::AwaitingGpuCapture:
 				++snapshot.meshing_records;
 				break;
 			case WtPageMeshingRuntimePhase::MeshReady:

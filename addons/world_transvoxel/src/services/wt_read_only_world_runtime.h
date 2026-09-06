@@ -322,6 +322,7 @@ private:
 	bool process_storage_completions();
 	bool process_pending_transition_remeshes();
 	bool process_scheduler_jobs();
+	bool process_deferred_gpu_captures();
 	bool process_async_mesh_completions();
 	bool prepare_terrain_collision_payload(
 		const WtTerrainMeshCompletion &completion,

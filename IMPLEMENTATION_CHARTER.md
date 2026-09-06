@@ -1220,6 +1220,11 @@ Resolved in M5:
   `ArrayMesh` and `ConcavePolygonShape3D` evidence;
 - native trace schema 1 uses an 80-byte metadata section and fixed 128-byte
   checkpoint/final events with construction-time capacity;
+- GPU capture saturation no longer prevents mixed visual/collision generations
+  from completing CPU collision preparation: at most four
+  immutable pre-mesh capture groups remain deferred, collision publication is
+  recorded once per generation, and the same generation resumes GPU capture in
+  priority order when capacity becomes available;
 - the reference orchestration soak runs for 60 seconds, samples every 1,024
   simulated frames, admits at most 65,536 events, and requires zero runtime
   rejection/failure paths;

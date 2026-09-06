@@ -652,7 +652,10 @@ void test_collision_only_with_full_gpu_queue(std::size_t mesh_workers) {
 	storage.close();
 }
 
-void test_collision_promotion_before_mesh(std::size_t mesh_workers) {
+void test_collision_promotion_before_mesh(
+	std::size_t mesh_workers,
+	bool supersede_before_release = false
+) {
 	const int failures_before = failure_count;
 	FixtureRoot fixture;
 	std::filesystem::path world_path;
@@ -718,11 +721,115 @@ void test_collision_promotion_before_mesh(std::size_t mesh_workers) {
 		"blocked visual head stalled independent collision work");
 	check(runtime.update_collision_viewer(viewer(2, 1, 40.0, 8.0), 0) == wt::WtReadOnlyRuntimeStatus::Ok,
 		"queued collision promotion collision viewer rejected");
-	while (runtime.get_metrics().collision_viewer_updates < 2 && std::chrono::steady_clock::now() < deadline) {
+	bool collision_before_gpu_capacity = false;
+	bool render_before_gpu_capacity = false;
+	while (!collision_before_gpu_capacity && std::chrono::steady_clock::now() < deadline) {
 		collect();
+		for (const auto &publication : publications) {
+			if (publication.generation != initial_generation) continue;
+			collision_before_gpu_capacity |=
+				publication.kind == wt::WtReadOnlyPublicationKind::CollisionPayload &&
+				publication.collision && !publication.collision->faces.empty();
+			render_before_gpu_capacity |=
+				publication.kind == wt::WtReadOnlyPublicationKind::RenderPayload;
+		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
-	check(runtime.get_metrics().collision_viewer_updates == 2, "collision promotion was not applied before meshing");
+	check(collision_before_gpu_capacity && !render_before_gpu_capacity &&
+		gpu->metrics().reserved_capture_slots == 2,
+		"mixed-demand collision waited for GPU capture capacity");
+	if (supersede_before_release) {
+		check(runtime.remove_viewer(1, 2) == wt::WtReadOnlyRuntimeStatus::Ok &&
+			runtime.remove_collision_viewer(2, 2) ==
+				wt::WtReadOnlyRuntimeStatus::Ok,
+			"deferred GPU generation removal was rejected");
+		const auto removal_deadline =
+			std::chrono::steady_clock::now() + std::chrono::seconds(5);
+		while ((runtime.get_metrics().viewer_removals == 0 ||
+				runtime.get_metrics().collision_viewer_removals == 0) &&
+				std::chrono::steady_clock::now() < removal_deadline) {
+			wt::WtReadOnlyPublication publication;
+			while (runtime.pop_publication(publication)) {
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+		check(runtime.get_metrics().viewer_removals != 0 &&
+			runtime.get_metrics().collision_viewer_removals != 0,
+			"deferred GPU generation removal was not processed");
+		gpu->release_capture_slots(reservation);
+		check(runtime.update_viewer(viewer(1, 3, 40.0, 8.0), 0) ==
+				wt::WtReadOnlyRuntimeStatus::Ok &&
+			runtime.update_collision_viewer(viewer(2, 3, 40.0, 8.0), 0) ==
+				wt::WtReadOnlyRuntimeStatus::Ok,
+			"replacement GPU generation was rejected");
+		wt::WtGenerationToken replacement_generation;
+		bool replacement_render = false;
+		bool replacement_collision = false;
+		bool stale_after_supersede = false;
+		const auto replacement_deadline =
+			std::chrono::steady_clock::now() + std::chrono::seconds(5);
+		while (!replacement_collision &&
+				std::chrono::steady_clock::now() < replacement_deadline) {
+			wt::WtReadOnlyPublication publication;
+			while (runtime.pop_publication(publication)) {
+				if (publication.key != target) continue;
+				stale_after_supersede |= replacement_generation.value != 0 &&
+					publication.generation == initial_generation &&
+					(publication.kind == wt::WtReadOnlyPublicationKind::RenderPayload ||
+						publication.kind == wt::WtReadOnlyPublicationKind::CollisionPayload);
+				if (publication.kind == wt::WtReadOnlyPublicationKind::ExpectChunk &&
+					publication.generation != initial_generation) {
+					replacement_generation = publication.generation;
+				}
+				if (publication.generation != replacement_generation ||
+					replacement_generation.value == 0) continue;
+				replacement_render |=
+					publication.kind == wt::WtReadOnlyPublicationKind::RenderPayload;
+				replacement_collision |=
+					publication.kind == wt::WtReadOnlyPublicationKind::CollisionPayload;
+			}
+			wt::WtGpuMeshingShadowRequest request;
+			while (gpu->pop(request)) {
+				stale_after_supersede |= replacement_generation.value != 0 &&
+					request.job.key == target &&
+					request.job.generation == initial_generation;
+				gpu->complete(
+					request.request_id,
+					{
+						request.job.key,
+						request.job.generation,
+						request.job.source_revision,
+						request.job.world_revision,
+						request.transition_mask,
+						request.surface,
+					},
+					request.job.source_revision,
+					request.job.world_revision,
+					true,
+					{}
+				);
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+		runtime.request_stop();
+		worker.join();
+		std::printf("GPU_DEFERRED_CAPTURE_SUPERSEDE workers=%zu original=%llu replacement=%llu render=%d collision=%d stale=%d\n",
+			mesh_workers,
+			static_cast<unsigned long long>(initial_generation.value),
+			static_cast<unsigned long long>(replacement_generation.value),
+			replacement_render, replacement_collision, stale_after_supersede);
+		check(replacement_generation.value != 0 && replacement_collision &&
+			!stale_after_supersede,
+			"superseded deferred GPU work published stale collision or visual output");
+		check(status.load() == wt::WtReadOnlyRuntimeStatus::Ok,
+			"superseded deferred GPU runtime did not stop cleanly");
+		gpu->end();
+		storage.close();
+		if (failure_count == failures_before) {
+			std::printf("GPU_DEFERRED_CAPTURE_SUPERSEDE_PASS workers=%zu\n", mesh_workers);
+		}
+		return;
+	}
 	gpu->release_capture_slots(reservation);
 	bool consumed = false;
 	while (!consumed && std::chrono::steady_clock::now() < deadline) {
@@ -962,6 +1069,7 @@ int main(int argc, char **argv) {
 	if (argc == 2 && std::string(argv[1]) == "--collision-promotion") {
 		test_collision_promotion_before_mesh(0);
 		test_collision_promotion_before_mesh(1);
+		test_collision_promotion_before_mesh(1, true);
 		return failure_count == 0 ? 0 : 1;
 	}
 	if (argc == 2 && std::string(argv[1]) == "--gpu-generation-lifecycle") {
@@ -970,6 +1078,7 @@ int main(int argc, char **argv) {
 	}
 	test_collision_promotion_before_mesh(0);
 	test_collision_promotion_before_mesh(1);
+	test_collision_promotion_before_mesh(1, true);
 	test_collision_retirement_locality_modes();
 	test_gpu_native_visual_generation_lifecycle();
 	test_collision_only_with_full_gpu_queue(0);

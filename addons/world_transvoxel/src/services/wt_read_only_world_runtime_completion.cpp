@@ -148,6 +148,7 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 		std::shared_ptr<WtCollisionPayload> replacement_collision;
 		if (application_record.staged_replacement &&
 			application_record.collision_required &&
+			!completion.collision_completed_early &&
 			!prepare_terrain_collision_payload(
 				{ completion.key, completion.generation, completion.mesh },
 				replacement_collision

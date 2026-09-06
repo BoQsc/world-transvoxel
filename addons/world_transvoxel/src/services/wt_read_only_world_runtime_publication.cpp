@@ -24,6 +24,8 @@
 namespace world_transvoxel {
 namespace {
 
+constexpr std::size_t kWtDeferredGpuCaptureCapacity = 4;
+
 class GpuMeshingCaptureReservation {
 public:
 	GpuMeshingCaptureReservation(
@@ -527,6 +529,7 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 				})) break;
 		}
 		std::shared_ptr<GpuMeshingCaptureReservation> pre_mesh_reservation;
+		bool defer_gpu_capture = false;
 		const bool resident_input = gpu_meshing_shadow_ &&
 			gpu_meshing_shadow_->captures_pre_mesh_field();
 		WtChunkApplicationRecord admission_record;
@@ -539,14 +542,20 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			const std::uint64_t reservation_id =
 				gpu_meshing_shadow_->reserve_capture_slots(next_job);
 			if (reservation_id == 0) {
-				// GPU backpressure must not stop sampling or collision-only work.
-				// Leave every blocked visual job in its original queue position.
-				if (!scheduler_->peek_job(next_job, [this](const WtChunkJob &candidate) {
-					if (candidate.stage == WtChunkJobStage::Sample) return true;
-					WtChunkApplicationRecord record;
-					return application_->copy_record(candidate.key, record) &&
-						record.generation == candidate.generation && !record.visual_required;
-				})) break;
+				if (admission_record.collision_required &&
+					page_runtime_->deferred_gpu_capture_count() <
+						kWtDeferredGpuCaptureCapacity) {
+					defer_gpu_capture = true;
+				} else {
+					// GPU backpressure must not stop sampling or collision-only work.
+					// Leave every blocked visual job in its original queue position.
+					if (!scheduler_->peek_job(next_job, [this](const WtChunkJob &candidate) {
+						if (candidate.stage == WtChunkJobStage::Sample) return true;
+						WtChunkApplicationRecord record;
+						return application_->copy_record(candidate.key, record) &&
+							record.generation == candidate.generation && !record.visual_required;
+					})) break;
+				}
 			} else {
 				pre_mesh_reservation = std::make_shared<GpuMeshingCaptureReservation>(
 					gpu_meshing_shadow_, reservation_id
@@ -647,7 +656,7 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 				continue;
 			}
 			WtTerrainMeshReadyCallback terrain_mesh_ready;
-			if (!application_record.visual_required ||
+			if (defer_gpu_capture || !application_record.visual_required ||
 				!application_record.staged_replacement) {
 				terrain_mesh_ready =
 					[this](const WtTerrainMeshCompletion &completion) {
@@ -678,7 +687,8 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 					};
 				}
 			}
-			const bool pre_mesh_field_capture = pre_mesh_reservation != nullptr;
+			const bool pre_mesh_field_capture =
+				pre_mesh_reservation != nullptr || defer_gpu_capture;
 			if (asynchronous_mesh) {
 				const WtMeshExecutionCallback execution_callback =
 					[this](const WtMeshExecutionEvent &event) {
@@ -724,7 +734,8 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 					execution_callback,
 					cell_capture_callback,
 					pre_mesh_field_capture,
-					application_record.collision_required
+					application_record.collision_required,
+					defer_gpu_capture
 				);
 			} else {
 				status = page_runtime_->execute_mesh_job(
@@ -740,7 +751,8 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 					application_record.visual_required,
 					cell_capture_callback,
 					pre_mesh_field_capture,
-					application_record.collision_required
+					application_record.collision_required,
+					defer_gpu_capture
 				);
 			}
 		}
@@ -817,6 +829,60 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 		if (has_pending_edit_operation()) {
 			break;
 		}
+	}
+	return progressed;
+}
+
+bool WtReadOnlyWorldRuntime::process_deferred_gpu_captures() {
+	if (!gpu_meshing_shadow_ || !gpu_meshing_shadow_->enabled()) return false;
+	bool progressed = false;
+	for (std::size_t count = 0; count < 4; ++count) {
+		WtChunkJob job;
+		if (!page_runtime_->peek_deferred_gpu_capture(job)) break;
+		WtChunkApplicationRecord application_record;
+		const bool application_current = application_->copy_record(
+			job.key, application_record
+		) && application_record.generation == job.generation;
+		if (!application_current || !application_record.visual_required) {
+			const WtPageMeshingRuntimeStatus discard_status =
+				page_runtime_->discard_deferred_gpu_capture(job, *scheduler_);
+			if (discard_status != WtPageMeshingRuntimeStatus::Ok &&
+				discard_status !=
+					WtPageMeshingRuntimeStatus::SchedulerBackpressure &&
+				discard_status != WtPageMeshingRuntimeStatus::StaleCompletion) {
+				set_failure(WtReadOnlyRuntimeStatus::PipelineSchedulerJobFailure);
+				break;
+			}
+			progressed = true;
+			continue;
+		}
+		const std::uint64_t reservation_id =
+			gpu_meshing_shadow_->reserve_capture_slots(job);
+		if (reservation_id == 0) break;
+		const auto reservation =
+			std::make_shared<GpuMeshingCaptureReservation>(
+				gpu_meshing_shadow_, reservation_id
+			);
+		const WtPageMeshingRuntimeStatus status =
+			page_runtime_->submit_deferred_gpu_capture(
+				job,
+				[reservation](WtGpuMeshingShadowCapture capture) {
+					reservation->capture(std::move(capture));
+				},
+				*scheduler_
+			);
+		if (status == WtPageMeshingRuntimeStatus::StaleCompletion ||
+			status == WtPageMeshingRuntimeStatus::NotFound) {
+			page_runtime_->cancel_generation(job.key, job.generation);
+			progressed = true;
+			continue;
+		}
+		if (status != WtPageMeshingRuntimeStatus::Ok &&
+			status != WtPageMeshingRuntimeStatus::SchedulerBackpressure) {
+			set_failure(WtReadOnlyRuntimeStatus::PipelineSchedulerJobFailure);
+			break;
+		}
+		progressed = true;
 	}
 	return progressed;
 }

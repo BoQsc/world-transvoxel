@@ -519,7 +519,8 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 	bool visual_required,
 	const WtMeshCellCaptureCallback &cell_capture_callback,
 	bool pre_mesh_field_capture,
-	bool collision_required
+	bool collision_required,
+	bool defer_gpu_capture
 ) {
 	PreparedMeshJob prepared;
 	const WtPageMeshingRuntimeStatus prepare_status = prepare_mesh_job(
@@ -534,6 +535,7 @@ WtPageMeshingRuntimeService::execute_mesh_job(
 		cell_capture_callback,
 		pre_mesh_field_capture,
 		collision_required,
+		defer_gpu_capture,
 		prepared
 	);
 	if (prepare_status != WtPageMeshingRuntimeStatus::Ok) {
@@ -564,7 +566,8 @@ WtPageMeshingRuntimeService::dispatch_mesh_job(
 	const WtMeshExecutionCallback &execution_callback,
 	const WtMeshCellCaptureCallback &cell_capture_callback,
 	bool pre_mesh_field_capture,
-	bool collision_required
+	bool collision_required,
+	bool defer_gpu_capture
 ) {
 	if (!async_) return WtPageMeshingRuntimeStatus::InvalidConfiguration;
 	PreparedMeshJob prepared;
@@ -580,6 +583,7 @@ WtPageMeshingRuntimeService::dispatch_mesh_job(
 		cell_capture_callback,
 		pre_mesh_field_capture,
 		collision_required,
+		defer_gpu_capture,
 		prepared
 	);
 	if (status != WtPageMeshingRuntimeStatus::Ok) return status;
