@@ -577,12 +577,13 @@ WtChunkEditStatus WtChunkEditState::apply_command(
 	if (command.world_revision != current_world_revision_) {
 		current_world_revision_ = command.world_revision;
 		next_sequence_ = 0;
+		surface_shift_dirty_bounds_ = {};
+		has_surface_shift_dirty_bounds_ = false;
 	}
 	changed_sample_count_ += apply_values(
 		page_, command, procedural_descriptor
 	);
-	if (invalidates_surface_shift) {
-		page_.surface_shift_valid = false;
+	if (may_intersect_page(page_.metadata, command.bounds)) {
 		if (!has_surface_shift_dirty_bounds_) {
 			surface_shift_dirty_bounds_ = command.bounds;
 			has_surface_shift_dirty_bounds_ = true;
@@ -595,6 +596,9 @@ WtChunkEditStatus WtChunkEditState::apply_command(
 			bounds.maximum.y = std::max(bounds.maximum.y, command.bounds.maximum.y);
 			bounds.maximum.z = std::max(bounds.maximum.z, command.bounds.maximum.z);
 		}
+	}
+	if (invalidates_surface_shift) {
+		page_.surface_shift_valid = false;
 	}
 	next_sequence_ = command.sequence + 1;
 	last_status_ = WtChunkEditStatus::Ok;

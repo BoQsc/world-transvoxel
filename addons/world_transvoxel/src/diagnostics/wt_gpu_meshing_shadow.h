@@ -1,6 +1,7 @@
 #pragma once
 
 #include "diagnostics/wt_gpu_meshing_differential_backend.h"
+#include "editing/wt_edit_transaction.h"
 #include "streaming/wt_stream_scheduler.h"
 
 #include <cstddef>
@@ -40,6 +41,10 @@ struct WtGpuMeshingShadowCapture {
 		WtGpuMeshingCaptureStage::PostMeshAuthority;
 	bool static_water_surface_expected = false;
 	bool cpu_visual_mesh_omitted = false;
+	bool incremental_edit = false;
+	std::uint8_t dirty_regular_brick_mask = 0xff;
+	WtEditBounds dirty_edit_bounds;
+	bool has_dirty_edit_bounds = false;
 	std::vector<WtRecordedMeshingCell> records;
 	std::vector<WtGpuMeshingShadowPage> retained_pages;
 	std::shared_ptr<const WtChunkMeshResult> authority_terrain_mesh;

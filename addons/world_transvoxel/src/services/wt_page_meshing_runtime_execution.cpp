@@ -33,6 +33,39 @@ std::uint64_t steady_time_ns() noexcept {
 	);
 }
 
+std::uint8_t dirty_regular_bricks(
+	const WtChunkKey &key,
+	const WtEditBounds &dirty
+) noexcept {
+	if (key.lod != 0) return 0xff;
+	const WtGridPoint chunk_minimum = wt_chunk_bounds(key).minimum;
+	std::uint8_t mask = 0;
+	for (std::int32_t z = 0; z < 2; ++z) {
+		for (std::int32_t y = 0; y < 2; ++y) {
+			for (std::int32_t x = 0; x < 2; ++x) {
+				const WtGridPoint minimum = {
+					chunk_minimum.x + x * 8 - 1,
+					chunk_minimum.y + y * 8 - 1,
+					chunk_minimum.z + z * 8 - 1,
+				};
+				const WtGridPoint maximum = {
+					chunk_minimum.x + (x + 1) * 8 + 1,
+					chunk_minimum.y + (y + 1) * 8 + 1,
+					chunk_minimum.z + (z + 1) * 8 + 1,
+				};
+				const bool intersects =
+					dirty.maximum.x >= minimum.x && dirty.minimum.x <= maximum.x &&
+					dirty.maximum.y >= minimum.y && dirty.minimum.y <= maximum.y &&
+					dirty.maximum.z >= minimum.z && dirty.minimum.z <= maximum.z;
+				if (intersects) mask |= static_cast<std::uint8_t>(
+					1U << static_cast<unsigned int>(x + y * 2 + z * 4)
+				);
+			}
+		}
+	}
+	return mask == 0 ? 0xff : mask;
+}
+
 class PointEditReplaySink final : public WtEditReplaySink {
 public:
 	PointEditReplaySink(
@@ -164,6 +197,10 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 	);
 	bool source_valid = primary != record->dependencies.end() &&
 		primary->key == record->key && static_cast<bool>(primary->page);
+	bool incremental_edit = false;
+	std::uint8_t dirty_regular_brick_mask = 0xff;
+	WtEditBounds dirty_edit_bounds;
+	bool has_dirty_edit_bounds = false;
 	if (source_valid && edit_journal != nullptr) {
 		WtProceduralWorldDescriptor procedural_descriptor;
 		const WtProceduralWorldDescriptor *procedural_descriptor_pointer =
@@ -198,6 +235,17 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 				break;
 			}
 			WtChunkPage edited_page = edit_state.page();
+			if (dependency.key == record->key) {
+				const WtEditBounds *dirty = edit_state.surface_shift_dirty_bounds();
+				incremental_edit = dirty != nullptr &&
+					record->world_revision > initial_world_revision;
+				dirty_regular_brick_mask = dirty != nullptr ?
+					dirty_regular_bricks(record->key, *dirty) : 0xff;
+				if (dirty != nullptr) {
+					dirty_edit_bounds = *dirty;
+					has_dirty_edit_bounds = true;
+				}
+			}
 			if (!edited_page.surface_shift_valid) {
 				const WtChunkPageSampleSource retained_source(*dependency.page);
 				const WtEditSurfaceShiftSource local_source(
@@ -243,6 +291,10 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 	prepared.cell_capture_callback = cell_capture_callback;
 	prepared.pre_mesh_field_capture = pre_mesh_field_capture;
 	prepared.defer_gpu_capture = defer_gpu_capture;
+	prepared.incremental_edit = incremental_edit;
+	prepared.dirty_regular_brick_mask = dirty_regular_brick_mask;
+	prepared.dirty_edit_bounds = dirty_edit_bounds;
+	prepared.has_dirty_edit_bounds = has_dirty_edit_bounds;
 	prepared.gpu_resident_visual_only = pre_mesh_field_capture &&
 		visual_required;
 	prepared.gpu_resident_skip_cpu_meshing =
@@ -349,6 +401,11 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		capture.static_water_surface_expected = water_present;
 		capture.cpu_visual_mesh_omitted =
 			completion.prepared.gpu_resident_visual_only;
+		capture.incremental_edit = completion.prepared.incremental_edit;
+		capture.dirty_regular_brick_mask =
+			completion.prepared.dirty_regular_brick_mask;
+		capture.dirty_edit_bounds = completion.prepared.dirty_edit_bounds;
+		capture.has_dirty_edit_bounds = completion.prepared.has_dirty_edit_bounds;
 		capture.retained_pages.reserve(completion.prepared.dependencies.size());
 		for (const PreparedDependency &dependency :
 				completion.prepared.dependencies) {

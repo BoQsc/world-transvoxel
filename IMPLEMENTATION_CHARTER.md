@@ -1319,6 +1319,30 @@ count, and transferred bytes on one bounded timeline. Instrumentation is
 disabled by default and cannot alter scheduling or publication. Optimization
 claims require matching traced and untraced deterministic routes.
 
+### 23.1 GPU interaction derived-cache contract
+
+Loaded LOD0 terrain in the interaction working set uses 8 by 8 by 8 regular
+cell bricks with a one-sample edit halo. The CPU journal and decoded pages stay
+authoritative. Each accepted edit generation carries bounded dirty world bounds
+and an eight-bit regular-brick mask into the internal GPU capture; this metadata
+does not change the public API or persistence format.
+
+Candidate meshlets are written into a distinct arena slot while the previous
+generation remains drawable. A one-workgroup GPU transaction validates every
+candidate meshlet and changes all candidate and retirement activation flags as
+one ordered cohort. A failed cohort keeps the old activation flags and old
+coverage. The render thread may draw provisional arena views directly; CPU
+counter availability cannot gate visual publication.
+
+Only edited page-field ranges and configuration tokens are uploaded when the
+dependency layout and transition mask match the previous generation. Clean
+meshlets are copied on the device and dirty regular bricks are regenerated;
+transition meshlets retain exact Transvoxel ownership. The asynchronous result
+summary is exactly 20 bytes per candidate and exists only for telemetry,
+failure cleanup, and reclamation. GPU fields, meshlets, candidate slots,
+activation state, and journal-derived replay state remain capacity bounded.
+Collision geometry remains CPU authoritative and cannot depend on GPU readback.
+
 ## 24. Final definition of success
 
 Success is a maintainable native Godot terrain addon, not merely generated
