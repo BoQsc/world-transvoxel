@@ -6,6 +6,7 @@
 #include "physics/wt_godot_collision_sink.h"
 #include "render/wt_godot_render_sink.h"
 #include "services/wt_chunk_application.h"
+#include "services/wt_publication_dependency_graph.h"
 #include "testing/wt_m3_integration_fixture.h"
 #include "testing/wt_m5_application_benchmark_fixture.h"
 

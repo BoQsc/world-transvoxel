@@ -1,0 +1,29 @@
+[
+  {
+    "retirements": 64,
+    "replacements": 71,
+    "exact_match": true,
+    "before_median_us": 88.7,
+    "after_median_us": 69,
+    "before_p95_us": 464.7,
+    "after_p95_us": 113.5
+  },
+  {
+    "retirements": 512,
+    "replacements": 519,
+    "exact_match": true,
+    "before_median_us": 161.9,
+    "after_median_us": 232.9,
+    "before_p95_us": 165.3,
+    "after_p95_us": 394.4
+  },
+  {
+    "retirements": 4096,
+    "replacements": 4103,
+    "exact_match": true,
+    "before_median_us": 745.8,
+    "after_median_us": 1071.9,
+    "before_p95_us": 1729.4,
+    "after_p95_us": 2386
+  }
+]

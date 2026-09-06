@@ -24,6 +24,7 @@ class WtChunkApplicationService;
 class WtGodotCollisionSink;
 class WtGodotRenderSink;
 class WtGpuMeshingShadowQueue;
+class WtPublicationDependencyGraph;
 class WtM3IntegrationFixture;
 class WtM5ApplicationBenchmarkFixture;
 struct WtChunkPublicationRegion;
@@ -349,6 +350,7 @@ private:
 	std::uint64_t gpu_meshing_publication_terrain_queued_ = 0;
 	std::uint64_t gpu_meshing_publication_water_queued_ = 0;
 	bool gpu_resident_render_publication_enabled_ = false;
+	std::unique_ptr<WtPublicationDependencyGraph> gpu_publication_dependencies_;
 	std::uint64_t gpu_resident_render_validation_attempts_ = 0;
 	std::uint64_t gpu_resident_render_validation_ready_ = 0;
 	std::uint64_t gpu_resident_render_validation_rejections_ = 0;

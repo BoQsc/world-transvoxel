@@ -1,4 +1,6 @@
 #include "services/wt_chunk_publication_policy.h"
+#include "services/wt_publication_spatial_index.h"
+#include "services/wt_publication_dependency_graph.h"
 
 #include <algorithm>
 #include <limits>
@@ -24,75 +26,6 @@ bool bounds_overlap(
 		right_bounds.minimum.y < left_bounds.maximum.y &&
 		left_bounds.minimum.z < right_bounds.maximum.z &&
 		right_bounds.minimum.z < left_bounds.maximum.z;
-}
-
-bool bounds_share_face(
-	const WtChunkKey &left,
-	const WtChunkKey &right
-) noexcept {
-	if (!wt_is_valid_chunk_key(left) || !wt_is_valid_chunk_key(right) ||
-			bounds_overlap(left, right)) {
-		return false;
-	}
-	const WtChunkBounds left_bounds = wt_chunk_bounds(left);
-	const WtChunkBounds right_bounds = wt_chunk_bounds(right);
-	const auto positive_overlap = [](double left_minimum, double left_maximum,
-			double right_minimum, double right_maximum) noexcept {
-		return left_minimum < right_maximum &&
-			right_minimum < left_maximum;
-	};
-	const bool x_face =
-		(left_bounds.maximum.x == right_bounds.minimum.x ||
-			right_bounds.maximum.x == left_bounds.minimum.x) &&
-		positive_overlap(
-			left_bounds.minimum.y,
-			left_bounds.maximum.y,
-			right_bounds.minimum.y,
-			right_bounds.maximum.y
-		) && positive_overlap(
-			left_bounds.minimum.z,
-			left_bounds.maximum.z,
-			right_bounds.minimum.z,
-			right_bounds.maximum.z
-		);
-	const bool y_face =
-		(left_bounds.maximum.y == right_bounds.minimum.y ||
-			right_bounds.maximum.y == left_bounds.minimum.y) &&
-		positive_overlap(
-			left_bounds.minimum.x,
-			left_bounds.maximum.x,
-			right_bounds.minimum.x,
-			right_bounds.maximum.x
-		) && positive_overlap(
-			left_bounds.minimum.z,
-			left_bounds.maximum.z,
-			right_bounds.minimum.z,
-			right_bounds.maximum.z
-		);
-	const bool z_face =
-		(left_bounds.maximum.z == right_bounds.minimum.z ||
-			right_bounds.maximum.z == left_bounds.minimum.z) &&
-		positive_overlap(
-			left_bounds.minimum.x,
-			left_bounds.maximum.x,
-			right_bounds.minimum.x,
-			right_bounds.maximum.x
-		) && positive_overlap(
-			left_bounds.minimum.y,
-			left_bounds.maximum.y,
-			right_bounds.minimum.y,
-			right_bounds.maximum.y
-		);
-	return x_face || y_face || z_face;
-}
-
-bool unsafe_lod_boundary(
-	const WtChunkKey &replacement,
-	const WtChunkKey &retirement
-) noexcept {
-	const std::uint8_t lod_gap = replacement.lod > retirement.lod ?
-		replacement.lod - retirement.lod : retirement.lod - replacement.lod;
-	return lod_gap > 1U && bounds_share_face(replacement, retirement);
 }
 
 bool insert_key(std::vector<WtChunkKey> &keys, const WtChunkKey &key) {
@@ -133,20 +66,6 @@ public:
 		);
 	}
 
-	void append_overlapping(
-		const WtChunkKey &key,
-		std::vector<WtChunkKey> &output
-	) const {
-		if (!wt_is_valid_chunk_key(key)) return;
-		WtChunkKey ancestor = key;
-		while (true) {
-			if (contains(keys_, ancestor)) insert_key(output, ancestor);
-			if (ancestor.lod == maximum_lod_) break;
-			ancestor = wt_parent_chunk_key(ancestor);
-		}
-		append_descendants(key, output);
-	}
-
 	bool covers(const WtChunkKey &key) const noexcept {
 		WtChunkKey ancestor = key;
 		while (ancestor.lod <= maximum_lod_) {
@@ -176,26 +95,6 @@ private:
 		const WtChunkKey &key
 	) noexcept {
 		return std::binary_search(keys.begin(), keys.end(), key);
-	}
-
-	void append_descendants(
-		const WtChunkKey &parent,
-		std::vector<WtChunkKey> &output
-	) const {
-		if (parent.lod == 0) return;
-		for (std::int32_t z = 0; z < 2; ++z) {
-			for (std::int32_t y = 0; y < 2; ++y) {
-				for (std::int32_t x = 0; x < 2; ++x) {
-					WtChunkKey child;
-					if (!key_child(parent, x, y, z, child) ||
-						!contains(closure_, child)) {
-						continue;
-					}
-					if (contains(keys_, child)) insert_key(output, child);
-					append_descendants(child, output);
-				}
-			}
-		}
 	}
 
 	const std::vector<WtChunkKey> &keys_;
@@ -341,56 +240,29 @@ namespace {
 
 void build_indexed_publication_region(
 	const WtChunkKey &seed_replacement,
-	const std::vector<WtChunkKey> &pending_retirements,
-	const ChunkHierarchyIndex &replacement_index,
-	const ChunkHierarchyIndex &retirement_index,
+	const WtPublicationSpatialIndex &replacement_index,
+	const WtPublicationSpatialIndex &retirement_index,
 	WtChunkPublicationRegion &output
 ) {
-	output = {};
-	std::vector<WtChunkKey> replacement_queue { seed_replacement };
-	std::vector<WtChunkKey> retirement_queue;
-	output.replacements.push_back(seed_replacement);
-	std::size_t replacement_cursor = 0;
-	std::size_t retirement_cursor = 0;
-	std::size_t boundary_cursor = 0;
-	while (replacement_cursor < replacement_queue.size() ||
-		retirement_cursor < retirement_queue.size() ||
-		boundary_cursor < output.replacements.size()) {
-		while (replacement_cursor < replacement_queue.size()) {
-			std::vector<WtChunkKey> overlapping;
-			retirement_index.append_overlapping(
-				replacement_queue[replacement_cursor++],
-				overlapping
-			);
-			for (const WtChunkKey &retirement : overlapping) {
-				if (insert_key(output.retirements, retirement)) {
-					retirement_queue.push_back(retirement);
-				}
-			}
-		}
-		while (retirement_cursor < retirement_queue.size()) {
-			std::vector<WtChunkKey> overlapping;
-			replacement_index.append_overlapping(
-				retirement_queue[retirement_cursor++],
-				overlapping
-			);
-			for (const WtChunkKey &replacement : overlapping) {
-				if (insert_key(output.replacements, replacement)) {
-					replacement_queue.push_back(replacement);
-				}
-			}
-		}
-		while (boundary_cursor < output.replacements.size()) {
-			const WtChunkKey replacement =
-				output.replacements[boundary_cursor++];
-			for (const WtChunkKey &retirement : pending_retirements) {
-				if (unsafe_lod_boundary(replacement, retirement) &&
-						insert_key(output.retirements, retirement)) {
-					retirement_queue.push_back(retirement);
-				}
-			}
+	// Directed bipartite dependency graph: a replacement requires overlapping
+	// retirements and unsafe old face neighbors; a retirement requires all of
+	// its overlapping replacements. Each discovered vertex is expanded once.
+	struct Work { WtChunkKey key; bool retirement; };
+	std::vector<Work> work {{seed_replacement, false}};
+	std::set<WtChunkKey> replacements {seed_replacement}, retirements;
+	std::vector<WtChunkKey> dependencies;
+	for (std::size_t cursor = 0; cursor < work.size(); ++cursor) {
+		const auto item = work[cursor];
+		dependencies.clear();
+		const auto &index = item.retirement ? replacement_index : retirement_index;
+		index.append_dependencies(item.key, !item.retirement, dependencies);
+		auto &selected = item.retirement ? replacements : retirements;
+		for (const auto &dependency : dependencies) {
+			if (selected.insert(dependency).second) work.push_back({dependency, !item.retirement});
 		}
 	}
+	output.replacements.assign(replacements.begin(), replacements.end());
+	output.retirements.assign(retirements.begin(), retirements.end());
 }
 
 } // namespace
@@ -417,13 +289,10 @@ bool wt_build_chunk_publication_region(
 	output = {};
 	if (!wt_is_valid_chunk_key(seed_replacement) || !std::binary_search(
 			pending_replacements.begin(), pending_replacements.end(), seed_replacement)) return false;
-	std::uint8_t maximum_lod = seed_replacement.lod;
-	for (const WtChunkKey &key : pending_replacements) maximum_lod = std::max(maximum_lod, key.lod);
-	for (const WtChunkKey &key : pending_retirements) maximum_lod = std::max(maximum_lod, key.lod);
-	const ChunkHierarchyIndex replacement_index(pending_replacements, maximum_lod);
-	const ChunkHierarchyIndex retirement_index(pending_retirements, maximum_lod);
+	const WtPublicationSpatialIndex replacement_index(pending_replacements);
+	const WtPublicationSpatialIndex retirement_index(pending_retirements);
 	build_indexed_publication_region(
-		seed_replacement, pending_retirements, replacement_index, retirement_index, output
+		seed_replacement, replacement_index, retirement_index, output
 	);
 	return true;
 }
@@ -435,7 +304,8 @@ bool wt_build_gpu_chunk_publication_cohort(
 	const std::function<bool(const WtChunkKey &, WtGpuPublicationBoundary &)> &lookup,
 	WtChunkPublicationRegion &output,
 	std::vector<WtChunkKey> &waiting_masks,
-	std::size_t maximum_members
+	std::size_t maximum_members,
+	WtPublicationDependencyGraph *dependencies
 ) {
 	output = {};
 	waiting_masks.clear();
@@ -472,11 +342,9 @@ bool wt_build_gpu_chunk_publication_cohort(
 	};
 	std::set<WtChunkKey> selected;
 	std::set<WtChunkKey> expanded_regions;
-	std::uint8_t indexed_maximum_lod = seed.lod;
-	for (const WtChunkKey &key : pending_replacements) indexed_maximum_lod = std::max(indexed_maximum_lod, key.lod);
-	for (const WtChunkKey &key : pending_retirements) indexed_maximum_lod = std::max(indexed_maximum_lod, key.lod);
-	std::unique_ptr<ChunkHierarchyIndex> replacement_index;
-	std::unique_ptr<ChunkHierarchyIndex> retirement_index;
+	WtPublicationDependencyGraph local_dependencies;
+	auto &graph = dependencies ? *dependencies : local_dependencies;
+	graph.update(pending_replacements, pending_retirements);
 	std::vector<WtChunkKey> queue;
 	const auto add = [&](const WtChunkKey &key) {
 		if (selected.count(key) != 0) return true;
@@ -496,16 +364,11 @@ bool wt_build_gpu_chunk_publication_cohort(
 		// Any newly required boundary member may itself replace retained chunks.
 		// Include that overlap component and its retirements in the same swap.
 		if (expanded_regions.count(key) == 0 &&
-			wt_chunk_replacement_requires_regional_publication(key, pending_retirements)) {
+			graph.retirements().overlaps(key)) {
 			if (!std::binary_search(pending_replacements.begin(), pending_replacements.end(), key)) return false;
-			if (!replacement_index || key.lod > indexed_maximum_lod) {
-				indexed_maximum_lod = std::max(indexed_maximum_lod, key.lod);
-				replacement_index = std::make_unique<ChunkHierarchyIndex>(pending_replacements, indexed_maximum_lod);
-				retirement_index = std::make_unique<ChunkHierarchyIndex>(pending_retirements, indexed_maximum_lod);
-			}
 			WtChunkPublicationRegion region;
 			build_indexed_publication_region(
-				key, pending_retirements, *replacement_index, *retirement_index, region
+				key, graph.replacements(), graph.retirements(), region
 			);
 			for (const WtChunkKey &replacement : region.replacements) {
 				if (!add(replacement)) return false;

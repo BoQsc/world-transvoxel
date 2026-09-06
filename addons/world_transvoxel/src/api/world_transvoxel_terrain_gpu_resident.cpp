@@ -5,6 +5,7 @@
 #include "render/wt_godot_render_sink.h"
 #include "services/wt_chunk_application.h"
 #include "services/wt_chunk_publication_policy.h"
+#include "services/wt_publication_dependency_graph.h"
 
 #include <algorithm>
 #include <chrono>
@@ -119,7 +120,8 @@ bool build_gpu_publication_cohort(
 	std::vector<WtChunkKey> &waiting_masks,
 	godot::Array *inspected_boundaries = nullptr,
 	std::vector<WtChunkKey> *inspected_candidates = nullptr,
-	std::vector<WtChunkKey> *inspected_visual_retirements = nullptr
+	std::vector<WtChunkKey> *inspected_visual_retirements = nullptr,
+	WtPublicationDependencyGraph *dependencies = nullptr
 ) {
 	std::vector<WtChunkKey> candidates = pending;
 	candidates.insert(candidates.end(), ready.begin(), ready.end());
@@ -195,7 +197,7 @@ bool build_gpu_publication_cohort(
 				inspected_boundaries->push_back(member);
 			}
 			return true;
-		}, region, waiting_masks
+		}, region, waiting_masks, 4096, dependencies
 	);
 }
 
@@ -244,6 +246,7 @@ godot::Dictionary WorldTransvoxelTerrain::inspect_gpu_resident_publication(
 bool WorldTransvoxelTerrain::begin_gpu_resident_render_publication(
 	std::int64_t capacity
 ) {
+	gpu_publication_dependencies_ = std::make_unique<WtPublicationDependencyGraph>();
 	gpu_meshing_publication_enabled_ = false;
 	gpu_resident_render_publication_enabled_ = false;
 	gpu_resident_render_validation_attempts_ = 0;
@@ -277,6 +280,7 @@ bool WorldTransvoxelTerrain::begin_gpu_resident_render_publication(
 }
 
 void WorldTransvoxelTerrain::end_gpu_resident_render_publication() {
+	gpu_publication_dependencies_.reset();
 	gpu_resident_render_publication_enabled_ = false;
 	if (gpu_meshing_shadow_) gpu_meshing_shadow_->end();
 	if (render_sink_) {
@@ -628,7 +632,7 @@ get_gpu_resident_render_activation_cohort(
 			pending_chunk_replacements_, ready_staged_chunk_replacements_,
 			pending_chunk_retirements_, independently_publishable_chunk_replacements_,
 			region, waiting_masks,
-			nullptr, nullptr, &visual_retirements
+			nullptr, nullptr, &visual_retirements, gpu_publication_dependencies_.get()
 		);
 	record_phase("selection");
 	const bool covered = built && (region.retirements.empty() ||
@@ -844,7 +848,7 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 			*application_, *render_sink_, seed_key,
 			pending_chunk_replacements_, ready_staged_chunk_replacements_,
 			pending_chunk_retirements_, independently_publishable_chunk_replacements_,
-			region, waiting_masks
+			region, waiting_masks, nullptr, nullptr, nullptr, gpu_publication_dependencies_.get()
 		) || (!region.retirements.empty() &&
 			!publication_region_has_complete_authoritative_coverage(region))) {
 		result["status"] = "WAITING_COHORT";

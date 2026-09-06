@@ -1,4 +1,6 @@
 #include "services/wt_chunk_publication_policy.h"
+#include "services/wt_publication_spatial_index.h"
+#include "services/wt_publication_dependency_graph.h"
 
 #include <algorithm>
 #include <chrono>
@@ -230,6 +232,92 @@ void regression() {
 	std::cout << "PUBLICATION_POLICY_PASS random_cases=250 coordinate_limit_cases=30\n";
 }
 
+void spatial_dependency_regression() {
+	Keys retirements;
+	for (int i = 0; i < 4096; ++i) retirements.push_back({i * 4, 0, 0, 3});
+	const wt::WtPublicationSpatialIndex index(retirements);
+	wt::WtPublicationSpatialIndex::QueryStats stats;
+	Keys replacements;
+	for (int z = 0; z < 2; ++z) for (int y = 0; y < 2; ++y) for (int x = 0; x < 2; ++x) {
+		const wt::WtChunkKey key {x, y, z, 2};
+		replacements.push_back(key);
+		Keys actual, expected;
+		index.append_dependencies(key, true, actual, &stats);
+		for (const auto &candidate : retirements) if (related(key, candidate, true)) expected.push_back(candidate);
+		normalize(actual);
+		check(actual == expected && index.overlaps(key), "spatial dependency query differs from integer oracle");
+	}
+	check(stats.tested_keys < 128, "local dependency query scanned unrelated retirements");
+	normalize(replacements);
+	compare(replacements, retirements);
+	// Contacts across a fine-coordinate limit may still have representable
+	// coarse neighbors. Querying integer bounds must not lose those faces.
+	for (int limit : {std::numeric_limits<int>::min(), std::numeric_limits<int>::max()}) {
+		for (std::uint8_t lod : {0, 1, 18, 20}) {
+			const wt::WtChunkKey key {limit, limit, limit, lod};
+			Keys candidates {key};
+			for (auto parent = key; parent.lod < wt::kWtMaximumLod;) {
+				parent = wt::wt_parent_chunk_key(parent);
+				candidates.push_back(parent);
+				candidates.push_back({parent.x + 1, parent.y, parent.z, parent.lod});
+				candidates.push_back({parent.x - 1, parent.y, parent.z, parent.lod});
+			}
+			const wt::WtPublicationSpatialIndex limits(candidates);
+			for (bool faces : {false, true}) {
+				Keys actual, expected;
+				limits.append_dependencies(key, faces, actual);
+				for (const auto &candidate : candidates) if (related(key, candidate, faces)) expected.push_back(candidate);
+				normalize(actual); normalize(expected);
+				check(actual == expected, "coordinate-limit dependency query differs from oracle");
+			}
+		}
+	}
+	std::cout << "SPATIAL_PUBLICATION_DEPENDENCIES_PASS retirements=4096 queries=8 tested_keys="
+		<< stats.tested_keys << " all_pairs_keys=32768 coordinate_limits=both\n";
+}
+
+void dependency_snapshot_regression() {
+	wt::WtPublicationDependencyGraph graph;
+	Keys replacements {{0, 0, 0, 0}}, retirements {{0, 0, 0, 1}};
+	graph.update(replacements, retirements);
+	graph.replacements(); graph.retirements();
+	check(graph.index_builds() == 2, "initial spatial indexes were not constructed");
+	for (int i = 0; i < 100; ++i) {
+		graph.update(replacements, retirements);
+		graph.replacements(); graph.retirements();
+	}
+	check(graph.index_builds() == 2, "unchanged publication membership rebuilt indexes");
+	replacements.push_back({1, 0, 0, 0});
+	graph.update(replacements, retirements);
+	graph.replacements(); graph.retirements();
+	check(graph.index_builds() == 3, "replacement mutation failed isolated invalidation");
+	retirements.clear();
+	graph.update(replacements, retirements);
+	check(!graph.retirements().overlaps(replacements.front()) && graph.index_builds() == 4,
+		"retirement removal retained stale spatial coverage");
+	replacements.clear(); retirements = {{0, 0, 0, 1}};
+	for (int z = 0; z < 2; ++z) for (int y = 0; y < 2; ++y) for (int x = 0; x < 2; ++x) {
+		replacements.push_back({x, y, z, 0});
+	}
+	normalize(replacements);
+	for (int phase = 0; phase < 128; ++phase) {
+		const auto lookup = [&](const wt::WtChunkKey &key, wt::WtGpuPublicationBoundary &boundary) {
+			if (!contains(replacements, key)) return false;
+			boundary = {std::uint8_t(phase / 2), phase % 2 != 0};
+			return true;
+		};
+		wt::WtChunkPublicationRegion cached, fresh;
+		Keys cached_wait, fresh_wait;
+		const bool a = wt::wt_build_gpu_chunk_publication_cohort(replacements.front(), replacements,
+			retirements, lookup, cached, cached_wait, 4096, &graph);
+		const bool b = wt::wt_build_gpu_chunk_publication_cohort(replacements.front(), replacements,
+			retirements, lookup, fresh, fresh_wait);
+		check(a == b && cached.replacements == fresh.replacements && cached.retirements == fresh.retirements &&
+			cached_wait == fresh_wait, "spatial snapshot cached changing masks or active-content readiness");
+	}
+	std::cout << "PUBLICATION_DEPENDENCY_SNAPSHOT_PASS unchanged_queries=100 mask_readiness_mutations=128 isolated_invalidation=1\n";
+}
+
 wt::WtChunkKey read_key() {
 	wt::WtChunkKey key; int lod;
 	check(bool(std::cin >> key.x >> key.y >> key.z >> lod) && lod >= 0 && lod <= wt::kWtMaximumLod,
@@ -271,11 +359,12 @@ void replay(int iterations) {
 		boundary = found->second; return true;
 	};
 	std::vector<double> times;
+	wt::WtPublicationDependencyGraph dependencies;
 	wt::WtChunkPublicationRegion region; Keys waiting;
 	bool built = false;
 	for (int i = 0; i <= iterations; ++i) {
 		const auto start = std::chrono::steady_clock::now();
-		built = wt::wt_build_gpu_chunk_publication_cohort(seed, replacements, retirements, lookup, region, waiting);
+		built = wt::wt_build_gpu_chunk_publication_cohort(seed, replacements, retirements, lookup, region, waiting, 4096, &dependencies);
 		const double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count();
 		if (i) times.push_back(us);
 	}
@@ -322,6 +411,8 @@ int main(int argc, char **argv) {
 		replay(iterations);
 	} else {
 		regression();
+		spatial_dependency_regression();
+		dependency_snapshot_regression();
 		coverage_regression();
 	}
 }

@@ -64,6 +64,20 @@ project for years.
 
 ## 3. Production strategy and backend policy
 
+Publication replacement/retirement closure uses an immutable integer AABB index
+and a directed dependency traversal. A replacement depends on overlapping old
+coverage and unsafe old face neighbors; an old chunk depends on its overlapping
+replacements. Each selected vertex is expanded once, and final membership is
+sorted deterministically. This replaces repeated retirement scans without
+relaxing complete authoritative coverage, 2:1 boundaries, collision readiness,
+generation identity, or atomic publication. Independent all-pairs reference
+tests and bounded locality measurements qualify this subsystem replacement;
+GPU gameplay latency remains a separate, unqualified gate.
+The GPU publication session retains these spatial indexes across queries while
+exact key membership is unchanged. Readiness, generation, active content and
+transition masks are never cached by this graph. Membership changes invalidate
+the affected index; ending the GPU session releases its retained storage.
+
 The optional staged runtime can activate the visual viewer's immediate
 seven-chunk neighborhood independently of distant background refinement through
 `hierarchical_lod_viewer_activation_enabled` (default false). This changes work

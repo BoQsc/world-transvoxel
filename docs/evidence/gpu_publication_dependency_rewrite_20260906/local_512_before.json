@@ -1,0 +1,69 @@
+{
+  "built": true,
+  "coverage_matches_oracle": true,
+  "covered": true,
+  "coverage_median_us": 1.6,
+  "reference_coverage_median_us": 1.5,
+  "iterations": 25,
+  "median_us": 167.5,
+  "p95_us": 171.4,
+  "selected": [
+    [
+      0,
+      0,
+      0,
+      2
+    ],
+    [
+      1,
+      0,
+      0,
+      2
+    ],
+    [
+      0,
+      1,
+      0,
+      2
+    ],
+    [
+      1,
+      1,
+      0,
+      2
+    ],
+    [
+      0,
+      0,
+      1,
+      2
+    ],
+    [
+      1,
+      0,
+      1,
+      2
+    ],
+    [
+      0,
+      1,
+      1,
+      2
+    ],
+    [
+      1,
+      1,
+      1,
+      2
+    ]
+  ],
+  "retirements": [
+    [
+      0,
+      0,
+      0,
+      3
+    ]
+  ],
+  "waiting_masks": []
+}

@@ -9,6 +9,8 @@
 
 namespace world_transvoxel {
 
+class WtPublicationDependencyGraph;
+
 struct WtChunkPublicationRegion {
 	std::vector<WtChunkKey> replacements;
 	std::vector<WtChunkKey> retirements;
@@ -35,7 +37,8 @@ bool wt_build_gpu_chunk_publication_cohort(
 	const std::function<bool(const WtChunkKey &, WtGpuPublicationBoundary &)> &lookup,
 	WtChunkPublicationRegion &output,
 	std::vector<WtChunkKey> &waiting_masks,
-	std::size_t maximum_members = 4096
+	std::size_t maximum_members = 4096,
+	WtPublicationDependencyGraph *dependencies = nullptr
 );
 
 bool wt_chunk_replacement_requires_regional_publication(
