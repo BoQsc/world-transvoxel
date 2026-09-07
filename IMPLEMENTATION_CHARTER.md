@@ -1399,6 +1399,12 @@ before background payloads. FIFO order is preserved within each class, total
 capacity is unchanged, stale-generation validation still occurs at apply time,
 and the per-frame item and time budgets remain authoritative.
 
+When a staged replacement produces render and collision payloads from the same
+mesh completion, the collision publication is enqueued first. A saturated
+visual publication ring must therefore not hold an already prepared collision
+behind the matching render publication. Visual staging and regional activation
+remain atomic; only authoritative collision readiness advances independently.
+
 Cached source pages remain immutable base data keyed by source revision. An edit
 does not evict that base page: journal replay derives the requested world revision
 when sampling the replacement. The runtime admits and starts committed-edit work

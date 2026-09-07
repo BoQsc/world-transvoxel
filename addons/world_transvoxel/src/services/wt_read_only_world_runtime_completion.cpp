@@ -272,12 +272,6 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 				application_record.staged_replacement;
 			publication.interaction_critical =
 				application_record.independently_publishable_replacement;
-			if (!push_publication(std::move(publication))) {
-				if (!stop_requested_.load()) {
-					set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
-				}
-				break;
-			}
 			WtReadOnlyPublication collision_publication;
 			collision_publication.kind = WtReadOnlyPublicationKind::CollisionPayload;
 			if (replacement_collision) {
@@ -291,6 +285,12 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			if (application_record.staged_replacement &&
 				application_record.collision_required && replacement_collision &&
 				!push_publication(std::move(collision_publication))) {
+				if (!stop_requested_.load()) {
+					set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
+				}
+				break;
+			}
+			if (!push_publication(std::move(publication))) {
 				if (!stop_requested_.load()) {
 					set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
 				}
@@ -334,12 +334,6 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 		publication.staged_replacement = application_record.staged_replacement;
 		publication.interaction_critical =
 			application_record.independently_publishable_replacement;
-		if (!push_publication(std::move(publication))) {
-			if (!stop_requested_.load()) {
-				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
-			}
-			break;
-		}
 		WtReadOnlyPublication collision_publication;
 		collision_publication.kind = WtReadOnlyPublicationKind::CollisionPayload;
 		if (replacement_collision) {
@@ -353,6 +347,12 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 		if (application_record.staged_replacement &&
 			application_record.collision_required && replacement_collision &&
 			!push_publication(std::move(collision_publication))) {
+			if (!stop_requested_.load()) {
+				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
+			}
+			break;
+		}
+		if (!push_publication(std::move(publication))) {
 			if (!stop_requested_.load()) {
 				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
 			}
