@@ -1,9 +1,19 @@
 #include "services/wt_world_lifecycle.h"
 
+#include <algorithm>
 #include <system_error>
 #include <utility>
 
 namespace world_transvoxel {
+namespace {
+
+std::size_t interaction_storage_reserve(std::uint64_t capacity) noexcept {
+	if (capacity < 2) return 0;
+	const std::uint64_t fraction = std::max<std::uint64_t>(1, capacity / 8);
+	return static_cast<std::size_t>(std::min<std::uint64_t>(32, fraction));
+}
+
+} // namespace
 
 WtWorldLifecycleService::WtWorldLifecycleService(
 	WtRuntimeConfig config,
@@ -55,6 +65,7 @@ WtWorldLifecycleStatus WtWorldLifecycleService::start(
 				static_cast<std::size_t>(
 					config_.procedural_generation_worker_count
 				),
+				interaction_storage_reserve(config_.storage_request_capacity),
 			}
 		);
 		last_storage_status_ = WtAsyncStorageStatus::Ok;
@@ -109,6 +120,7 @@ WtWorldLifecycleStatus WtWorldLifecycleService::start_procedural(
 				static_cast<std::size_t>(
 					config_.procedural_generation_worker_count
 				),
+				interaction_storage_reserve(config_.storage_request_capacity),
 			}
 		);
 		last_storage_status_ = WtAsyncStorageStatus::Ok;
@@ -161,6 +173,7 @@ WtWorldLifecycleStatus WtWorldLifecycleService::start_procedural_snapshot(
 				static_cast<std::size_t>(
 					config_.procedural_generation_worker_count
 				),
+				interaction_storage_reserve(config_.storage_request_capacity),
 			}
 		);
 		last_storage_status_ = WtAsyncStorageStatus::Ok;

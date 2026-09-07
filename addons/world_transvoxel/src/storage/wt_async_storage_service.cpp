@@ -95,15 +95,8 @@ bool WtAsyncStorageService::configuration_valid() const noexcept {
 		limits_.maximum_page_bytes <= kWtMaximumContainerSize &&
 		limits_.procedural_generation_worker_count != 0 &&
 		limits_.procedural_generation_worker_count <=
-			kWtMaximumProceduralGenerationWorkerCount;
-}
-
-void WtAsyncStorageService::start_workers(std::size_t worker_count) {
-	std::lock_guard<std::mutex> lock(mutex_);
-	workers_.reserve(worker_count);
-	for (std::size_t index = 0; index < worker_count; ++index) {
-		workers_.emplace_back(&WtAsyncStorageService::worker_main, this);
-	}
+			kWtMaximumProceduralGenerationWorkerCount &&
+		limits_.interaction_request_capacity < limits_.request_capacity;
 }
 
 void WtAsyncStorageService::reset_closed_state_locked() noexcept {
@@ -192,7 +185,10 @@ WtAsyncStorageStatus WtAsyncStorageService::open(
 	}
 	// Parallel reads from one object store can add random-I/O contention. Keep
 	// the authoritative file-backed path single-worker.
-	start_workers(1);
+	start_workers(1, WtStorageRequestClass::Background);
+	if (limits_.interaction_request_capacity != 0) {
+		start_workers(1, WtStorageRequestClass::Interaction);
+	}
 	return WtAsyncStorageStatus::Ok;
 }
 
@@ -235,7 +231,13 @@ WtAsyncStorageStatus WtAsyncStorageService::open_procedural(
 		metrics_ = {};
 		open_ = true;
 	}
-	start_workers(limits_.procedural_generation_worker_count);
+	start_workers(
+		limits_.procedural_generation_worker_count,
+		WtStorageRequestClass::Background
+	);
+	if (limits_.interaction_request_capacity != 0) {
+		start_workers(1, WtStorageRequestClass::Interaction);
+	}
 	return WtAsyncStorageStatus::Ok;
 }
 
@@ -316,7 +318,13 @@ WtAsyncStorageStatus WtAsyncStorageService::open_procedural_snapshot(
 		metrics_ = {};
 		open_ = true;
 	}
-	start_workers(limits_.procedural_generation_worker_count);
+	start_workers(
+		limits_.procedural_generation_worker_count,
+		WtStorageRequestClass::Background
+	);
+	if (limits_.interaction_request_capacity != 0) {
+		start_workers(1, WtStorageRequestClass::Interaction);
+	}
 	return WtAsyncStorageStatus::Ok;
 }
 
@@ -347,7 +355,8 @@ void WtAsyncStorageService::close() noexcept {
 WtAsyncStorageStatus WtAsyncStorageService::request_page(
 	const WtChunkKey &key,
 	WtGenerationToken generation,
-	std::int32_t priority
+	std::int32_t priority,
+	WtStorageRequestClass request_class
 ) {
 	if (!wt_is_valid_chunk_key(key) || generation.value == 0) {
 		return WtAsyncStorageStatus::InvalidKey;
@@ -380,8 +389,15 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 				return request.key == key;
 			}
 		);
-		if (queued != requests_.end() && queued->priority != priority) {
+		if (queued != requests_.end() &&
+			(queued->priority != priority ||
+				queued->request_class != request_class)) {
+			if (queued->request_class == WtStorageRequestClass::Background &&
+				request_class == WtStorageRequestClass::Interaction) {
+				++metrics_.interaction_request_promotions;
+			}
 			queued->priority = priority;
+			queued->request_class = request_class;
 			std::stable_sort(
 				requests_.begin(),
 				requests_.end(),
@@ -392,13 +408,29 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 					return left.sequence < right.sequence;
 				}
 			);
+			work_available_.notify_all();
 		}
 		++metrics_.duplicate_requests;
 		return WtAsyncStorageStatus::AlreadyPending;
 	}
 	if (requests_.size() >= limits_.request_capacity) {
 		++metrics_.request_queue_rejections;
+		metrics_.interaction_queue_rejections +=
+			request_class == WtStorageRequestClass::Interaction ? 1U : 0U;
 		return WtAsyncStorageStatus::RequestQueueFull;
+	}
+	if (request_class == WtStorageRequestClass::Background &&
+		limits_.interaction_request_capacity != 0) {
+		const std::size_t background_count = static_cast<std::size_t>(
+			std::count_if(requests_.begin(), requests_.end(), [](const Request &item) {
+				return item.request_class == WtStorageRequestClass::Background;
+			})
+		);
+		if (background_count >= limits_.request_capacity -
+				limits_.interaction_request_capacity) {
+			++metrics_.request_queue_rejections;
+			return WtAsyncStorageStatus::RequestQueueFull;
+		}
 	}
 	Request request;
 	request.key = key;
@@ -409,6 +441,7 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 	request.procedural_fallback = procedural_ && entry == nullptr;
 	request.sequence = ++sequence_counter_;
 	request.priority = priority;
+	request.request_class = request_class;
 	const auto position = std::lower_bound(
 		requests_.begin(),
 		requests_.end(),
@@ -423,6 +456,8 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 	requests_.insert(position, request);
 	active_requests_.push_back({ key, generation });
 	++metrics_.accepted_requests;
+	metrics_.interaction_accepted_requests +=
+		request_class == WtStorageRequestClass::Interaction ? 1U : 0U;
 	if (trace_observer_) {
 		const WtAsyncStorageTraceObserver observer = trace_observer_;
 		observer(
@@ -433,7 +468,11 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 			WtPageLoadStatus::Ok
 		);
 	}
-	work_available_.notify_one();
+	if (limits_.interaction_request_capacity == 0) {
+		work_available_.notify_one();
+	} else {
+		work_available_.notify_all();
+	}
 	return WtAsyncStorageStatus::Ok;
 }
 
@@ -541,108 +580,6 @@ void WtAsyncStorageService::remove_active_locked(const WtChunkKey &key) {
 	);
 	if (active != active_requests_.end()) {
 		active_requests_.erase(active);
-	}
-}
-
-void WtAsyncStorageService::worker_main() noexcept {
-	for (;;) {
-		Request request;
-		std::chrono::steady_clock::time_point load_started;
-		WtAsyncStorageTraceObserver trace_observer;
-		{
-			std::unique_lock<std::mutex> lock(mutex_);
-			work_available_.wait(lock, [&]() {
-				return stop_requested_ || !requests_.empty();
-			});
-			if (stop_requested_) {
-				return;
-			}
-			request = requests_.front();
-			requests_.erase(requests_.begin());
-			++metrics_.started_requests;
-			load_started = std::chrono::steady_clock::now();
-			in_flight_requests_.push_back({
-				{ request.key, request.generation },
-				load_started,
-			});
-			metrics_.maximum_in_flight_requests = std::max<std::uint64_t>(
-				metrics_.maximum_in_flight_requests,
-				in_flight_requests_.size()
-			);
-			trace_observer = trace_observer_;
-		}
-		if (trace_observer) {
-			trace_observer(
-				WtAsyncStorageTraceEventKind::Started,
-				request.key,
-				request.generation,
-				0,
-				WtPageLoadStatus::Ok
-			);
-		}
-		const auto traced_load_started = std::chrono::steady_clock::now();
-
-		std::uint64_t bytes_read = 0;
-		WtPageLoadCompletion completion = load_page(request, bytes_read);
-		const auto load_finished = std::chrono::steady_clock::now();
-		const std::uint64_t observed_load_time_ns = static_cast<std::uint64_t>(
-			std::chrono::duration_cast<std::chrono::nanoseconds>(
-				load_finished - load_started
-			).count()
-		);
-		const std::uint64_t traced_load_time_ns = static_cast<std::uint64_t>(
-			std::chrono::duration_cast<std::chrono::nanoseconds>(
-				load_finished - traced_load_started
-			).count()
-		);
-		if (trace_observer) {
-			trace_observer(
-				WtAsyncStorageTraceEventKind::Finished,
-				request.key,
-				request.generation,
-				traced_load_time_ns,
-				completion.status
-			);
-		}
-
-		std::unique_lock<std::mutex> lock(mutex_);
-		const std::uint64_t load_time_ns = observed_load_time_ns;
-		metrics_.load_time_ns_last = load_time_ns;
-		metrics_.load_time_ns_total += load_time_ns;
-		metrics_.load_time_ns_maximum =
-			std::max(metrics_.load_time_ns_maximum, load_time_ns);
-		const auto in_flight = std::find_if(
-			in_flight_requests_.begin(),
-			in_flight_requests_.end(),
-			[&](const InFlightRequest &candidate) {
-				return candidate.identity.key == request.key;
-			}
-		);
-		if (in_flight != in_flight_requests_.end()) {
-			in_flight_requests_.erase(in_flight);
-		}
-		completion_space_available_.wait(lock, [&]() {
-			return stop_requested_ ||
-				completion_count_ < limits_.completion_capacity;
-		});
-		if (stop_requested_) {
-			++metrics_.cancelled_requests;
-			return;
-		}
-		const std::size_t tail =
-			(completion_head_ + completion_count_) %
-			limits_.completion_capacity;
-		completion_slots_[tail] = std::move(completion);
-		++completion_count_;
-		++metrics_.completed_requests;
-		metrics_.bytes_read += bytes_read;
-		if (completion_slots_[tail].status == WtPageLoadStatus::Ok) {
-			++metrics_.successful_pages;
-		} else {
-			++metrics_.failed_pages;
-		}
-		completion_available_.notify_one();
-		if (completion_notifier_) completion_notifier_();
 	}
 }
 
@@ -831,7 +768,22 @@ WtAsyncStorageMetrics WtAsyncStorageService::get_metrics() const noexcept {
 	std::lock_guard<std::mutex> lock(mutex_);
 	WtAsyncStorageMetrics snapshot = metrics_;
 	snapshot.worker_count = workers_.size();
+	snapshot.interaction_worker_count =
+		limits_.interaction_request_capacity == 0 ? 0U : 1U;
+	snapshot.interaction_queued_requests = static_cast<std::uint64_t>(
+		std::count_if(requests_.begin(), requests_.end(), [](const Request &item) {
+			return item.request_class == WtStorageRequestClass::Interaction;
+		})
+	);
 	snapshot.in_flight_requests = in_flight_requests_.size();
+	snapshot.interaction_in_flight_requests = static_cast<std::uint64_t>(
+		std::count_if(
+			in_flight_requests_.begin(), in_flight_requests_.end(),
+			[](const InFlightRequest &item) {
+				return item.request_class == WtStorageRequestClass::Interaction;
+			}
+		)
+	);
 	if (!in_flight_requests_.empty()) {
 		const auto oldest = std::min_element(
 			in_flight_requests_.begin(),

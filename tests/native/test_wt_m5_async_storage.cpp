@@ -1002,6 +1002,75 @@ void test_parallel_procedural_service() {
 	service.close();
 }
 
+void test_reserved_interaction_storage_lane() {
+	wt::WtProceduralWorldDescriptor descriptor;
+	descriptor.chunk_count_x = 16;
+	descriptor.chunk_count_z = 16;
+	descriptor.source_revision = 190021;
+	descriptor.world_revision = 3;
+	descriptor.seed = 19021;
+	descriptor.mode = wt::WtProceduralWorldMode::FourBiomesLakesCavesRoads;
+	wt::WtAsyncStorageService service({
+		16,
+		64,
+		wt::kWtMaximumContainerSize,
+		1,
+		4,
+	});
+	check(
+		service.open_procedural(descriptor) == wt::WtAsyncStorageStatus::Ok,
+		"reserved interaction storage service open failed"
+	);
+	bool background_saturated = false;
+	std::uint64_t generation = 1000;
+	for (std::int32_t z = 0; z < 8 && !background_saturated; ++z) {
+		for (std::int32_t x = 0; x < 8; ++x) {
+			const wt::WtAsyncStorageStatus status = service.request_page(
+				{ x, 0, z, 0 }, { generation++ }, 0,
+				wt::WtStorageRequestClass::Background
+			);
+			if (status == wt::WtAsyncStorageStatus::RequestQueueFull) {
+				background_saturated = true;
+				break;
+			}
+			check(status == wt::WtAsyncStorageStatus::Ok,
+				"background saturation request failed unexpectedly");
+		}
+	}
+	const wt::WtChunkKey interaction_key{ 15, 0, 15, 0 };
+	check(background_saturated,
+		"background storage did not reach its reserved admission boundary");
+	check(
+		service.request_page(
+			interaction_key, { 2000 }, 100,
+			wt::WtStorageRequestClass::Interaction
+		) == wt::WtAsyncStorageStatus::Ok,
+		"interaction storage request was rejected by background saturation"
+	);
+	bool interaction_completed = false;
+	for (std::size_t index = 0; index < 64 && !interaction_completed; ++index) {
+		wt::WtPageLoadCompletion completion;
+		check(
+			service.wait_pop_completion(completion, std::chrono::seconds(5)),
+			"reserved interaction completion timed out"
+		);
+		interaction_completed = completion.key == interaction_key &&
+			completion.generation.value == 2000 &&
+			completion.status == wt::WtPageLoadStatus::Ok;
+	}
+	const wt::WtAsyncStorageMetrics metrics = service.get_metrics();
+	check(
+		interaction_completed && metrics.worker_count == 2 &&
+			metrics.interaction_worker_count == 1 &&
+			metrics.interaction_accepted_requests == 1 &&
+			metrics.interaction_started_requests == 1 &&
+			metrics.request_queue_rejections >= 1 &&
+			metrics.interaction_queue_rejections == 0,
+		"reserved interaction storage metrics mismatch"
+	);
+	service.close();
+}
+
 void test_procedural_cave_portal() {
 	const wt::WtProceduralCaveField center =
 		wt::wt_sample_reference_cave_field(900.0, 24.0, 1000.0);
@@ -1308,6 +1377,7 @@ int main() {
 	test_shutdown_accounting(fixture);
 	test_procedural_service(evidence);
 	test_parallel_procedural_service();
+	test_reserved_interaction_storage_lane();
 	test_procedural_cave_portal();
 	test_procedural_road_network();
 	test_four_biome_lake_world();
@@ -1322,6 +1392,7 @@ int main() {
 		"M5_ASYNC_STORAGE_PASS requests=5 successes=1 failures=4 "
 		"queue_rejections=1 procedural_strata=1 procedural_lod3=1 "
 		"parallel_procedural_generation=1 "
+		"reserved_interaction_storage_lane=1 "
 		"procedural_cave_portal=1 procedural_roads=1 "
 		"four_biome_lake_world=1 procedural_bottom_boundary=1\n"
 	);

@@ -1375,6 +1375,14 @@ and sink ownership checks still run before preparation. CPU mesh payloads retain
 the existing bounded apply queue. This prevents background CPU render
 publication from delaying a prepared interaction capture.
 
+Storage keeps a bounded interaction lane for player-support, interaction-focus,
+and committed-edit page dependencies. Background requests cannot consume its
+reserved admission slots, and one additional worker consumes only interaction
+requests. Both lanes publish into the same bounded completion ring and immutable
+page cache. Queued background requests may be promoted in place; an active page
+load remains one non-preemptible whole-page unit. Lane occupancy, starts,
+promotions, rejections, and worker ownership are reported by storage metrics.
+
 ## 24. Final definition of success
 
 Success is a maintainable native Godot terrain addon, not merely generated

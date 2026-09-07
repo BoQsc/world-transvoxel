@@ -30,6 +30,13 @@ struct WtAsyncStorageLimits {
 	// File-backed storage always uses one I/O worker. This limit applies only
 	// when open_procedural() generates immutable source pages.
 	std::size_t procedural_generation_worker_count = 1;
+	// Reserved within request_capacity. Zero preserves the single shared lane.
+	std::size_t interaction_request_capacity = 0;
+};
+
+enum class WtStorageRequestClass : std::uint8_t {
+	Background,
+	Interaction,
 };
 
 enum class WtAsyncStorageStatus : std::uint8_t {
@@ -88,6 +95,13 @@ struct WtAsyncStorageMetrics {
 	std::int64_t in_flight_key_z = 0;
 	std::uint64_t in_flight_key_lod = 0;
 	std::uint64_t in_flight_generation = 0;
+	std::uint64_t interaction_accepted_requests = 0;
+	std::uint64_t interaction_started_requests = 0;
+	std::uint64_t interaction_queue_rejections = 0;
+	std::uint64_t interaction_request_promotions = 0;
+	std::uint64_t interaction_queued_requests = 0;
+	std::uint64_t interaction_in_flight_requests = 0;
+	std::uint64_t interaction_worker_count = 0;
 };
 
 enum class WtAsyncStorageTraceEventKind : std::uint8_t {
@@ -132,7 +146,9 @@ public:
 	WtAsyncStorageStatus request_page(
 		const WtChunkKey &key,
 		WtGenerationToken generation,
-		std::int32_t priority
+		std::int32_t priority,
+		WtStorageRequestClass request_class =
+			WtStorageRequestClass::Background
 	);
 	WtPageLoadStatus load_page_now(
 		const WtChunkKey &key,
@@ -180,6 +196,8 @@ private:
 		bool procedural_fallback = false;
 		std::uint64_t sequence = 0;
 		std::int32_t priority = 0;
+		WtStorageRequestClass request_class =
+			WtStorageRequestClass::Background;
 	};
 
 	struct RequestIdentity {
@@ -190,14 +208,19 @@ private:
 	struct InFlightRequest {
 		RequestIdentity identity;
 		std::chrono::steady_clock::time_point started;
+		WtStorageRequestClass request_class =
+			WtStorageRequestClass::Background;
 	};
 
 	bool configuration_valid() const noexcept;
 	bool pop_completion_locked(WtPageLoadCompletion &completion);
 	void remove_active_locked(const WtChunkKey &key);
-	void start_workers(std::size_t worker_count);
+	void start_workers(
+		std::size_t worker_count,
+		WtStorageRequestClass request_class
+	);
 	void reset_closed_state_locked() noexcept;
-	void worker_main() noexcept;
+	void worker_main(WtStorageRequestClass request_class) noexcept;
 	WtPageLoadCompletion load_page(
 		const Request &request,
 		std::uint64_t &bytes_read

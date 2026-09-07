@@ -2,6 +2,7 @@
 
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_storage_page_cache.h"
+#include "streaming/wt_foreground_priority.h"
 
 #include <algorithm>
 
@@ -354,7 +355,10 @@ WtPageMeshingRuntimeService::resolve_dependency(
 	const WtAsyncStorageStatus storage_status = storage.request_page(
 		dependency.key,
 		record.generation,
-		record.priority
+		record.priority,
+		record.priority >= kWtInteractionFocusPriority ?
+			WtStorageRequestClass::Interaction :
+			WtStorageRequestClass::Background
 	);
 	if (storage_status == WtAsyncStorageStatus::Ok) {
 		dependency.request_pending = true;
