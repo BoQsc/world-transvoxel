@@ -1383,6 +1383,14 @@ page cache. Queued background requests may be promoted in place; an active page
 load remains one non-preemptible whole-page unit. Lane occupancy, starts,
 promotions, rejections, and worker ownership are reported by storage metrics.
 
+Cancelling or superseding a page-meshing generation releases each dependency
+request that is still queued and has no remaining page-meshing owner. A request
+already executing remains immutable and completes normally. Shared dependencies
+remain queued until their last live meshing owner retires, and a request shared
+with interaction warming is never cancelled through meshing ownership. Storage
+and page-runtime metrics report queued dependency cancellations so interaction
+lane reclamation is measurable without weakening queue capacity.
+
 Interaction-focus leases also warm missing LOD0 source pages without adding them
 to the desired set. Each unique active focus key uses the reserved interaction
 storage lane and is decoded into the bounded page cache when its immutable load

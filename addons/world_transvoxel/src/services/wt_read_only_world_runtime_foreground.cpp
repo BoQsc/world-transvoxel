@@ -89,7 +89,8 @@ bool WtReadOnlyWorldRuntime::process_foreground_priority_event() {
 			key,
 			{ next_interaction_warm_generation_++ },
 			kWtInteractionFocusPriority,
-			WtStorageRequestClass::Interaction
+			WtStorageRequestClass::Interaction,
+			WtStorageRequestSource::InteractionWarm
 		);
 		if (warm_status == WtAsyncStorageStatus::Ok) {
 			++warm_admissions;

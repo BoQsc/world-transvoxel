@@ -484,6 +484,10 @@ WtPageMeshingRuntimeService::begin_sample_job(
 	if (!valid_ || !cache.valid() || !storage.is_open()) {
 		return WtPageMeshingRuntimeStatus::InvalidConfiguration;
 	}
+	if (storage_ != nullptr && storage_ != &storage && !records_.empty()) {
+		return WtPageMeshingRuntimeStatus::InvalidConfiguration;
+	}
+	storage_ = &storage;
 	if (job.stage != WtChunkJobStage::Sample ||
 		!wt_is_valid_chunk_key(job.key) ||
 		job.generation.value == 0) {
@@ -519,7 +523,11 @@ WtPageMeshingRuntimeService::begin_sample_job(
 		if (existing->mesh) {
 			++metrics_.discarded_mesh_completions;
 		}
+		cancel_async_work(existing->key, existing->generation);
+		const std::vector<Dependency> removed_dependencies =
+			existing->dependencies;
 		records_.erase(existing);
+		cancel_orphaned_dependency_requests(removed_dependencies);
 		++metrics_.cancellations;
 	}
 	if (records_.size() >= record_capacity_) {

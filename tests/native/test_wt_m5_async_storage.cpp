@@ -6,6 +6,7 @@
 #include "storage/wt_procedural_snapshot_descriptor.h"
 #include "storage/wt_procedural_world_source.h"
 
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -1071,6 +1072,104 @@ void test_reserved_interaction_storage_lane() {
 	service.close();
 }
 
+void test_cancel_queued_interaction_storage() {
+	wt::WtProceduralWorldDescriptor descriptor;
+	descriptor.chunk_count_x = 8;
+	descriptor.chunk_count_z = 8;
+	descriptor.source_revision = 190022;
+	descriptor.world_revision = 4;
+	descriptor.seed = 19022;
+	descriptor.mode = wt::WtProceduralWorldMode::FourBiomesLakesCavesRoads;
+	wt::WtAsyncStorageService service({
+		8,
+		8,
+		wt::kWtMaximumContainerSize,
+		1,
+		4,
+	});
+	check(
+		service.open_procedural(descriptor) == wt::WtAsyncStorageStatus::Ok,
+		"queued interaction cancellation service open failed"
+	);
+	const wt::WtChunkKey blocker{ 0, 0, 0, 0 };
+	const wt::WtChunkKey obsolete{ 1, 0, 0, 0 };
+	const wt::WtChunkKey live{ 2, 0, 0, 0 };
+	const wt::WtChunkKey cross_source_shared{ 3, 0, 0, 0 };
+	std::atomic<bool> blocker_started{ false };
+	std::atomic<bool> release_blocker{ false };
+	service.set_trace_observer(
+		[&](wt::WtAsyncStorageTraceEventKind kind, const wt::WtChunkKey &key,
+			wt::WtGenerationToken, std::uint64_t, wt::WtPageLoadStatus) {
+			if (kind != wt::WtAsyncStorageTraceEventKind::Started || key != blocker) {
+				return;
+			}
+			blocker_started.store(true, std::memory_order_release);
+			while (!release_blocker.load(std::memory_order_acquire)) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			}
+		}
+	);
+	check(
+		service.request_page(blocker, { 3000 }, 100,
+			wt::WtStorageRequestClass::Interaction) == wt::WtAsyncStorageStatus::Ok,
+		"interaction blocker request failed"
+	);
+	const auto start_deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(3);
+	while (!blocker_started.load(std::memory_order_acquire) &&
+		std::chrono::steady_clock::now() < start_deadline) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	check(blocker_started.load(std::memory_order_acquire),
+		"interaction blocker did not start");
+	check(
+		service.request_page(obsolete, { 3001 }, 99,
+			wt::WtStorageRequestClass::Interaction) == wt::WtAsyncStorageStatus::Ok &&
+		service.request_page(live, { 3002 }, 98,
+			wt::WtStorageRequestClass::Interaction) == wt::WtAsyncStorageStatus::Ok &&
+		service.request_page(cross_source_shared, { 3003 }, 97,
+			wt::WtStorageRequestClass::Interaction) == wt::WtAsyncStorageStatus::Ok &&
+		service.request_page(cross_source_shared, { 4003 }, 97,
+			wt::WtStorageRequestClass::Interaction,
+			wt::WtStorageRequestSource::InteractionWarm) ==
+				wt::WtAsyncStorageStatus::AlreadyPending,
+		"queued interaction setup failed"
+	);
+	check(service.cancel_queued_page(
+			obsolete, wt::WtStorageRequestSource::General
+		),
+		"obsolete queued interaction request was not cancelled");
+	check(!service.cancel_queued_page(
+			blocker, wt::WtStorageRequestSource::General
+		),
+		"in-flight interaction request was cancelled");
+	check(!service.cancel_queued_page(
+			cross_source_shared, wt::WtStorageRequestSource::General
+		),
+		"cross-source shared interaction request was cancelled");
+	release_blocker.store(true, std::memory_order_release);
+	const wt::WtPageLoadCompletion blocker_completion = wait_completion(
+		service, blocker, 3000, wt::WtPageLoadStatus::Ok
+	);
+	const wt::WtPageLoadCompletion live_completion = wait_completion(
+		service, live, 3002, wt::WtPageLoadStatus::Ok
+	);
+	const wt::WtPageLoadCompletion shared_completion = wait_completion(
+		service, cross_source_shared, 3003, wt::WtPageLoadStatus::Ok
+	);
+	const wt::WtAsyncStorageMetrics metrics = service.get_metrics();
+	check(
+		blocker_completion.page_bytes && live_completion.page_bytes &&
+		shared_completion.page_bytes && metrics.completed_requests == 3 &&
+		metrics.cancelled_queued_requests == 1 &&
+		metrics.interaction_cancelled_queued_requests == 1 &&
+		service.active_request_count() == 0,
+		"queued interaction cancellation accounting mismatch"
+	);
+	service.set_trace_observer({});
+	service.close();
+}
+
 void test_procedural_cave_portal() {
 	const wt::WtProceduralCaveField center =
 		wt::wt_sample_reference_cave_field(900.0, 24.0, 1000.0);
@@ -1378,6 +1477,7 @@ int main() {
 	test_procedural_service(evidence);
 	test_parallel_procedural_service();
 	test_reserved_interaction_storage_lane();
+	test_cancel_queued_interaction_storage();
 	test_procedural_cave_portal();
 	test_procedural_road_network();
 	test_four_biome_lake_world();
@@ -1393,6 +1493,7 @@ int main() {
 		"queue_rejections=1 procedural_strata=1 procedural_lod3=1 "
 		"parallel_procedural_generation=1 "
 		"reserved_interaction_storage_lane=1 "
+		"cancelled_queued_interaction_storage=1 "
 		"procedural_cave_portal=1 procedural_roads=1 "
 		"four_biome_lake_world=1 procedural_bottom_boundary=1\n"
 	);

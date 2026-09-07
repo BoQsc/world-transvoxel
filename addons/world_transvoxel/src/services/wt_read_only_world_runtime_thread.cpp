@@ -600,6 +600,10 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 	snapshot.storage_request_queue_rejections =
 		storage.request_queue_rejections;
 	snapshot.storage_duplicate_requests = storage.duplicate_requests;
+	snapshot.storage_cancelled_queued_requests =
+		storage.cancelled_queued_requests;
+	snapshot.storage_interaction_cancelled_queued_requests =
+		storage.interaction_cancelled_queued_requests;
 	snapshot.storage_successful_pages = storage.successful_pages;
 	snapshot.storage_load_time_ns_last = storage.load_time_ns_last;
 	snapshot.storage_load_time_ns_total = storage.load_time_ns_total;
@@ -646,6 +650,8 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 		snapshot.page_dependency_requests = page.dependency_requests;
 		snapshot.page_dependency_reprioritizations =
 			page.dependency_reprioritizations;
+		snapshot.page_cancelled_dependency_requests =
+			page.cancelled_dependency_requests;
 		snapshot.page_dependency_cache_hits = page.dependency_cache_hits;
 		snapshot.page_dependency_cache_misses = page.dependency_cache_misses;
 		snapshot.page_accepted_storage_completions =

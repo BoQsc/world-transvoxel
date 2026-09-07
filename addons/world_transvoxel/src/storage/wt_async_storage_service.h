@@ -39,6 +39,12 @@ enum class WtStorageRequestClass : std::uint8_t {
 	Interaction,
 };
 
+enum class WtStorageRequestSource : std::uint8_t {
+	General,
+	PageMeshing,
+	InteractionWarm,
+};
+
 enum class WtAsyncStorageStatus : std::uint8_t {
 	Ok,
 	InvalidConfiguration,
@@ -82,6 +88,8 @@ struct WtAsyncStorageMetrics {
 	std::uint64_t request_queue_rejections = 0;
 	std::uint64_t duplicate_requests = 0;
 	std::uint64_t cancelled_requests = 0;
+	std::uint64_t cancelled_queued_requests = 0;
+	std::uint64_t interaction_cancelled_queued_requests = 0;
 	std::uint64_t discarded_completions = 0;
 	std::uint64_t load_time_ns_last = 0;
 	std::uint64_t load_time_ns_total = 0;
@@ -148,8 +156,16 @@ public:
 		WtGenerationToken generation,
 		std::int32_t priority,
 		WtStorageRequestClass request_class =
-			WtStorageRequestClass::Background
+			WtStorageRequestClass::Background,
+		WtStorageRequestSource request_source =
+			WtStorageRequestSource::General
 	);
+	// Removes immutable page work only while it is still queued. In-flight work
+	// is allowed to complete so consumers never observe partial cancellation.
+	bool cancel_queued_page(
+		const WtChunkKey &key,
+		WtStorageRequestSource request_source
+	) noexcept;
 	WtPageLoadStatus load_page_now(
 		const WtChunkKey &key,
 		std::shared_ptr<const std::vector<std::uint8_t>> &page_bytes
@@ -198,6 +214,9 @@ private:
 		std::int32_t priority = 0;
 		WtStorageRequestClass request_class =
 			WtStorageRequestClass::Background;
+		WtStorageRequestSource request_source =
+			WtStorageRequestSource::General;
+		bool shared_request_source = false;
 	};
 
 	struct RequestIdentity {

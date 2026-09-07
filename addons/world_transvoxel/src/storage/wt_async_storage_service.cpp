@@ -356,7 +356,8 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 	const WtChunkKey &key,
 	WtGenerationToken generation,
 	std::int32_t priority,
-	WtStorageRequestClass request_class
+	WtStorageRequestClass request_class,
+	WtStorageRequestSource request_source
 ) {
 	if (!wt_is_valid_chunk_key(key) || generation.value == 0) {
 		return WtAsyncStorageStatus::InvalidKey;
@@ -410,6 +411,10 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 			);
 			work_available_.notify_all();
 		}
+		if (queued != requests_.end() &&
+			queued->request_source != request_source) {
+			queued->shared_request_source = true;
+		}
 		++metrics_.duplicate_requests;
 		return WtAsyncStorageStatus::AlreadyPending;
 	}
@@ -442,6 +447,7 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 	request.sequence = ++sequence_counter_;
 	request.priority = priority;
 	request.request_class = request_class;
+	request.request_source = request_source;
 	const auto position = std::lower_bound(
 		requests_.begin(),
 		requests_.end(),
@@ -474,6 +480,35 @@ WtAsyncStorageStatus WtAsyncStorageService::request_page(
 		work_available_.notify_all();
 	}
 	return WtAsyncStorageStatus::Ok;
+}
+
+bool WtAsyncStorageService::cancel_queued_page(
+	const WtChunkKey &key,
+	WtStorageRequestSource request_source
+) noexcept {
+	if (!wt_is_valid_chunk_key(key)) {
+		return false;
+	}
+	std::lock_guard<std::mutex> lock(mutex_);
+	if (!open_ || stop_requested_) {
+		return false;
+	}
+	const auto queued = std::find_if(
+		requests_.begin(), requests_.end(),
+		[&](const Request &request) { return request.key == key; }
+	);
+	if (queued == requests_.end() || queued->request_source != request_source ||
+		queued->shared_request_source) {
+		return false;
+	}
+	const bool interaction =
+		queued->request_class == WtStorageRequestClass::Interaction;
+	requests_.erase(queued);
+	remove_active_locked(key);
+	++metrics_.cancelled_requests;
+	++metrics_.cancelled_queued_requests;
+	metrics_.interaction_cancelled_queued_requests += interaction ? 1U : 0U;
+	return true;
 }
 
 WtPageLoadStatus WtAsyncStorageService::load_page_now(

@@ -358,7 +358,8 @@ WtPageMeshingRuntimeService::resolve_dependency(
 		record.priority,
 		record.priority >= kWtInteractionFocusPriority ?
 			WtStorageRequestClass::Interaction :
-			WtStorageRequestClass::Background
+			WtStorageRequestClass::Background,
+		WtStorageRequestSource::PageMeshing
 	);
 	if (storage_status == WtAsyncStorageStatus::Ok) {
 		dependency.request_pending = true;

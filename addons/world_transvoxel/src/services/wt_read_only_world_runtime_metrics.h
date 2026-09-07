@@ -125,6 +125,8 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t storage_completed_requests = 0;
 	std::uint64_t storage_request_queue_rejections = 0;
 	std::uint64_t storage_duplicate_requests = 0;
+	std::uint64_t storage_cancelled_queued_requests = 0;
+	std::uint64_t storage_interaction_cancelled_queued_requests = 0;
 	std::uint64_t storage_successful_pages = 0;
 	std::uint64_t storage_load_time_ns_last = 0;
 	std::uint64_t storage_load_time_ns_total = 0;
@@ -159,6 +161,7 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t page_scheduler_backpressure = 0;
 	std::uint64_t page_dependency_requests = 0;
 	std::uint64_t page_dependency_reprioritizations = 0;
+	std::uint64_t page_cancelled_dependency_requests = 0;
 	std::uint64_t page_dependency_cache_hits = 0;
 	std::uint64_t page_dependency_cache_misses = 0;
 	std::uint64_t page_accepted_storage_completions = 0;

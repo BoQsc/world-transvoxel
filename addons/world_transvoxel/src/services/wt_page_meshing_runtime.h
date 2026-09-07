@@ -113,6 +113,7 @@ struct WtPageMeshingRuntimeMetrics {
 	std::uint64_t mesh_jobs = 0;
 	std::uint64_t dependency_requests = 0;
 	std::uint64_t dependency_reprioritizations = 0;
+	std::uint64_t cancelled_dependency_requests = 0;
 	std::uint64_t dependency_cache_hits = 0;
 	std::uint64_t dependency_cache_misses = 0;
 	std::uint64_t accepted_storage_completions = 0;
@@ -406,6 +407,9 @@ private:
 		WtGenerationToken generation,
 		std::int32_t priority
 	) noexcept;
+	void cancel_orphaned_dependency_requests(
+		const std::vector<Dependency> &removed_dependencies
+	) noexcept;
 	void update_maximum_pins() noexcept;
 
 	std::size_t record_capacity_ = 0;
@@ -415,6 +419,7 @@ private:
 	WtPageMeshingRuntimeMetrics metrics_;
 	WtChunkMeshingScratch preparation_scratch_;
 	std::unique_ptr<AsyncState> async_;
+	WtAsyncStorageService *storage_ = nullptr;
 };
 
 } // namespace world_transvoxel

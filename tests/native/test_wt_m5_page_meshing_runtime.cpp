@@ -1710,8 +1710,13 @@ void test_runtime_lifecycle(
 			wt::WtSchedulerStatus::Ok,
 		"runtime generation cancellation failed"
 	);
+	const std::size_t cancelled_dependency_requests = static_cast<std::size_t>(
+		runtime.get_metrics().cancelled_dependency_requests
+	);
+	const std::size_t expected_stale_completions =
+		kDependencyCount - cancelled_dependency_requests;
 	std::size_t stale_count = 0;
-	for (std::size_t index = 0; index < kDependencyCount; ++index) {
+	for (std::size_t index = 0; index < expected_stale_completions; ++index) {
 		wt::WtPageLoadCompletion completion;
 		if (!wait_completion(storage, completion)) {
 			break;
@@ -1723,7 +1728,8 @@ void test_runtime_lifecycle(
 		) == wt::WtPageMeshingRuntimeStatus::CompletionNotOwned ? 1U : 0U;
 	}
 	check(
-		stale_count == kDependencyCount &&
+		stale_count == expected_stale_completions &&
+		stale_count + cancelled_dependency_requests == kDependencyCount &&
 		runtime.record_count() == 0 &&
 		runtime.pinned_page_count() == 0 &&
 		scheduler.forget_chunk(fixture.coarse_key) ==
@@ -1736,7 +1742,8 @@ void test_runtime_lifecycle(
 		metrics.sample_jobs == 2 && metrics.mesh_jobs == 1 &&
 		metrics.dependency_requests == kDependencyCount * 2 &&
 		metrics.accepted_storage_completions == kDependencyCount &&
-		metrics.stale_storage_completions == kDependencyCount &&
+		metrics.stale_storage_completions +
+			metrics.cancelled_dependency_requests == kDependencyCount &&
 		metrics.sample_successes == 1 && metrics.mesh_successes == 1 &&
 		metrics.scheduler_backpressure == 1 &&
 		metrics.cancellations == 1 &&
@@ -2509,8 +2516,13 @@ void test_shared_page_completion_survives_first_owner_cancellation(
 				wt::WtSchedulerStatus::Ok,
 		"shared cancellation failed to retire the first owner"
 	);
+	const std::size_t cancelled_dependency_requests = static_cast<std::size_t>(
+		runtime.get_metrics().cancelled_dependency_requests
+	);
+	const std::size_t expected_completions =
+		kDependencyCount - cancelled_dependency_requests;
 	std::size_t stale_count = 0;
-	for (std::size_t index = 0; index < kDependencyCount; ++index) {
+	for (std::size_t index = 0; index < expected_completions; ++index) {
 		wt::WtPageLoadCompletion completion;
 		if (!wait_completion(storage, completion)) {
 			break;
@@ -2542,10 +2554,13 @@ void test_shared_page_completion_survives_first_owner_cancellation(
 			surviving_record != records.end() &&
 			surviving_record->phase ==
 				wt::WtPageMeshingRuntimePhase::AwaitingMesh &&
-			stale_count == kDependencyCount - 1 &&
+			stale_count + cancelled_dependency_requests ==
+				kDependencyCount - 1 &&
 			metrics.accepted_storage_completions == 1 &&
-			metrics.stale_storage_completions == kDependencyCount - 1 &&
-			storage.get_metrics().completed_requests == kDependencyCount,
+			metrics.stale_storage_completions +
+				metrics.cancelled_dependency_requests == kDependencyCount - 1 &&
+			storage.get_metrics().completed_requests +
+				storage.get_metrics().cancelled_queued_requests == kDependencyCount,
 		"cancelling the first owner stranded the surviving page consumer"
 	);
 	storage.close();

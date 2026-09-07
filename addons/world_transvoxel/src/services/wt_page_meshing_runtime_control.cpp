@@ -1,8 +1,37 @@
 #include "services/wt_page_meshing_runtime.h"
 
+#include "storage/wt_async_storage_service.h"
+
 #include <algorithm>
 
 namespace world_transvoxel {
+
+void WtPageMeshingRuntimeService::cancel_orphaned_dependency_requests(
+	const std::vector<Dependency> &removed_dependencies
+) noexcept {
+	if (storage_ == nullptr) return;
+	for (const Dependency &removed : removed_dependencies) {
+		if (!removed.request_pending) continue;
+		const bool still_needed = std::any_of(
+			records_.begin(), records_.end(),
+			[&](const Record &record) {
+				return std::any_of(
+					record.dependencies.begin(), record.dependencies.end(),
+					[&](const Dependency &dependency) {
+						return dependency.key == removed.key &&
+							dependency.request_pending;
+					}
+				);
+			}
+		);
+		if (!still_needed && storage_->cancel_queued_page(
+				removed.key,
+				WtStorageRequestSource::PageMeshing
+			)) {
+			++metrics_.cancelled_dependency_requests;
+		}
+	}
+}
 
 WtPageMeshingRuntimeStatus
 WtPageMeshingRuntimeService::cancel_generation(
@@ -20,7 +49,9 @@ WtPageMeshingRuntimeService::cancel_generation(
 	if (record->mesh) {
 		++metrics_.discarded_mesh_completions;
 	}
+	const std::vector<Dependency> removed_dependencies = record->dependencies;
 	records_.erase(record);
+	cancel_orphaned_dependency_requests(removed_dependencies);
 	++metrics_.cancellations;
 	return WtPageMeshingRuntimeStatus::Ok;
 }
@@ -36,7 +67,9 @@ WtPageMeshingRuntimeStatus WtPageMeshingRuntimeService::release_chunk(
 		++metrics_.discarded_mesh_completions;
 	}
 	cancel_async_work(key, record->generation);
+	const std::vector<Dependency> removed_dependencies = record->dependencies;
 	records_.erase(record);
+	cancel_orphaned_dependency_requests(removed_dependencies);
 	++metrics_.cancellations;
 	return WtPageMeshingRuntimeStatus::Ok;
 }
@@ -90,7 +123,10 @@ WtPageMeshingRuntimeService::invalidate_dependency(
 		if (record->mesh) {
 			++metrics_.discarded_mesh_completions;
 		}
+		const std::vector<Dependency> removed_dependencies =
+			record->dependencies;
 		record = records_.erase(record);
+		cancel_orphaned_dependency_requests(removed_dependencies);
 		++metrics_.invalidated_records;
 	}
 	return invalidated.empty() ?

@@ -487,6 +487,16 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	);
 	set_metric(
 		output,
+		"storage_cancelled_queued_requests",
+		runtime.storage_cancelled_queued_requests
+	);
+	set_metric(
+		output,
+		"storage_interaction_cancelled_queued_requests",
+		runtime.storage_interaction_cancelled_queued_requests
+	);
+	set_metric(
+		output,
 		"storage_successful_pages",
 		runtime.storage_successful_pages
 	);
@@ -626,6 +636,11 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		output,
 		"page_dependency_reprioritizations",
 		runtime.page_dependency_reprioritizations
+	);
+	set_metric(
+		output,
+		"page_cancelled_dependency_requests",
+		runtime.page_cancelled_dependency_requests
 	);
 	set_metric(
 		output,
