@@ -1469,6 +1469,16 @@ background generation may replace older queued work in place without consuming
 the interaction reserve. Interaction-only dequeue is an internal scheduling
 operation; publication ordering and the public API remain unchanged.
 
+An interaction GPU capture may consume its exact, prerequisite-safe resident
+placeholder from the bounded publication queue when the capture reaches the
+frontend after that frame's normal publication drain. The key, generation,
+interaction flag, render kind, and placeholder source must all match, and an
+earlier same-generation `ExpectChunk` prevents extraction. Native applies only
+that lightweight visual expectation before capture admission. A missing match
+waits without occupying a GPU slot; superseded generations are rejected by the
+existing readiness checks. Collision readiness and regional publication remain
+unchanged.
+
 LOD-map validation and balancing use exact dyadic ancestor and face-neighbor
 lookups. They do not scan all pairs of active leaves. Staged planning builds one
 immutable descendant-priority summary per target and reuses it for selection,

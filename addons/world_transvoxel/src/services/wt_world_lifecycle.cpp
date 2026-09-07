@@ -541,6 +541,17 @@ bool WtWorldLifecycleService::pop_interaction_collision_publication(
 		runtime_->pop_interaction_collision_publication(publication);
 }
 
+bool WtWorldLifecycleService::pop_interaction_gpu_placeholder_publication(
+	const WtChunkKey &key,
+	WtGenerationToken generation,
+	WtReadOnlyPublication &publication
+) {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	return runtime_ && runtime_->pop_interaction_gpu_placeholder_publication(
+		key, generation, publication
+	);
+}
+
 bool WtWorldLifecycleService::pop_unbudgeted_publication(
 	WtReadOnlyPublication &publication
 ) {

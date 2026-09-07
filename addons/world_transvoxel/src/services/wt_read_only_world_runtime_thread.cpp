@@ -325,6 +325,75 @@ bool WtReadOnlyWorldRuntime::pop_interaction_collision_publication(
 	return true;
 }
 
+bool WtReadOnlyWorldRuntime::pop_interaction_gpu_placeholder_publication(
+	const WtChunkKey &key,
+	WtGenerationToken generation,
+	WtReadOnlyPublication &publication
+) {
+	std::lock_guard<std::mutex> lock(publication_mutex_);
+	const auto pop_matching = [&key, generation, &publication](
+		std::vector<WtReadOnlyPublication> &slots,
+		std::size_t &head,
+		std::size_t &count
+	) {
+		for (std::size_t offset = 0; offset < count; ++offset) {
+			const std::size_t index = (head + offset) % slots.size();
+			const WtReadOnlyPublication &candidate = slots[index];
+			if (!candidate.interaction_critical || candidate.key != key ||
+				candidate.generation != generation ||
+				candidate.kind != WtReadOnlyPublicationKind::RenderPayload ||
+				!candidate.render || candidate.render->publication_source !=
+					WtRenderPublicationSource::GpuResidentPlaceholder) {
+				continue;
+			}
+			bool prerequisite_pending = false;
+			for (std::size_t prior = 0; prior < offset; ++prior) {
+				const WtReadOnlyPublication &predecessor =
+					slots[(head + prior) % slots.size()];
+				if (predecessor.key == key && predecessor.generation == generation &&
+					predecessor.kind == WtReadOnlyPublicationKind::ExpectChunk) {
+					prerequisite_pending = true;
+					break;
+				}
+			}
+			if (prerequisite_pending) continue;
+			publication = std::move(slots[index]);
+			for (std::size_t shift = offset; shift + 1U < count; ++shift) {
+				const std::size_t destination = (head + shift) % slots.size();
+				const std::size_t source = (head + shift + 1U) % slots.size();
+				slots[destination] = std::move(slots[source]);
+			}
+			const std::size_t tail = (head + count - 1U) % slots.size();
+			slots[tail] = {};
+			--count;
+			return true;
+		}
+		return false;
+	};
+	const bool priority = pop_matching(
+		priority_publication_slots_, priority_publication_head_,
+		priority_publication_count_
+	);
+	if (!priority && !pop_matching(
+			publication_slots_, publication_head_, publication_count_
+		)) {
+		return false;
+	}
+	priority_publication_burst_ = priority ? priority_publication_burst_ + 1U : 0U;
+	publication_space_available_.notify_one();
+	if (causal_trace_.enabled()) {
+		causal_trace_.record(
+			WtCausalTraceEventKind::PublicationPopped,
+			WtCausalTraceThreadRole::Frontend,
+			&publication.key,
+			publication.generation,
+			publication.world_revision,
+			static_cast<std::uint64_t>(publication.kind)
+		);
+	}
+	return true;
+}
+
 bool WtReadOnlyWorldRuntime::pop_unbudgeted_publication(
 	WtReadOnlyPublication &publication
 ) {

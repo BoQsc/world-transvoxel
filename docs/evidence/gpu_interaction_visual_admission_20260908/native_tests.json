@@ -1,0 +1,21 @@
+{
+  "debug": [
+    "test_wt_production_streaming",
+    "test_wt_production_lod_streaming",
+    "test_wt_production_lifecycle",
+    "test_wt_m5_edit_replacement",
+    "test_wt_m3_application",
+    "test_wt_publication_policy",
+    "test_wt_gpu_meshing_shadow"
+  ],
+  "release": [
+    "test_wt_production_streaming",
+    "test_wt_production_lod_streaming",
+    "test_wt_production_lifecycle",
+    "test_wt_m5_edit_replacement",
+    "test_wt_m3_application",
+    "test_wt_publication_policy",
+    "test_wt_gpu_meshing_shadow"
+  ],
+  "all_exit_codes": 0
+}

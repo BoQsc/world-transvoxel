@@ -394,6 +394,26 @@ godot::Dictionary WorldTransvoxelTerrain::pop_gpu_resident_render_request(
 	}
 	WtGpuMeshingShadowRequest request;
 	if (!gpu_meshing_shadow_->pop(request, interaction_only)) return result;
+	if (request.incremental_edit && lifecycle_ && application_ && render_sink_) {
+		WtChunkApplicationRecord record;
+		if (application_->copy_record(request.job.key, record) &&
+			record.generation == request.job.generation && record.collision_ready &&
+			record.visual_generation != request.job.generation) {
+			WtReadOnlyPublication placeholder;
+			if (lifecycle_->pop_interaction_gpu_placeholder_publication(
+					request.job.key, request.job.generation, placeholder
+				) && placeholder.render) {
+				const WtApplicationStatus status =
+					application_->apply_gpu_resident_placeholder(
+						placeholder.render, *render_sink_
+					);
+				lifecycle_->record_frontend_publication(
+					placeholder, static_cast<std::int64_t>(status)
+				);
+				lifecycle_->notify_application_progress();
+			}
+		}
+	}
 	const godot::Dictionary packed = wt_gpu_meshing_shadow_packed_input(request);
 	if (packed.get("status", "FAIL") != "PASS") {
 		WtGpuMeshingShadowIdentity identity;

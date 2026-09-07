@@ -112,6 +112,11 @@ public:
 	bool pop_interaction_collision_publication(
 		WtReadOnlyPublication &publication
 	);
+	bool pop_interaction_gpu_placeholder_publication(
+		const WtChunkKey &key,
+		WtGenerationToken generation,
+		WtReadOnlyPublication &publication
+	);
 	bool pop_unbudgeted_publication(WtReadOnlyPublication &publication);
 
 	WtWorldLifecycleState state() const noexcept;
