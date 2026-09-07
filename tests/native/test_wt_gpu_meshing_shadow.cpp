@@ -617,6 +617,44 @@ int main() {
 		"unaffected dequeue request did not release"
 	);
 
+	WtGpuMeshingShadowQueue interaction_lane_queue;
+	require(interaction_lane_queue.begin(16),
+		"interaction lane queue did not start");
+	for (std::int32_t index = 0; index < 12; ++index) {
+		WtGpuMeshingShadowCapture background = capture_for(100 + index);
+		background.job.key.x = index;
+		require(interaction_lane_queue.capture(std::move(background)),
+			"background lane did not admit its bounded capacity");
+	}
+	WtGpuMeshingShadowCapture excess_background = capture_for(200);
+	excess_background.job.key.x = 20;
+	require(!interaction_lane_queue.capture(std::move(excess_background)),
+		"background capture consumed the interaction reserve");
+	WtGpuMeshingShadowCapture superseding_background = capture_for(500);
+	superseding_background.job.key.x = 0;
+	require(interaction_lane_queue.capture(std::move(superseding_background)) &&
+			interaction_lane_queue.metrics().queued_requests == 12,
+		"background reserve prevented an in-place superseding generation");
+	for (std::int32_t index = 0; index < 4; ++index) {
+		WtGpuMeshingShadowCapture interaction = capture_for(300 + index);
+		interaction.job.key.x = 30 + index;
+		interaction.job.priority = kWtInteractiveEditPriority;
+		interaction.incremental_edit = true;
+		require(interaction_lane_queue.capture(std::move(interaction)),
+			"interaction capture did not use reserved capacity");
+	}
+	WtGpuMeshingShadowRequest interaction_request;
+	require(interaction_lane_queue.pop(interaction_request, true) &&
+			interaction_request.incremental_edit &&
+			interaction_lane_queue.metrics().queued_requests == 15,
+		"interaction-only dequeue consumed background work");
+	require(interaction_lane_queue.reject_resident(
+			interaction_request.request_id,
+			identity_for(interaction_request),
+			"test release"
+		).status == WtGpuMeshingResidentValidationStatus::Rejected,
+		"interaction-only dequeue request did not release");
+
 	WtGpuMeshingShadowQueue queue;
 	require(!queue.begin(0), "zero capacity was accepted");
 	require(queue.begin(1), "bounded queue did not start");

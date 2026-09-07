@@ -1392,6 +1392,19 @@ publishable edited generation may complete while a viewer plan is open; all
 generation, revision, transition, and sink checks still apply independently to
 its collision and visual branches.
 
+The production 16-request GPU capture queue reserves four admission slots for
+incremental interaction generations. Background reservations, queued captures,
+and in-flight captures share the remaining twelve-slot bound. A newer
+background generation may replace older queued work in place without consuming
+the interaction reserve. Interaction-only dequeue is an internal scheduling
+operation; publication ordering and the public API remain unchanged.
+
+LOD-map validation and balancing use exact dyadic ancestor and face-neighbor
+lookups. They do not scan all pairs of active leaves. Staged planning builds one
+immutable descendant-priority summary per target and reuses it for selection,
+while preserving overlap rejection, deterministic face ownership, 2:1 balance,
+transition masks, hysteresis, and atomic regional publication.
+
 ## 24. Final definition of success
 
 Success is a maintainable native Godot terrain addon, not merely generated

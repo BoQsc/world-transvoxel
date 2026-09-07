@@ -26,28 +26,161 @@ static_assert(
 	"collision priority band must outrank every visual LOD priority"
 );
 
-bool intervals_overlap(
-	std::int64_t a_minimum,
-	std::int64_t a_maximum,
-	std::int64_t b_minimum,
-	std::int64_t b_maximum
+bool adjacent_key(
+	const WtChunkKey &key,
+	WtChunkFace face,
+	WtChunkKey &adjacent
 ) noexcept {
-	return a_minimum < b_maximum && b_minimum < a_maximum;
+	adjacent = key;
+	std::int32_t *axis = nullptr;
+	bool positive = false;
+	switch (face) {
+		case WtChunkFace::NegativeX: axis = &adjacent.x; break;
+		case WtChunkFace::PositiveX: axis = &adjacent.x; positive = true; break;
+		case WtChunkFace::NegativeY: axis = &adjacent.y; break;
+		case WtChunkFace::PositiveY: axis = &adjacent.y; positive = true; break;
+		case WtChunkFace::NegativeZ: axis = &adjacent.z; break;
+		case WtChunkFace::PositiveZ: axis = &adjacent.z; positive = true; break;
+	}
+	if ((positive && *axis == std::numeric_limits<std::int32_t>::max()) ||
+		(!positive && *axis == std::numeric_limits<std::int32_t>::min())) {
+		return false;
+	}
+	*axis += positive ? 1 : -1;
+	return true;
 }
 
-bool face_neighbor(
-	const WtChunkBounds &a,
-	const WtChunkBounds &b
+std::size_t find_key_index(
+	const std::vector<WtChunkKey> &keys,
+	const WtChunkKey &key
 ) noexcept {
-	return ((a.maximum.x == b.minimum.x || a.minimum.x == b.maximum.x) &&
-		intervals_overlap(a.minimum.y, a.maximum.y, b.minimum.y, b.maximum.y) &&
-		intervals_overlap(a.minimum.z, a.maximum.z, b.minimum.z, b.maximum.z)) ||
-		((a.maximum.y == b.minimum.y || a.minimum.y == b.maximum.y) &&
-		intervals_overlap(a.minimum.x, a.maximum.x, b.minimum.x, b.maximum.x) &&
-		intervals_overlap(a.minimum.z, a.maximum.z, b.minimum.z, b.maximum.z)) ||
-		((a.maximum.z == b.minimum.z || a.minimum.z == b.maximum.z) &&
-		intervals_overlap(a.minimum.x, a.maximum.x, b.minimum.x, b.maximum.x) &&
-		intervals_overlap(a.minimum.y, a.maximum.y, b.minimum.y, b.maximum.y));
+	const auto iterator = std::lower_bound(keys.begin(), keys.end(), key);
+	return iterator != keys.end() && *iterator == key ?
+		static_cast<std::size_t>(iterator - keys.begin()) : keys.size();
+}
+
+const WtLodMapEntry *find_map_entry(
+	const std::vector<WtLodMapEntry> &entries,
+	const WtChunkKey &key
+) noexcept {
+	const auto iterator = std::lower_bound(
+		entries.begin(), entries.end(), key,
+		[](const WtLodMapEntry &entry, const WtChunkKey &value) {
+			return entry.key < value;
+		}
+	);
+	return iterator != entries.end() && iterator->key == key ?
+		&*iterator : nullptr;
+}
+
+bool borders_coarser_leaf(
+	const WtChunkKey &leaf,
+	const std::vector<WtLodMapEntry> &entries
+) noexcept {
+	for (std::uint8_t face_index = 0; face_index < 6U; ++face_index) {
+		WtChunkKey neighbor;
+		if (!adjacent_key(
+				leaf, static_cast<WtChunkFace>(face_index), neighbor
+			)) continue;
+		while (neighbor.lod < kWtMaximumLod) {
+			neighbor = wt_parent_chunk_key(neighbor);
+			if (find_map_entry(entries, neighbor) != nullptr) return true;
+		}
+	}
+	return false;
+}
+
+bool plan_covers_key(
+	const std::vector<WtLodMapEntry> &entries,
+	WtChunkKey key
+) noexcept {
+	for (;;) {
+		if (find_map_entry(entries, key) != nullptr) return true;
+		if (key.lod == kWtMaximumLod) return false;
+		key = wt_parent_chunk_key(key);
+	}
+}
+
+struct TargetDescendantSummary {
+	WtChunkKey ancestor;
+	std::uint8_t deepest_lod = kWtMaximumLod;
+	std::int32_t background_priority = std::numeric_limits<std::int32_t>::min();
+	std::int32_t deepest_priority = std::numeric_limits<std::int32_t>::min();
+};
+
+std::vector<TargetDescendantSummary> summarize_target_descendants(
+	const std::vector<WtViewerChunkDemand> &demands
+) {
+	std::vector<TargetDescendantSummary> summaries;
+	summaries.reserve(demands.size() * 2U);
+	for (const WtViewerChunkDemand &demand : demands) {
+		WtChunkKey ancestor = demand.key;
+		while (ancestor.lod < kWtMaximumLod) {
+			ancestor = wt_parent_chunk_key(ancestor);
+			summaries.push_back({
+				ancestor, demand.key.lod, demand.priority, demand.priority
+			});
+		}
+	}
+	std::sort(summaries.begin(), summaries.end(), [](const auto &left, const auto &right) {
+		return left.ancestor < right.ancestor;
+	});
+	std::size_t write = 0;
+	for (const TargetDescendantSummary &summary : summaries) {
+		if (write != 0 && summaries[write - 1U].ancestor == summary.ancestor) {
+			TargetDescendantSummary &merged = summaries[write - 1U];
+			merged.background_priority = std::max(
+				merged.background_priority, summary.background_priority
+			);
+			if (summary.deepest_lod < merged.deepest_lod) {
+				merged.deepest_lod = summary.deepest_lod;
+				merged.deepest_priority = summary.deepest_priority;
+			} else if (summary.deepest_lod == merged.deepest_lod) {
+				merged.deepest_priority = std::max(
+					merged.deepest_priority, summary.deepest_priority
+				);
+			}
+			continue;
+		}
+		summaries[write++] = summary;
+	}
+	summaries.resize(write);
+	return summaries;
+}
+
+const TargetDescendantSummary *find_target_descendants(
+	const std::vector<TargetDescendantSummary> &summaries,
+	const WtChunkKey &key
+) noexcept {
+	const auto iterator = std::lower_bound(
+		summaries.begin(), summaries.end(), key,
+		[](const TargetDescendantSummary &summary, const WtChunkKey &value) {
+			return summary.ancestor < value;
+		}
+	);
+	return iterator != summaries.end() && iterator->ancestor == key ?
+		&*iterator : nullptr;
+}
+
+std::size_t find_unbalanced_coarse_leaf(
+	const std::vector<WtChunkKey> &leaves
+) noexcept {
+	for (const WtChunkKey &leaf : leaves) {
+		for (std::uint8_t face_index = 0; face_index < 6U; ++face_index) {
+			WtChunkKey neighbor;
+			if (!adjacent_key(
+					leaf, static_cast<WtChunkFace>(face_index), neighbor
+				)) continue;
+			while (neighbor.lod < kWtMaximumLod) {
+				neighbor = wt_parent_chunk_key(neighbor);
+				const std::size_t index = find_key_index(leaves, neighbor);
+				if (index == leaves.size()) continue;
+				if (neighbor.lod - leaf.lod > 1U) return index;
+				break;
+			}
+		}
+	}
+	return leaves.size();
 }
 
 double axis_distance(double point, double minimum, double maximum) noexcept {
@@ -324,26 +457,15 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::balance(
 		if (status != WtLodMapStatus::LodDifferenceExceeded) {
 			return WtBalancedLodPlannerStatus::InvalidLodMap;
 		}
-		bool refined = false;
-		for (std::size_t a = 0; !refined && a < leaves.size(); ++a) {
-			const WtChunkBounds a_bounds = wt_chunk_bounds(leaves[a]);
-			for (std::size_t b = a + 1; b < leaves.size(); ++b) {
-				if (!face_neighbor(a_bounds, wt_chunk_bounds(leaves[b]))) continue;
-				const int difference = static_cast<int>(leaves[a].lod) -
-					static_cast<int>(leaves[b].lod);
-				if (difference > 1 || difference < -1) {
-					const WtBalancedLodPlannerStatus refine_status = refine_leaf(
-						leaves, difference > 1 ? a : b
-					);
-					if (refine_status != WtBalancedLodPlannerStatus::Ok) {
-						return refine_status;
-					}
-					refined = true;
-				}
-				if (refined) break;
-			}
+		const std::size_t coarse_index = find_unbalanced_coarse_leaf(leaves);
+		if (coarse_index == leaves.size()) {
+			return WtBalancedLodPlannerStatus::InvalidLodMap;
 		}
-		if (!refined) return WtBalancedLodPlannerStatus::InvalidLodMap;
+		const WtBalancedLodPlannerStatus refine_status =
+			refine_leaf(leaves, coarse_index);
+		if (refine_status != WtBalancedLodPlannerStatus::Ok) {
+			return refine_status;
+		}
 	}
 	return WtBalancedLodPlannerStatus::InvalidLodMap;
 }
@@ -602,6 +724,8 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 			}
 		), leaves.end());
 	}
+	const std::vector<TargetDescendantSummary> target_descendants =
+		summarize_target_descendants(target.demands);
 
 	std::size_t topology_changes = 0;
 	while (topology_changes < maximum_topology_changes) {
@@ -615,12 +739,8 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 			if (preferred_refinement_only && !allow_preferred_coarsening) break;
 			if (leaf.lod >= kWtMaximumLod) continue;
 			const WtChunkKey parent = wt_parent_chunk_key(leaf);
-			const bool target_contains_parent = std::any_of(
-				target.entries.begin(), target.entries.end(),
-				[&](const WtLodMapEntry &entry) {
-					return bounds_contain(entry.key, parent);
-				}
-			);
+			const bool target_contains_parent =
+				plan_covers_key(target.entries, parent);
 			if (!target_contains_parent) continue;
 			std::array<WtChunkKey, 8> children{};
 			if (!page_hierarchy_.complete_children(parent, children)) {
@@ -679,46 +799,19 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 						preferred_refinement))) {
 				continue;
 			}
-			const WtChunkBounds leaf_bounds = wt_chunk_bounds(leaf);
-			const bool borders_coarser = std::any_of(
-				current_entries.begin(), current_entries.end(),
-				[&](const WtLodMapEntry &neighbor) {
-					return neighbor.key.lod > leaf.lod &&
-						face_neighbor(
-							leaf_bounds, wt_chunk_bounds(neighbor.key)
-					);
-				}
-			);
+			const bool borders_coarser =
+				borders_coarser_leaf(leaf, current_entries);
 			// Refining an edit-local leaf may require adjacent coarser leaves to
 			// refine in the same balanced output. The balance pass supplies only
 			// those mandatory 2:1 support families.
 			if (borders_coarser && !preferred_refinement) continue;
-			bool target_descends = false;
-			std::uint8_t target_lod = kWtMaximumLod + 1U;
-			std::int32_t background_priority =
-				std::numeric_limits<std::int32_t>::min();
-			std::int32_t deepest_priority =
-				std::numeric_limits<std::int32_t>::min();
-			for (const WtViewerChunkDemand &demand : target.demands) {
-				if (demand.key != leaf && bounds_contain(leaf, demand.key)) {
-					target_descends = true;
-					background_priority = std::max(
-						background_priority, demand.priority
-					);
-					if (demand.key.lod < target_lod) {
-						target_lod = demand.key.lod;
-						deepest_priority = demand.priority;
-					} else if (demand.key.lod == target_lod) {
-						deepest_priority = std::max(
-							deepest_priority, demand.priority
-						);
-					}
-				}
-			}
-			if (!target_descends) continue;
+			const TargetDescendantSummary *target_summary =
+				find_target_descendants(target_descendants, leaf);
+			if (target_summary == nullptr) continue;
 			if (preferred_refinement_only && !preferred_refinement) continue;
 			const std::int32_t priority = preferred_refinement ?
-				deepest_priority : background_priority;
+				target_summary->deepest_priority :
+				target_summary->background_priority;
 			std::array<WtChunkKey, 8> children{};
 			if (!page_hierarchy_.complete_children(leaf, children)) {
 				return WtBalancedLodPlannerStatus::IncompleteHierarchy;
@@ -726,8 +819,10 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 			const bool priority_precedes = selected == nullptr ||
 				priority > selected_priority ||
 				(priority == selected_priority && leaf < *selected);
-			const bool preferred_precedes = target_lod < selected_target_lod ||
-				(target_lod == selected_target_lod && priority_precedes);
+			const bool preferred_precedes =
+				target_summary->deepest_lod < selected_target_lod ||
+				(target_summary->deepest_lod == selected_target_lod &&
+					priority_precedes);
 			const bool background_precedes = selected == nullptr ||
 				leaf.lod > selected->lod ||
 				(leaf.lod == selected->lod && priority_precedes);
@@ -739,7 +834,7 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 			if (select) {
 				selected = &entry.key;
 				selected_preferred = preferred_refinement;
-				selected_target_lod = target_lod;
+				selected_target_lod = target_summary->deepest_lod;
 				selected_priority = priority;
 			}
 		}

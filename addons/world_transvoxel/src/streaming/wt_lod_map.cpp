@@ -1,67 +1,56 @@
 #include "streaming/wt_lod_map.h"
 
 #include <algorithm>
+#include <limits>
 
 namespace world_transvoxel {
 namespace {
 
-bool intervals_overlap(
-	std::int64_t a_minimum,
-	std::int64_t a_maximum,
-	std::int64_t b_minimum,
-	std::int64_t b_maximum
+const WtLodMapEntry *find_entry(
+	const std::vector<WtLodMapEntry> &entries,
+	const WtChunkKey &key
 ) noexcept {
-	return a_minimum < b_maximum && b_minimum < a_maximum;
+	const auto iterator = std::lower_bound(
+		entries.begin(), entries.end(), key,
+		[](const WtLodMapEntry &entry, const WtChunkKey &value) {
+			return entry.key < value;
+		}
+	);
+	return iterator != entries.end() && iterator->key == key ?
+		&*iterator : nullptr;
 }
 
-bool volumes_overlap(const WtChunkBounds &a, const WtChunkBounds &b) noexcept {
-	return intervals_overlap(a.minimum.x, a.maximum.x, b.minimum.x, b.maximum.x) &&
-		intervals_overlap(a.minimum.y, a.maximum.y, b.minimum.y, b.maximum.y) &&
-		intervals_overlap(a.minimum.z, a.maximum.z, b.minimum.z, b.maximum.z);
+WtLodMapEntry *find_entry(
+	std::vector<WtLodMapEntry> &entries,
+	const WtChunkKey &key
+) noexcept {
+	return const_cast<WtLodMapEntry *>(find_entry(
+		static_cast<const std::vector<WtLodMapEntry> &>(entries), key
+	));
 }
 
-bool face_neighbor(
-	const WtChunkBounds &a,
-	const WtChunkBounds &b,
-	WtChunkFace &a_face
+bool adjacent_key(
+	const WtChunkKey &key,
+	WtChunkFace face,
+	WtChunkKey &adjacent
 ) noexcept {
-	if (a.maximum.x == b.minimum.x &&
-		intervals_overlap(a.minimum.y, a.maximum.y, b.minimum.y, b.maximum.y) &&
-		intervals_overlap(a.minimum.z, a.maximum.z, b.minimum.z, b.maximum.z)) {
-		a_face = WtChunkFace::PositiveX;
-		return true;
+	adjacent = key;
+	std::int32_t *axis = nullptr;
+	bool positive = false;
+	switch (face) {
+		case WtChunkFace::NegativeX: axis = &adjacent.x; break;
+		case WtChunkFace::PositiveX: axis = &adjacent.x; positive = true; break;
+		case WtChunkFace::NegativeY: axis = &adjacent.y; break;
+		case WtChunkFace::PositiveY: axis = &adjacent.y; positive = true; break;
+		case WtChunkFace::NegativeZ: axis = &adjacent.z; break;
+		case WtChunkFace::PositiveZ: axis = &adjacent.z; positive = true; break;
 	}
-	if (a.minimum.x == b.maximum.x &&
-		intervals_overlap(a.minimum.y, a.maximum.y, b.minimum.y, b.maximum.y) &&
-		intervals_overlap(a.minimum.z, a.maximum.z, b.minimum.z, b.maximum.z)) {
-		a_face = WtChunkFace::NegativeX;
-		return true;
+	if ((positive && *axis == std::numeric_limits<std::int32_t>::max()) ||
+		(!positive && *axis == std::numeric_limits<std::int32_t>::min())) {
+		return false;
 	}
-	if (a.maximum.y == b.minimum.y &&
-		intervals_overlap(a.minimum.x, a.maximum.x, b.minimum.x, b.maximum.x) &&
-		intervals_overlap(a.minimum.z, a.maximum.z, b.minimum.z, b.maximum.z)) {
-		a_face = WtChunkFace::PositiveY;
-		return true;
-	}
-	if (a.minimum.y == b.maximum.y &&
-		intervals_overlap(a.minimum.x, a.maximum.x, b.minimum.x, b.maximum.x) &&
-		intervals_overlap(a.minimum.z, a.maximum.z, b.minimum.z, b.maximum.z)) {
-		a_face = WtChunkFace::NegativeY;
-		return true;
-	}
-	if (a.maximum.z == b.minimum.z &&
-		intervals_overlap(a.minimum.x, a.maximum.x, b.minimum.x, b.maximum.x) &&
-		intervals_overlap(a.minimum.y, a.maximum.y, b.minimum.y, b.maximum.y)) {
-		a_face = WtChunkFace::PositiveZ;
-		return true;
-	}
-	if (a.minimum.z == b.maximum.z &&
-		intervals_overlap(a.minimum.x, a.maximum.x, b.minimum.x, b.maximum.x) &&
-		intervals_overlap(a.minimum.y, a.maximum.y, b.minimum.y, b.maximum.y)) {
-		a_face = WtChunkFace::NegativeZ;
-		return true;
-	}
-	return false;
+	*axis += positive ? 1 : -1;
+	return true;
 }
 
 } // namespace
@@ -91,27 +80,44 @@ WtLodMapStatus WtLodMap::set_active_chunks(const std::vector<WtChunkKey> &keys) 
 		}
 	}
 
-	for (std::size_t a_index = 0; a_index < candidate.size(); ++a_index) {
-		const WtChunkBounds a_bounds = wt_chunk_bounds(candidate[a_index].key);
-		for (std::size_t b_index = a_index + 1; b_index < candidate.size(); ++b_index) {
-			const WtChunkBounds b_bounds = wt_chunk_bounds(candidate[b_index].key);
-			if (volumes_overlap(a_bounds, b_bounds)) {
+	// Dyadic chunk leaves can overlap only when one key is an ancestor of the
+	// other. Checking the ancestor chain is exact and avoids an all-pairs bounds
+	// scan for every viewer update.
+	for (const WtLodMapEntry &entry : candidate) {
+		WtChunkKey ancestor = entry.key;
+		while (ancestor.lod < kWtMaximumLod) {
+			ancestor = wt_parent_chunk_key(ancestor);
+			if (find_entry(candidate, ancestor) != nullptr) {
 				return WtLodMapStatus::OverlappingLeaves;
 			}
-			WtChunkFace a_face = WtChunkFace::NegativeX;
-			if (!face_neighbor(a_bounds, b_bounds, a_face)) {
-				continue;
-			}
-			const int lod_difference =
-				static_cast<int>(candidate[a_index].key.lod) -
-				static_cast<int>(candidate[b_index].key.lod);
-			if (lod_difference < -1 || lod_difference > 1) {
-				return WtLodMapStatus::LodDifferenceExceeded;
-			}
-			if (lod_difference > 0) {
-				candidate[a_index].transition_mask |= wt_face_bit(a_face);
-			} else if (lod_difference < 0) {
-				candidate[b_index].transition_mask |= wt_face_bit(wt_opposite_face(a_face));
+		}
+	}
+
+	// Every mixed-LOD face is discovered from its finer leaf. The adjacent
+	// same-LOD cell identifies the unique coarser ancestor on the other side.
+	// A fine leaf therefore needs at most six short ancestor walks regardless
+	// of the total active set size.
+	for (const WtLodMapEntry &entry : candidate) {
+		for (std::uint8_t face_index = 0; face_index < 6U; ++face_index) {
+			const WtChunkFace face = static_cast<WtChunkFace>(face_index);
+			WtChunkKey neighbor;
+			if (!adjacent_key(entry.key, face, neighbor)) continue;
+			for (;;) {
+				WtLodMapEntry *neighbor_entry = find_entry(candidate, neighbor);
+				if (neighbor_entry != nullptr) {
+					const std::uint8_t difference =
+						neighbor_entry->key.lod - entry.key.lod;
+					if (difference > 1U) {
+						return WtLodMapStatus::LodDifferenceExceeded;
+					}
+					if (difference == 1U) {
+						neighbor_entry->transition_mask |=
+							wt_face_bit(wt_opposite_face(face));
+					}
+					break;
+				}
+				if (neighbor.lod == kWtMaximumLod) break;
+				neighbor = wt_parent_chunk_key(neighbor);
 			}
 		}
 	}

@@ -188,8 +188,9 @@ void WorldTransvoxelTerrain::bind_gpu_meshing_shadow_methods() {
 		&WorldTransvoxelTerrain::end_gpu_resident_render_publication
 	);
 	godot::ClassDB::bind_method(
-		godot::D_METHOD("pop_gpu_resident_render_request"),
-		&WorldTransvoxelTerrain::pop_gpu_resident_render_request
+		godot::D_METHOD("pop_gpu_resident_render_request", "interaction_only"),
+		&WorldTransvoxelTerrain::pop_gpu_resident_render_request,
+		DEFVAL(false)
 	);
 	godot::ClassDB::bind_method(
 		godot::D_METHOD(

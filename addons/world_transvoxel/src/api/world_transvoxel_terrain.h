@@ -231,7 +231,9 @@ public:
 	godot::Dictionary get_gpu_meshing_shadow_metrics() const;
 	bool begin_gpu_resident_render_publication(std::int64_t capacity = 3);
 	void end_gpu_resident_render_publication();
-	godot::Dictionary pop_gpu_resident_render_request();
+	godot::Dictionary pop_gpu_resident_render_request(
+		bool interaction_only = false
+	);
 	godot::Dictionary validate_gpu_resident_render_request(
 		std::int64_t request_id,
 		const godot::Dictionary &identity

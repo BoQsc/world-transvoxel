@@ -146,7 +146,10 @@ public:
 	);
 	void release_capture_slots(std::uint64_t reservation_id) noexcept;
 	bool capture(WtGpuMeshingShadowCapture capture);
-	bool pop(WtGpuMeshingShadowRequest &request);
+	bool pop(
+		WtGpuMeshingShadowRequest &request,
+		bool interaction_only = false
+	);
 	WtGpuMeshingShadowCompletion complete(
 		std::uint64_t request_id,
 		const WtGpuMeshingShadowIdentity &identity,
@@ -198,6 +201,8 @@ private:
 		const WtChunkJob &left,
 		const WtChunkJob &right
 	) noexcept;
+	static bool interaction_job(const WtChunkJob &job) noexcept;
+	std::size_t background_occupancy_locked() const noexcept;
 	bool job_version_in_flight_locked(const WtChunkJob &job) const noexcept;
 	bool is_latest_locked(const WtGpuMeshingShadowRequest &request) const noexcept;
 	void notify_capacity_available() const;

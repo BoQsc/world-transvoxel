@@ -289,7 +289,9 @@ void WorldTransvoxelTerrain::end_gpu_resident_render_publication() {
 	}
 }
 
-godot::Dictionary WorldTransvoxelTerrain::pop_gpu_resident_render_request() {
+godot::Dictionary WorldTransvoxelTerrain::pop_gpu_resident_render_request(
+	bool interaction_only
+) {
 	godot::Dictionary result;
 	result["schema"] =
 		"world_transvoxel.gpu_resident_render_request.v7";
@@ -314,7 +316,7 @@ godot::Dictionary WorldTransvoxelTerrain::pop_gpu_resident_render_request() {
 		return result;
 	}
 	WtGpuMeshingShadowRequest request;
-	if (!gpu_meshing_shadow_->pop(request)) return result;
+	if (!gpu_meshing_shadow_->pop(request, interaction_only)) return result;
 	const godot::Dictionary packed = wt_gpu_meshing_shadow_packed_input(request);
 	if (packed.get("status", "FAIL") != "PASS") {
 		WtGpuMeshingShadowIdentity identity;

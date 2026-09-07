@@ -5,6 +5,12 @@
 
 namespace world_transvoxel {
 
+namespace {
+
+constexpr std::size_t kGpuInteractionCaptureReserve = 4;
+
+}
+
 bool WtGpuMeshingShadowQueue::begin(
 	std::size_t capacity,
 	bool retain_publication_authority,
@@ -73,6 +79,46 @@ std::uint64_t WtGpuMeshingShadowQueue::reserve_capture_slots(
 		return 0;
 	}
 	const std::size_t requested_slots = capacity_ >= 2 ? 2U : 1U;
+	const bool interaction = interaction_job(job);
+	const std::size_t interaction_reserve =
+		capacity_ >= 16 ? kGpuInteractionCaptureReserve : 0U;
+	if (interaction_reserve != 0 && !interaction &&
+			background_occupancy_locked() + requested_slots >
+			capacity_ - interaction_reserve) {
+		const std::size_t required =
+			background_occupancy_locked() + requested_slots -
+			(capacity_ - interaction_reserve);
+		std::size_t released = 0;
+		while (released < required) {
+			const auto candidate = std::find_if(
+				queued_.begin(), queued_.end(),
+				[this, &job](const WtGpuMeshingShadowRequest &queued) {
+					return !queued.incremental_edit &&
+						!job_version_in_flight_locked(queued.job) &&
+						job_version_supersedes(job, queued.job);
+				}
+			);
+			if (candidate == queued_.end()) break;
+			const WtChunkJob superseded_job = candidate->job;
+			const std::size_t before = queued_.size();
+			queued_.erase(std::remove_if(
+				queued_.begin(), queued_.end(),
+				[&superseded_job](const WtGpuMeshingShadowRequest &queued) {
+					return same_job_version(queued.job, superseded_job);
+				}
+			), queued_.end());
+			const std::size_t removed = before - queued_.size();
+			if (removed == 0) break;
+			released += removed;
+			metrics_.superseded_queued_requests += removed;
+		}
+		metrics_.queued_requests = queued_.size();
+		if (background_occupancy_locked() + requested_slots >
+				capacity_ - interaction_reserve) {
+			++metrics_.capture_reservation_rejections;
+			return 0;
+		}
+	}
 	std::size_t occupied = queued_.size() + in_flight_.size() +
 		metrics_.reserved_capture_slots;
 	if (occupied <= capacity_ && requested_slots > capacity_ - occupied) {
@@ -228,6 +274,35 @@ bool WtGpuMeshingShadowQueue::capture(WtGpuMeshingShadowCapture capture) {
 	const bool cpu_visual_mesh_omitted = capture.cpu_visual_mesh_omitted;
 	WtGpuMeshingShadowRequest request;
 	static_cast<WtGpuMeshingShadowCapture &>(request) = std::move(capture);
+	const std::size_t interaction_reserve =
+		capacity_ >= 16 ? kGpuInteractionCaptureReserve : 0U;
+	if (interaction_reserve != 0 && !request.incremental_edit &&
+			background_occupancy_locked() >= capacity_ - interaction_reserve) {
+		const auto replace = std::find_if(
+			queued_.begin(), queued_.end(),
+			[this, &request](const WtGpuMeshingShadowRequest &queued) {
+				return !queued.incremental_edit &&
+					!job_version_in_flight_locked(queued.job) &&
+					supersedes_queued(request, queued);
+			}
+		);
+		if (replace == queued_.end()) {
+			++metrics_.capacity_rejections;
+			return false;
+		}
+		request.request_id = next_request_id_++;
+		*replace = std::move(request);
+		++metrics_.captured_requests;
+		if (capture_stage_ == WtGpuMeshingCaptureStage::PreMeshField) {
+			++metrics_.pre_mesh_field_captures;
+		}
+		if (cpu_visual_mesh_omitted) {
+			++metrics_.cpu_visual_mesh_omitted_captures;
+		}
+		++metrics_.superseded_queued_requests;
+		metrics_.queued_requests = queued_.size();
+		return true;
+	}
 	if (!retain_publication_authority_) {
 		request.retained_pages.clear();
 		request.authority_terrain_mesh.reset();
@@ -272,16 +347,21 @@ bool WtGpuMeshingShadowQueue::capture(WtGpuMeshingShadowCapture capture) {
 	return true;
 }
 
-bool WtGpuMeshingShadowQueue::pop(WtGpuMeshingShadowRequest &request) {
+bool WtGpuMeshingShadowQueue::pop(
+	WtGpuMeshingShadowRequest &request,
+	bool interaction_only
+) {
 	std::lock_guard<std::mutex> lock(mutex_);
 	if (!enabled_ || queued_.empty()) return false;
-	const auto selected = std::min_element(
-		queued_.begin(), queued_.end(),
-		[](const WtGpuMeshingShadowRequest &left,
-			const WtGpuMeshingShadowRequest &right) {
-			return job_precedes(left.job, right.job);
+	auto selected = queued_.end();
+	for (auto candidate = queued_.begin(); candidate != queued_.end(); ++candidate) {
+		if (interaction_only && !candidate->incremental_edit) continue;
+		if (selected == queued_.end() ||
+				job_precedes(candidate->job, selected->job)) {
+			selected = candidate;
 		}
-	);
+	}
+	if (selected == queued_.end()) return false;
 	const WtChunkJob selected_job = selected->job;
 	const bool priority_dequeue = selected != queued_.begin();
 	request = std::move(*selected);
@@ -340,6 +420,28 @@ bool WtGpuMeshingShadowQueue::job_version_in_flight_locked(
 			return same_job_version(request.job, job);
 		}
 	);
+}
+
+bool WtGpuMeshingShadowQueue::interaction_job(
+	const WtChunkJob &job
+) noexcept {
+	return job.priority == kWtInteractiveEditPriority;
+}
+
+std::size_t WtGpuMeshingShadowQueue::background_occupancy_locked() const noexcept {
+	std::size_t occupied = 0;
+	for (const WtGpuMeshingShadowRequest &request : queued_) {
+		if (!request.incremental_edit) ++occupied;
+	}
+	for (const WtGpuMeshingShadowRequest &request : in_flight_) {
+		if (!request.incremental_edit) ++occupied;
+	}
+	for (const CaptureReservation &reservation : capture_reservations_) {
+		if (!interaction_job(reservation.job)) {
+			occupied += reservation.remaining_slots;
+		}
+	}
+	return occupied;
 }
 
 WtGpuMeshingShadowCompletion WtGpuMeshingShadowQueue::complete(
