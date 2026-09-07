@@ -237,8 +237,18 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 	for (std::size_t count = 0; count < 256U; ++count) {
 		WtReadOnlyPublication publication;
 		if (has_deferred_publication_) {
-			publication = std::move(deferred_publication_);
-			has_deferred_publication_ = false;
+			const bool deferred_interaction_collision =
+				deferred_publication_.interaction_critical &&
+				deferred_publication_.kind ==
+					WtReadOnlyPublicationKind::CollisionPayload;
+			if (deferred_interaction_collision ||
+					collision_publication_count != 0 ||
+					!lifecycle_->pop_interaction_collision_publication(
+						publication
+					)) {
+				publication = std::move(deferred_publication_);
+				has_deferred_publication_ = false;
+			}
 		} else if (!lifecycle_->pop_publication(publication)) {
 			break;
 		}
@@ -353,7 +363,10 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 			case WtReadOnlyPublicationKind::CollisionPayload:
 				++collision_publication_count;
 				status = publication.collision ?
-					application_->submit_collision(publication.collision) :
+					application_->submit_collision(
+						publication.collision,
+						publication.interaction_critical
+					) :
 					WtApplicationStatus::InvalidInput;
 				// Collision publications are already bounded by
 				// collision_apply_budget_. Apply each accepted payload before

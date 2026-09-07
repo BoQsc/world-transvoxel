@@ -1391,6 +1391,14 @@ must not leave that dependency waiting behind the background mesh frontier.
 Already executing work remains non-preemptible, and a full interaction queue
 retains the reprioritized job in the priority-ordered background queue.
 
+Committed-edit collision urgency is preserved through both bounded frontend
+handoffs. An interaction-critical collision publication may bypass one retained
+background render or collision publication at the start of a physics frame,
+and the collision apply queue selects the oldest interaction-critical payload
+before background payloads. FIFO order is preserved within each class, total
+capacity is unchanged, stale-generation validation still occurs at apply time,
+and the per-frame item and time budgets remain authoritative.
+
 Cached source pages remain immutable base data keyed by source revision. An edit
 does not evict that base page: journal replay derives the requested world revision
 when sampling the replacement. The runtime admits and starts committed-edit work

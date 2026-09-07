@@ -111,7 +111,10 @@ public:
 		const WtRenderPayloadPtr &payload,
 		WtRenderSink &render_sink
 	);
-	WtApplicationStatus submit_collision(const WtCollisionPayloadPtr &payload);
+	WtApplicationStatus submit_collision(
+		const WtCollisionPayloadPtr &payload,
+		bool interaction_critical = false
+	);
 	WtApplicationStatus confirm_external_visual_activation(
 		const WtChunkKey &key,
 		WtGenerationToken generation

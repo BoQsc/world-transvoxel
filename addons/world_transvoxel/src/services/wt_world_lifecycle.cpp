@@ -533,6 +533,14 @@ bool WtWorldLifecycleService::pop_publication(
 	return runtime_ && runtime_->pop_publication(publication);
 }
 
+bool WtWorldLifecycleService::pop_interaction_collision_publication(
+	WtReadOnlyPublication &publication
+) {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	return runtime_ &&
+		runtime_->pop_interaction_collision_publication(publication);
+}
+
 bool WtWorldLifecycleService::pop_unbudgeted_publication(
 	WtReadOnlyPublication &publication
 ) {

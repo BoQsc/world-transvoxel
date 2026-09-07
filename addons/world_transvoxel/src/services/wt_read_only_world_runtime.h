@@ -198,6 +198,9 @@ public:
 	WtReadOnlyRuntimeStatus run();
 	void request_stop() noexcept;
 	bool pop_publication(WtReadOnlyPublication &publication);
+	bool pop_interaction_collision_publication(
+		WtReadOnlyPublication &publication
+	);
 	bool pop_unbudgeted_publication(WtReadOnlyPublication &publication);
 	void notify_application_progress() noexcept;
 	void notify_visual_activation(

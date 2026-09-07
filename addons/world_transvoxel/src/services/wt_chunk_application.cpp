@@ -359,10 +359,13 @@ WtApplicationStatus WtChunkApplicationService::apply_gpu_resident_placeholder(
 }
 
 WtApplicationStatus WtChunkApplicationService::submit_collision(
-	const WtCollisionPayloadPtr &payload
+	const WtCollisionPayloadPtr &payload,
+	bool interaction_critical
 ) {
 	const WtApplicationStatus status = collision_queue_.submit(
-		payload, application_tick_.load(std::memory_order_relaxed)
+		payload,
+		application_tick_.load(std::memory_order_relaxed),
+		interaction_critical
 	);
 	if (status == WtApplicationStatus::Ok) {
 		asynchronous_collision_submissions_.fetch_add(1, std::memory_order_relaxed);

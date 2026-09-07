@@ -109,6 +109,9 @@ public:
 		const WtChunkKey &key, WtGenerationToken generation
 	) const;
 	bool pop_publication(WtReadOnlyPublication &publication);
+	bool pop_interaction_collision_publication(
+		WtReadOnlyPublication &publication
+	);
 	bool pop_unbudgeted_publication(WtReadOnlyPublication &publication);
 
 	WtWorldLifecycleState state() const noexcept;

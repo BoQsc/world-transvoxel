@@ -322,6 +322,33 @@ struct SlowCollisionSink final : wt::WtCollisionSink {
 	}
 };
 
+void test_interaction_collision_apply_priority() {
+	wt::WtCollisionApplyQueue queue(3);
+	const auto payload = [](std::int32_t x) {
+		auto result = std::make_shared<wt::WtCollisionPayload>();
+		result->key = { x, 0, 0, 0 };
+		result->generation = { 1 };
+		return result;
+	};
+	check(
+		queue.submit(payload(1), 1) == wt::WtApplicationStatus::Ok &&
+		queue.submit(payload(2), 2) == wt::WtApplicationStatus::Ok &&
+		queue.submit(payload(3), 3, true) == wt::WtApplicationStatus::Ok,
+		"interaction collision priority fixture submission failed"
+	);
+	wt::WtCollisionApplyEntry first;
+	wt::WtCollisionApplyEntry second;
+	wt::WtCollisionApplyEntry third;
+	check(
+		queue.pop(first) && first.interaction_critical &&
+			first.payload->key.x == 3 &&
+		queue.pop(second) && second.payload->key.x == 1 &&
+		queue.pop(third) && third.payload->key.x == 2 &&
+		queue.size() == 0,
+		"interaction collision did not bypass the background apply backlog"
+	);
+}
+
 void test_application_service(
 	const wt::WtRenderPayload &render_source,
 	std::size_t stale_cycles
@@ -1318,6 +1345,7 @@ int main() {
 	wt::WtRenderPayload render;
 	test_render_builder(render);
 	test_collision_builder();
+	test_interaction_collision_apply_priority();
 	constexpr std::size_t stale_cycles = 1000;
 	test_application_service(render, stale_cycles);
 	test_staged_replacement_collision_waits_for_render(render);
