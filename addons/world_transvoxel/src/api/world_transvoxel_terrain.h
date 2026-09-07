@@ -364,6 +364,8 @@ private:
 	std::uint64_t gpu_resident_render_prepared_chunks_ = 0;
 	std::uint64_t gpu_resident_render_activation_cohorts_ = 0;
 	std::uint64_t gpu_resident_render_activation_cohort_chunks_ = 0;
+	std::uint64_t gpu_resident_same_layout_edit_activation_cohorts_ = 0;
+	std::uint64_t gpu_resident_same_layout_edit_activation_chunks_ = 0;
 	std::uint64_t gpu_resident_render_activated_chunks_ = 0;
 	std::uint64_t gpu_resident_render_retired_chunks_ = 0;
 	std::uint64_t gpu_resident_render_reconciled_retires_ = 0;

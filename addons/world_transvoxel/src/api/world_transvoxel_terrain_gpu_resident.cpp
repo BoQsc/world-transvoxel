@@ -108,6 +108,67 @@ godot::Array gpu_cohort_keys(const std::vector<WtChunkKey> &keys) {
 	return result;
 }
 
+enum class SameLayoutEditCohortStatus : std::uint8_t {
+	NotApplicable,
+	Waiting,
+	Ready,
+};
+
+SameLayoutEditCohortStatus build_same_layout_edit_cohort(
+	WtChunkApplicationService &application,
+	WtGodotRenderSink &render_sink,
+	const WtChunkKey &seed,
+	const std::vector<WtChunkKey> &retirements,
+	const std::vector<WtChunkKey> &edit_replacements,
+	WtChunkPublicationRegion &region,
+	std::vector<WtChunkKey> &waiting_masks
+) {
+	if (!std::binary_search(
+			edit_replacements.begin(), edit_replacements.end(), seed
+		)) {
+		return SameLayoutEditCohortStatus::NotApplicable;
+	}
+	WtChunkApplicationRecord seed_record;
+	if (!application.copy_record(seed, seed_record) ||
+		!seed_record.visual_required || seed_record.world_revision == 0) {
+		return SameLayoutEditCohortStatus::NotApplicable;
+	}
+
+	WtChunkPublicationRegion candidate;
+	std::vector<WtChunkKey> candidate_waiting_masks;
+	for (const WtChunkKey &key : edit_replacements) {
+		WtChunkApplicationRecord record;
+		if (!application.copy_record(key, record) || !record.visual_required ||
+			record.world_revision != seed_record.world_revision) {
+			continue;
+		}
+		// An exact-key retirement means this is a layout change, even if an older
+		// GPU instance is still visible for the key.
+		if (std::binary_search(retirements.begin(), retirements.end(), key)) {
+			return SameLayoutEditCohortStatus::NotApplicable;
+		}
+		std::uint8_t active_mask = 0;
+		if (!render_sink.get_gpu_resident_boundary_mask(key, active_mask)) {
+			return SameLayoutEditCohortStatus::NotApplicable;
+		}
+		candidate.replacements.push_back(key);
+		if (record.visual_generation != record.generation) {
+			candidate_waiting_masks.push_back(key);
+			continue;
+		}
+		if (record.external_visual_transition_mask != active_mask) {
+			return SameLayoutEditCohortStatus::NotApplicable;
+		}
+	}
+	if (candidate.replacements.empty()) {
+		return SameLayoutEditCohortStatus::NotApplicable;
+	}
+	region = std::move(candidate);
+	waiting_masks = std::move(candidate_waiting_masks);
+	return waiting_masks.empty() ? SameLayoutEditCohortStatus::Ready :
+		SameLayoutEditCohortStatus::Waiting;
+}
+
 bool build_gpu_publication_cohort(
 	WtChunkApplicationService &application,
 	WtGodotRenderSink &render_sink,
@@ -121,8 +182,20 @@ bool build_gpu_publication_cohort(
 	godot::Array *inspected_boundaries = nullptr,
 	std::vector<WtChunkKey> *inspected_candidates = nullptr,
 	std::vector<WtChunkKey> *inspected_visual_retirements = nullptr,
-	WtPublicationDependencyGraph *dependencies = nullptr
+	WtPublicationDependencyGraph *dependencies = nullptr,
+	bool *same_layout_edit = nullptr
 ) {
+	if (same_layout_edit) *same_layout_edit = false;
+	const SameLayoutEditCohortStatus edit_status = build_same_layout_edit_cohort(
+		application, render_sink, seed, retirements, edit_replacements,
+		region, waiting_masks
+	);
+	if (edit_status != SameLayoutEditCohortStatus::NotApplicable) {
+		if (same_layout_edit) *same_layout_edit = true;
+		if (inspected_candidates) *inspected_candidates = region.replacements;
+		if (inspected_visual_retirements) inspected_visual_retirements->clear();
+		return true;
+	}
 	std::vector<WtChunkKey> candidates = pending;
 	candidates.insert(candidates.end(), ready.begin(), ready.end());
 	std::sort(candidates.begin(), candidates.end());
@@ -218,11 +291,12 @@ godot::Dictionary WorldTransvoxelTerrain::inspect_gpu_resident_publication(
 	godot::Array boundaries;
 	std::vector<WtChunkKey> visual_candidates;
 	std::vector<WtChunkKey> visual_retirements;
+	bool same_layout_edit = false;
 	const bool built = build_gpu_publication_cohort(
 		*application_, *render_sink_, seed, pending_chunk_replacements_,
 		ready_staged_chunk_replacements_, pending_chunk_retirements_,
 		independently_publishable_chunk_replacements_, region, waiting_masks, &boundaries, &visual_candidates,
-		&visual_retirements
+		&visual_retirements, nullptr, &same_layout_edit
 	);
 	result["seed"] = gpu_cohort_key(seed);
 	result["built"] = built;
@@ -237,6 +311,7 @@ godot::Dictionary WorldTransvoxelTerrain::inspect_gpu_resident_publication(
 	result["selected"] = gpu_cohort_keys(region.replacements);
 	result["retirements"] = gpu_cohort_keys(region.retirements);
 	result["waiting_masks"] = gpu_cohort_keys(waiting_masks);
+	result["same_layout_edit"] = same_layout_edit;
 	// Only successful lookups are needed to replay the selector. Other keys are
 	// absent. No priority requests, activation, or GPU readback occurs here.
 	result["boundaries"] = boundaries;
@@ -260,6 +335,8 @@ bool WorldTransvoxelTerrain::begin_gpu_resident_render_publication(
 	gpu_resident_render_prepared_chunks_ = 0;
 	gpu_resident_render_activation_cohorts_ = 0;
 	gpu_resident_render_activation_cohort_chunks_ = 0;
+	gpu_resident_same_layout_edit_activation_cohorts_ = 0;
+	gpu_resident_same_layout_edit_activation_chunks_ = 0;
 	gpu_resident_render_activated_chunks_ = 0;
 	gpu_resident_render_retired_chunks_ = 0;
 	gpu_resident_render_reconciled_retires_ = 0;
@@ -630,13 +707,15 @@ get_gpu_resident_render_activation_cohort(
 	WtChunkPublicationRegion region;
 	std::vector<WtChunkKey> waiting_masks;
 	std::vector<WtChunkKey> visual_retirements;
+	bool same_layout_edit = false;
 	record_phase("seed_validation");
 	const bool built = build_gpu_publication_cohort(
 			*application_, *render_sink_, identity.key,
 			pending_chunk_replacements_, ready_staged_chunk_replacements_,
 			pending_chunk_retirements_, independently_publishable_chunk_replacements_,
 			region, waiting_masks,
-			nullptr, nullptr, &visual_retirements, gpu_publication_dependencies_.get()
+			nullptr, nullptr, &visual_retirements,
+			gpu_publication_dependencies_.get(), &same_layout_edit
 		);
 	record_phase("selection");
 	const bool covered = built && (region.retirements.empty() ||
@@ -647,6 +726,7 @@ get_gpu_resident_render_activation_cohort(
 	);
 	result["cohort_built"] = built;
 	result["authoritative_coverage_complete"] = covered;
+	result["same_layout_edit"] = same_layout_edit;
 	if (!covered) {
 		result["status"] = "WAITING_COHORT";
 		result["error"] = "GPU resident boundary cohort is incomplete or exceeds capacity";
@@ -855,11 +935,13 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 	}
 	WtChunkPublicationRegion region;
 	std::vector<WtChunkKey> waiting_masks;
+	bool same_layout_edit = false;
 	if (!build_gpu_publication_cohort(
 			*application_, *render_sink_, seed_key,
 			pending_chunk_replacements_, ready_staged_chunk_replacements_,
 			pending_chunk_retirements_, independently_publishable_chunk_replacements_,
-			region, waiting_masks, nullptr, nullptr, nullptr, gpu_publication_dependencies_.get()
+			region, waiting_masks, nullptr, nullptr, nullptr,
+			gpu_publication_dependencies_.get(), &same_layout_edit
 		) || (!region.retirements.empty() &&
 			!publication_region_has_complete_authoritative_coverage(region))) {
 		result["status"] = "WAITING_COHORT";
@@ -998,6 +1080,10 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 	}
 	++gpu_resident_render_activation_cohorts_;
 	gpu_resident_render_activation_cohort_chunks_ += inventories.size();
+	if (same_layout_edit) {
+		++gpu_resident_same_layout_edit_activation_cohorts_;
+		gpu_resident_same_layout_edit_activation_chunks_ += inventories.size();
+	}
 	gpu_resident_render_activated_chunks_ += sink_activated;
 	flush_ready_independent_publication_regions();
 	result["status"] = "ACTIVE";
@@ -1009,6 +1095,7 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 	result["retained_active_chunk_count"] = static_cast<std::int64_t>(
 		inventories.size() - sink_activated
 	);
+	result["same_layout_edit"] = same_layout_edit;
 	result["error"] = "";
 	return result;
 }
@@ -1394,6 +1481,12 @@ godot::Dictionary WorldTransvoxelTerrain::get_gpu_resident_render_metrics() cons
 	);
 	result["activation_cohort_chunks"] = static_cast<std::int64_t>(
 		gpu_resident_render_activation_cohort_chunks_
+	);
+	result["same_layout_edit_activation_cohorts"] = static_cast<std::int64_t>(
+		gpu_resident_same_layout_edit_activation_cohorts_
+	);
+	result["same_layout_edit_activation_chunks"] = static_cast<std::int64_t>(
+		gpu_resident_same_layout_edit_activation_chunks_
 	);
 	result["activated_chunks"] = static_cast<std::int64_t>(
 		gpu_resident_render_activated_chunks_

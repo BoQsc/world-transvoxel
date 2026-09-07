@@ -1414,6 +1414,14 @@ publishable edited generation may complete while a viewer plan is open; all
 generation, revision, transition, and sink checks still apply independently to
 its collision and visual branches.
 
+A loaded GPU edit cohort may bypass an overlapping background LOD retirement
+region only when every visual member of the committed world revision replaces
+an already active identical chunk key with the same transition mask. The whole
+revision activates in one cohort without retiring coverage. Missing active
+coverage, an exact-key retirement, or any boundary-mask change uses the normal
+regional publication graph; candidates whose masks are not prepared remain
+pending. Collision readiness remains independent of this visual fast path.
+
 The production 16-request GPU capture queue reserves four admission slots for
 incremental interaction generations. Background reservations, queued captures,
 and in-flight captures share the remaining twelve-slot bound. A newer
