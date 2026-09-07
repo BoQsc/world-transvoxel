@@ -9,7 +9,6 @@
 #include <cmath>
 #include <limits>
 #include <string>
-
 namespace world_transvoxel {
 void WorldTransvoxelTerrain::_process(double delta) {
 	(void)delta;
@@ -249,7 +248,13 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 		const bool collision_deadline_reached =
 			collision_apply_deadline_ns_ != 0U &&
 			collision_apply_time_ns_used >= collision_apply_deadline_ns_;
+		const bool gpu_resident_placeholder =
+			publication.kind == WtReadOnlyPublicationKind::RenderPayload &&
+			publication.render &&
+			publication.render->publication_source ==
+				WtRenderPublicationSource::GpuResidentPlaceholder;
 		if ((publication.kind == WtReadOnlyPublicationKind::RenderPayload &&
+				!gpu_resident_placeholder &&
 				render_count >= render_apply_budget_) ||
 			(publication.kind == WtReadOnlyPublicationKind::CollisionPayload &&
 				(collision_publication_count >= collision_apply_budget_ ||
@@ -333,10 +338,16 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 				stage_chunk_retirement(publication.key);
 				break;
 			case WtReadOnlyPublicationKind::RenderPayload:
-				++render_count;
-				status = publication.render ?
-					application_->submit_render(publication.render) :
-					WtApplicationStatus::InvalidInput;
+				if (gpu_resident_placeholder) {
+					status = application_->apply_gpu_resident_placeholder(
+						publication.render, *render_sink_
+					);
+				} else {
+					++render_count;
+					status = publication.render ?
+						application_->submit_render(publication.render) :
+						WtApplicationStatus::InvalidInput;
+				}
 				break;
 			case WtReadOnlyPublicationKind::CollisionPayload:
 				++collision_publication_count;

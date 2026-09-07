@@ -289,6 +289,65 @@ WtApplicationStatus WtChunkApplicationService::submit_render(
 	return status;
 }
 
+WtApplicationStatus WtChunkApplicationService::apply_gpu_resident_placeholder(
+	const WtRenderPayloadPtr &payload,
+	WtRenderSink &render_sink
+) {
+	if (!payload || payload->publication_source !=
+			WtRenderPublicationSource::GpuResidentPlaceholder) {
+		return WtApplicationStatus::InvalidInput;
+	}
+	std::lock_guard<std::mutex> lock(records_mutex_);
+	WtChunkApplicationRecord *record = find_record_mutable(payload->key);
+	if (record == nullptr) return WtApplicationStatus::NotFound;
+	if (record->generation != payload->generation ||
+		record->visual_generation_superseded) {
+		++metrics_.stale_render;
+		return WtApplicationStatus::StaleGeneration;
+	}
+	if (!record->visual_required) {
+		++metrics_.stale_render;
+		return WtApplicationStatus::InvalidInput;
+	}
+	const bool already_activated =
+		record->visual_generation == payload->generation &&
+		record->visual_ready &&
+		!record->external_visual_activation_required &&
+		record->external_visual_transition_mask == payload->transition_mask;
+	const bool already_prepared =
+		record->visual_generation == payload->generation &&
+		record->external_visual_activation_required &&
+		record->external_visual_prepared &&
+		record->external_visual_transition_mask == payload->transition_mask;
+	const bool trace_enabled = static_cast<bool>(trace_observer_);
+	const Clock::time_point sink_started = trace_enabled ?
+		Clock::now() : Clock::time_point{};
+	const bool sink_applied = render_sink.apply_render(*payload);
+	if (trace_enabled) {
+		trace_observer_(
+			false,
+			payload->key,
+			payload->generation,
+			elapsed_ns(sink_started),
+			sink_applied
+		);
+	}
+	if (!sink_applied) {
+		++metrics_.sink_failures;
+		return WtApplicationStatus::InvalidInput;
+	}
+	record->visual_generation = payload->generation;
+	record->external_visual_activation_required = !already_activated;
+	record->external_visual_prepared = already_prepared;
+	record->external_visual_transition_mask = payload->transition_mask;
+	record->visual_ready = !record->external_visual_activation_required;
+	if (record->fully_ready()) record->staged_replacement = false;
+	asynchronous_render_submissions_.fetch_add(1, std::memory_order_relaxed);
+	++metrics_.applied_render;
+	return already_activated ? WtApplicationStatus::AlreadyCurrent :
+		WtApplicationStatus::Ok;
+}
+
 WtApplicationStatus WtChunkApplicationService::submit_collision(
 	const WtCollisionPayloadPtr &payload
 ) {

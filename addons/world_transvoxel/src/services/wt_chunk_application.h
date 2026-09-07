@@ -103,6 +103,12 @@ public:
 	);
 	WtApplicationStatus forget_chunk(const WtChunkKey &key);
 	WtApplicationStatus submit_render(const WtRenderPayloadPtr &payload);
+	// Main-thread fast path for the geometry-free GPU placeholder. This updates
+	// the sink and application record without entering the CPU mesh apply queue.
+	WtApplicationStatus apply_gpu_resident_placeholder(
+		const WtRenderPayloadPtr &payload,
+		WtRenderSink &render_sink
+	);
 	WtApplicationStatus submit_collision(const WtCollisionPayloadPtr &payload);
 	WtApplicationStatus confirm_external_visual_activation(
 		const WtChunkKey &key,

@@ -580,6 +580,22 @@ void test_gpu_placeholder_waits_for_external_activation(
 		record->external_visual_activation_required &&
 		record->staged_replacement && !record->fully_ready(),
 		"GPU placeholder retired coverage before external activation");
+	wt::WtChunkApplicationService immediate(1, 1, 1);
+	RenderSink immediate_render_sink;
+	check(immediate.expect_chunk(
+			placeholder->key, { 41 }, false, true, true
+		) == wt::WtApplicationStatus::Ok &&
+		immediate.apply_gpu_resident_placeholder(
+			placeholder, immediate_render_sink
+		) == wt::WtApplicationStatus::Ok &&
+		immediate.queued_render_count() == 0,
+		"GPU placeholder fast path entered the CPU render queue");
+	const wt::WtChunkApplicationRecord *immediate_record =
+		immediate.find_record(placeholder->key);
+	check(immediate_record != nullptr &&
+		immediate_record->external_visual_activation_required &&
+		!immediate_record->visual_ready && immediate_render_sink.calls == 1,
+		"GPU placeholder fast path did not preserve external activation");
 	check(service.confirm_external_visual_activation(
 			placeholder->key, { 40 }
 		) == wt::WtApplicationStatus::StaleGeneration,

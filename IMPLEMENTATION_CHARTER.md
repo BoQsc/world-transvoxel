@@ -1368,6 +1368,13 @@ transition-bearing payloads so the bounded cache can satisfy regular-only
 readiness without rebuilding CPU topology. GPU publication remains atomic and
 capacity bounded; collision authority remains entirely on the CPU.
 
+GPU-resident placeholder publications are geometry-free main-thread state
+updates. They bypass the bounded CPU mesh apply queue and immediately establish
+the matching external visual application record; generation, transition-mask,
+and sink ownership checks still run before preparation. CPU mesh payloads retain
+the existing bounded apply queue. This prevents background CPU render
+publication from delaying a prepared interaction capture.
+
 ## 24. Final definition of success
 
 Success is a maintainable native Godot terrain addon, not merely generated
