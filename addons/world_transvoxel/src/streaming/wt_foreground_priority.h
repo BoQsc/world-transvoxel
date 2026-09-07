@@ -62,6 +62,14 @@ public:
 	std::size_t active_key_count(
 		WtForegroundPriorityClass priority_class
 	) const noexcept;
+	void append_active_keys(
+		WtForegroundPriorityClass priority_class,
+		std::vector<WtChunkKey> &output
+	) const;
+	bool contains_active_key(
+		WtForegroundPriorityClass priority_class,
+		const WtChunkKey &key
+	) const noexcept;
 
 private:
 	struct SourceRecord {

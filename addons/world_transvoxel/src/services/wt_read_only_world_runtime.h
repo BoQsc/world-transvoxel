@@ -433,6 +433,7 @@ private:
 	std::uint8_t staging_root_lod_ = 0;
 	std::uint64_t staging_observed_visual_activation_sequence_ = 0;
 	std::uint64_t plan_revision_ = 0;
+	std::uint64_t next_interaction_warm_generation_ = 1;
 	std::unique_ptr<WtStreamScheduler> scheduler_;
 	std::unique_ptr<WtChunkApplicationService> application_;
 	std::unique_ptr<WtStoragePageCache> page_cache_;

@@ -126,4 +126,29 @@ std::size_t WtForegroundPriorityLeaseSet::active_key_count(
 	return count;
 }
 
+void WtForegroundPriorityLeaseSet::append_active_keys(
+	WtForegroundPriorityClass priority_class,
+	std::vector<WtChunkKey> &output
+) const {
+	for (const SourceRecord &source : sources_) {
+		if (source.priority_class != priority_class) continue;
+		output.insert(output.end(), source.keys.begin(), source.keys.end());
+	}
+	std::sort(output.begin(), output.end());
+	output.erase(std::unique(output.begin(), output.end()), output.end());
+}
+
+bool WtForegroundPriorityLeaseSet::contains_active_key(
+	WtForegroundPriorityClass priority_class,
+	const WtChunkKey &key
+) const noexcept {
+	for (const SourceRecord &source : sources_) {
+		if (source.priority_class != priority_class) continue;
+		if (std::binary_search(source.keys.begin(), source.keys.end(), key)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 } // namespace world_transvoxel

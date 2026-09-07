@@ -362,6 +362,18 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		runtime.foreground_priority_last_key_lod);
 	output["foreground_priority_last_effective_priority"] =
 		runtime.foreground_priority_last_effective_priority;
+	set_metric(output, "interaction_warm_requests",
+		runtime.interaction_warm_requests);
+	set_metric(output, "interaction_warm_admissions",
+		runtime.interaction_warm_admissions);
+	set_metric(output, "interaction_warm_coalesced",
+		runtime.interaction_warm_coalesced);
+	set_metric(output, "interaction_warm_cache_hits",
+		runtime.interaction_warm_cache_hits);
+	set_metric(output, "interaction_warm_completions",
+		runtime.interaction_warm_completions);
+	set_metric(output, "interaction_warm_rejections",
+		runtime.interaction_warm_rejections);
 	set_metric(
 		output,
 		"edit_lod_retention_zones",

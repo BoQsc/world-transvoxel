@@ -465,7 +465,7 @@ void test_foreground_priority_runtime_contract() {
 		2,
 		1,
 		wt::WtForegroundPriorityClass::InteractionFocus,
-		{ { 1, 0, 0, 0 } },
+		{ { 2, 0, 0, 0 } },
 	}) == wt::WtReadOnlyRuntimeStatus::Ok,
 		"foreground runtime focus lease rejected");
 	std::atomic<wt::WtReadOnlyRuntimeStatus> run_status{
@@ -490,14 +490,15 @@ void test_foreground_priority_runtime_contract() {
 		if (metrics.foreground_priority_updates >= 3 &&
 			metrics.foreground_priority_active_sources == 2 &&
 			metrics.foreground_priority_support_keys == 1 &&
-			metrics.foreground_priority_focus_keys == 1) {
+			metrics.foreground_priority_focus_keys == 1 &&
+			metrics.interaction_warm_completions >= 1) {
 			break;
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 	const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
 	std::printf(
-		"FOREGROUND_RUNTIME_METRICS updates=%llu active=%llu support=%llu focus=%llu changed=%llu matched=%llu missing=%llu\n",
+		"FOREGROUND_RUNTIME_METRICS updates=%llu active=%llu support=%llu focus=%llu changed=%llu matched=%llu missing=%llu warm_requests=%llu warm_admissions=%llu warm_completions=%llu warm_rejections=%llu\n",
 		static_cast<unsigned long long>(metrics.foreground_priority_updates),
 		static_cast<unsigned long long>(
 			metrics.foreground_priority_active_sources
@@ -516,14 +517,22 @@ void test_foreground_priority_runtime_contract() {
 		),
 		static_cast<unsigned long long>(
 			metrics.foreground_priority_missing_keys
-		)
+		),
+		static_cast<unsigned long long>(metrics.interaction_warm_requests),
+		static_cast<unsigned long long>(metrics.interaction_warm_admissions),
+		static_cast<unsigned long long>(metrics.interaction_warm_completions),
+		static_cast<unsigned long long>(metrics.interaction_warm_rejections)
 	);
 	check(
 		metrics.foreground_priority_updates == 3 &&
 		metrics.foreground_priority_active_sources == 2 &&
 		metrics.foreground_priority_support_keys == 1 &&
 		metrics.foreground_priority_focus_keys == 1 &&
-		metrics.foreground_priority_changed_priorities >= 2,
+		metrics.foreground_priority_changed_priorities >= 1 &&
+		metrics.foreground_priority_missing_keys >= 1 &&
+		metrics.interaction_warm_admissions >= 1 &&
+		metrics.interaction_warm_completions >= 1 &&
+		metrics.interaction_warm_rejections == 0,
 		"foreground runtime metrics did not expose active leases"
 	);
 	runtime.end_causal_trace();
@@ -532,9 +541,13 @@ void test_foreground_priority_runtime_contract() {
 	);
 	bool support_priority_seen = false;
 	bool new_focus_priority_seen = false;
-	bool old_focus_demoted = false;
+	bool warmed_key_demand_seen = false;
 	for (const wt::WtCausalTraceEvent &event : trace.events) {
 		if (!event.has_chunk) continue;
+		if (event.key == wt::WtChunkKey{ 2, 0, 0, 0 } &&
+			event.kind == wt::WtCausalTraceEventKind::ChunkDemandAccepted) {
+			warmed_key_demand_seen = true;
+		}
 		if (event.key == wt::WtChunkKey{ 0, 0, 0, 0 }) {
 			if ((event.kind == wt::WtCausalTraceEventKind::ChunkDemandAccepted &&
 					event.auxiliary == static_cast<std::uint64_t>(
@@ -554,14 +567,10 @@ void test_foreground_priority_runtime_contract() {
 			event.status == wt::kWtInteractionFocusPriority) {
 			new_focus_priority_seen = true;
 		}
-		if (event.key == wt::WtChunkKey{ 1, 0, 0, 0 } &&
-			event.status < wt::kWtInteractionFocusPriority) {
-			old_focus_demoted = true;
-		}
 	}
 	check(support_priority_seen && new_focus_priority_seen &&
-		old_focus_demoted,
-		"foreground runtime trace did not prove promotion and demotion");
+		!warmed_key_demand_seen,
+		"foreground runtime trace did not isolate warming from demand");
 	runtime.request_stop();
 	worker.join();
 	storage.close();

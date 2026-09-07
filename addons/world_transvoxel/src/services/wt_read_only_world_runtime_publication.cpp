@@ -494,6 +494,21 @@ bool WtReadOnlyWorldRuntime::process_storage_completions() {
 				*page_cache_,
 				*scheduler_
 			);
+		if (completion.status == WtPageLoadStatus::Ok &&
+			foreground_priority_leases_.contains_active_key(
+				WtForegroundPriorityClass::InteractionFocus,
+				completion.key
+			)) {
+			std::shared_ptr<const WtChunkPage> warmed_page;
+			if (page_cache_->find_or_decode(
+					completion.key,
+					storage_.source_revision(),
+					warmed_page
+				) == WtStoragePageCacheStatus::Ok && warmed_page) {
+				std::lock_guard<std::mutex> lock(metrics_mutex_);
+				++metrics_.interaction_warm_completions;
+			}
+		}
 		if (status != WtPageMeshingRuntimeStatus::Ok &&
 			status != WtPageMeshingRuntimeStatus::CompletionNotOwned &&
 			status != WtPageMeshingRuntimeStatus::StaleCompletion &&

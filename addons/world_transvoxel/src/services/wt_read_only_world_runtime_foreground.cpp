@@ -3,6 +3,7 @@
 #include "services/wt_desired_set_runtime.h"
 #include "services/wt_page_meshing_runtime.h"
 #include "storage/wt_async_storage_service.h"
+#include "storage/wt_storage_page_cache.h"
 #include "streaming/wt_stream_scheduler.h"
 
 #include <algorithm>
@@ -51,6 +52,43 @@ bool WtReadOnlyWorldRuntime::process_foreground_priority_event() {
 		base_demands_,
 		effective_demands
 	);
+	std::uint64_t warm_requests = 0;
+	std::uint64_t warm_admissions = 0;
+	std::uint64_t warm_coalesced = 0;
+	std::uint64_t warm_cache_hits = 0;
+	std::uint64_t warm_rejections = 0;
+	std::vector<WtChunkKey> interaction_warm_keys;
+	candidate_leases.append_active_keys(
+		WtForegroundPriorityClass::InteractionFocus,
+		interaction_warm_keys
+	);
+	for (const WtChunkKey &key : interaction_warm_keys) {
+		++warm_requests;
+		std::shared_ptr<const WtChunkPage> page;
+		if (page_cache_->find_or_decode(
+				key, storage_.source_revision(), page
+			) == WtStoragePageCacheStatus::Ok && page) {
+			++warm_cache_hits;
+			continue;
+		}
+		if (next_interaction_warm_generation_ ==
+				std::numeric_limits<std::uint64_t>::max()) {
+			next_interaction_warm_generation_ = 1;
+		}
+		const WtAsyncStorageStatus warm_status = storage_.request_page(
+			key,
+			{ next_interaction_warm_generation_++ },
+			kWtInteractionFocusPriority,
+			WtStorageRequestClass::Interaction
+		);
+		if (warm_status == WtAsyncStorageStatus::Ok) {
+			++warm_admissions;
+		} else if (warm_status == WtAsyncStorageStatus::AlreadyPending) {
+			++warm_coalesced;
+		} else {
+			++warm_rejections;
+		}
+	}
 	WtDesiredSetDelta delta;
 	WtMultiViewerDesiredSet candidate_desired = *desired_;
 	if (!base_demands_.empty()) {
@@ -156,6 +194,11 @@ bool WtReadOnlyWorldRuntime::process_foreground_priority_event() {
 			static_cast<std::uint64_t>(event.request.priority_class);
 		metrics_.foreground_priority_last_effective_priority =
 			wt_foreground_priority(event.request.priority_class);
+		metrics_.interaction_warm_requests += warm_requests;
+		metrics_.interaction_warm_admissions += warm_admissions;
+		metrics_.interaction_warm_coalesced += warm_coalesced;
+		metrics_.interaction_warm_cache_hits += warm_cache_hits;
+		metrics_.interaction_warm_rejections += warm_rejections;
 		if (!event.request.keys.empty()) {
 			const WtChunkKey &key = event.request.keys.front();
 			metrics_.foreground_priority_last_key_x = key.x;

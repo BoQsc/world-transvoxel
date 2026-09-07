@@ -1383,6 +1383,15 @@ page cache. Queued background requests may be promoted in place; an active page
 load remains one non-preemptible whole-page unit. Lane occupancy, starts,
 promotions, rejections, and worker ownership are reported by storage metrics.
 
+Interaction-focus leases also warm missing LOD0 source pages without adding them
+to the desired set. Each unique active focus key uses the reserved interaction
+storage lane and is decoded into the bounded page cache when its immutable load
+completes. Warming cannot create application, collision, or visual publication
+records; later balanced demand remains the sole authority for chunk activation.
+Focus movement does not cancel an already executing immutable load, and ordinary
+cache eviction reconstructs it from storage plus the authoritative journal.
+Admissions, coalescing, cache hits, completions, and rejections are observable.
+
 Asynchronous meshing also preserves its reserved interaction worker after
 admission. When an atomic GPU publication identifies a queued background mesh as
 a required edit-cohort dependency and raises it to committed-edit priority, the
