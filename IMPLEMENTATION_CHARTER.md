@@ -1392,6 +1392,17 @@ Focus movement does not cancel an already executing immutable load, and ordinary
 cache eviction reconstructs it from storage plus the authoritative journal.
 Admissions, coalescing, cache hits, completions, and rejections are observable.
 
+The production player projects each LOD0 support or tool-focus path into a
+one-chunk three-dimensional interaction shell before updating its foreground
+leases. Lease construction admits every exact path center first, then fills
+nearest Manhattan halo layers across all centers, and stops at the native
+64-key per-source capacity. A single focus therefore warms its complete 27-key
+neighborhood; a long tool ray retains every traversed center before optional
+halo keys. Shell loading uses the existing bounded interaction storage lane and
+must not reject requests or block input, physics, or rendering. It changes
+priority and derived-cache warmth only; viewer demand, balanced topology, and
+atomic regional publication remain authoritative.
+
 Asynchronous meshing also preserves its reserved interaction worker after
 admission. When an atomic GPU publication identifies a queued background mesh as
 a required edit-cohort dependency and raises it to committed-edit priority, the
