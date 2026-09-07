@@ -660,7 +660,7 @@ void test_gpu_placeholder_waits_for_external_activation(
 		"changed GPU transition mask retained stale visual readiness");
 }
 
-void test_empty_replacement_collision_preserves_support_until_visual(
+void test_independent_empty_replacement_collision_precedes_visual(
 	const wt::WtRenderPayload &render_source
 ) {
 	wt::WtChunkApplicationService service(1, 1, 1);
@@ -675,7 +675,8 @@ void test_empty_replacement_collision_preserves_support_until_visual(
 	empty_collision->generation = placeholder->generation;
 	empty_collision->world_origin = wt::wt_chunk_bounds(placeholder->key).minimum;
 	check(service.expect_chunk(
-			placeholder->key, placeholder->generation, true, true, true
+			placeholder->key, placeholder->generation,
+			true, true, true, false, 0, true
 		) == wt::WtApplicationStatus::Ok &&
 		service.submit_render(placeholder) == wt::WtApplicationStatus::Ok &&
 		service.submit_collision(empty_collision) == wt::WtApplicationStatus::Ok,
@@ -683,10 +684,10 @@ void test_empty_replacement_collision_preserves_support_until_visual(
 	service.apply(0, 1, render_sink, collision_sink);
 	const wt::WtChunkApplicationRecord *record =
 		service.find_record(placeholder->key);
-	check(collision_sink.calls == 0 && service.deferred_collision_count() == 1 &&
-		record != nullptr && !record->collision_ready &&
+	check(collision_sink.calls == 1 && service.deferred_collision_count() == 0 &&
+		record != nullptr && record->collision_ready &&
 		!record->visual_ready && record->staged_replacement,
-		"empty replacement collision removed support before visual activation");
+		"independent empty replacement collision waited for visual activation");
 	service.apply(1, 0, render_sink, collision_sink);
 	check(service.confirm_external_visual_prepared(
 			placeholder->key, placeholder->generation, placeholder->transition_mask
@@ -701,7 +702,7 @@ void test_empty_replacement_collision_preserves_support_until_visual(
 		record != nullptr && record->collision_ready &&
 		record->collision_generation == placeholder->generation &&
 		record->visual_ready && record->fully_ready(),
-		"empty replacement collision did not publish after matching visual");
+		"independent empty replacement did not retain collision readiness");
 }
 
 void test_superseded_gpu_visual_generation(
@@ -1322,7 +1323,7 @@ int main() {
 	test_staged_replacement_collision_waits_for_render(render);
 	test_gpu_placeholder_waits_for_external_activation(render);
 	test_superseded_gpu_visual_generation(render);
-	test_empty_replacement_collision_preserves_support_until_visual(render);
+	test_independent_empty_replacement_collision_precedes_visual(render);
 	test_cross_lod_replacement_publication_policy();
 	test_gpu_reciprocal_publication_dependencies();
 	test_gpu_publication_dependency_bounds();

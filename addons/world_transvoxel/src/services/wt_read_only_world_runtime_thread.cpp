@@ -32,8 +32,10 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 		// delta. Viewer events are coalesced and may safely follow the edit; the
 		// edit journal remains authoritative for chunks requested afterward.
 		bool progressed = process_world_operation_event();
-		progressed = process_foreground_priority_event() || progressed;
-		progressed = process_viewer_event() || progressed;
+		// An accepted edit owns the highest scheduler priority. Admit its sample
+		// before planning another viewer delta so a cached page can reach the
+		// mesh queue in this runtime iteration.
+		progressed = process_scheduler_jobs() || progressed;
 		progressed = process_storage_completions() || progressed;
 		progressed = page_runtime_->resume_loading_records(
 			storage_,
@@ -50,6 +52,8 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 		) != 0 || progressed;
 		progressed = process_pending_transition_remeshes() || progressed;
 		progressed = process_scheduler_jobs() || progressed;
+		progressed = process_foreground_priority_event() || progressed;
+		progressed = process_viewer_event() || progressed;
 		progressed = process_async_mesh_completions() || progressed;
 		progressed = process_deferred_gpu_captures() || progressed;
 		progressed = scheduler_->apply_completions(
@@ -152,25 +156,66 @@ bool WtReadOnlyWorldRuntime::pop_publication(
 	WtReadOnlyPublication &publication
 ) {
 	std::lock_guard<std::mutex> lock(publication_mutex_);
+	const auto pop_interaction_payload = [this, &publication](
+		std::vector<WtReadOnlyPublication> &slots,
+		std::size_t &head,
+		std::size_t &count
+	) {
+		for (std::size_t offset = 0; offset < count; ++offset) {
+			const std::size_t index = (head + offset) % slots.size();
+			const WtReadOnlyPublication &candidate = slots[index];
+			if (!candidate.interaction_critical ||
+				(candidate.kind != WtReadOnlyPublicationKind::RenderPayload &&
+					candidate.kind != WtReadOnlyPublicationKind::CollisionPayload)) {
+				continue;
+			}
+			publication = std::move(slots[index]);
+			for (std::size_t shift = offset; shift + 1U < count; ++shift) {
+				const std::size_t destination = (head + shift) % slots.size();
+				const std::size_t source = (head + shift + 1U) % slots.size();
+				slots[destination] = std::move(slots[source]);
+			}
+			const std::size_t tail = (head + count - 1U) % slots.size();
+			slots[tail] = {};
+			--count;
+			return true;
+		}
+		return false;
+	};
+	bool interaction_priority = pop_interaction_payload(
+		priority_publication_slots_, priority_publication_head_,
+		priority_publication_count_
+	);
+	bool interaction_normal = !interaction_priority && pop_interaction_payload(
+		publication_slots_, publication_head_, publication_count_
+	);
+	if (interaction_priority) {
+		++priority_publication_burst_;
+	} else if (interaction_normal) {
+		priority_publication_burst_ = 0;
+	}
 	const bool pop_normal =
+		!interaction_priority && !interaction_normal &&
 		publication_count_ != 0 &&
 		(priority_publication_count_ == 0 ||
 			priority_publication_burst_ >= kWtPublicationPriorityBurstLimit);
-	std::vector<WtReadOnlyPublication> *slots = pop_normal ?
-		&publication_slots_ : &priority_publication_slots_;
-	std::size_t *head = pop_normal ? &publication_head_ :
-		&priority_publication_head_;
-	std::size_t *count = pop_normal ? &publication_count_ :
-		&priority_publication_count_;
-	if (*count == 0) return false;
-	publication = std::move((*slots)[*head]);
-	(*slots)[*head] = {};
-	*head = (*head + 1U) % slots->size();
-	--*count;
-	if (pop_normal) {
-		priority_publication_burst_ = 0;
-	} else {
-		++priority_publication_burst_;
+	if (!interaction_priority && !interaction_normal) {
+		std::vector<WtReadOnlyPublication> *slots = pop_normal ?
+			&publication_slots_ : &priority_publication_slots_;
+		std::size_t *head = pop_normal ? &publication_head_ :
+			&priority_publication_head_;
+		std::size_t *count = pop_normal ? &publication_count_ :
+			&priority_publication_count_;
+		if (*count == 0) return false;
+		publication = std::move((*slots)[*head]);
+		(*slots)[*head] = {};
+		*head = (*head + 1U) % slots->size();
+		--*count;
+		if (pop_normal) {
+			priority_publication_burst_ = 0;
+		} else {
+			++priority_publication_burst_;
+		}
 	}
 	publication_space_available_.notify_one();
 	if (causal_trace_.enabled()) {

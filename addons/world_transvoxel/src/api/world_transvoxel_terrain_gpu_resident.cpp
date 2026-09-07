@@ -613,12 +613,14 @@ get_gpu_resident_render_activation_cohort(
 	result["pending_retirement_count"] = static_cast<std::int64_t>(
 		pending_chunk_retirements_.size()
 	);
-	result["seed_independently_publishable"] = std::binary_search(
+	const bool seed_independently_publishable = std::binary_search(
 		independently_publishable_chunk_replacements_.begin(),
 		independently_publishable_chunk_replacements_.end(),
 		identity.key
 	);
-	if (open_viewer_plan_publications_ != 0) {
+	result["seed_independently_publishable"] = seed_independently_publishable;
+	if (open_viewer_plan_publications_ != 0 &&
+			!seed_independently_publishable) {
 		result["status"] = "WAITING_COHORT";
 		result["error"] = "GPU resident viewer plan is not complete";
 		return result;
@@ -816,12 +818,8 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 		}
 		inventory_pool.push_back(inventory);
 	}
-	if (open_viewer_plan_publications_ != 0) {
-		result["status"] = "WAITING_COHORT";
-		result["error"] = "GPU resident viewer plan is not complete";
-		return result;
-	}
 	WtChunkKey seed_key = inventory_pool.front().identity.key;
+	bool seed_independently_publishable = false;
 	if (!authoritative_seed_dictionary.is_empty()) {
 		WtGpuMeshingShadowIdentity seed;
 		if (!wt_parse_gpu_meshing_shadow_identity(authoritative_seed_dictionary, seed) ||
@@ -841,6 +839,17 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 			return result;
 		}
 		seed_key = seed.key;
+		seed_independently_publishable = std::binary_search(
+			independently_publishable_chunk_replacements_.begin(),
+			independently_publishable_chunk_replacements_.end(),
+			seed_key
+		);
+	}
+	if (open_viewer_plan_publications_ != 0 &&
+			!seed_independently_publishable) {
+		result["status"] = "WAITING_COHORT";
+		result["error"] = "GPU resident viewer plan is not complete";
+		return result;
 	}
 	WtChunkPublicationRegion region;
 	std::vector<WtChunkKey> waiting_masks;

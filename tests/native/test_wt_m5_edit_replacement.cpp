@@ -422,9 +422,9 @@ void test_end_to_end(std::vector<std::uint8_t> &evidence) {
 			application_record->visual_required == replacement.visual_required &&
 			application_record->staged_replacement,
 			"edit replacement readiness was not reset or preserved");
-		check(replacement.evicted_page_entries == 2 &&
+		check(replacement.evicted_page_entries == 0 &&
 			replacement.evicted_resource_entries == 2,
-			"edit replacement did not preserve collision authority");
+			"edit replacement did not preserve immutable source pages");
 		append_key(evidence, replacement.key);
 		append_u64(evidence, replacement.previous_generation.value);
 		append_u64(evidence, replacement.replacement_generation.value);
@@ -432,8 +432,8 @@ void test_end_to_end(std::vector<std::uint8_t> &evidence) {
 		append_u64(evidence, replacement.collision_required ? 1 : 0);
 		append_u64(evidence, replacement.visual_required ? 1 : 0);
 	}
-	check(page_cache.encoded_entry_count() == 1 &&
-		page_cache.decoded_entry_count() == 1 &&
+	check(page_cache.encoded_entry_count() == 3 &&
+		page_cache.decoded_entry_count() == 3 &&
 		resource_cache.mesh_entry_count() == 1 &&
 		resource_cache.render_entry_count() == 1 &&
 		resource_cache.collision_entry_count() == 3,
@@ -518,7 +518,7 @@ void test_end_to_end(std::vector<std::uint8_t> &evidence) {
 	}
 	const wt::WtEditRuntimeReplacementMetrics metrics = service.get_metrics();
 	check(metrics.completed_transactions == 1 && metrics.replaced_chunks == 2 &&
-		metrics.evicted_page_entries == 4 &&
+		metrics.evicted_page_entries == 0 &&
 		metrics.evicted_resource_entries == 4 &&
 		metrics.cancelled_page_meshing_generations == 2 &&
 		page_meshing_owner.cancelled == 2,

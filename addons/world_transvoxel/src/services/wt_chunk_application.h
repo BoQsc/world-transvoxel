@@ -29,6 +29,7 @@ struct WtChunkApplicationRecord {
 	bool external_visual_prepared = false;
 	std::uint8_t external_visual_transition_mask = 0;
 	bool visual_generation_superseded = false;
+	bool independently_publishable_replacement = false;
 
 	bool fully_ready() const noexcept;
 };
@@ -91,7 +92,8 @@ public:
 		bool visual_required = true,
 		bool staged_replacement = false,
 		bool preserve_collision_ready = false,
-		std::uint64_t world_revision = 0
+		std::uint64_t world_revision = 0,
+		bool independently_publishable_replacement = false
 	);
 	WtApplicationStatus set_visual_required(
 		const WtChunkKey &key,

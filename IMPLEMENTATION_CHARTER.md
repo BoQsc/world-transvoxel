@@ -1349,10 +1349,10 @@ Loaded LOD0 collision is stored in eight independently replaceable 8-by-8-by-8
 cell blocks. Until dirty-block extraction includes verified ownership halos,
 density edits rebuild the complete regular CPU mesh and replace all eight blocks
 as one generation. This prevents a partial mesh from clearing still-authoritative
-support triangles. Empty and nonempty replacements remain staged behind their
-matching visual activation, so old support cannot disappear before the new
-surface is visible. A superseding generation cancels queued and active collision
-work and discards stale completions.
+support triangles. Empty and nonempty collision replacements publish as soon as
+the complete matching CPU generation is ready; GPU capture capacity and visual
+activation cannot delay them. A superseding generation cancels queued and active
+collision work and discards stale completions.
 
 One configured mesh worker and one bounded queue lane are reserved for
 foreground collision patches. Background storage, LOD, and visual work cannot
@@ -1382,6 +1382,15 @@ requests. Both lanes publish into the same bounded completion ring and immutable
 page cache. Queued background requests may be promoted in place; an active page
 load remains one non-preemptible whole-page unit. Lane occupancy, starts,
 promotions, rejections, and worker ownership are reported by storage metrics.
+
+Cached source pages remain immutable base data keyed by source revision. An edit
+does not evict that base page: journal replay derives the requested world revision
+when sampling the replacement. The runtime admits and starts committed-edit work
+before applying a pending viewer plan, and interaction render/collision
+publications are selected ahead of background publications. An independently
+publishable edited generation may complete while a viewer plan is open; all
+generation, revision, transition, and sink checks still apply independently to
+its collision and visual branches.
 
 ## 24. Final definition of success
 

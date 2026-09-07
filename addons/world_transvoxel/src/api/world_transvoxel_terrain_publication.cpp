@@ -169,7 +169,6 @@ void WorldTransvoxelTerrain::request_visibility_coverage_priority_batch(
 }
 
 void WorldTransvoxelTerrain::flush_ready_independent_publication_regions() {
-	if (open_viewer_plan_publications_ != 0) return;
 	for (std::size_t index = 0;
 			index < independently_publishable_chunk_replacements_.size();) {
 		const WtChunkKey seed =

@@ -53,7 +53,8 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 	bool visual_required,
 	bool staged_replacement,
 	bool preserve_collision_ready,
-	std::uint64_t world_revision
+	std::uint64_t world_revision,
+	bool independently_publishable_replacement
 ) {
 	std::lock_guard<std::mutex> lock(records_mutex_);
 	if (!wt_is_valid_chunk_key(key) || generation.value == 0 ||
@@ -90,6 +91,11 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 				record->staged_replacement = true;
 				changed = true;
 			}
+			if (independently_publishable_replacement &&
+					!record->independently_publishable_replacement) {
+				record->independently_publishable_replacement = true;
+				changed = true;
+			}
 			return changed ? WtApplicationStatus::Ok :
 				WtApplicationStatus::AlreadyCurrent;
 		}
@@ -111,6 +117,8 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 			carried_collision_ready,
 			staged_replacement,
 		};
+		record->independently_publishable_replacement =
+			independently_publishable_replacement;
 		return WtApplicationStatus::Ok;
 	}
 	if (records_.size() >= record_capacity_) {
@@ -128,6 +136,8 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 		false,
 		staged_replacement,
 	});
+	records_.back().independently_publishable_replacement =
+		independently_publishable_replacement;
 	std::sort(records_.begin(), records_.end(), [](const auto &a, const auto &b) {
 		return a.key < b.key;
 	});
@@ -681,7 +691,10 @@ bool WtChunkApplicationService::should_defer_collision(
 	const WtChunkApplicationRecord &record,
 	const WtCollisionPayload &payload
 ) const noexcept {
-	if (payload.incremental_patch) return false;
+	if (payload.incremental_patch ||
+			record.independently_publishable_replacement) {
+		return false;
+	}
 	return record.staged_replacement && record.visual_required &&
 		!record.visual_ready;
 }

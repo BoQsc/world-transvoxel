@@ -153,15 +153,16 @@ bool WtReadOnlyWorldRuntime::process_terrain_mesh_completion(
 		application_record.generation != completion.generation) {
 		return true;
 	}
+	WtReadOnlyPublication collision_publication;
+	collision_publication.kind = WtReadOnlyPublicationKind::CollisionPayload;
+	collision_publication.key = collision->key;
+	collision_publication.generation = collision->generation;
+	collision_publication.collision_required = true;
+	collision_publication.collision = collision;
+	collision_publication.interaction_critical =
+		application_record.independently_publishable_replacement;
 	if (application_record.collision_required &&
-		!push_publication({
-			WtReadOnlyPublicationKind::CollisionPayload,
-			collision->key,
-			collision->generation,
-			true,
-			{},
-			collision,
-		})) {
+		!push_publication(std::move(collision_publication))) {
 		if (!stop_requested_.load()) {
 			set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
 		}
@@ -269,22 +270,27 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			publication.render = render;
 			publication.staged_replacement =
 				application_record.staged_replacement;
+			publication.interaction_critical =
+				application_record.independently_publishable_replacement;
 			if (!push_publication(std::move(publication))) {
 				if (!stop_requested_.load()) {
 					set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
 				}
 				break;
 			}
+			WtReadOnlyPublication collision_publication;
+			collision_publication.kind = WtReadOnlyPublicationKind::CollisionPayload;
+			if (replacement_collision) {
+				collision_publication.key = replacement_collision->key;
+				collision_publication.generation = replacement_collision->generation;
+				collision_publication.collision_required = true;
+				collision_publication.collision = replacement_collision;
+				collision_publication.interaction_critical =
+					application_record.independently_publishable_replacement;
+			}
 			if (application_record.staged_replacement &&
 				application_record.collision_required && replacement_collision &&
-				!push_publication({
-					WtReadOnlyPublicationKind::CollisionPayload,
-					replacement_collision->key,
-					replacement_collision->generation,
-					true,
-					{},
-					replacement_collision,
-				})) {
+				!push_publication(std::move(collision_publication))) {
 				if (!stop_requested_.load()) {
 					set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
 				}
@@ -326,22 +332,27 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 		publication.generation = render->generation;
 		publication.render = render;
 		publication.staged_replacement = application_record.staged_replacement;
+		publication.interaction_critical =
+			application_record.independently_publishable_replacement;
 		if (!push_publication(std::move(publication))) {
 			if (!stop_requested_.load()) {
 				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
 			}
 			break;
 		}
+		WtReadOnlyPublication collision_publication;
+		collision_publication.kind = WtReadOnlyPublicationKind::CollisionPayload;
+		if (replacement_collision) {
+			collision_publication.key = replacement_collision->key;
+			collision_publication.generation = replacement_collision->generation;
+			collision_publication.collision_required = true;
+			collision_publication.collision = replacement_collision;
+			collision_publication.interaction_critical =
+				application_record.independently_publishable_replacement;
+		}
 		if (application_record.staged_replacement &&
 			application_record.collision_required && replacement_collision &&
-			!push_publication({
-				WtReadOnlyPublicationKind::CollisionPayload,
-				replacement_collision->key,
-				replacement_collision->generation,
-				true,
-				{},
-				replacement_collision,
-			})) {
+			!push_publication(std::move(collision_publication))) {
 			if (!stop_requested_.load()) {
 				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
 			}

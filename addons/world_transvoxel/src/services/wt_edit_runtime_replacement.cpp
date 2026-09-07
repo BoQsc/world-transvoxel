@@ -205,6 +205,7 @@ WtEditRuntimeReplacementService::apply_prepared(
 	WtChunkApplicationService &application,
 	WtPageMeshingRuntimeOwner *page_meshing_runtime
 ) {
+	(void)page_cache;
 	if (!has_prepared_ ||
 		transaction.source_revision != prepared_source_revision_ ||
 		transaction.base_revision != prepared_base_revision_ ||
@@ -256,13 +257,18 @@ WtEditRuntimeReplacementService::apply_prepared(
 				replacement.visual_required,
 				true,
 				replacement.collision_required,
-				current->world_revision
+				current->world_revision,
+				true
 			) != WtApplicationStatus::Ok) {
 			++metrics_.application_failures;
 			return WtEditRuntimeReplacementStatus::ApplicationFailure;
 		}
 
-		const std::size_t page_entries = page_cache.erase_key(replacement.key);
+		// Storage pages are immutable source data, keyed by chunk and source
+		// revision. The committed journal is replayed over that base page while
+		// preparing the replacement generation, so evicting it here only forces
+		// an unnecessary storage request on the edit critical path.
+		const std::size_t page_entries = 0;
 		const std::size_t resource_entries =
 			replacement.collision_required ?
 				resource_cache.erase_visual_key(replacement.key) :

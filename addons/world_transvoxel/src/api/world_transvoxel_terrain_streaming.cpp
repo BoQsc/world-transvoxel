@@ -275,7 +275,8 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 					publication.visual_required,
 					publication.staged_replacement,
 					publication.preserve_collision_ready,
-					publication.world_revision
+					publication.world_revision,
+					publication.independently_publishable_replacement
 				);
 				if (status == WtApplicationStatus::Ok ||
 					status == WtApplicationStatus::AlreadyCurrent) {
