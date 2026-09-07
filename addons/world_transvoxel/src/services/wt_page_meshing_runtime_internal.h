@@ -24,6 +24,7 @@ struct WtPageMeshingRuntimeService::PreparedMeshJob {
 	WtMeshCellCaptureCallback cell_capture_callback;
 	bool pre_mesh_field_capture = false;
 	bool incremental_edit = false;
+	bool interaction_lane = false;
 	std::uint8_t dirty_regular_brick_mask = 0xff;
 	WtEditBounds dirty_edit_bounds;
 	bool has_dirty_edit_bounds = false;

@@ -126,6 +126,7 @@ struct WtPageMeshingRuntimeService::AsyncState {
 		std::lock_guard<std::mutex> lock(work_mutex);
 		const bool interactive_collision = prepared.incremental_edit &&
 			prepared.collision_required;
+		prepared.interaction_lane = interactive_collision;
 		std::vector<PreparedMeshJob> &queue = interactive_collision ?
 			interactive_work : work;
 		if (stopping.load(std::memory_order_acquire) ||
@@ -217,13 +218,28 @@ struct WtPageMeshingRuntimeService::AsyncState {
 		std::int32_t priority
 	) {
 		std::lock_guard<std::mutex> lock(work_mutex);
-		for (PreparedMeshJob &item : work) {
-			if (item.job.key != key || item.job.generation != generation) {
+		for (auto item = work.begin(); item != work.end(); ++item) {
+			if (item->job.key != key || item->job.generation != generation) {
 				continue;
 			}
-			item.job.priority = priority;
+			item->job.priority = priority;
+			bool promoted_to_interaction_lane = false;
+			if (reserved_lane_enabled && priority == kWtInteractiveEditPriority &&
+					interactive_work.size() < queue_capacity) {
+				item->interaction_lane = true;
+				interactive_work.push_back(std::move(*item));
+				work.erase(item);
+				promoted_to_interaction_lane = true;
+				work_available.notify_all();
+			}
 			std::lock_guard<std::mutex> metrics_lock(metrics_mutex);
 			++metrics.mesh_worker_reprioritized_queued_jobs;
+			if (promoted_to_interaction_lane) {
+				++metrics.mesh_worker_interactive_accepted_jobs;
+			}
+			metrics.mesh_worker_queued_jobs =
+				work.size() + interactive_work.size();
+			metrics.mesh_worker_interactive_queued_jobs = interactive_work.size();
 			return true;
 		}
 		for (PreparedMeshJob &item : interactive_work) {
@@ -311,7 +327,7 @@ struct WtPageMeshingRuntimeService::AsyncState {
 				metrics.mesh_worker_queued_jobs = queued_after_pop;
 				metrics.mesh_worker_interactive_queued_jobs =
 					interactive_queued_after_pop;
-				if (prepared.incremental_edit && prepared.collision_required) {
+				if (prepared.interaction_lane) {
 					++metrics.mesh_worker_interactive_started_jobs;
 				}
 				metrics.mesh_worker_queue_wait_ns_last = queue_wait;
@@ -336,8 +352,8 @@ struct WtPageMeshingRuntimeService::AsyncState {
 					completion.status,
 				});
 			}
-			const bool completed_interactive = completion.prepared.incremental_edit &&
-				completion.prepared.collision_required;
+			const bool completed_interactive =
+				completion.prepared.interaction_lane;
 			const std::uint64_t completed_execute_time_ns =
 				completion.execute_time_ns;
 			{

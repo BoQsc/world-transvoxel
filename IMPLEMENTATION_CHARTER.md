@@ -1383,6 +1383,14 @@ page cache. Queued background requests may be promoted in place; an active page
 load remains one non-preemptible whole-page unit. Lane occupancy, starts,
 promotions, rejections, and worker ownership are reported by storage metrics.
 
+Asynchronous meshing also preserves its reserved interaction worker after
+admission. When an atomic GPU publication identifies a queued background mesh as
+a required edit-cohort dependency and raises it to committed-edit priority, the
+prepared immutable job moves to the bounded interaction queue. Reprioritization
+must not leave that dependency waiting behind the background mesh frontier.
+Already executing work remains non-preemptible, and a full interaction queue
+retains the reprioritized job in the priority-ordered background queue.
+
 Cached source pages remain immutable base data keyed by source revision. An edit
 does not evict that base page: journal replay derives the requested world revision
 when sampling the replacement. The runtime admits and starts committed-edit work
