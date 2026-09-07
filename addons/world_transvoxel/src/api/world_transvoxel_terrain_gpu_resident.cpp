@@ -736,6 +736,11 @@ get_gpu_resident_render_activation_cohort(
 	std::vector<WtChunkKey> retirements = std::move(region.retirements);
 	const std::size_t retirement_count = retirements.size();
 	const bool regional = replacements.size() > 1 || !retirements.empty();
+	result["regional"] = regional;
+	result["replacement_count"] = static_cast<std::int64_t>(
+		replacements.size()
+	);
+	result["retirement_count"] = static_cast<std::int64_t>(retirement_count);
 	result["boundary_mask_wait_count"] = static_cast<std::int64_t>(waiting_masks.size());
 	std::vector<WtChunkApplicationRecord> ready_records;
 	ready_records.reserve(replacements.size());

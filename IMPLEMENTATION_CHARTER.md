@@ -1440,6 +1440,17 @@ coverage, an exact-key retirement, or any boundary-mask change uses the normal
 regional publication graph; candidates whose masks are not prepared remain
 pending. Collision readiness remains independent of this visual fast path.
 
+The render activation cohort query exposes its immutable regional flag and
+replacement/retirement counts as soon as the cohort graph is built, before
+payload readiness. A controller may precommit only a one-replacement,
+zero-retirement, same-layout incremental edit after every required surface is
+present and the normal preparation and request-validation contracts succeed.
+Its activation command may wait behind candidate extraction in the same render
+callback; render-thread cohort validation must still reject a missing, stale,
+or failed candidate while retaining old coverage. Multi-chunk, regional,
+transition-changing, streaming, and LOD cohorts continue through the normal
+deferred publication graph.
+
 The production 16-request GPU capture queue reserves four admission slots for
 incremental interaction generations. Background reservations, queued captures,
 and in-flight captures share the remaining twelve-slot bound. A newer

@@ -1,0 +1,100 @@
+[
+  {
+    "test": "test_wt_production_streaming",
+    "configuration": "template_debug",
+    "exit_code": 0,
+    "executable_sha256": "dbb84490e8ed84193f70d754f454ff5a3c807bfce44ef1301fddc5f5b6afbc99",
+    "output": "GPU_QUEUED_COLLISION_PROMOTION workers=0 generation=1 mesh_jobs=1 remeshes=0 render=1 collision=1\nGPU_QUEUED_COLLISION_PROMOTION_PASS workers=0\nGPU_QUEUED_COLLISION_PROMOTION workers=1 generation=1 mesh_jobs=1 remeshes=0 render=1 collision=1\nGPU_QUEUED_COLLISION_PROMOTION_PASS workers=1\nGPU_DEFERRED_CAPTURE_SUPERSEDE workers=1 original=1 replacement=3 render=0 collision=1 stale=0\nGPU_DEFERRED_CAPTURE_SUPERSEDE_PASS workers=1\nCOLLISION_RETIREMENT_LOCALITY workers=0 gpu=0 visual_collision=0 promotions=0 payloads=0 faces=0 support_faces=1536\nCOLLISION_RETIREMENT_LOCALITY_PASS\nCOLLISION_RETIREMENT_LOCALITY workers=0 gpu=1 visual_collision=0 promotions=0 payloads=0 faces=0 support_faces=1536\nCOLLISION_RETIREMENT_LOCALITY_PASS\nCOLLISION_RETIREMENT_LOCALITY workers=0 gpu=0 visual_collision=1 promotions=2 payloads=2 faces=3072 support_faces=1536\nCOLLISION_RETIREMENT_LOCALITY_PASS\nCOLLISION_RETIREMENT_LOCALITY workers=1 gpu=0 visual_collision=0 promotions=0 payloads=0 faces=0 support_faces=1536\nCOLLISION_RETIREMENT_LOCALITY_PASS\nCOLLISION_RETIREMENT_LOCALITY workers=1 gpu=1 visual_collision=0 promotions=0 payloads=0 faces=0 support_faces=1536\nCOLLISION_RETIREMENT_LOCALITY_PASS\nCOLLISION_RETIREMENT_LOCALITY workers=1 gpu=0 visual_collision=1 promotions=2 payloads=2 faces=3072 support_faces=1536\nCOLLISION_RETIREMENT_LOCALITY_PASS\nGPU_NATIVE_VISUAL_GENERATION_LIFECYCLE_PASS\nGPU_COLLISION_ADMISSION_PASS mesh_workers=0\nGPU_COLLISION_ADMISSION_PASS mesh_workers=1\nPRODUCTION_G8_2000X2000_WINDOW_PASS pages=93 samples=5 max_window=25\nFOREGROUND_PRIORITY_LEASE_PASS sources=2 active=1 support=1 focus=0\nFOREGROUND_RUNTIME_METRICS updates=3 active=2 support=1 focus=1 changed=1 matched=6 missing=2 warm_requests=2 warm_admissions=1 warm_completions=1 warm_rejections=0\nPRODUCTION_STREAMING_HASH 39db05c67fc2f4b8d8beaab2e7da927ae968efb3d75118bcd80c5523116d9b3b\nPRODUCTION_STREAMING_PASS pages=4 viewers=2 movement=4 backend=MIT meshing_workers=2\n"
+  },
+  {
+    "test": "test_wt_production_lod_streaming",
+    "configuration": "template_debug",
+    "exit_code": 0,
+    "executable_sha256": "368682538014b6a8999d898dbebfcb3345248ac0cdae2372a332226a02c872f8",
+    "output": "FOREGROUND_PROJECTION_PASS full_resolution_keys=27 requested_leaves=129 intermediate_publications=0\nPRODUCTION_LOD_STREAMING_EVIDENCE entries=9 mask=1 retained_entries=18 retained_edit_key=1 fallback_retention=1 bridge0=320/1674 bridge1=351/1812 staged_expects=9 staged_collision_preserve_expects=1 transition_stage_generations=1 transition_preserve_generations=1 global_coarse=1 many_zone_retention=1 lod_hysteresis=1 edit_viewer_second_edit=1 collision_reactivation=1 replacement_collision_continuity=1 collision_publication_priority=1 collision_publication_coalescing=1 hierarchical_staging=1 hierarchical_runtime=1 hierarchical_bounded_edit_planning=1 g21_entries=1380 g21_nearest_coarse=51.5 transition_completions=3\nPRODUCTION_LOD_STREAMING_HASH 1a59569e2131a7aa07279004a8c2ce304278da658047c3aac8d56bb601ae87a3\nPRODUCTION_LOD_STREAMING_PASS pages=28 viewers=2 transitions=3 lod_hysteresis=1 collision_reactivation=1 edit_viewer_second_edit=1 replacement_collision_continuity=1 collision_publication_priority=1 collision_publication_coalescing=1 hierarchical_staging=1 hierarchical_runtime=1 hierarchical_bounded_edit_planning=1 g21_near_field=1 backend=MIT\n"
+  },
+  {
+    "test": "test_wt_production_lifecycle",
+    "configuration": "template_debug",
+    "exit_code": 0,
+    "executable_sha256": "f79256eb74344e1f066ca3602da5efe5150a7c468ee73f0c1aa7bc509077a5a5",
+    "output": "PRODUCTION_LIFECYCLE_HASH ccdb1e1ad000f824ebd4628e640a6c1d95f9d734cc1298f738de3d0c98f3a126\nPRODUCTION_LIFECYCLE_PASS states=5 async_failures=2 restarts=1\n"
+  },
+  {
+    "test": "test_wt_m5_edit_replacement",
+    "configuration": "template_debug",
+    "exit_code": 0,
+    "executable_sha256": "748bf67128e0335062a5e6aebbf8426a16e594fd36a8e9299ca1f931e17f7d02",
+    "output": "M5_EDIT_REPLACEMENT_HASH 008fbdadab064299395ddf283e205a91b278a34d2c288772e93d825558ce6098\nM5_EDIT_REPLACEMENT_PASS affected=2 foreground_first=yes stale_pipeline=4 cycles=1000\n"
+  },
+  {
+    "test": "test_wt_m3_application",
+    "configuration": "template_debug",
+    "exit_code": 0,
+    "executable_sha256": "d4b1758059c0212f2feee35f5a1c206c5be6e7075fca5ad9280f3980a3d7eae6",
+    "output": "M3_APPLICATION_PASS stale_cycles=1000 cross_lod_publication=1 reciprocal_gpu_faces=12\n"
+  },
+  {
+    "test": "test_wt_publication_policy",
+    "configuration": "template_debug",
+    "exit_code": 0,
+    "executable_sha256": "843c10c644fd0688757d359385cd038a9f62d46b238ee47bcc95dcc5e772102b",
+    "output": "PUBLICATION_POLICY_PASS random_cases=250 coordinate_limit_cases=30\nSPATIAL_PUBLICATION_DEPENDENCIES_PASS retirements=4096 queries=8 tested_keys=32 all_pairs_keys=32768 coordinate_limits=both\nPUBLICATION_DEPENDENCY_SNAPSHOT_PASS unchanged_queries=100 mask_readiness_mutations=128 isolated_invalidation=1\nAUTHORITATIVE_COVERAGE_PASS partition_cases=180 authorities=3 mutations=6 coordinate_limits=both\n"
+  },
+  {
+    "test": "test_wt_gpu_meshing_shadow",
+    "configuration": "template_debug",
+    "exit_code": 0,
+    "executable_sha256": "0b6cd58f7c43d6d37727d79b73bad171963f18ab5bbb429c747882675f67f8e5",
+    "output": "GPU_MESHING_SHADOW_TEST_PASS capacity=2 stale=1 mismatched=1 queued_superseded=1 pre_mesh_field=1 cpu_topology_calls=0\n"
+  },
+  {
+    "test": "test_wt_production_streaming",
+    "configuration": "template_release",
+    "exit_code": 0,
+    "executable_sha256": "dbb84490e8ed84193f70d754f454ff5a3c807bfce44ef1301fddc5f5b6afbc99",
+    "output": "GPU_QUEUED_COLLISION_PROMOTION workers=0 generation=1 mesh_jobs=1 remeshes=0 render=1 collision=1\nGPU_QUEUED_COLLISION_PROMOTION_PASS workers=0\nGPU_QUEUED_COLLISION_PROMOTION workers=1 generation=1 mesh_jobs=1 remeshes=0 render=1 collision=1\nGPU_QUEUED_COLLISION_PROMOTION_PASS workers=1\nGPU_DEFERRED_CAPTURE_SUPERSEDE workers=1 original=1 replacement=3 render=0 collision=1 stale=0\nGPU_DEFERRED_CAPTURE_SUPERSEDE_PASS workers=1\nCOLLISION_RETIREMENT_LOCALITY workers=0 gpu=0 visual_collision=0 promotions=0 payloads=0 faces=0 support_faces=1536\nCOLLISION_RETIREMENT_LOCALITY_PASS\nCOLLISION_RETIREMENT_LOCALITY workers=0 gpu=1 visual_collision=0 promotions=0 payloads=0 faces=0 support_faces=1536\nCOLLISION_RETIREMENT_LOCALITY_PASS\nCOLLISION_RETIREMENT_LOCALITY workers=0 gpu=0 visual_collision=1 promotions=2 payloads=2 faces=3072 support_faces=1536\nCOLLISION_RETIREMENT_LOCALITY_PASS\nCOLLISION_RETIREMENT_LOCALITY workers=1 gpu=0 visual_collision=0 promotions=0 payloads=0 faces=0 support_faces=1536\nCOLLISION_RETIREMENT_LOCALITY_PASS\nCOLLISION_RETIREMENT_LOCALITY workers=1 gpu=1 visual_collision=0 promotions=0 payloads=0 faces=0 support_faces=1536\nCOLLISION_RETIREMENT_LOCALITY_PASS\nCOLLISION_RETIREMENT_LOCALITY workers=1 gpu=0 visual_collision=1 promotions=2 payloads=2 faces=3072 support_faces=1536\nCOLLISION_RETIREMENT_LOCALITY_PASS\nGPU_NATIVE_VISUAL_GENERATION_LIFECYCLE_PASS\nGPU_COLLISION_ADMISSION_PASS mesh_workers=0\nGPU_COLLISION_ADMISSION_PASS mesh_workers=1\nPRODUCTION_G8_2000X2000_WINDOW_PASS pages=93 samples=5 max_window=25\nFOREGROUND_PRIORITY_LEASE_PASS sources=2 active=1 support=1 focus=0\nFOREGROUND_RUNTIME_METRICS updates=3 active=2 support=1 focus=1 changed=1 matched=6 missing=2 warm_requests=2 warm_admissions=1 warm_completions=1 warm_rejections=0\nPRODUCTION_STREAMING_HASH 39db05c67fc2f4b8d8beaab2e7da927ae968efb3d75118bcd80c5523116d9b3b\nPRODUCTION_STREAMING_PASS pages=4 viewers=2 movement=4 backend=MIT meshing_workers=2\n"
+  },
+  {
+    "test": "test_wt_production_lod_streaming",
+    "configuration": "template_release",
+    "exit_code": 0,
+    "executable_sha256": "368682538014b6a8999d898dbebfcb3345248ac0cdae2372a332226a02c872f8",
+    "output": "FOREGROUND_PROJECTION_PASS full_resolution_keys=27 requested_leaves=129 intermediate_publications=0\nPRODUCTION_LOD_STREAMING_EVIDENCE entries=9 mask=1 retained_entries=18 retained_edit_key=1 fallback_retention=1 bridge0=320/1674 bridge1=351/1812 staged_expects=9 staged_collision_preserve_expects=1 transition_stage_generations=1 transition_preserve_generations=1 global_coarse=1 many_zone_retention=1 lod_hysteresis=1 edit_viewer_second_edit=1 collision_reactivation=1 replacement_collision_continuity=1 collision_publication_priority=1 collision_publication_coalescing=1 hierarchical_staging=1 hierarchical_runtime=1 hierarchical_bounded_edit_planning=1 g21_entries=1380 g21_nearest_coarse=51.5 transition_completions=3\nPRODUCTION_LOD_STREAMING_HASH 1a59569e2131a7aa07279004a8c2ce304278da658047c3aac8d56bb601ae87a3\nPRODUCTION_LOD_STREAMING_PASS pages=28 viewers=2 transitions=3 lod_hysteresis=1 collision_reactivation=1 edit_viewer_second_edit=1 replacement_collision_continuity=1 collision_publication_priority=1 collision_publication_coalescing=1 hierarchical_staging=1 hierarchical_runtime=1 hierarchical_bounded_edit_planning=1 g21_near_field=1 backend=MIT\n"
+  },
+  {
+    "test": "test_wt_production_lifecycle",
+    "configuration": "template_release",
+    "exit_code": 0,
+    "executable_sha256": "f79256eb74344e1f066ca3602da5efe5150a7c468ee73f0c1aa7bc509077a5a5",
+    "output": "PRODUCTION_LIFECYCLE_HASH ccdb1e1ad000f824ebd4628e640a6c1d95f9d734cc1298f738de3d0c98f3a126\nPRODUCTION_LIFECYCLE_PASS states=5 async_failures=2 restarts=1\n"
+  },
+  {
+    "test": "test_wt_m5_edit_replacement",
+    "configuration": "template_release",
+    "exit_code": 0,
+    "executable_sha256": "748bf67128e0335062a5e6aebbf8426a16e594fd36a8e9299ca1f931e17f7d02",
+    "output": "M5_EDIT_REPLACEMENT_HASH 008fbdadab064299395ddf283e205a91b278a34d2c288772e93d825558ce6098\nM5_EDIT_REPLACEMENT_PASS affected=2 foreground_first=yes stale_pipeline=4 cycles=1000\n"
+  },
+  {
+    "test": "test_wt_m3_application",
+    "configuration": "template_release",
+    "exit_code": 0,
+    "executable_sha256": "d4b1758059c0212f2feee35f5a1c206c5be6e7075fca5ad9280f3980a3d7eae6",
+    "output": "M3_APPLICATION_PASS stale_cycles=1000 cross_lod_publication=1 reciprocal_gpu_faces=12\n"
+  },
+  {
+    "test": "test_wt_publication_policy",
+    "configuration": "template_release",
+    "exit_code": 0,
+    "executable_sha256": "843c10c644fd0688757d359385cd038a9f62d46b238ee47bcc95dcc5e772102b",
+    "output": "PUBLICATION_POLICY_PASS random_cases=250 coordinate_limit_cases=30\nSPATIAL_PUBLICATION_DEPENDENCIES_PASS retirements=4096 queries=8 tested_keys=32 all_pairs_keys=32768 coordinate_limits=both\nPUBLICATION_DEPENDENCY_SNAPSHOT_PASS unchanged_queries=100 mask_readiness_mutations=128 isolated_invalidation=1\nAUTHORITATIVE_COVERAGE_PASS partition_cases=180 authorities=3 mutations=6 coordinate_limits=both\n"
+  },
+  {
+    "test": "test_wt_gpu_meshing_shadow",
+    "configuration": "template_release",
+    "exit_code": 0,
+    "executable_sha256": "0b6cd58f7c43d6d37727d79b73bad171963f18ab5bbb429c747882675f67f8e5",
+    "output": "GPU_MESHING_SHADOW_TEST_PASS capacity=2 stale=1 mismatched=1 queued_superseded=1 pre_mesh_field=1 cpu_topology_calls=0\n"
+  }
+]
