@@ -1345,13 +1345,14 @@ Collision geometry remains CPU authoritative and cannot depend on GPU readback.
 
 ### 23.2 Incremental interaction collision contract
 
-Loaded LOD0 collision is partitioned into eight independently replaceable
-8-by-8-by-8 cell blocks. Density edits mesh only dirty regular blocks plus the
-sampling halo, assign every triangle deterministically to one block, and publish
-the complete dirty-block set for one `(chunk, generation, world revision)` at
-the physics boundary. Clean block shapes remain installed. A superseding
-generation cancels queued and active collision work and discards stale
-completions.
+Loaded LOD0 collision is stored in eight independently replaceable 8-by-8-by-8
+cell blocks. Until dirty-block extraction includes verified ownership halos,
+density edits rebuild the complete regular CPU mesh and replace all eight blocks
+as one generation. This prevents a partial mesh from clearing still-authoritative
+support triangles. Empty and nonempty replacements remain staged behind their
+matching visual activation, so old support cannot disappear before the new
+surface is visible. A superseding generation cancels queued and active collision
+work and discards stale completions.
 
 One configured mesh worker and one bounded queue lane are reserved for
 foreground collision patches. Background storage, LOD, and visual work cannot
@@ -1360,8 +1361,7 @@ worker reports itself idle, and a queued collision publication records the
 generation's collision branch as pending so readiness repair cannot schedule a
 duplicate generation.
 
-Collision publication does not reserve GPU capture capacity and incremental
-patches do not wait for visual activation. Water-only and material-only journal
+Collision preparation does not reserve GPU capture capacity. Water-only and material-only journal
 revisions advance the installed collision generation while preserving its
 unchanged shapes. Full regular collision payloads are marked separately from
 transition-bearing payloads so the bounded cache can satisfy regular-only

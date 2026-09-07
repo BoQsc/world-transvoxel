@@ -114,55 +114,18 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 			completion.generation,
 			record->generation
 		) != WtChunkResourceCacheStatus::Ok) ||
-		(completion.incremental_edit ?
-			wt_build_regular_collision_patch(
-				*completion.mesh,
-				completion.generation,
-				collision_policy,
-				completion.dirty_regular_brick_mask,
-				*collision
-			) :
-			wt_build_regular_collision_payload(
-				*completion.mesh,
-				completion.generation,
-				collision_policy,
-				*collision
-			)) != WtCollisionBuildStatus::Ok ||
-		(!completion.incremental_edit &&
-			resource_cache_->insert_collision(collision, record->generation) !=
-				WtChunkResourceCacheStatus::Ok)) {
+		wt_build_regular_collision_payload(
+			*completion.mesh,
+			completion.generation,
+			collision_policy,
+			*collision
+		) != WtCollisionBuildStatus::Ok ||
+		resource_cache_->insert_collision(collision, record->generation) !=
+			WtChunkResourceCacheStatus::Ok) {
 		set_failure(
 			WtReadOnlyRuntimeStatus::PipelineTerrainMeshCompletionFailure
 		);
 		return false;
-	}
-	if (completion.incremental_edit) {
-		const std::shared_ptr<const WtCollisionPayload> base =
-			resource_cache_->find_collision(
-				completion.key, application_record.collision_generation
-			);
-		if (collision->dirty_block_mask == kWtCollisionAllBlocksMask) {
-			auto complete = std::make_shared<WtCollisionPayload>(*collision);
-			complete->incremental_patch = false;
-			if (resource_cache_->insert_collision(complete, record->generation) !=
-					WtChunkResourceCacheStatus::Ok) {
-				set_failure(
-					WtReadOnlyRuntimeStatus::PipelineTerrainMeshCompletionFailure
-				);
-				return false;
-			}
-		} else if (base) {
-			auto merged = std::make_shared<WtCollisionPayload>();
-			if (wt_merge_collision_patch(*base, *collision, *merged) !=
-					WtCollisionBuildStatus::Ok ||
-				resource_cache_->insert_collision(merged, record->generation) !=
-					WtChunkResourceCacheStatus::Ok) {
-				set_failure(
-					WtReadOnlyRuntimeStatus::PipelineTerrainMeshCompletionFailure
-				);
-				return false;
-			}
-		}
 	}
 	causal_trace_.record(
 		WtCausalTraceEventKind::CollisionPayloadPrepared,

@@ -644,7 +644,7 @@ void test_gpu_placeholder_waits_for_external_activation(
 		"changed GPU transition mask retained stale visual readiness");
 }
 
-void test_empty_collision_does_not_wait_for_external_visual(
+void test_empty_replacement_collision_preserves_support_until_visual(
 	const wt::WtRenderPayload &render_source
 ) {
 	wt::WtChunkApplicationService service(1, 1, 1);
@@ -667,12 +667,25 @@ void test_empty_collision_does_not_wait_for_external_visual(
 	service.apply(0, 1, render_sink, collision_sink);
 	const wt::WtChunkApplicationRecord *record =
 		service.find_record(placeholder->key);
-	check(collision_sink.calls == 1 && record != nullptr &&
-		record->collision_ready &&
+	check(collision_sink.calls == 0 && service.deferred_collision_count() == 1 &&
+		record != nullptr && !record->collision_ready &&
+		!record->visual_ready && record->staged_replacement,
+		"empty replacement collision removed support before visual activation");
+	service.apply(1, 0, render_sink, collision_sink);
+	check(service.confirm_external_visual_prepared(
+			placeholder->key, placeholder->generation, placeholder->transition_mask
+		) == wt::WtApplicationStatus::Ok &&
+		service.confirm_external_visual_activation(
+			placeholder->key, placeholder->generation
+		) == wt::WtApplicationStatus::Ok,
+		"empty replacement visual activation failed");
+	service.apply(0, 1, render_sink, collision_sink);
+	record = service.find_record(placeholder->key);
+	check(collision_sink.calls == 1 && service.deferred_collision_count() == 0 &&
+		record != nullptr && record->collision_ready &&
 		record->collision_generation == placeholder->generation &&
-		!record->visual_ready && record->staged_replacement &&
-		!record->fully_ready(),
-		"empty collision waited for unrelated external visual activation");
+		record->visual_ready && record->fully_ready(),
+		"empty replacement collision did not publish after matching visual");
 }
 
 void test_superseded_gpu_visual_generation(
@@ -1293,7 +1306,7 @@ int main() {
 	test_staged_replacement_collision_waits_for_render(render);
 	test_gpu_placeholder_waits_for_external_activation(render);
 	test_superseded_gpu_visual_generation(render);
-	test_empty_collision_does_not_wait_for_external_visual(render);
+	test_empty_replacement_collision_preserves_support_until_visual(render);
 	test_cross_lod_replacement_publication_policy();
 	test_gpu_reciprocal_publication_dependencies();
 	test_gpu_publication_dependency_bounds();

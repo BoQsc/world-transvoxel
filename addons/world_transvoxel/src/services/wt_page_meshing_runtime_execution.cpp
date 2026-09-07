@@ -299,8 +299,7 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 	prepared.gpu_resident_visual_only = pre_mesh_field_capture &&
 		visual_required;
 	prepared.gpu_resident_skip_cpu_meshing =
-		prepared.gpu_resident_visual_only &&
-		(!collision_required || prepared.incremental_edit);
+		prepared.gpu_resident_visual_only && !collision_required;
 	prepared.dependencies.reserve(record->dependencies.size());
 	for (const Dependency &dependency : record->dependencies) {
 		if (!dependency.page) source_valid = false;
