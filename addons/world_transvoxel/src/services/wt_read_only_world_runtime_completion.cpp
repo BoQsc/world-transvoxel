@@ -60,23 +60,109 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 		application_record.generation != completion.generation) {
 		return true;
 	}
-	if (resource_cache_->insert_mesh(
+	if (completion.incremental_edit && edit_journal_store_ &&
+		!edit_journal_store_->journal().revision_affects_density(
+			record->world_revision
+		)) {
+		const std::shared_ptr<const WtCollisionPayload> previous =
+			resource_cache_->find_collision(
+				completion.key, application_record.collision_generation
+			);
+		if (previous) {
+			collision = std::make_shared<WtCollisionPayload>(*previous);
+			collision->generation = completion.generation;
+			collision->dirty_block_mask = kWtCollisionAllBlocksMask;
+			collision->incremental_patch = true;
+			auto cached = std::make_shared<WtCollisionPayload>(*collision);
+			cached->incremental_patch = false;
+			if (resource_cache_->insert_collision(cached, record->generation) !=
+					WtChunkResourceCacheStatus::Ok) {
+				set_failure(
+					WtReadOnlyRuntimeStatus::PipelineTerrainMeshCompletionFailure
+				);
+				return false;
+			}
+			causal_trace_.record(
+				WtCausalTraceEventKind::CollisionPayloadPrepared,
+				WtCausalTraceThreadRole::Runtime,
+				&completion.key,
+				completion.generation,
+				record->world_revision,
+				collision->metrics.output_triangles
+			);
+			return true;
+		}
+		collision->key = completion.key;
+		collision->generation = completion.generation;
+		collision->world_origin = wt_chunk_bounds(completion.key).minimum;
+		collision->dirty_block_mask = kWtCollisionAllBlocksMask;
+		collision->incremental_patch = true;
+		collision->regular_only = true;
+		collision->preserve_existing = true;
+		causal_trace_.record(
+			WtCausalTraceEventKind::CollisionPayloadPrepared,
+			WtCausalTraceThreadRole::Runtime,
+			&completion.key,
+			completion.generation,
+			record->world_revision,
+			0
+		);
+		return true;
+	}
+	if ((!completion.incremental_edit && resource_cache_->insert_mesh(
 			completion.mesh,
 			completion.generation,
 			record->generation
-		) != WtChunkResourceCacheStatus::Ok ||
-		wt_build_regular_collision_payload(
-			*completion.mesh,
-			completion.generation,
-			collision_policy,
-			*collision
-		) != WtCollisionBuildStatus::Ok ||
-		resource_cache_->insert_collision(collision, record->generation) !=
-			WtChunkResourceCacheStatus::Ok) {
+		) != WtChunkResourceCacheStatus::Ok) ||
+		(completion.incremental_edit ?
+			wt_build_regular_collision_patch(
+				*completion.mesh,
+				completion.generation,
+				collision_policy,
+				completion.dirty_regular_brick_mask,
+				*collision
+			) :
+			wt_build_regular_collision_payload(
+				*completion.mesh,
+				completion.generation,
+				collision_policy,
+				*collision
+			)) != WtCollisionBuildStatus::Ok ||
+		(!completion.incremental_edit &&
+			resource_cache_->insert_collision(collision, record->generation) !=
+				WtChunkResourceCacheStatus::Ok)) {
 		set_failure(
 			WtReadOnlyRuntimeStatus::PipelineTerrainMeshCompletionFailure
 		);
 		return false;
+	}
+	if (completion.incremental_edit) {
+		const std::shared_ptr<const WtCollisionPayload> base =
+			resource_cache_->find_collision(
+				completion.key, application_record.collision_generation
+			);
+		if (collision->dirty_block_mask == kWtCollisionAllBlocksMask) {
+			auto complete = std::make_shared<WtCollisionPayload>(*collision);
+			complete->incremental_patch = false;
+			if (resource_cache_->insert_collision(complete, record->generation) !=
+					WtChunkResourceCacheStatus::Ok) {
+				set_failure(
+					WtReadOnlyRuntimeStatus::PipelineTerrainMeshCompletionFailure
+				);
+				return false;
+			}
+		} else if (base) {
+			auto merged = std::make_shared<WtCollisionPayload>();
+			if (wt_merge_collision_patch(*base, *collision, *merged) !=
+					WtCollisionBuildStatus::Ok ||
+				resource_cache_->insert_collision(merged, record->generation) !=
+					WtChunkResourceCacheStatus::Ok) {
+				set_failure(
+					WtReadOnlyRuntimeStatus::PipelineTerrainMeshCompletionFailure
+				);
+				return false;
+			}
+		}
 	}
 	causal_trace_.record(
 		WtCausalTraceEventKind::CollisionPayloadPrepared,
@@ -158,7 +244,13 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			application_record.collision_required &&
 			!completion.collision_completed_early &&
 			!prepare_terrain_collision_payload(
-				{ completion.key, completion.generation, completion.mesh },
+				{
+					completion.key,
+					completion.generation,
+					completion.mesh,
+					completion.incremental_edit,
+					completion.dirty_regular_brick_mask,
+				},
 				replacement_collision
 			)) {
 			break;
@@ -309,10 +401,14 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 		return false;
 	}
 	const WtSchedulerMetrics scheduler_metrics = scheduler_->get_metrics();
+	const WtPageMeshingRuntimeMetrics page_metrics = page_runtime_->get_metrics();
 	if (scheduler_->queued_job_count() != 0 ||
 		scheduler_->queued_completion_count() != 0 ||
 		scheduler_metrics.sampling_records != 0 ||
-		scheduler_metrics.meshing_records != 0) {
+		scheduler_metrics.meshing_records != 0 ||
+		page_metrics.mesh_worker_queued_jobs != 0 ||
+		page_metrics.mesh_worker_active_jobs != 0 ||
+		page_metrics.mesh_worker_queued_completions != 0) {
 		return false;
 	}
 	const WtCollisionPolicy collision_policy {
@@ -329,7 +425,8 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 				return !application_->copy_record(attempt.key, record) ||
 					record.generation != attempt.generation ||
 					!record.collision_required ||
-					record.collision_ready;
+					(record.collision_ready &&
+						record.collision_generation == record.generation);
 			}
 		),
 		collision_readiness_repair_attempts_.end()
@@ -350,7 +447,11 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 	std::size_t repairs = 0;
 	constexpr std::size_t kMaxCollisionRepairsPerPass = 8;
 	for (const WtChunkApplicationRecord &record : application_->get_records()) {
-		if (!record.collision_required || record.collision_ready) continue;
+		if (!record.collision_required ||
+			(record.collision_ready &&
+				record.collision_generation == record.generation)) {
+			continue;
+		}
 		if (repair_already_published(record.key, record.generation)) continue;
 		const WtDesiredChunk *desired = desired_->find_desired(record.key);
 		if (desired != nullptr && !desired->collision_required) {
@@ -442,10 +543,14 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 		return false;
 	}
 	const WtSchedulerMetrics scheduler_metrics = scheduler_->get_metrics();
+	const WtPageMeshingRuntimeMetrics page_metrics = page_runtime_->get_metrics();
 	if (scheduler_->queued_job_count() != 0 ||
 		scheduler_->queued_completion_count() != 0 ||
 		scheduler_metrics.sampling_records != 0 ||
-		scheduler_metrics.meshing_records != 0) {
+		scheduler_metrics.meshing_records != 0 ||
+		page_metrics.mesh_worker_queued_jobs != 0 ||
+		page_metrics.mesh_worker_active_jobs != 0 ||
+		page_metrics.mesh_worker_queued_completions != 0) {
 		return false;
 	}
 	bool progressed = false;
@@ -469,19 +574,9 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 			readiness_repair_remesh_attempts_.end(),
 			[this](const ReadinessRepairRemeshAttempt &attempt) {
 				WtChunkApplicationRecord record;
-				if (!application_->copy_record(attempt.key, record) ||
+				return !application_->copy_record(attempt.key, record) ||
 					!record.staged_replacement ||
-					record.generation != attempt.generation) {
-					return true;
-				}
-				const WtChunkRecord *scheduler_record =
-					scheduler_->find_record(attempt.key);
-				return scheduler_record != nullptr &&
-					scheduler_record->lifecycle == WtChunkLifecycle::Ready &&
-					!resource_cache_->find_render(
-						attempt.key,
-						attempt.generation
-					);
+					record.generation != attempt.generation;
 			}
 		),
 		readiness_repair_remesh_attempts_.end()

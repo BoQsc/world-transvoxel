@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <array>
 #include <vector>
 
 namespace world_transvoxel {
@@ -49,16 +50,36 @@ struct WtCollisionBuildMetrics {
 	std::size_t decimated_triangles = 0;
 };
 
+constexpr std::size_t kWtCollisionBlockCount = 8;
+constexpr std::uint8_t kWtCollisionAllBlocksMask = 0xff;
+
+struct WtCollisionBlockRange {
+	std::size_t first_face = 0;
+	std::size_t face_count = 0;
+	bool operator==(const WtCollisionBlockRange &other) const noexcept {
+		return first_face == other.first_face && face_count == other.face_count;
+	}
+};
+
 struct WtCollisionPayload {
 	WtChunkKey key;
 	WtGenerationToken generation;
 	WtGridPoint world_origin;
 	std::vector<WtVec3> faces;
+	std::array<WtCollisionBlockRange, kWtCollisionBlockCount> blocks;
+	std::uint8_t dirty_block_mask = kWtCollisionAllBlocksMask;
+	bool incremental_patch = false;
+	bool regular_only = false;
+	bool preserve_existing = false;
 	WtCollisionBuildMetrics metrics;
 
 	WtCollisionPayload();
 	void clear() noexcept;
 };
+
+bool wt_is_valid_collision_payload(
+	const WtCollisionPayload &collision
+) noexcept;
 
 enum class WtCollisionBuildStatus : std::uint8_t {
 	Ok,
@@ -81,6 +102,23 @@ WtCollisionBuildStatus wt_build_regular_collision_payload(
 	const WtChunkMeshResult &mesh,
 	WtGenerationToken generation,
 	const WtCollisionPolicy &policy,
+	WtCollisionPayload &output
+);
+
+// Produces a complete generation token with geometry only for the selected
+// LOD0 8-cubed collision blocks. A sink retains every unselected block from
+// the preceding generation and publishes the selected set atomically.
+WtCollisionBuildStatus wt_build_regular_collision_patch(
+	const WtChunkMeshResult &mesh,
+	WtGenerationToken generation,
+	const WtCollisionPolicy &policy,
+	std::uint8_t dirty_block_mask,
+	WtCollisionPayload &output
+);
+
+WtCollisionBuildStatus wt_merge_collision_patch(
+	const WtCollisionPayload &base,
+	const WtCollisionPayload &patch,
 	WtCollisionPayload &output
 );
 

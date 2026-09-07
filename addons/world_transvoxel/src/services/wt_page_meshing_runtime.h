@@ -80,12 +80,16 @@ struct WtPageMeshCompletion {
 	std::shared_ptr<const WtChunkMeshResult> water_mesh;
 	bool gpu_resident_visual_only = false;
 	bool collision_completed_early = false;
+	bool incremental_edit = false;
+	std::uint8_t dirty_regular_brick_mask = 0xff;
 };
 
 struct WtTerrainMeshCompletion {
 	WtChunkKey key;
 	WtGenerationToken generation;
 	std::shared_ptr<const WtChunkMeshResult> mesh;
+	bool incremental_edit = false;
+	std::uint8_t dirty_regular_brick_mask = 0xff;
 };
 
 using WtTerrainMeshReadyCallback =
@@ -143,6 +147,11 @@ struct WtPageMeshingRuntimeMetrics {
 	std::uint64_t mesh_worker_queued_completions = 0;
 	std::uint64_t mesh_worker_active_jobs = 0;
 	std::uint64_t mesh_worker_maximum_active_jobs = 0;
+	std::uint64_t mesh_worker_interactive_lane_count = 0;
+	std::uint64_t mesh_worker_interactive_accepted_jobs = 0;
+	std::uint64_t mesh_worker_interactive_started_jobs = 0;
+	std::uint64_t mesh_worker_interactive_completed_jobs = 0;
+	std::uint64_t mesh_worker_interactive_queued_jobs = 0;
 	std::uint64_t mesh_worker_queue_wait_ns_last = 0;
 	std::uint64_t mesh_worker_queue_wait_ns_total = 0;
 	std::uint64_t mesh_worker_queue_wait_ns_maximum = 0;
@@ -324,6 +333,8 @@ private:
 		std::shared_ptr<const WtChunkMeshResult> water_mesh;
 		bool gpu_resident_visual_only = false;
 		bool collision_completed_early = false;
+		bool incremental_edit = false;
+		std::uint8_t dirty_regular_brick_mask = 0xff;
 		std::vector<WtGpuMeshingShadowCapture> deferred_gpu_captures;
 	};
 	struct LoadingRetryCandidate {

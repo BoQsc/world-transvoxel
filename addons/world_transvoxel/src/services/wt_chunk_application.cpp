@@ -622,6 +622,7 @@ bool WtChunkApplicationService::should_defer_collision(
 	const WtChunkApplicationRecord &record,
 	const WtCollisionPayload &payload
 ) const noexcept {
+	if (payload.incremental_patch) return false;
 	// An empty payload creates no physical surface, so applying it cannot expose
 	// collision ahead of the staged visual replacement. Resolving it immediately
 	// prevents empty support chunks from blocking movement on an unrelated visual

@@ -52,74 +52,108 @@ WtGodotCollisionSink::WtGodotCollisionSink(godot::Node3D &owner) noexcept :
 
 bool WtGodotCollisionSink::apply_collision(const WtCollisionPayload &payload) {
 	if (!on_owner_thread()) return false;
-	if (payload.faces.empty()) {
+	if (payload.preserve_existing) {
 		const auto iterator = records_.find(payload.key);
-		if (iterator != records_.end() &&
+		if (iterator == records_.end() || !iterator->second.active) return false;
+		Record &record = iterator->second;
+		record.generation = payload.generation;
+		for (auto &shape : record.staged_shapes) shape.unref();
+		record.staged_generation = {};
+		record.staged = false;
+		record.staged_empty = false;
+		record.staged_dirty_block_mask = 0;
+		return true;
+	}
+	const bool complete_empty = payload.faces.empty() &&
+		payload.dirty_block_mask == kWtCollisionAllBlocksMask;
+	if (complete_empty) {
+		const auto iterator = records_.find(payload.key);
+		if (!payload.incremental_patch && iterator != records_.end() &&
 				should_stage_existing_replacement(payload.key)) {
 			Record &record = iterator->second;
-			record.staged_shape.unref();
+			for (auto &shape : record.staged_shapes) shape.unref();
 			record.staged_generation = payload.generation;
 			record.staged = true;
 			record.staged_empty = true;
+			record.staged_dirty_block_mask = kWtCollisionAllBlocksMask;
 			return true;
 		}
 		remove_collision(payload.key);
 		return true;
 	}
-	godot::PackedVector3Array faces;
-	faces.resize(static_cast<std::int64_t>(payload.faces.size()));
-	for (std::size_t triangle = 0; triangle < payload.faces.size(); triangle += 3) {
-		// Match Godot's clockwise front-face convention so the default
-		// one-sided concave collision accepts rays and bodies from outside.
-		faces.set(
-			static_cast<std::int64_t>(triangle),
-			to_godot(payload.faces[triangle])
-		);
-		faces.set(
-			static_cast<std::int64_t>(triangle + 1),
-			to_godot(payload.faces[triangle + 2])
-		);
-		faces.set(
-			static_cast<std::int64_t>(triangle + 2),
-			to_godot(payload.faces[triangle + 1])
-		);
-	}
-	godot::Ref<godot::ConcavePolygonShape3D> shape;
-	shape.instantiate();
-	shape->set_faces(faces);
-
 	const auto existing = records_.find(payload.key);
 	const bool created = existing == records_.end();
-	const bool stage = created ?
+	if (created && payload.dirty_block_mask != kWtCollisionAllBlocksMask) {
+		return false;
+	}
+	std::array<godot::Ref<godot::Shape3D>, kWtCollisionBlockCount>
+		candidate_shapes{};
+	for (std::size_t block = 0; block < payload.blocks.size(); ++block) {
+		if ((payload.dirty_block_mask & (1U << block)) == 0) continue;
+		const WtCollisionBlockRange &range = payload.blocks[block];
+		if (range.face_count == 0) continue;
+		godot::PackedVector3Array faces;
+		faces.resize(static_cast<std::int64_t>(range.face_count));
+		for (std::size_t triangle = 0; triangle < range.face_count; triangle += 3) {
+			const std::size_t source = range.first_face + triangle;
+			// Match Godot's clockwise front-face convention so the default
+			// one-sided concave collision accepts rays and bodies from outside.
+			faces.set(static_cast<std::int64_t>(triangle),
+				to_godot(payload.faces[source]));
+			faces.set(static_cast<std::int64_t>(triangle + 1),
+				to_godot(payload.faces[source + 2]));
+			faces.set(static_cast<std::int64_t>(triangle + 2),
+				to_godot(payload.faces[source + 1]));
+		}
+		godot::Ref<godot::ConcavePolygonShape3D> shape;
+		shape.instantiate();
+		shape->set_faces(faces);
+		candidate_shapes[block] = shape;
+	}
+	const bool stage = !payload.incremental_patch && (created ?
 		should_stage_created_record(payload.key) :
-		should_stage_existing_replacement(payload.key);
+		should_stage_existing_replacement(payload.key));
 	Record &record = records_[payload.key];
 	if (created) {
 		record.body = memnew(godot::StaticBody3D);
-		record.shape = memnew(godot::CollisionShape3D);
 		record.body->set_name(chunk_name(payload.key));
-		record.shape->set_name("Shape");
-		record.body->add_child(record.shape);
+		for (std::size_t block = 0; block < record.shapes.size(); ++block) {
+			record.shapes[block] = memnew(godot::CollisionShape3D);
+			record.shapes[block]->set_name(block == 0 ? "Shape" :
+				godot::String("Shape_") + godot::String::num_int64(block));
+			record.body->add_child(record.shapes[block]);
+		}
 	}
 	record.body->set_position(to_godot(payload.world_origin));
 	if (stage) {
-		record.staged_shape = shape;
+		for (auto &shape : record.staged_shapes) shape.unref();
+		for (std::size_t block = 0; block < candidate_shapes.size(); ++block) {
+			if ((payload.dirty_block_mask & (1U << block)) != 0) {
+				record.staged_shapes[block] = candidate_shapes[block];
+			}
+		}
 		record.staged_position = to_godot(payload.world_origin);
 		record.staged_generation = payload.generation;
 		record.staged = true;
 		record.staged_empty = false;
+		record.staged_dirty_block_mask = payload.dirty_block_mask;
 		return true;
 	}
 	if (!record.active) {
 		owner_.add_child(record.body);
 		record.active = true;
 	}
-	record.shape->set_shape(shape);
+	for (std::size_t block = 0; block < candidate_shapes.size(); ++block) {
+		if ((payload.dirty_block_mask & (1U << block)) != 0) {
+			record.shapes[block]->set_shape(candidate_shapes[block]);
+		}
+	}
 	record.generation = payload.generation;
-	record.staged_shape.unref();
+	for (auto &shape : record.staged_shapes) shape.unref();
 	record.staged_generation = {};
 	record.staged = false;
 	record.staged_empty = false;
+	record.staged_dirty_block_mask = 0;
 	return true;
 }
 
@@ -197,11 +231,14 @@ bool WtGodotCollisionSink::can_publish_staged_record(
 	if (!record.staged) {
 		return record.active && record.generation == generation;
 	}
-	if (record.body == nullptr || record.shape == nullptr ||
-			record.staged_generation != generation) {
+	if (record.body == nullptr || record.staged_generation != generation ||
+			record.staged_dirty_block_mask == 0) {
 		return false;
 	}
-	return record.staged_empty || record.staged_shape.is_valid();
+	for (godot::CollisionShape3D *shape : record.shapes) {
+		if (shape == nullptr) return false;
+	}
+	return true;
 }
 
 bool WtGodotCollisionSink::publish_staged_record(
@@ -211,25 +248,29 @@ bool WtGodotCollisionSink::publish_staged_record(
 	const auto iterator = records_.find(key);
 	if (iterator == records_.end() || !iterator->second.staged) return true;
 	Record &record = iterator->second;
-	if (record.body == nullptr || record.shape == nullptr) return false;
+	if (record.body == nullptr || record.staged_dirty_block_mask == 0) return false;
 	if (record.staged_empty) {
 		if (record.active) owner_.remove_child(record.body);
 		record.body->queue_free();
 		records_.erase(iterator);
 		return true;
 	}
-	if (record.staged_shape.is_null()) return false;
 	if (!record.active) {
 		owner_.add_child(record.body);
 		record.active = true;
 	}
 	record.body->set_position(record.staged_position);
-	record.shape->set_shape(record.staged_shape);
+	for (std::size_t block = 0; block < record.shapes.size(); ++block) {
+		if ((record.staged_dirty_block_mask & (1U << block)) != 0) {
+			record.shapes[block]->set_shape(record.staged_shapes[block]);
+		}
+	}
 	record.generation = record.staged_generation;
-	record.staged_shape.unref();
+	for (auto &shape : record.staged_shapes) shape.unref();
 	record.staged_generation = {};
 	record.staged = false;
 	record.staged_empty = false;
+	record.staged_dirty_block_mask = 0;
 	return true;
 }
 

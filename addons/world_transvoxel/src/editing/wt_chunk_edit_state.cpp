@@ -577,8 +577,6 @@ WtChunkEditStatus WtChunkEditState::apply_command(
 	if (command.world_revision != current_world_revision_) {
 		current_world_revision_ = command.world_revision;
 		next_sequence_ = 0;
-		surface_shift_dirty_bounds_ = {};
-		has_surface_shift_dirty_bounds_ = false;
 	}
 	changed_sample_count_ += apply_values(
 		page_, command, procedural_descriptor

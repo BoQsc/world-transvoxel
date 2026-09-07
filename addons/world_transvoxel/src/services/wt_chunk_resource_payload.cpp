@@ -235,36 +235,6 @@ std::size_t wt_render_payload_resident_bytes(
 		render.water_indices.capacity() * sizeof(std::uint32_t);
 }
 
-bool wt_is_valid_collision_payload(
-	const WtCollisionPayload &collision
-) noexcept {
-	const std::size_t maximum_triangles = kWtMaximumRenderIndices / 3;
-	if (!wt_is_valid_chunk_key(collision.key) ||
-		collision.generation.value == 0 ||
-		collision.world_origin != wt_chunk_bounds(collision.key).minimum ||
-		collision.faces.size() > kWtMaximumRenderIndices ||
-		(collision.faces.size() % 3U) != 0 ||
-		collision.metrics.input_triangles > maximum_triangles ||
-		collision.metrics.output_triangles > maximum_triangles ||
-		collision.metrics.degenerate_triangles > maximum_triangles ||
-		collision.metrics.thin_triangles > maximum_triangles ||
-		collision.metrics.decimated_triangles > maximum_triangles ||
-		collision.metrics.output_triangles * 3 != collision.faces.size() ||
-		collision.metrics.input_triangles !=
-			collision.metrics.output_triangles +
-			collision.metrics.degenerate_triangles +
-			collision.metrics.thin_triangles +
-			collision.metrics.decimated_triangles) {
-		return false;
-	}
-	for (const WtVec3 &face : collision.faces) {
-		if (!finite_vec3(face)) {
-			return false;
-		}
-	}
-	return true;
-}
-
 bool wt_equal_collision_payload(
 	const WtCollisionPayload &left,
 	const WtCollisionPayload &right
@@ -273,6 +243,11 @@ bool wt_equal_collision_payload(
 		left.generation != right.generation ||
 		left.world_origin != right.world_origin ||
 		left.faces.size() != right.faces.size() ||
+		left.blocks != right.blocks ||
+		left.dirty_block_mask != right.dirty_block_mask ||
+		left.incremental_patch != right.incremental_patch ||
+		left.regular_only != right.regular_only ||
+		left.preserve_existing != right.preserve_existing ||
 		left.metrics.input_triangles != right.metrics.input_triangles ||
 		left.metrics.output_triangles != right.metrics.output_triangles ||
 		left.metrics.degenerate_triangles != right.metrics.degenerate_triangles ||

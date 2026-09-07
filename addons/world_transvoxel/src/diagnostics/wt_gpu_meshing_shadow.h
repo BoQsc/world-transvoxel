@@ -198,6 +198,7 @@ private:
 		const WtChunkJob &left,
 		const WtChunkJob &right
 	) noexcept;
+	bool job_version_in_flight_locked(const WtChunkJob &job) const noexcept;
 	bool is_latest_locked(const WtGpuMeshingShadowRequest &request) const noexcept;
 	void notify_capacity_available() const;
 

@@ -7,6 +7,7 @@
 #include "storage/wt_storage_page_cache.h"
 #include "streaming/wt_stream_scheduler.h"
 
+#include <algorithm>
 #include <utility>
 
 namespace world_transvoxel {
@@ -102,13 +103,12 @@ bool WtReadOnlyWorldRuntime::push_publication(
 	if (stop_requested_.load()) return false;
 	const std::size_t tail = (head + count) % slots.size();
 	const bool trace_enabled = causal_trace_.enabled();
-	const WtChunkKey trace_key = trace_enabled ? publication.key : WtChunkKey{};
-	const WtGenerationToken trace_generation = trace_enabled ?
-		publication.generation : WtGenerationToken{};
+	const WtChunkKey trace_key = publication.key;
+	const WtGenerationToken trace_generation = publication.generation;
 	const std::uint64_t trace_revision = trace_enabled ?
 		publication.world_revision : 0;
-	const std::uint64_t trace_kind = trace_enabled ?
-		static_cast<std::uint64_t>(publication.kind) : 0;
+	const std::uint64_t trace_kind =
+		static_cast<std::uint64_t>(publication.kind);
 	slots[tail] = std::move(publication);
 	++count;
 	if (trace_enabled) {
@@ -126,6 +126,24 @@ bool WtReadOnlyWorldRuntime::push_publication(
 	{
 		std::lock_guard<std::mutex> metrics_lock(metrics_mutex_);
 		++metrics_.published_events;
+	}
+	if (trace_kind == static_cast<std::uint64_t>(
+			WtReadOnlyPublicationKind::CollisionPayload
+		)) {
+		const bool already_pending = std::find_if(
+			collision_readiness_repair_attempts_.begin(),
+			collision_readiness_repair_attempts_.end(),
+			[&](const CollisionReadinessRepairAttempt &attempt) {
+				return attempt.key == trace_key &&
+					attempt.generation == trace_generation;
+			}
+		) != collision_readiness_repair_attempts_.end();
+		if (!already_pending) {
+			collision_readiness_repair_attempts_.push_back({
+				trace_key,
+				trace_generation,
+			});
+		}
 	}
 	return true;
 }
@@ -470,6 +488,16 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 		snapshot.mesh_worker_active_jobs = page.mesh_worker_active_jobs;
 		snapshot.mesh_worker_maximum_active_jobs =
 			page.mesh_worker_maximum_active_jobs;
+		snapshot.mesh_worker_interactive_lane_count =
+			page.mesh_worker_interactive_lane_count;
+		snapshot.mesh_worker_interactive_accepted_jobs =
+			page.mesh_worker_interactive_accepted_jobs;
+		snapshot.mesh_worker_interactive_started_jobs =
+			page.mesh_worker_interactive_started_jobs;
+		snapshot.mesh_worker_interactive_completed_jobs =
+			page.mesh_worker_interactive_completed_jobs;
+		snapshot.mesh_worker_interactive_queued_jobs =
+			page.mesh_worker_interactive_queued_jobs;
 		snapshot.mesh_worker_queue_wait_ns_last =
 			page.mesh_worker_queue_wait_ns_last;
 		snapshot.mesh_worker_queue_wait_ns_total =

@@ -374,8 +374,10 @@ WtChunkResourceCache::find_or_rebuild_collision(
 	bool regular_only
 ) {
 	collision = find_collision(key, generation);
-	if (collision && !regular_only) return WtChunkResourceCacheStatus::Ok;
-	if (regular_only) collision.reset();
+	if (collision && (!regular_only || collision->regular_only)) {
+		return WtChunkResourceCacheStatus::Ok;
+	}
+	if (collision) collision.reset();
 
 	std::shared_ptr<const WtRenderPayload> collision_source = regular_only ?
 		std::shared_ptr<const WtRenderPayload>{} :
@@ -449,6 +451,25 @@ std::size_t WtChunkResourceCache::erase_key(const WtChunkKey &key) {
 		if (iterator->key == key) {
 			collision_resident_bytes_ -= iterator->resident_bytes;
 			iterator = collisions_.erase(iterator);
+			++erased;
+		} else ++iterator;
+	}
+	return erased;
+}
+
+std::size_t WtChunkResourceCache::erase_visual_key(const WtChunkKey &key) {
+	std::size_t erased = 0;
+	for (auto iterator = meshes_.begin(); iterator != meshes_.end();) {
+		if (iterator->key == key) {
+			mesh_resident_bytes_ -= iterator->resident_bytes;
+			iterator = meshes_.erase(iterator);
+			++erased;
+		} else ++iterator;
+	}
+	for (auto iterator = renders_.begin(); iterator != renders_.end();) {
+		if (iterator->key == key) {
+			render_resident_bytes_ -= iterator->resident_bytes;
+			iterator = renders_.erase(iterator);
 			++erased;
 		} else ++iterator;
 	}

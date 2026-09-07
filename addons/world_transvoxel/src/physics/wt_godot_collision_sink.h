@@ -7,6 +7,7 @@
 #include <godot_cpp/variant/vector3.hpp>
 
 #include <map>
+#include <array>
 #include <thread>
 #include <vector>
 
@@ -41,14 +42,16 @@ public:
 private:
 	struct Record {
 		godot::StaticBody3D *body = nullptr;
-		godot::CollisionShape3D *shape = nullptr;
-		godot::Ref<godot::Shape3D> staged_shape;
+		std::array<godot::CollisionShape3D *, kWtCollisionBlockCount> shapes{};
+		std::array<godot::Ref<godot::Shape3D>, kWtCollisionBlockCount>
+			staged_shapes{};
 		godot::Vector3 staged_position;
 		WtGenerationToken generation;
 		WtGenerationToken staged_generation;
 		bool active = false;
 		bool staged = false;
 		bool staged_empty = false;
+		std::uint8_t staged_dirty_block_mask = 0;
 	};
 
 	bool on_owner_thread() const noexcept;

@@ -92,11 +92,18 @@ struct WtPageMeshingRuntimeService::AsyncState {
 		std::size_t requested_queue_capacity
 	) :
 			worker_count(requested_worker_count),
+			background_worker_count(
+				requested_worker_count > 1 ? requested_worker_count - 1 : 1
+			),
+			reserved_lane_enabled(requested_worker_count > 1),
 			queue_capacity(requested_queue_capacity),
 			completion_capacity(requested_queue_capacity) {
-		workers.reserve(worker_count);
-		for (std::size_t index = 0; index < worker_count; ++index) {
-			workers.emplace_back([this]() { worker_main(); });
+		if (reserved_lane_enabled) {
+			interactive_worker = std::thread([this]() { worker_main(true); });
+		}
+		workers.reserve(background_worker_count);
+		for (std::size_t index = 0; index < background_worker_count; ++index) {
+			workers.emplace_back([this]() { worker_main(false); });
 		}
 	}
 
@@ -105,37 +112,49 @@ struct WtPageMeshingRuntimeService::AsyncState {
 			std::lock_guard<std::mutex> lock(work_mutex);
 			stopping.store(true, std::memory_order_release);
 			work.clear();
+			interactive_work.clear();
 		}
 		work_available.notify_all();
 		completion_space.notify_all();
 		for (std::thread &worker : workers) {
 			if (worker.joinable()) worker.join();
 		}
+		if (interactive_worker.joinable()) interactive_worker.join();
 	}
 
 	bool submit(PreparedMeshJob prepared) {
 		std::lock_guard<std::mutex> lock(work_mutex);
+		const bool interactive_collision = prepared.incremental_edit &&
+			prepared.collision_required;
+		std::vector<PreparedMeshJob> &queue = interactive_collision ?
+			interactive_work : work;
 		if (stopping.load(std::memory_order_acquire) ||
-			work.size() >= queue_capacity) {
+			queue.size() >= queue_capacity) {
 			std::lock_guard<std::mutex> metrics_lock(metrics_mutex);
 			++metrics.mesh_worker_queue_rejections;
 			return false;
 		}
 		prepared.enqueued_time_ns = steady_time_ns();
-		work.push_back(std::move(prepared));
+		queue.push_back(std::move(prepared));
 		{
 			std::lock_guard<std::mutex> metrics_lock(metrics_mutex);
 			++metrics.mesh_worker_accepted_jobs;
-			metrics.mesh_worker_queued_jobs = work.size();
+			if (interactive_collision) {
+				++metrics.mesh_worker_interactive_accepted_jobs;
+			}
+			metrics.mesh_worker_queued_jobs =
+				work.size() + interactive_work.size();
+			metrics.mesh_worker_interactive_queued_jobs = interactive_work.size();
 		}
-		work_available.notify_one();
+		work_available.notify_all();
 		return true;
 	}
 
 	bool admission_available() const {
 		std::lock_guard<std::mutex> lock(work_mutex);
 		return !stopping.load(std::memory_order_acquire) &&
-			work.size() < worker_count;
+			(work.size() < background_worker_count ||
+				interactive_work.size() < queue_capacity);
 	}
 
 	bool pop_completion(PreparedMeshCompletion &completion) {
@@ -168,11 +187,26 @@ struct WtPageMeshingRuntimeService::AsyncState {
 			),
 			work.end()
 		);
-		const std::size_t removed = before - work.size();
+		const std::size_t interactive_before = interactive_work.size();
+		interactive_work.erase(
+			std::remove_if(
+				interactive_work.begin(),
+				interactive_work.end(),
+				[&](const PreparedMeshJob &item) {
+					return item.job.key == key &&
+						item.job.generation == generation;
+				}
+			),
+			interactive_work.end()
+		);
+		const std::size_t removed = before - work.size() +
+			interactive_before - interactive_work.size();
 		if (removed != 0) {
 			std::lock_guard<std::mutex> metrics_lock(metrics_mutex);
 			metrics.mesh_worker_cancelled_queued_jobs += removed;
-			metrics.mesh_worker_queued_jobs = work.size();
+			metrics.mesh_worker_queued_jobs =
+				work.size() + interactive_work.size();
+			metrics.mesh_worker_interactive_queued_jobs = interactive_work.size();
 		}
 		return removed;
 	}
@@ -184,6 +218,15 @@ struct WtPageMeshingRuntimeService::AsyncState {
 	) {
 		std::lock_guard<std::mutex> lock(work_mutex);
 		for (PreparedMeshJob &item : work) {
+			if (item.job.key != key || item.job.generation != generation) {
+				continue;
+			}
+			item.job.priority = priority;
+			std::lock_guard<std::mutex> metrics_lock(metrics_mutex);
+			++metrics.mesh_worker_reprioritized_queued_jobs;
+			return true;
+		}
+		for (PreparedMeshJob &item : interactive_work) {
 			if (item.job.key != key || item.job.generation != generation) {
 				continue;
 			}
@@ -204,27 +247,35 @@ struct WtPageMeshingRuntimeService::AsyncState {
 		std::lock_guard<std::mutex> lock(metrics_mutex);
 		WtPageMeshingRuntimeMetrics result = metrics;
 		result.mesh_worker_count = worker_count;
+		result.mesh_worker_interactive_lane_count = reserved_lane_enabled ? 1U : 0U;
 		return result;
 	}
 
-	void worker_main() {
+	void worker_main(bool interactive_only) {
 		WtChunkMesher mesher(wt_get_transvoxel_mit_backend());
 		WtChunkMeshingScratch scratch;
 		while (true) {
 			PreparedMeshJob prepared;
 			std::size_t queued_after_pop = 0;
+			std::size_t interactive_queued_after_pop = 0;
 			{
 				std::unique_lock<std::mutex> lock(work_mutex);
-				work_available.wait(lock, [this]() {
+				work_available.wait(lock, [this, interactive_only]() {
 					return stopping.load(std::memory_order_acquire) ||
-						!work.empty();
+						(interactive_only ? !interactive_work.empty() :
+							(reserved_lane_enabled ? !work.empty() :
+								(!interactive_work.empty() || !work.empty())));
 				});
-				if (stopping.load(std::memory_order_acquire) && work.empty()) {
+				std::vector<PreparedMeshJob> &queue =
+					interactive_only ||
+						(!reserved_lane_enabled && !interactive_work.empty()) ?
+					interactive_work : work;
+				if (stopping.load(std::memory_order_acquire) && queue.empty()) {
 					return;
 				}
 				const auto selected = std::max_element(
-					work.begin(),
-					work.end(),
+					queue.begin(),
+					queue.end(),
 					[](const PreparedMeshJob &left, const PreparedMeshJob &right) {
 						if (left.job.priority != right.job.priority) {
 							return left.job.priority < right.job.priority;
@@ -233,8 +284,9 @@ struct WtPageMeshingRuntimeService::AsyncState {
 					}
 				);
 				prepared = std::move(*selected);
-				work.erase(selected);
-				queued_after_pop = work.size();
+				queue.erase(selected);
+				queued_after_pop = work.size() + interactive_work.size();
+				interactive_queued_after_pop = interactive_work.size();
 			}
 			const std::uint64_t started = steady_time_ns();
 			const std::uint64_t queue_wait =
@@ -257,6 +309,11 @@ struct WtPageMeshingRuntimeService::AsyncState {
 					metrics.mesh_worker_active_jobs
 				);
 				metrics.mesh_worker_queued_jobs = queued_after_pop;
+				metrics.mesh_worker_interactive_queued_jobs =
+					interactive_queued_after_pop;
+				if (prepared.incremental_edit && prepared.collision_required) {
+					++metrics.mesh_worker_interactive_started_jobs;
+				}
 				metrics.mesh_worker_queue_wait_ns_last = queue_wait;
 				metrics.mesh_worker_queue_wait_ns_total += queue_wait;
 				metrics.mesh_worker_queue_wait_ns_maximum = std::max(
@@ -279,19 +336,10 @@ struct WtPageMeshingRuntimeService::AsyncState {
 					completion.status,
 				});
 			}
-			{
-				std::lock_guard<std::mutex> lock(metrics_mutex);
-				--metrics.mesh_worker_active_jobs;
-				++metrics.mesh_worker_completed_jobs;
-				metrics.mesh_worker_execute_time_ns_last =
-					completion.execute_time_ns;
-				metrics.mesh_worker_execute_time_ns_total +=
-					completion.execute_time_ns;
-				metrics.mesh_worker_execute_time_ns_maximum = std::max(
-					metrics.mesh_worker_execute_time_ns_maximum,
-					completion.execute_time_ns
-				);
-			}
+			const bool completed_interactive = completion.prepared.incremental_edit &&
+				completion.prepared.collision_required;
+			const std::uint64_t completed_execute_time_ns =
+				completion.execute_time_ns;
 			{
 				std::unique_lock<std::mutex> lock(completion_mutex);
 				completion_space.wait(lock, [this]() {
@@ -306,6 +354,22 @@ struct WtPageMeshingRuntimeService::AsyncState {
 						completions.size();
 				}
 			}
+			{
+				std::lock_guard<std::mutex> lock(metrics_mutex);
+				--metrics.mesh_worker_active_jobs;
+				++metrics.mesh_worker_completed_jobs;
+				if (completed_interactive) {
+					++metrics.mesh_worker_interactive_completed_jobs;
+				}
+				metrics.mesh_worker_execute_time_ns_last =
+					completed_execute_time_ns;
+				metrics.mesh_worker_execute_time_ns_total +=
+					completed_execute_time_ns;
+				metrics.mesh_worker_execute_time_ns_maximum = std::max(
+					metrics.mesh_worker_execute_time_ns_maximum,
+					completed_execute_time_ns
+				);
+			}
 			std::function<void()> callback;
 			{
 				std::lock_guard<std::mutex> lock(notifier_mutex);
@@ -316,12 +380,16 @@ struct WtPageMeshingRuntimeService::AsyncState {
 	}
 
 	std::size_t worker_count = 0;
+	std::size_t background_worker_count = 0;
+	bool reserved_lane_enabled = false;
 	std::size_t queue_capacity = 0;
 	std::size_t completion_capacity = 0;
 	std::vector<std::thread> workers;
+	std::thread interactive_worker;
 	mutable std::mutex work_mutex;
 	std::condition_variable work_available;
 	std::vector<PreparedMeshJob> work;
+	std::vector<PreparedMeshJob> interactive_work;
 	mutable std::mutex completion_mutex;
 	std::condition_variable completion_space;
 	std::vector<PreparedMeshCompletion> completions;
@@ -658,6 +726,16 @@ void WtPageMeshingRuntimeService::merge_async_metrics(
 	snapshot.mesh_worker_active_jobs = asynchronous.mesh_worker_active_jobs;
 	snapshot.mesh_worker_maximum_active_jobs =
 		asynchronous.mesh_worker_maximum_active_jobs;
+	snapshot.mesh_worker_interactive_lane_count =
+		asynchronous.mesh_worker_interactive_lane_count;
+	snapshot.mesh_worker_interactive_accepted_jobs =
+		asynchronous.mesh_worker_interactive_accepted_jobs;
+	snapshot.mesh_worker_interactive_started_jobs =
+		asynchronous.mesh_worker_interactive_started_jobs;
+	snapshot.mesh_worker_interactive_completed_jobs =
+		asynchronous.mesh_worker_interactive_completed_jobs;
+	snapshot.mesh_worker_interactive_queued_jobs =
+		asynchronous.mesh_worker_interactive_queued_jobs;
 	snapshot.mesh_worker_queue_wait_ns_last =
 		asynchronous.mesh_worker_queue_wait_ns_last;
 	snapshot.mesh_worker_queue_wait_ns_total =

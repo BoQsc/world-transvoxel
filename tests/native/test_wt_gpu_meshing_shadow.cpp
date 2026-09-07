@@ -442,6 +442,45 @@ int main() {
 	);
 	reservation_queue.set_capacity_available_notifier({});
 
+	WtGpuMeshingShadowQueue paired_queue;
+	require(paired_queue.begin(4, true), "paired capture queue did not start");
+	const std::uint64_t old_pair_id =
+		paired_queue.reserve_capture_slots(capture_for(20).job);
+	WtGpuMeshingShadowCapture old_terrain = capture_for(20);
+	WtGpuMeshingShadowCapture old_water = capture_for(20);
+	old_water.surface = WtGpuMeshingShadowSurface::StaticWater;
+	require(
+		old_pair_id != 0 &&
+		paired_queue.capture_reserved(old_pair_id, std::move(old_terrain)) &&
+		paired_queue.capture_reserved(old_pair_id, std::move(old_water)),
+		"old paired capture did not enter the queue"
+	);
+	WtGpuMeshingShadowRequest old_terrain_request;
+	require(
+		paired_queue.pop(old_terrain_request),
+		"old terrain member did not enter flight"
+	);
+	const std::uint64_t new_pair_id =
+		paired_queue.reserve_capture_slots(capture_for(21).job);
+	WtGpuMeshingShadowCapture new_terrain = capture_for(21);
+	WtGpuMeshingShadowCapture new_water = capture_for(21);
+	new_water.surface = WtGpuMeshingShadowSurface::StaticWater;
+	require(
+		new_pair_id != 0 &&
+		paired_queue.capture_reserved(new_pair_id, std::move(new_terrain)) &&
+		paired_queue.capture_reserved(new_pair_id, std::move(new_water)) &&
+		paired_queue.metrics().queued_requests == 3,
+		"new capture replaced the queued peer of an in-flight surface"
+	);
+	WtGpuMeshingShadowRequest newest_member;
+	require(
+		paired_queue.pop(newest_member) &&
+		newest_member.job.generation.value == 21 &&
+		paired_queue.metrics().queued_requests == 2,
+		"dequeue coalescing removed the protected peer of an in-flight surface"
+	);
+	paired_queue.end();
+
 	WtGpuMeshingShadowQueue priority_queue;
 	require(priority_queue.begin(2), "priority reservation queue did not start");
 	WtGpuMeshingShadowCapture low_priority = capture_for(10);

@@ -236,6 +236,60 @@ void test_collision_builder() {
 		detailed_collision.metrics.decimated_triangles == 0 &&
 		detailed_collision.faces.size() == 513 * 3,
 		"default collision policy removed valid regular terrain triangles");
+
+	wt::WtChunkMeshResult block_mesh;
+	block_mesh.key = { 0, 0, 0, 0 };
+	block_mesh.world_origin = wt::wt_chunk_bounds(block_mesh.key).minimum;
+	add_triangle(block_mesh.regular,
+		vertex(1.0F, 1.0F, 1.0F, 1),
+		vertex(2.0F, 1.0F, 1.0F, 1),
+		vertex(1.0F, 2.0F, 1.0F, 1));
+	add_triangle(block_mesh.regular,
+		vertex(13.0F, 13.0F, 13.0F, 1),
+		vertex(14.0F, 13.0F, 13.0F, 1),
+		vertex(13.0F, 14.0F, 13.0F, 1));
+	wt::WtCollisionPayload block_patch;
+	check(wt::wt_build_regular_collision_patch(
+			block_mesh, { 14 }, policy, 1U << 0, block_patch
+		) == wt::WtCollisionBuildStatus::Ok,
+		"incremental collision block build failed");
+	check(block_patch.incremental_patch && block_patch.dirty_block_mask == 1U &&
+		block_patch.metrics.input_triangles == 1 &&
+		block_patch.metrics.output_triangles == 1 &&
+		block_patch.blocks[0].face_count == 3 &&
+		block_patch.blocks[7].face_count == 0 &&
+		block_patch.faces.size() == 3,
+		"incremental collision block ownership was not isolated");
+	wt::WtCollisionPayload block_base;
+	check(wt::wt_build_regular_collision_payload(
+			block_mesh, { 13 }, policy, block_base
+		) == wt::WtCollisionBuildStatus::Ok,
+		"collision block merge base build failed");
+	wt::WtCollisionPayload merged_blocks;
+	check(wt::wt_merge_collision_patch(
+			block_base, block_patch, merged_blocks
+		) == wt::WtCollisionBuildStatus::Ok &&
+		merged_blocks.generation.value == 14 &&
+		!merged_blocks.incremental_patch &&
+		merged_blocks.dirty_block_mask == wt::kWtCollisionAllBlocksMask &&
+		merged_blocks.blocks[0].face_count == 3 &&
+		merged_blocks.blocks[7].face_count == 3 &&
+		merged_blocks.faces.size() == 6,
+		"collision block merge did not preserve clean authoritative blocks");
+	wt::WtChunkMeshResult empty_block_mesh;
+	empty_block_mesh.key = block_mesh.key;
+	empty_block_mesh.world_origin = block_mesh.world_origin;
+	wt::WtCollisionPayload empty_patch;
+	check(wt::wt_build_regular_collision_patch(
+			empty_block_mesh, { 15 }, policy, 1U, empty_patch
+		) == wt::WtCollisionBuildStatus::Ok &&
+		wt::wt_merge_collision_patch(
+			merged_blocks, empty_patch, block_base
+		) == wt::WtCollisionBuildStatus::Ok &&
+		block_base.blocks[0].face_count == 0 &&
+		block_base.blocks[7].face_count == 3 &&
+		block_base.faces.size() == 3,
+		"empty collision patch did not retire only its dirty block");
 }
 
 struct RenderSink final : wt::WtRenderSink {

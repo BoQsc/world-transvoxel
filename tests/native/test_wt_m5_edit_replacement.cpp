@@ -423,8 +423,8 @@ void test_end_to_end(std::vector<std::uint8_t> &evidence) {
 			application_record->staged_replacement,
 			"edit replacement readiness was not reset or preserved");
 		check(replacement.evicted_page_entries == 2 &&
-			replacement.evicted_resource_entries == 3,
-			"edit replacement did not evict all key tiers");
+			replacement.evicted_resource_entries == 2,
+			"edit replacement did not preserve collision authority");
 		append_key(evidence, replacement.key);
 		append_u64(evidence, replacement.previous_generation.value);
 		append_u64(evidence, replacement.replacement_generation.value);
@@ -436,7 +436,7 @@ void test_end_to_end(std::vector<std::uint8_t> &evidence) {
 		page_cache.decoded_entry_count() == 1 &&
 		resource_cache.mesh_entry_count() == 1 &&
 		resource_cache.render_entry_count() == 1 &&
-		resource_cache.collision_entry_count() == 1,
+		resource_cache.collision_entry_count() == 3,
 		"edit replacement cache residency mismatch");
 
 	check(scheduler.submit_completion({ keys[0], generations[0],
@@ -519,7 +519,7 @@ void test_end_to_end(std::vector<std::uint8_t> &evidence) {
 	const wt::WtEditRuntimeReplacementMetrics metrics = service.get_metrics();
 	check(metrics.completed_transactions == 1 && metrics.replaced_chunks == 2 &&
 		metrics.evicted_page_entries == 4 &&
-		metrics.evicted_resource_entries == 6 &&
+		metrics.evicted_resource_entries == 4 &&
 		metrics.cancelled_page_meshing_generations == 2 &&
 		page_meshing_owner.cancelled == 2,
 		"edit replacement metrics mismatch");

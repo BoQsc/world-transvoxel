@@ -1343,6 +1343,31 @@ failure cleanup, and reclamation. GPU fields, meshlets, candidate slots,
 activation state, and journal-derived replay state remain capacity bounded.
 Collision geometry remains CPU authoritative and cannot depend on GPU readback.
 
+### 23.2 Incremental interaction collision contract
+
+Loaded LOD0 collision is partitioned into eight independently replaceable
+8-by-8-by-8 cell blocks. Density edits mesh only dirty regular blocks plus the
+sampling halo, assign every triangle deterministically to one block, and publish
+the complete dirty-block set for one `(chunk, generation, world revision)` at
+the physics boundary. Clean block shapes remain installed. A superseding
+generation cancels queued and active collision work and discards stale
+completions.
+
+One configured mesh worker and one bounded queue lane are reserved for
+foreground collision patches. Background storage, LOD, and visual work cannot
+consume that worker. Completion becomes visible to the runtime before the
+worker reports itself idle, and a queued collision publication records the
+generation's collision branch as pending so readiness repair cannot schedule a
+duplicate generation.
+
+Collision publication does not reserve GPU capture capacity and incremental
+patches do not wait for visual activation. Water-only and material-only journal
+revisions advance the installed collision generation while preserving its
+unchanged shapes. Full regular collision payloads are marked separately from
+transition-bearing payloads so the bounded cache can satisfy regular-only
+readiness without rebuilding CPU topology. GPU publication remains atomic and
+capacity bounded; collision authority remains entirely on the CPU.
+
 ## 24. Final definition of success
 
 Success is a maintainable native Godot terrain addon, not merely generated

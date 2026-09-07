@@ -781,6 +781,64 @@ void test_errors(const wt::WtChunkMesher &mesher, wt::WtChunkMeshingScratch &scr
 	check(output.regular.indices.empty(), "backend failure retained output");
 }
 
+void test_incremental_regular_block_meshing(
+	const wt::WtChunkMesher &mesher,
+	wt::WtChunkMeshingScratch &scratch
+) {
+	FlatYSource source;
+	wt::WtChunkMeshResult lower_corner;
+	check(
+		mesher.mesh_regular_blocks(
+			{ { 0, 0, 0, 0 }, 0, 0, 0.0F, 0.25F },
+			source,
+			0x01U,
+			lower_corner,
+			scratch
+		) == wt::WtChunkMeshingStatus::Ok,
+		"incremental regular block mesh failed"
+	);
+	check(
+		lower_corner.regular.indices.size() == 8U * 8U * 6U,
+		"incremental regular block visited cells outside its 8x8 face"
+	);
+	for (const wt::WtCellVertex &vertex : lower_corner.regular.vertices) {
+		check(
+			vertex.position.x >= 0.0F && vertex.position.x <= 8.0F &&
+			vertex.position.z >= 0.0F && vertex.position.z <= 8.0F,
+			"incremental regular block emitted geometry outside its block"
+		);
+	}
+	for (const wt::WtChunkMeshBuffer &transition : lower_corner.transitions) {
+		check(
+			transition.indices.empty(),
+			"incremental regular block emitted transition geometry"
+		);
+	}
+
+	wt::WtChunkMeshResult upper_y;
+	check(
+		mesher.mesh_regular_blocks(
+			{ { 0, 0, 0, 0 }, 0, 0, 0.0F, 0.25F },
+			source,
+			0x04U,
+			upper_y,
+			scratch
+		) == wt::WtChunkMeshingStatus::Ok &&
+		upper_y.regular.indices.empty(),
+		"incremental regular block retained geometry from a clean block"
+	);
+	check(
+		mesher.mesh_regular_blocks(
+			{ { 0, 0, 0, 1 }, 0, 0, 0.0F, 0.25F },
+			source,
+			0x01U,
+			upper_y,
+			scratch
+		) == wt::WtChunkMeshingStatus::InvalidInput,
+		"incremental regular block accepted non-LOD0 input"
+	);
+}
+
 void test_bounded_initial_mesh_reservation(
 	const wt::WtChunkMesher &mesher,
 	wt::WtChunkMeshingScratch &scratch
@@ -1022,6 +1080,7 @@ int main() {
 	test_convex_refined_corner_gallery(mesher, scratch, hash);
 	test_multiresolution_vertices_match_lod0(mesher, scratch);
 	test_errors(mesher, scratch);
+	test_incremental_regular_block_meshing(mesher, scratch);
 	test_bounded_initial_mesh_reservation(mesher, scratch);
 	test_recorded_gpu_cell_replay();
 

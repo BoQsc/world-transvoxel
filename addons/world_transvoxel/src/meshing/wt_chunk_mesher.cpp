@@ -371,7 +371,8 @@ WtChunkMeshingStatus mesh_regular_cells(
 	const WtChunkSampleSource &source,
 	const WtMeshingBackend &backend,
 	WtChunkMeshResult &output,
-	WtChunkMeshingScratch &scratch
+	WtChunkMeshingScratch &scratch,
+	std::uint8_t block_mask
 ) {
 	const WtChunkBounds bounds = wt_chunk_bounds(input.key);
 	const std::int64_t spacing_integer = wt_lod_cell_size(input.key.lod);
@@ -383,6 +384,10 @@ WtChunkMeshingStatus mesh_regular_cells(
 	for (int z = 0; z < kWtChunkCellsPerAxis; ++z) {
 		for (int y = 0; y < kWtChunkCellsPerAxis; ++y) {
 			for (int x = 0; x < kWtChunkCellsPerAxis; ++x) {
+				const unsigned int block = static_cast<unsigned int>(
+					(x / 8) + (y / 8) * 2 + (z / 8) * 4
+				);
+				if ((block_mask & (1U << block)) == 0) continue;
 				WtRegularCellInput cell_input;
 				std::array<WtGridPoint, kWtTransitionTopologySampleCount>
 					endpoint_world_positions{};
@@ -700,7 +705,7 @@ WtChunkMeshingStatus WtChunkMesher::mesh(
 	scratch.reset_samples();
 
 	WtChunkMeshingStatus status = mesh_regular_cells(
-		input, source, backend_, output, scratch
+		input, source, backend_, output, scratch, 0xff
 	);
 	scratch.cell_samples.clear();
 	for (unsigned int face_index = 0;
@@ -730,6 +735,42 @@ WtChunkMeshingStatus WtChunkMesher::mesh(
 		}
 	}
 	if (status != WtChunkMeshingStatus::Ok) {
+		output.clear();
+	}
+	return status;
+}
+
+WtChunkMeshingStatus WtChunkMesher::mesh_regular_blocks(
+	const WtChunkMeshingInput &input,
+	const WtChunkSampleSource &source,
+	std::uint8_t block_mask,
+	WtChunkMeshResult &output,
+	WtChunkMeshingScratch &scratch
+) const {
+	output.clear();
+	if (!wt_is_valid_chunk_key(input.key) || input.key.lod != 0 ||
+		block_mask == 0 || !std::isfinite(input.isovalue)) {
+		return WtChunkMeshingStatus::InvalidInput;
+	}
+	output.key = input.key;
+	output.world_origin = wt_chunk_bounds(input.key).minimum;
+	output.regular.prepare(
+		kWtMaximumRegularChunkVertices,
+		kWtMaximumRegularChunkIndices,
+		kWtInitialRegularChunkVertices,
+		kWtInitialRegularChunkIndices
+	);
+	for (WtChunkMeshBuffer &transition : output.transitions) {
+		transition.prepare(kWtMaximumTransitionFaceVertices,
+			kWtMaximumTransitionFaceIndices, 0, 0);
+	}
+	scratch.reset_samples();
+	WtChunkMeshingStatus status = mesh_regular_cells(
+		input, source, backend_, output, scratch, block_mask
+	);
+	if (status == WtChunkMeshingStatus::Ok) {
+		wt_finalize_deformed_triangles(output.regular);
+	} else {
 		output.clear();
 	}
 	return status;

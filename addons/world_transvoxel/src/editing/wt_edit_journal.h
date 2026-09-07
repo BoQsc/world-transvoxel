@@ -79,6 +79,7 @@ public:
 	std::size_t transaction_count() const noexcept;
 	std::size_t command_count() const noexcept;
 	std::size_t byte_size() const noexcept;
+	bool revision_affects_density(std::uint64_t revision) const noexcept;
 
 private:
 	WtEditJournalStatus validate_append(

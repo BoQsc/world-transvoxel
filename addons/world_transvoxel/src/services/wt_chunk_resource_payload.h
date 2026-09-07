@@ -24,9 +24,6 @@ std::size_t wt_render_payload_resident_bytes(
 	const WtRenderPayload &render
 ) noexcept;
 
-bool wt_is_valid_collision_payload(
-	const WtCollisionPayload &collision
-) noexcept;
 bool wt_equal_collision_payload(
 	const WtCollisionPayload &left,
 	const WtCollisionPayload &right

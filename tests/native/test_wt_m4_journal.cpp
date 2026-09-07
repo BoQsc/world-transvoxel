@@ -1,4 +1,5 @@
 #include "editing/wt_edit_journal.h"
+#include "core/wt_material_ids.h"
 #include "storage/wt_hash256.h"
 
 #include <algorithm>
@@ -210,6 +211,24 @@ void test_load_and_replay(
 		loaded.replay(failing_sink) == wt::WtEditJournalStatus::ReplayFailure &&
 			failing_sink.commands.size() == 3,
 		"journal replay sink failure was ignored"
+	);
+	check(
+		loaded.revision_affects_density(11) &&
+			loaded.revision_affects_density(13) &&
+			!loaded.revision_affects_density(14),
+		"journal density revision classification mismatch"
+	);
+	wt::WtEditJournal water_journal(1, 1, 4096);
+	water_journal.reset(7001, 20);
+	wt::WtEditTransaction water = transaction(90, 20, 1);
+	water.commands[0].operation = wt::WtEditOperation::PlaceStaticWater;
+	water.commands[0].density_value = 0.0F;
+	water.commands[0].material = wt::kWtStaticWaterMaterialId;
+	std::vector<std::uint8_t> water_segment;
+	check(
+		water_journal.append(water, water_segment) == wt::WtEditJournalStatus::Ok &&
+			!water_journal.revision_affects_density(21),
+		"journal classified a water-only revision as density-changing"
 	);
 }
 

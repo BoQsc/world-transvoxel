@@ -307,4 +307,27 @@ std::size_t WtEditJournal::byte_size() const noexcept {
 	return byte_size_;
 }
 
+bool WtEditJournal::revision_affects_density(
+	std::uint64_t revision
+) const noexcept {
+	const auto transaction = std::find_if(
+		transactions_.begin(),
+		transactions_.end(),
+		[revision](const WtEditTransaction &candidate) {
+			return candidate.committed_revision == revision;
+		}
+	);
+	if (transaction == transactions_.end()) return false;
+	return std::any_of(
+		transaction->commands.begin(),
+		transaction->commands.end(),
+		[](const WtEditCommand &command) {
+			return command.operation == WtEditOperation::AddDensity ||
+				command.operation == WtEditOperation::SetDensity ||
+				command.operation == WtEditOperation::SdfCarve ||
+				command.operation == WtEditOperation::SdfConstruct;
+		}
+	);
+}
+
 } // namespace world_transvoxel

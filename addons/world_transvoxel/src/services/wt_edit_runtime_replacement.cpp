@@ -264,7 +264,9 @@ WtEditRuntimeReplacementService::apply_prepared(
 
 		const std::size_t page_entries = page_cache.erase_key(replacement.key);
 		const std::size_t resource_entries =
-			resource_cache.erase_key(replacement.key);
+			replacement.collision_required ?
+				resource_cache.erase_visual_key(replacement.key) :
+				resource_cache.erase_key(replacement.key);
 		last_replacements_.push_back({
 			replacement.key,
 			replacement.previous_generation,

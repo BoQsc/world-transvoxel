@@ -14,6 +14,7 @@ struct WtPageMeshingRuntimeService::PreparedMeshJob {
 	std::uint8_t transition_mask = 0;
 	std::uint8_t cached_transition_mask = 0;
 	bool visual_required = true;
+	bool collision_required = false;
 	bool gpu_resident_visual_only = false;
 	bool gpu_resident_skip_cpu_meshing = false;
 	bool defer_gpu_capture = false;
@@ -32,6 +33,7 @@ struct WtPageMeshingRuntimeService::PreparedMeshJob {
 struct WtPageMeshingRuntimeService::PreparedMeshCompletion {
 	PreparedMeshJob prepared;
 	std::shared_ptr<WtChunkMeshResult> mesh;
+	std::shared_ptr<WtChunkMeshResult> collision_patch_mesh;
 	std::shared_ptr<WtChunkMeshResult> water_mesh;
 	std::vector<WtRecordedMeshingCell> terrain_records;
 	std::vector<WtRecordedMeshingCell> water_records;

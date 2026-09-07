@@ -39,6 +39,11 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t mesh_worker_queued_completions = 0;
 	std::uint64_t mesh_worker_active_jobs = 0;
 	std::uint64_t mesh_worker_maximum_active_jobs = 0;
+	std::uint64_t mesh_worker_interactive_lane_count = 0;
+	std::uint64_t mesh_worker_interactive_accepted_jobs = 0;
+	std::uint64_t mesh_worker_interactive_started_jobs = 0;
+	std::uint64_t mesh_worker_interactive_completed_jobs = 0;
+	std::uint64_t mesh_worker_interactive_queued_jobs = 0;
 	std::uint64_t mesh_worker_queue_wait_ns_last = 0;
 	std::uint64_t mesh_worker_queue_wait_ns_total = 0;
 	std::uint64_t mesh_worker_queue_wait_ns_maximum = 0;
