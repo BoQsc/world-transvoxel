@@ -583,6 +583,21 @@ void test_staged_replacement_collision_waits_for_render(
 		record->collision_generation.value == 3 &&
 		!record->staged_replacement,
 		"preserved replacement generations did not synchronize");
+
+	auto collision4 = std::make_shared<wt::WtCollisionPayload>(*collision3);
+	collision4->generation = { 4 };
+	check(service.expect_chunk(key, { 4 }, true, true, true, true) ==
+			wt::WtApplicationStatus::Ok &&
+		service.submit_collision(collision4, true) ==
+			wt::WtApplicationStatus::Ok,
+		"interaction-critical replacement collision submission failed");
+	service.apply(0, 1, render_sink, collision_sink);
+	record = service.find_record(key);
+	check(record != nullptr && record->collision_ready &&
+		record->collision_generation.value == 4 &&
+		!record->visual_ready && record->staged_replacement &&
+		collision_sink.calls == 4 && service.deferred_collision_count() == 0,
+		"interaction-critical collision waited for visual readiness");
 }
 
 void test_gpu_placeholder_waits_for_external_activation(

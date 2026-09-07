@@ -931,6 +931,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			payload.generation = record->generation;
 			payload.collision_required = true;
 			payload.collision = std::move(collision);
+			payload.interaction_critical = is_interaction_critical_key(key);
 			outgoing_collision_publications.push_back(std::move(payload));
 		}
 	}
@@ -1082,14 +1083,18 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			);
 			return true;
 		}
-		if (collision && !push_publication({
-				WtReadOnlyPublicationKind::CollisionPayload,
-				collision->key,
-				collision->generation,
-				true,
-				{},
-				collision,
-			})) {
+		WtReadOnlyPublication collision_publication;
+		if (collision) {
+			collision_publication.kind =
+				WtReadOnlyPublicationKind::CollisionPayload;
+			collision_publication.key = collision->key;
+			collision_publication.generation = collision->generation;
+			collision_publication.collision_required = true;
+			collision_publication.collision = collision;
+			collision_publication.interaction_critical =
+				is_interaction_critical_key(item.key);
+		}
+		if (collision && !push_publication(std::move(collision_publication))) {
 			if (!stop_requested_.load()) {
 				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
 			}

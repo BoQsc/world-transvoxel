@@ -565,7 +565,8 @@ std::size_t WtChunkApplicationService::apply_deferred_collisions(
 			iterator = deferred_collisions_.erase(iterator);
 			continue;
 		}
-		if (should_defer_collision(*record, *payload)) {
+		if (!entry.interaction_critical &&
+				should_defer_collision(*record, *payload)) {
 			++iterator;
 			continue;
 		}
@@ -653,7 +654,8 @@ std::size_t WtChunkApplicationService::apply_collision(
 			++metrics_.unrequired_collision;
 			continue;
 		}
-		if (should_defer_collision(*record, *payload)) {
+		if (!entry.interaction_critical &&
+				should_defer_collision(*record, *payload)) {
 			if (!defer_collision(entry)) {
 				++metrics_.queue_rejections;
 			}

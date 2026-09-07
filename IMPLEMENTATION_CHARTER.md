@@ -1408,6 +1408,15 @@ before background payloads. FIFO order is preserved within each class, total
 capacity is unchanged, stale-generation validation still occurs at apply time,
 and the per-frame item and time budgets remain authoritative.
 
+Player-support and interaction-focus leases confer the same collision urgency
+on their active chunk keys. Their payload may advance the application record and
+physics sink before a staged GPU visual replacement becomes ready. Earlier
+same-key `ExpectChunk` and positive collision-requirement publications remain
+mandatory ordering prerequisites; generation, requirement, sink, capacity, and
+deadline checks are unchanged. Ordinary staged replacements still wait for
+visual readiness, preserving atomic visual publication outside the interaction
+region.
+
 When a staged replacement produces render and collision payloads from the same
 mesh completion, the collision publication is enqueued first. A saturated
 visual publication ring must therefore not hold an already prepared collision

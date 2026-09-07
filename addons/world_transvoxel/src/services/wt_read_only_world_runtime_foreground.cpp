@@ -12,6 +12,16 @@
 
 namespace world_transvoxel {
 
+bool WtReadOnlyWorldRuntime::is_interaction_critical_key(
+	const WtChunkKey &key
+) const noexcept {
+	return foreground_priority_leases_.contains_active_key(
+			WtForegroundPriorityClass::PlayerSupport, key
+		) || foreground_priority_leases_.contains_active_key(
+			WtForegroundPriorityClass::InteractionFocus, key
+		);
+}
+
 bool WtReadOnlyWorldRuntime::process_foreground_priority_event() {
 	ForegroundPriorityEvent event;
 	{

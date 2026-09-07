@@ -476,6 +476,34 @@ void test_foreground_priority_runtime_contract() {
 	std::vector<std::uint8_t> evidence;
 	check(collect_until(runtime, counts, 3, 1, evidence),
 		"foreground runtime pages did not publish");
+	const auto warm_deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(2);
+	while (std::chrono::steady_clock::now() < warm_deadline &&
+		runtime.get_metrics().interaction_warm_completions == 0) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	check(runtime.update_collision_viewer(viewer(77, 1, 40.0, 8.0), 0) ==
+		wt::WtReadOnlyRuntimeStatus::Ok,
+		"foreground runtime collision viewer rejected");
+	bool target_collision_critical = false;
+	const auto collision_deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(2);
+	while (std::chrono::steady_clock::now() < collision_deadline &&
+		!target_collision_critical) {
+		wt::WtReadOnlyPublication publication;
+		while (runtime.pop_publication(publication)) {
+			if (publication.kind ==
+					wt::WtReadOnlyPublicationKind::CollisionPayload &&
+				publication.key == wt::WtChunkKey{ 2, 0, 0, 0 }) {
+				target_collision_critical = publication.interaction_critical;
+			}
+		}
+		if (!target_collision_critical) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+	}
+	check(target_collision_critical,
+		"focused collision publication was not interaction critical");
 	check(runtime.update_foreground_priority_lease({
 		2,
 		2,
@@ -541,12 +569,18 @@ void test_foreground_priority_runtime_contract() {
 	);
 	bool support_priority_seen = false;
 	bool new_focus_priority_seen = false;
-	bool warmed_key_demand_seen = false;
+	std::uint64_t warmed_key_completion_sequence = 0;
+	std::uint64_t warmed_key_demand_sequence = 0;
 	for (const wt::WtCausalTraceEvent &event : trace.events) {
 		if (!event.has_chunk) continue;
-		if (event.key == wt::WtChunkKey{ 2, 0, 0, 0 } &&
-			event.kind == wt::WtCausalTraceEventKind::ChunkDemandAccepted) {
-			warmed_key_demand_seen = true;
+		if (event.key == wt::WtChunkKey{ 2, 0, 0, 0 }) {
+			if (event.kind ==
+					wt::WtCausalTraceEventKind::StorageCompletionConsumed) {
+				warmed_key_completion_sequence = event.sequence;
+			} else if (event.kind ==
+					wt::WtCausalTraceEventKind::ChunkDemandAccepted) {
+				warmed_key_demand_sequence = event.sequence;
+			}
 		}
 		if (event.key == wt::WtChunkKey{ 0, 0, 0, 0 }) {
 			if ((event.kind == wt::WtCausalTraceEventKind::ChunkDemandAccepted &&
@@ -569,7 +603,8 @@ void test_foreground_priority_runtime_contract() {
 		}
 	}
 	check(support_priority_seen && new_focus_priority_seen &&
-		!warmed_key_demand_seen,
+		warmed_key_completion_sequence != 0 &&
+		warmed_key_demand_sequence > warmed_key_completion_sequence,
 		"foreground runtime trace did not isolate warming from demand");
 	runtime.request_stop();
 	worker.join();

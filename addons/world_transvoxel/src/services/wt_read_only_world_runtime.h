@@ -313,6 +313,7 @@ private:
 		const ForegroundPriorityEvent &event
 	);
 	bool process_foreground_priority_event();
+	bool is_interaction_critical_key(const WtChunkKey &key) const noexcept;
 	bool enqueue_world_operation(WorldOperation &operation);
 	bool has_pending_edit_operation();
 	bool process_world_operation_event();
