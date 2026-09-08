@@ -1623,7 +1623,13 @@ topology and publications, and leaves the newest equivalent viewer event queued
 for retry after the edit. Internal edit-retention refreshes restore their pending
 flag; staging remains driven by its existing pending state. Cancellation is not
 an event rejection. Runtime metrics expose its count and the maximum interval
-from edit admission to planner yield.
+from edit admission to planner yield. A newer queued viewer update also cancels
+planning for the same visual or collision lane at those cooperative boundaries;
+visual movement cannot cancel collision planning, and collision movement cannot
+cancel visual planning. Internal visual staging yields to any external visual
+update so work always converges on the newest authoritative viewer revision.
+Edit-retention refreshes remain protected so movement cannot discard freshly
+edited LOD0 retention before it enters the accepted plan.
 
 Incremental LOD0 collision extraction has a dedicated regular-cell path. It
 samples each selected 8-cubed block grid point once, derives a deterministic

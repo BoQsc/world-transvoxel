@@ -143,6 +143,42 @@ struct WtRuntimeEventTestAccess {
 			runtime.viewer_events_.empty() &&
 			runtime.last_status() == WtReadOnlyRuntimeStatus::Ok;
 	}
+
+	static bool viewer_plan_detects_lane_local_supersession(
+		WtAsyncStorageService &storage
+	) {
+		WtRuntimeConfig config;
+		config.active_chunk_capacity = 8;
+		config.viewer_capacity = 2;
+		config.demand_capacity_per_viewer = 8;
+		config.meshing_worker_count = 0;
+		WtReadOnlyWorldRuntime runtime(config, storage);
+		if (!runtime.valid()) return false;
+		const WtReadOnlyWorldRuntime::ViewerEvent visual {
+			WtReadOnlyWorldRuntime::ViewerEventKind::Update,
+			{ 1, 8.0, 8.0, 8.0, 1 }, 1, 1,
+		};
+		const WtReadOnlyWorldRuntime::ViewerEvent collision {
+			WtReadOnlyWorldRuntime::ViewerEventKind::UpdateCollision,
+			{ 1, 8.0, 8.0, 8.0, 1 }, 0, 0,
+		};
+		runtime.viewer_events_.push_back({
+			WtReadOnlyWorldRuntime::ViewerEventKind::Update,
+			{ 1, 40.0, 8.0, 8.0, 2 }, 1, 1,
+		});
+		if (!runtime.has_superseding_viewer_event(visual) ||
+			runtime.has_superseding_viewer_event(collision)) return false;
+		runtime.viewer_events_.push_back({
+			WtReadOnlyWorldRuntime::ViewerEventKind::UpdateCollision,
+			{ 1, 40.0, 8.0, 8.0, 2 }, 0, 0,
+		});
+		if (!runtime.has_superseding_viewer_event(collision)) return false;
+		const WtReadOnlyWorldRuntime::ViewerEvent staging {
+			WtReadOnlyWorldRuntime::ViewerEventKind::AdvanceStaging,
+			{ 2, 0.0, 0.0, 0.0, 1 }, 0, 0,
+		};
+		return runtime.has_superseding_viewer_event(staging);
+	}
 };
 
 } // namespace world_transvoxel::testing
@@ -2612,6 +2648,9 @@ int main(int argc, char **argv) {
 		"queued edit-retention refresh lost identity or external viewer (zero workers)");
 	check(wtt::WtRuntimeEventTestAccess::refresh_survives_full_queue(storage, 1),
 		"queued edit-retention refresh lost identity or external viewer (one worker)");
+	check(wtt::WtRuntimeEventTestAccess::
+		viewer_plan_detects_lane_local_supersession(storage),
+		"viewer planning did not detect newest lane-local movement");
 
 	const std::vector<wt::WtLodPlannerViewer> first_viewer = {
 		planner_viewer(1, 1, 8.0),
