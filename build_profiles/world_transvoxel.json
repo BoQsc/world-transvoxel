@@ -4,14 +4,18 @@
     "Camera3D",
     "CollisionShape3D",
     "ConcavePolygonShape3D",
+    "DisplayServer",
     "InputEvent",
     "Material",
+    "MainLoop",
     "MeshInstance3D",
     "Node3D",
     "OS",
     "PhysicsServer3D",
+    "PhysicsServer3DRenderingServerHandler",
     "ProjectSettings",
     "Resource",
-    "StaticBody3D"
+    "StaticBody3D",
+    "Window"
   ]
 }
