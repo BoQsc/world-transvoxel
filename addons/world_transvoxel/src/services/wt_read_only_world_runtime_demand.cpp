@@ -357,34 +357,6 @@ std::size_t WtReadOnlyWorldRuntime::append_edit_lod_retention_viewers(
 	return appended;
 }
 
-bool WtReadOnlyWorldRuntime::has_superseding_viewer_event(
-	const ViewerEvent &event
-) {
-	const bool event_collision =
-		event.kind == ViewerEventKind::UpdateCollision ||
-		event.kind == ViewerEventKind::RemoveCollision;
-	if (event.kind == ViewerEventKind::RefreshEditLodRetention) return false;
-	const bool internal_event =
-		event.kind == ViewerEventKind::RefreshForegroundTopology ||
-		event.kind == ViewerEventKind::AdvanceStaging;
-	std::lock_guard<std::mutex> lock(input_mutex_);
-	return std::any_of(
-		viewer_events_.begin(), viewer_events_.end(),
-		[&](const ViewerEvent &queued) {
-			if (queued.kind == ViewerEventKind::RefreshEditLodRetention ||
-				queued.kind == ViewerEventKind::RefreshForegroundTopology ||
-				queued.kind == ViewerEventKind::AdvanceStaging) return false;
-			const bool queued_collision =
-				queued.kind == ViewerEventKind::UpdateCollision ||
-				queued.kind == ViewerEventKind::RemoveCollision;
-			if (queued_collision != event_collision) return false;
-			return internal_event ||
-				(queued.snapshot.id == event.snapshot.id &&
-					queued.snapshot.revision >= event.snapshot.revision);
-		}
-	);
-}
-
 bool WtReadOnlyWorldRuntime::cancel_viewer_plan_for_pending_edit(
 	const ViewerEvent &event,
 	bool staging_event,
@@ -656,9 +628,8 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	std::uint64_t candidate_visual_activation_sequence =
 		staging_observed_visual_activation_sequence_;
 	WtBalancedLodPlannerStatus plan_status = WtBalancedLodPlannerStatus::Ok;
-	const auto cancel_for_superseding_work = [this, &event]() {
-		return has_pending_edit_operation() ||
-			has_superseding_viewer_event(event);
+	const auto cancel_for_pending_edit = [this]() {
+		return has_pending_edit_operation();
 	};
 	if (collision_event) {
 		// Collision viewers are an independent working-set overlay. Reusing the
@@ -691,7 +662,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 					collision_policy,
 					candidate_plan,
 					config_.visual_viewer_collision_enabled,
-					cancel_for_superseding_work,
+					cancel_for_pending_edit,
 					interaction_topology_keys
 				);
 				if (status == WtBalancedLodPlannerStatus::IncompleteHierarchy) {
@@ -703,7 +674,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 					status = lod_planner_->plan(
 						planning_viewers, {}, collision_policy, candidate_plan,
 						config_.visual_viewer_collision_enabled,
-						cancel_for_superseding_work, {});
+						cancel_for_pending_edit, {});
 					if (status == WtBalancedLodPlannerStatus::Ok) {
 						std::lock_guard<std::mutex> lock(metrics_mutex_);
 						++metrics_.viewer_hysteresis_fallbacks;
@@ -762,14 +733,14 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 					collision_policy,
 					candidate_plan,
 					config_.visual_viewer_collision_enabled,
-					cancel_for_superseding_work,
+					cancel_for_pending_edit,
 					interaction_topology_keys
 				);
 				if (plan_status == WtBalancedLodPlannerStatus::IncompleteHierarchy) {
 					plan_status = lod_planner_->plan(
 						planning_viewers, {}, collision_policy, candidate_plan,
 						config_.visual_viewer_collision_enabled,
-						cancel_for_superseding_work, {});
+						cancel_for_pending_edit, {});
 					if (plan_status == WtBalancedLodPlannerStatus::Ok) {
 						std::lock_guard<std::mutex> lock(metrics_mutex_);
 						++metrics_.viewer_hysteresis_fallbacks;
@@ -889,7 +860,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			plan_status = lod_planner_->stage_foreground(candidate_staging_target,
 				current_plan_, visually_ready, candidate_staging_root_lod,
 				preferred_refinement_keys, staged, staging_complete,
-				cancel_for_superseding_work);
+				cancel_for_pending_edit);
 		} else {
 		plan_status = lod_planner_->stage_toward(
 			candidate_staging_target,
@@ -906,7 +877,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 					(staging_event || unchanged_external_target)),
 			direct_edit_refinement,
 			config_.hierarchical_lod_viewer_activation_enabled && !direct_edit_refinement,
-			cancel_for_superseding_work
+			cancel_for_pending_edit
 		);
 		}
 		if (plan_status == WtBalancedLodPlannerStatus::Cancelled) {

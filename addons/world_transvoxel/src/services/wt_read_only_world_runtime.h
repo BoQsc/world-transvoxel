@@ -315,7 +315,6 @@ private:
 
 	bool enqueue_viewer_event(const ViewerEvent &event);
 	bool process_viewer_event();
-	bool has_superseding_viewer_event(const ViewerEvent &event);
 	bool cancel_viewer_plan_for_pending_edit(
 		const ViewerEvent &event,
 		bool staging_event,
