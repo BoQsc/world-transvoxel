@@ -543,7 +543,7 @@ void test_foreground_priority_runtime_contract() {
 	}
 	const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
 	std::printf(
-		"FOREGROUND_RUNTIME_METRICS updates=%llu active=%llu support=%llu focus=%llu changed=%llu matched=%llu missing=%llu shell_refreshes=%llu shell_added=%llu shell_rejections=%llu shell_max_ns=%llu warm_requests=%llu warm_admissions=%llu warm_completions=%llu warm_rejections=%llu\n",
+		"FOREGROUND_RUNTIME_METRICS updates=%llu active=%llu support=%llu focus=%llu changed=%llu matched=%llu missing=%llu warm_requests=%llu warm_admissions=%llu warm_completions=%llu warm_rejections=%llu\n",
 		static_cast<unsigned long long>(metrics.foreground_priority_updates),
 		static_cast<unsigned long long>(
 			metrics.foreground_priority_active_sources
@@ -563,10 +563,6 @@ void test_foreground_priority_runtime_contract() {
 		static_cast<unsigned long long>(
 			metrics.foreground_priority_missing_keys
 		),
-		static_cast<unsigned long long>(metrics.interaction_shell_refreshes),
-		static_cast<unsigned long long>(metrics.interaction_shell_added_chunks),
-		static_cast<unsigned long long>(metrics.interaction_shell_rejections),
-		static_cast<unsigned long long>(metrics.interaction_shell_planning_ns_max),
 		static_cast<unsigned long long>(metrics.interaction_warm_requests),
 		static_cast<unsigned long long>(metrics.interaction_warm_admissions),
 		static_cast<unsigned long long>(metrics.interaction_warm_completions),
@@ -579,8 +575,6 @@ void test_foreground_priority_runtime_contract() {
 		metrics.foreground_priority_focus_keys == 1 &&
 		metrics.foreground_priority_changed_priorities >= 1 &&
 		metrics.foreground_priority_missing_keys >= 1 &&
-		metrics.interaction_shell_refreshes >= 1 &&
-		metrics.interaction_shell_rejections == 0 &&
 		metrics.interaction_warm_admissions >= 1 &&
 		metrics.interaction_warm_completions >= 1 &&
 		metrics.interaction_warm_rejections == 0,

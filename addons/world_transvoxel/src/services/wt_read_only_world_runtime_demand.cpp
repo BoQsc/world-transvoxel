@@ -384,17 +384,9 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	ViewerEvent event;
 	bool staging_event = false;
 	bool retention_refresh_event = false;
-	bool interaction_shell_event = false;
 	{
 		std::lock_guard<std::mutex> lock(input_mutex_);
-		if (interaction_shell_refresh_pending_) {
-			interaction_shell_refresh_pending_ = false;
-			interaction_shell_event = true;
-			event.kind = ViewerEventKind::RefreshInteractionShell;
-			event.snapshot = planner_viewers_.empty() ?
-				WtViewerSnapshot { 1, 0.0, 0.0, 0.0, plan_revision_ + 1 } :
-				planner_viewers_.front().snapshot;
-		} else if (viewer_events_.empty()) {
+		if (viewer_events_.empty()) {
 			if (edit_lod_retention_refresh_pending_) {
 				if (edit_content_waiting) return false;
 				edit_lod_retention_refresh_pending_ = false;
@@ -423,8 +415,6 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			staging_event = event.kind == ViewerEventKind::AdvanceStaging;
 			retention_refresh_event =
 				event.kind == ViewerEventKind::RefreshEditLodRetention;
-			interaction_shell_event =
-				event.kind == ViewerEventKind::RefreshInteractionShell;
 		}
 	}
 	const bool trace_enabled = causal_trace_.enabled();
@@ -446,7 +436,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	const bool collision_event =
 		event.kind == ViewerEventKind::UpdateCollision ||
 		event.kind == ViewerEventKind::RemoveCollision;
-	if (staging_event || retention_refresh_event || interaction_shell_event) {
+	if (staging_event || retention_refresh_event) {
 		// Application progress advances the already accepted visual target. It
 		// does not mutate or revise an external viewer. An edit-retention refresh
 		// likewise replans the retained internal viewers without fabricating a
@@ -556,36 +546,6 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	} else if (staging_event) {
 		planning_viewers = candidate_viewers;
 		candidate_plan = staging_target_plan_;
-	} else if (interaction_shell_event) {
-		planning_viewers = candidate_viewers;
-		std::vector<WtChunkKey> interaction_keys;
-		foreground_priority_leases_.append_active_keys(
-			WtForegroundPriorityClass::InteractionFocus,
-			interaction_keys
-		);
-		const std::uint64_t shell_started_ns = wt_causal_trace_now_ns();
-		plan_status = lod_planner_->refine_interaction_shell(
-			current_plan_,
-			interaction_keys,
-			kWtInteractionFocusPriority,
-			candidate_plan
-		);
-		const std::uint64_t shell_elapsed_ns =
-			wt_causal_trace_now_ns() - shell_started_ns;
-		std::lock_guard<std::mutex> lock(metrics_mutex_);
-		if (plan_status == WtBalancedLodPlannerStatus::Ok) {
-			++metrics_.interaction_shell_refreshes;
-			if (candidate_plan.entries.size() > current_plan_.entries.size()) {
-				metrics_.interaction_shell_added_chunks +=
-					candidate_plan.entries.size() - current_plan_.entries.size();
-			}
-			metrics_.interaction_shell_planning_ns_max = std::max(
-				metrics_.interaction_shell_planning_ns_max,
-				shell_elapsed_ns
-			);
-		} else {
-			++metrics_.interaction_shell_rejections;
-		}
 	} else {
 		const std::size_t retention_viewer_capacity =
 			kWtEditLodRetentionCapacity;
@@ -665,8 +625,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		++metrics_.rejected_events;
 		return true;
 	}
-	if (!collision_event && !interaction_shell_event &&
-			config_.hierarchical_lod_staging_enabled) {
+	if (!collision_event && config_.hierarchical_lod_staging_enabled) {
 		candidate_staging_target = staging_event ?
 			staging_target_plan_ : candidate_plan;
 		const bool unchanged_external_target = !staging_event &&
@@ -1056,9 +1015,6 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		staging_root_lod_ = candidate_staging_root_lod;
 		staging_observed_visual_activation_sequence_ =
 			candidate_visual_activation_sequence;
-	} else if (interaction_shell_event) {
-		staging_target_plan_ = current_plan_;
-		staging_pending_ = false;
 	}
 	for (const WtLodMapEntry &entry : transition_mask_updates) {
 		const WtDesiredChunk *desired = desired_->find_desired(entry.key);
