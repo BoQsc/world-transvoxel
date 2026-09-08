@@ -357,6 +357,63 @@ std::size_t WtReadOnlyWorldRuntime::append_edit_lod_retention_viewers(
 	return appended;
 }
 
+bool WtReadOnlyWorldRuntime::cancel_viewer_plan_for_pending_edit(
+	const ViewerEvent &event,
+	bool staging_event,
+	bool retention_refresh_event,
+	bool collision_event,
+	bool trace_enabled,
+	std::uint64_t planning_started_ns
+) {
+	const std::uint64_t now_ns = wt_causal_trace_now_ns();
+	const std::uint64_t edit_started_ns =
+		pending_edit_operation_started_ns_.load(std::memory_order_relaxed);
+	const std::uint64_t cancel_latency_ns =
+		edit_started_ns != 0 && now_ns >= edit_started_ns ?
+			now_ns - edit_started_ns : 0;
+	{
+		std::lock_guard<std::mutex> lock(metrics_mutex_);
+		++metrics_.viewer_plan_cancellations;
+		metrics_.viewer_plan_cancel_latency_ns_maximum = std::max(
+			metrics_.viewer_plan_cancel_latency_ns_maximum,
+			cancel_latency_ns
+		);
+	}
+	if (trace_enabled) {
+		causal_trace_.record(
+			WtCausalTraceEventKind::ViewerPlanCancelled,
+			WtCausalTraceThreadRole::Runtime,
+			nullptr,
+			{},
+			event.snapshot.revision,
+			static_cast<std::uint64_t>(event.kind),
+			now_ns - planning_started_ns
+		);
+	}
+	std::lock_guard<std::mutex> lock(input_mutex_);
+	if (retention_refresh_event) {
+		edit_lod_retention_refresh_pending_ = true;
+	} else if (!staging_event) {
+		const bool newer_event_queued = std::any_of(
+			viewer_events_.begin(), viewer_events_.end(),
+			[&](const ViewerEvent &queued) {
+				if (queued.kind == ViewerEventKind::RefreshEditLodRetention ||
+					queued.kind == ViewerEventKind::AdvanceStaging) return false;
+				const bool queued_collision =
+					queued.kind == ViewerEventKind::UpdateCollision ||
+					queued.kind == ViewerEventKind::RemoveCollision;
+				return queued_collision == collision_event &&
+					queued.snapshot.id == event.snapshot.id &&
+					queued.snapshot.revision >= event.snapshot.revision;
+			}
+		);
+		if (!newer_event_queued) {
+			viewer_events_.insert(viewer_events_.begin(), event);
+		}
+	}
+	return true;
+}
+
 bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	bool edit_content_waiting = false;
 	{
@@ -631,53 +688,10 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		}
 	}
 	if (plan_status == WtBalancedLodPlannerStatus::Cancelled) {
-		const std::uint64_t now_ns = wt_causal_trace_now_ns();
-		const std::uint64_t edit_started_ns =
-			pending_edit_operation_started_ns_.load(std::memory_order_relaxed);
-		const std::uint64_t cancel_latency_ns =
-			edit_started_ns != 0 && now_ns >= edit_started_ns ?
-				now_ns - edit_started_ns : 0;
-		{
-			std::lock_guard<std::mutex> lock(metrics_mutex_);
-			++metrics_.viewer_plan_cancellations;
-			metrics_.viewer_plan_cancel_latency_ns_maximum = std::max(
-				metrics_.viewer_plan_cancel_latency_ns_maximum,
-				cancel_latency_ns
-			);
-		}
-		if (trace_enabled) {
-			causal_trace_.record(
-				WtCausalTraceEventKind::ViewerPlanCancelled,
-				WtCausalTraceThreadRole::Runtime,
-				nullptr,
-				{},
-				event.snapshot.revision,
-				static_cast<std::uint64_t>(event.kind),
-				now_ns - planning_started_ns
-			);
-		}
-		std::lock_guard<std::mutex> lock(input_mutex_);
-		if (retention_refresh_event) {
-			edit_lod_retention_refresh_pending_ = true;
-		} else if (!staging_event) {
-			const bool newer_event_queued = std::any_of(
-				viewer_events_.begin(), viewer_events_.end(),
-				[&](const ViewerEvent &queued) {
-					if (queued.kind == ViewerEventKind::RefreshEditLodRetention ||
-						queued.kind == ViewerEventKind::AdvanceStaging) return false;
-					const bool queued_collision =
-						queued.kind == ViewerEventKind::UpdateCollision ||
-						queued.kind == ViewerEventKind::RemoveCollision;
-					return queued_collision == collision_event &&
-						queued.snapshot.id == event.snapshot.id &&
-						queued.snapshot.revision >= event.snapshot.revision;
-				}
-			);
-			if (!newer_event_queued) {
-				viewer_events_.insert(viewer_events_.begin(), event);
-			}
-		}
-		return true;
+		return cancel_viewer_plan_for_pending_edit(
+			event, staging_event, retention_refresh_event, collision_event,
+			trace_enabled, planning_started_ns
+		);
 	}
 	if (plan_status != WtBalancedLodPlannerStatus::Ok ||
 			plan_revision_ == std::numeric_limits<std::uint64_t>::max()) {
@@ -771,7 +785,8 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		if (config_.hierarchical_lod_viewer_activation_enabled) {
 			plan_status = lod_planner_->stage_foreground(candidate_staging_target,
 				current_plan_, visually_ready, candidate_staging_root_lod,
-				preferred_refinement_keys, staged, staging_complete);
+				preferred_refinement_keys, staged, staging_complete,
+				cancel_for_pending_edit);
 		} else {
 		plan_status = lod_planner_->stage_toward(
 			candidate_staging_target,
@@ -787,8 +802,15 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 				(!config_.hierarchical_lod_background_activation_enabled &&
 					(staging_event || unchanged_external_target)),
 			direct_edit_refinement,
-			config_.hierarchical_lod_viewer_activation_enabled && !direct_edit_refinement
+			config_.hierarchical_lod_viewer_activation_enabled && !direct_edit_refinement,
+			cancel_for_pending_edit
 		);
+		}
+		if (plan_status == WtBalancedLodPlannerStatus::Cancelled) {
+			return cancel_viewer_plan_for_pending_edit(
+				event, staging_event, retention_refresh_event, collision_event,
+				trace_enabled, planning_started_ns
+			);
 		}
 		if (plan_status != WtBalancedLodPlannerStatus::Ok) {
 			std::lock_guard<std::mutex> lock(metrics_mutex_);

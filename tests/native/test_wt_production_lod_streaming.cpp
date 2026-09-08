@@ -799,6 +799,21 @@ bool run_g21_near_field_capacity_regression(
 			cancellation_checks == 32U,
 		"balanced LOD planning did not cancel cleanly at a traversal boundary"
 	);
+	std::size_t staging_cancellation_checks = 0;
+	bool cancelled_stage_complete = true;
+	wt::WtBalancedLodPlan cancelled_stage = plan;
+	const wt::WtBalancedLodPlannerStatus cancelled_stage_status =
+		planner.stage_toward(
+			plan, {}, {}, 3, 1, cancelled_stage, cancelled_stage_complete,
+			{}, false, false, false,
+			[&]() { return ++staging_cancellation_checks >= 32U; }
+		);
+	check(
+		cancelled_stage_status == wt::WtBalancedLodPlannerStatus::Cancelled &&
+			cancelled_stage.entries.empty() && cancelled_stage.demands.empty() &&
+			!cancelled_stage_complete && staging_cancellation_checks == 32U,
+		"staged LOD projection did not cancel cleanly before publication"
+	);
 	wt::WtBalancedLodPlan visual_only_plan;
 	check(
 		planner.plan(viewers, {}, {}, visual_only_plan, false) ==

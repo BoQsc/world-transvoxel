@@ -654,7 +654,8 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 	const std::vector<WtChunkKey> &preferred_refinement_keys,
 	bool preferred_refinement_only,
 	bool allow_unready_preferred_refinement,
-	bool allow_preferred_coarsening
+	bool allow_preferred_coarsening,
+	const std::function<bool()> &cancel_requested
 ) const {
 	output.clear();
 	complete = false;
@@ -673,6 +674,9 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 	std::sort(ready.begin(), ready.end());
 	ready.erase(std::unique(ready.begin(), ready.end()), ready.end());
 	for (const WtChunkKey &key : ready) {
+		if (cancel_requested && cancel_requested()) {
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
 		if (!wt_is_valid_chunk_key(key)) {
 			return WtBalancedLodPlannerStatus::InvalidLodMap;
 		}
@@ -681,12 +685,18 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 	std::sort(preferred.begin(), preferred.end());
 	preferred.erase(std::unique(preferred.begin(), preferred.end()), preferred.end());
 	for (const WtChunkKey &key : preferred) {
+		if (cancel_requested && cancel_requested()) {
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
 		if (!wt_is_valid_chunk_key(key)) {
 			return WtBalancedLodPlannerStatus::InvalidLodMap;
 		}
 	}
 
 	for (const WtLodMapEntry &entry : target.entries) {
+		if (cancel_requested && cancel_requested()) {
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
 		if (!wt_is_valid_chunk_key(entry.key) ||
 			!catalog_contains(entry.key) || entry.key.lod > staging_root_lod) {
 			return WtBalancedLodPlannerStatus::InvalidLodMap;
@@ -694,6 +704,9 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 	}
 	std::vector<WtChunkKey> target_roots;
 	for (const WtLodMapEntry &entry : target.entries) {
+		if (cancel_requested && cancel_requested()) {
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
 		WtChunkKey root = entry.key;
 		while (root.lod < staging_root_lod) root = wt_parent_chunk_key(root);
 		target_roots.push_back(root);
@@ -708,6 +721,9 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 	leaves.reserve(std::min(active_capacity_,
 		current.entries.size() + target_roots.size()));
 	for (const WtLodMapEntry &entry : current.entries) {
+		if (cancel_requested && cancel_requested()) {
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
 		if (!wt_is_valid_chunk_key(entry.key) ||
 			!catalog_contains(entry.key)) {
 			return WtBalancedLodPlannerStatus::InvalidLodMap;
@@ -715,6 +731,9 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 		leaves.push_back(entry.key);
 	}
 	for (const WtChunkKey &root : target_roots) {
+		if (cancel_requested && cancel_requested()) {
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
 		const bool covered = std::any_of(
 			leaves.begin(), leaves.end(),
 			[&](const WtChunkKey &leaf) { return keys_overlap(root, leaf); }
@@ -728,6 +747,9 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 
 	bool target_coverage_ready = true;
 	for (const WtChunkKey &root : target_roots) {
+		if (cancel_requested && cancel_requested()) {
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
 		bool covered = false;
 		for (const WtChunkKey &leaf : leaves) {
 			if (!bounds_contain(root, leaf)) continue;
@@ -756,11 +778,17 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 
 	std::size_t topology_changes = 0;
 	while (topology_changes < maximum_topology_changes) {
+		if (cancel_requested && cancel_requested()) {
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
 		bool changed = false;
 		// Collapse one complete ready sibling family when the target contains
 		// its parent. This is the inverse of refinement and keeps relocation
 		// coarsening bounded by the same publication unit.
 		for (const WtChunkKey &leaf : leaves) {
+			if (cancel_requested && cancel_requested()) {
+				return WtBalancedLodPlannerStatus::Cancelled;
+			}
 			// An edit-only batch must not spend its refinement budget on
 			// unrelated background coarsening or enlarge its publication set.
 			if (preferred_refinement_only && !allow_preferred_coarsening) break;
@@ -801,7 +829,7 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 		// batch; otherwise a valid intermediate step is rejected before the
 		// final balance pass can run. No intermediate map is published.
 		const WtBalancedLodPlannerStatus intermediate_balance =
-			balance(leaves, current_map);
+			balance(leaves, current_map, cancel_requested);
 		if (intermediate_balance != WtBalancedLodPlannerStatus::Ok) {
 			return intermediate_balance;
 		}
@@ -812,6 +840,9 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 		std::uint8_t selected_target_lod = kWtMaximumLod + 1U;
 		std::int32_t selected_priority = std::numeric_limits<std::int32_t>::min();
 		for (const WtLodMapEntry &entry : current_entries) {
+			if (cancel_requested && cancel_requested()) {
+				return WtBalancedLodPlannerStatus::Cancelled;
+			}
 			const WtChunkKey &leaf = entry.key;
 			const bool preferred_refinement = std::any_of(
 				preferred.begin(), preferred.end(),
@@ -884,7 +915,8 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 	}
 
 	WtLodMap staged_map(active_capacity_);
-	const WtBalancedLodPlannerStatus balance_status = balance(leaves, staged_map);
+	const WtBalancedLodPlannerStatus balance_status =
+		balance(leaves, staged_map, cancel_requested);
 	if (balance_status != WtBalancedLodPlannerStatus::Ok) {
 		return balance_status;
 	}
@@ -896,6 +928,10 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 	}
 	output.demands.reserve(output.entries.size());
 	for (const WtLodMapEntry &entry : output.entries) {
+		if (cancel_requested && cancel_requested()) {
+			output.clear();
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
 		if (!append_staged_demand(
 				entry.key, target, current, output.demands
 			)) {
@@ -914,7 +950,8 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_foreground(
 	const WtBalancedLodPlan &target, const WtBalancedLodPlan &current,
 	const std::vector<WtChunkKey> &visually_ready, std::uint8_t staging_root_lod,
 	const std::vector<WtChunkKey> &foreground_keys,
-	WtBalancedLodPlan &output, bool &complete
+	WtBalancedLodPlan &output, bool &complete,
+	const std::function<bool()> &cancel_requested
 ) const {
 	// Establish coverage and admit at most one obsolete family for coarsening.
 	// Foreground refinement itself is a tree projection, not a sequence of
@@ -922,14 +959,20 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_foreground(
 	output.clear();
 	complete = false;
 	for (const auto &key : foreground_keys) {
+		if (cancel_requested && cancel_requested()) {
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
 		if (!wt_is_valid_chunk_key(key)) return WtBalancedLodPlannerStatus::InvalidLodMap;
 	}
 	WtBalancedLodPlan base;
 	const auto status = stage_toward(target, current, visually_ready, staging_root_lod,
-		1, base, complete, {}, true, false, true);
+		1, base, complete, {}, true, false, true, cancel_requested);
 	if (status != WtBalancedLodPlannerStatus::Ok) return status;
 	std::vector<WtChunkKey> refined_ancestors;
 	for (const auto &entry : target.entries) {
+		if (cancel_requested && cancel_requested()) {
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
 		for (auto ancestor = entry.key; ancestor.lod < staging_root_lod;) {
 			ancestor = wt_parent_chunk_key(ancestor);
 			refined_ancestors.push_back(ancestor);
@@ -940,6 +983,9 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_foreground(
 	std::vector<WtChunkKey> work, leaves;
 	for (const auto &entry : base.entries) work.push_back(entry.key);
 	for (std::size_t cursor = 0; cursor < work.size(); ++cursor) {
+		if (cancel_requested && cancel_requested()) {
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
 		const auto key = work[cursor];
 		const bool foreground = std::any_of(foreground_keys.begin(), foreground_keys.end(),
 			[&](const WtChunkKey &focus) { return bounds_contain(key, focus); });
@@ -957,7 +1003,7 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_foreground(
 	}
 	std::sort(leaves.begin(), leaves.end());
 	WtLodMap map(active_capacity_);
-	const auto balanced = balance(leaves, map);
+	const auto balanced = balance(leaves, map, cancel_requested);
 	if (balanced != WtBalancedLodPlannerStatus::Ok) return balanced;
 	output.clear();
 	output.entries = map.get_entries();
@@ -967,6 +1013,10 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_foreground(
 		return WtBalancedLodPlannerStatus::Ok;
 	}
 	for (const auto &entry : output.entries) {
+		if (cancel_requested && cancel_requested()) {
+			output.clear();
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
 		if (!append_staged_demand(entry.key, target, current, output.demands)) {
 			output.clear();
 			return WtBalancedLodPlannerStatus::InvalidLodMap;

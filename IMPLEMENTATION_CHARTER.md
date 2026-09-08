@@ -1509,8 +1509,9 @@ immutable descendant-priority summary per target and reuses it for selection,
 while preserving overlap rejection, deterministic face ownership, 2:1 balance,
 transition masks, hysteresis, and atomic regional publication.
 
-Broad visual LOD planning is cooperatively cancellable at viewer, desired-set,
-root/subtree, balance-pass, and demand-construction boundaries. A newly queued
+Broad visual LOD planning and staged topology projection are cooperatively
+cancellable at viewer, desired-set, root/subtree, balance-pass,
+demand-construction, coverage, coarsening, and refinement boundaries. A newly queued
 authoritative edit cancels the local candidate plan, preserves the last accepted
 topology and publications, and leaves the newest equivalent viewer event queued
 for retry after the edit. Internal edit-retention refreshes restore their pending

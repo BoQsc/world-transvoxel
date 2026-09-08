@@ -314,6 +314,14 @@ private:
 
 	bool enqueue_viewer_event(const ViewerEvent &event);
 	bool process_viewer_event();
+	bool cancel_viewer_plan_for_pending_edit(
+		const ViewerEvent &event,
+		bool staging_event,
+		bool retention_refresh_event,
+		bool collision_event,
+		bool trace_enabled,
+		std::uint64_t planning_started_ns
+	);
 	bool enqueue_foreground_priority_event(
 		const ForegroundPriorityEvent &event
 	);
