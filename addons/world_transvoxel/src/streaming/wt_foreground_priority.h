@@ -19,6 +19,10 @@ constexpr std::int32_t kWtPlayerSupportPriority =
 // Every collision-planner priority remains above pre-click interaction focus.
 constexpr std::int32_t kWtInteractionFocusPriority =
 	std::numeric_limits<std::int32_t>::max() - 1000002;
+// A blocked regional publication may accelerate its missing visual members,
+// but it must not consume the lane reserved for committed edit work.
+constexpr std::int32_t kWtVisibilityCoveragePriority =
+	kWtInteractionFocusPriority - 1;
 
 enum class WtForegroundPriorityClass : std::uint8_t {
 	PlayerSupport,

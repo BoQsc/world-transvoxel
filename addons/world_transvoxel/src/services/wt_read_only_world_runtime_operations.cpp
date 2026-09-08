@@ -227,10 +227,14 @@ bool WtReadOnlyWorldRuntime::process_visibility_coverage_priority_operation(
 			);
 			continue;
 		}
+		const std::int32_t coverage_priority = std::max(
+			record->priority,
+			kWtVisibilityCoveragePriority
+		);
 		const WtSchedulerStatus scheduler_status =
 			scheduler_->reprioritize_chunk(
 				request.key,
-				kWtInteractiveEditPriority
+				coverage_priority
 			);
 		if (scheduler_status != WtSchedulerStatus::Ok &&
 			scheduler_status != WtSchedulerStatus::AlreadyCurrent) {
@@ -244,7 +248,7 @@ bool WtReadOnlyWorldRuntime::process_visibility_coverage_priority_operation(
 			page_runtime_->reprioritize_owned_chunk(
 				request.key,
 				request.generation,
-				kWtInteractiveEditPriority
+				coverage_priority
 			);
 		if (page_status == WtPageMeshingRuntimeOwnerStatus::StaleGeneration) {
 			std::lock_guard<std::mutex> lock(metrics_mutex_);
@@ -262,7 +266,9 @@ bool WtReadOnlyWorldRuntime::process_visibility_coverage_priority_operation(
 			WtCausalTraceEventKind::VisibilityCoveragePriorityApplied,
 			WtCausalTraceThreadRole::Runtime,
 			&request.key,
-			request.generation
+			request.generation,
+			0,
+			static_cast<std::uint64_t>(coverage_priority)
 		);
 		record_outcome(
 			page_status == WtPageMeshingRuntimeOwnerStatus::NotFound ?

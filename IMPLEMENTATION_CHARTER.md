@@ -1419,6 +1419,14 @@ must not leave that dependency waiting behind the background mesh frontier.
 Already executing work remains non-preemptible, and a full interaction queue
 retains the reprioritized job in the priority-ordered background queue.
 
+A regional visibility publication accelerates missing replacement members with
+a distinct coverage priority below player support and interaction focus. It
+never promotes those members into the committed-edit mesh lane, and promotion is
+monotonic so a member already belonging to a committed edit keeps its higher
+priority. This prevents a large balanced-LOD publication cohort from tying with
+and age-ordering ahead of the exact edit cohort while preserving old coverage
+until the complete region is ready.
+
 Committed-edit collision urgency is preserved through both bounded frontend
 handoffs. An interaction-critical collision publication may bypass one retained
 background render or collision publication at the start of a physics frame,

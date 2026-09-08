@@ -291,7 +291,19 @@ void test_visibility_coverage_priority_generation_contract() {
 	const wt::WtCausalTraceSnapshot trace = runtime.causal_trace_snapshot(0, 256);
 	std::size_t applied_outcomes = 0;
 	std::size_t stale_outcomes = 0;
+	std::size_t noninteractive_coverage_promotions = 0;
 	for (const wt::WtCausalTraceEvent &event : trace.events) {
+		if (event.kind ==
+				wt::WtCausalTraceEventKind::VisibilityCoveragePriorityApplied &&
+				event.status == 0 &&
+				event.auxiliary >= static_cast<std::uint64_t>(
+					wt::kWtVisibilityCoveragePriority
+				) &&
+				event.auxiliary != static_cast<std::uint64_t>(
+					wt::kWtInteractiveEditPriority
+				)) {
+			++noninteractive_coverage_promotions;
+		}
 		if (event.kind !=
 				wt::WtCausalTraceEventKind::VisibilityCoveragePriorityOutcome) {
 			continue;
@@ -309,7 +321,12 @@ void test_visibility_coverage_priority_generation_contract() {
 		}
 	}
 	check(
-		applied_outcomes == 1 && stale_outcomes == 1,
+		applied_outcomes == 1 && stale_outcomes == 1 &&
+			noninteractive_coverage_promotions == 1 &&
+			wt::kWtVisibilityCoveragePriority <
+				wt::kWtInteractionFocusPriority &&
+			wt::kWtVisibilityCoveragePriority !=
+				wt::kWtInteractiveEditPriority,
 		"visibility coverage priority outcomes were not exhaustive"
 	);
 	runtime.request_stop();
