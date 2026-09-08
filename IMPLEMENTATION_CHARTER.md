@@ -1586,6 +1586,16 @@ flag; staging remains driven by its existing pending state. Cancellation is not
 an event rejection. Runtime metrics expose its count and the maximum interval
 from edit admission to planner yield.
 
+Incremental LOD0 collision extraction has a dedicated regular-cell path. It
+samples each selected 8-cubed block grid point once, derives a deterministic
+cell gradient from the eight scalar corners, and emits canonical regular-cell
+faces without render-material vertex deduplication. The authoritative triangle
+finalizer still validates degeneracy, shared-edge consistency, and component
+winding before block ownership and physics publication. Native parity tests
+compare the expanded face sequence against the full-quality regular mesher for
+planar, curved, and excavated terrain; this optimization cannot change visual
+meshing, transition topology, collision capacity, or generation semantics.
+
 ## 24. Final definition of success
 
 Success is a maintainable native Godot terrain addon, not merely generated

@@ -169,6 +169,13 @@ public:
 		WtChunkMeshResult &output,
 		WtChunkMeshingScratch &scratch
 	) const;
+	WtChunkMeshingStatus mesh_regular_collision_blocks(
+		const WtChunkMeshingInput &input,
+		const WtChunkSampleSource &source,
+		std::uint8_t block_mask,
+		WtChunkMeshResult &output,
+		WtChunkMeshingScratch &scratch
+	) const;
 	const WtMeshingBackend &backend() const noexcept;
 
 private:

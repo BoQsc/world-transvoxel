@@ -438,7 +438,7 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		}
 		completion.collision_patch_mesh =
 			std::make_shared<WtChunkMeshResult>();
-		return mesher.mesh_regular_blocks(
+		return mesher.mesh_regular_collision_blocks(
 			{
 				completion.prepared.job.key,
 				0,

@@ -366,13 +366,63 @@ WtChunkMeshingStatus append_cell_mesh(
 	return WtChunkMeshingStatus::Ok;
 }
 
+WtChunkMeshingStatus append_collision_cell_mesh(
+	const WtCellMesh &cell,
+	WtChunkMeshBuffer &output,
+	const std::array<WtVec3, kWtTransitionTopologySampleCount> &endpoint_positions,
+	const WtCellSample *samples,
+	float isovalue
+) {
+	if (cell.vertex_count > kWtCellMaxVertexCount ||
+		cell.index_count > kWtCellMaxIndexCount ||
+		(cell.index_count % 3U) != 0U) {
+		return WtChunkMeshingStatus::CellBackendFailure;
+	}
+	if (output.vertices.size() + cell.vertex_count > output.vertex_limit ||
+		output.indices.size() + cell.index_count > output.index_limit) {
+		return WtChunkMeshingStatus::RegularBufferOverflow;
+	}
+	const std::uint32_t base =
+		static_cast<std::uint32_t>(output.vertices.size());
+	for (std::uint8_t index = 0; index < cell.vertex_count; ++index) {
+		WtCellVertex vertex = cell.vertices[index];
+		if (vertex.endpoint_a >= kWtRegularSampleCount ||
+			vertex.endpoint_b >= kWtRegularSampleCount ||
+			vertex.endpoint_a == vertex.endpoint_b ||
+			samples[vertex.endpoint_a].density ==
+				samples[vertex.endpoint_b].density) {
+			return WtChunkMeshingStatus::CellBackendFailure;
+		}
+		vertex.position = wt_snap_chunk_position(wt_canonical_edge_position(
+			endpoint_positions[vertex.endpoint_a],
+			endpoint_positions[vertex.endpoint_b],
+			samples[vertex.endpoint_a],
+			samples[vertex.endpoint_b],
+			isovalue
+		));
+		vertex.canonical_position = vertex.position;
+		vertex.canonical_position_valid = true;
+		vertex.endpoint_a = 0;
+		vertex.endpoint_b = 0;
+		output.vertices.push_back(vertex);
+	}
+	for (std::uint8_t index = 0; index < cell.index_count; ++index) {
+		if (cell.indices[index] >= cell.vertex_count) {
+			return WtChunkMeshingStatus::CellBackendFailure;
+		}
+		output.indices.push_back(base + cell.indices[index]);
+	}
+	return WtChunkMeshingStatus::Ok;
+}
+
 WtChunkMeshingStatus mesh_regular_cells(
 	const WtChunkMeshingInput &input,
 	const WtChunkSampleSource &source,
 	const WtMeshingBackend &backend,
 	WtChunkMeshResult &output,
 	WtChunkMeshingScratch &scratch,
-	std::uint8_t block_mask
+	std::uint8_t block_mask,
+	bool collision_cell_gradients
 ) {
 	const WtChunkBounds bounds = wt_chunk_bounds(input.key);
 	const std::int64_t spacing_integer = wt_lod_cell_size(input.key.lod);
@@ -405,8 +455,21 @@ WtChunkMeshingStatus mesh_regular_cells(
 						bounds.minimum.z + static_cast<std::int64_t>(z + ((corner & 4U) != 0U)) * spacing_integer,
 					};
 					endpoint_world_positions[corner] = point;
-					const WtChunkMeshingStatus sample_status =
-						get_cell_sample(
+					if (collision_cell_gradients) {
+						WtScalarSample scalar;
+						const WtChunkMeshingStatus sample_status = get_scalar_sample(
+							point, source, scratch, scalar
+						);
+						if (sample_status != WtChunkMeshingStatus::Ok) {
+							return sample_status;
+						}
+						cell_input.samples[corner] = {
+							scalar.density, {}, scalar.material,
+							scalar.material_authored,
+						};
+						continue;
+					}
+					const WtChunkMeshingStatus sample_status = get_cell_sample(
 							point,
 							spacing_integer,
 							source,
@@ -415,6 +478,18 @@ WtChunkMeshingStatus mesh_regular_cells(
 						);
 					if (sample_status != WtChunkMeshingStatus::Ok) {
 						return sample_status;
+					}
+				}
+				if (collision_cell_gradients) {
+					WtVec3 gradient;
+					for (unsigned int corner = 0; corner < 8; ++corner) {
+						const float density = cell_input.samples[corner].density;
+						gradient.x += (corner & 1U) != 0U ? density : -density;
+						gradient.y += (corner & 2U) != 0U ? density : -density;
+						gradient.z += (corner & 4U) != 0U ? density : -density;
+					}
+					for (WtCellSample &sample : cell_input.samples) {
+						sample.gradient = gradient;
 					}
 				}
 				WtCellMesh cell_mesh;
@@ -435,7 +510,14 @@ WtChunkMeshingStatus mesh_regular_cells(
 				if (cell_status != WtCellStatus::Ok) {
 					return WtChunkMeshingStatus::CellBackendFailure;
 				}
-				const WtChunkMeshingStatus append_status = append_cell_mesh(
+				const WtChunkMeshingStatus append_status = collision_cell_gradients ?
+					append_collision_cell_mesh(
+						cell_mesh,
+						output.regular,
+						endpoint_positions,
+						cell_input.samples.data(),
+						input.isovalue
+					) : append_cell_mesh(
 					cell_mesh,
 					output.regular,
 					scratch,
@@ -705,7 +787,7 @@ WtChunkMeshingStatus WtChunkMesher::mesh(
 	scratch.reset_samples();
 
 	WtChunkMeshingStatus status = mesh_regular_cells(
-		input, source, backend_, output, scratch, 0xff
+		input, source, backend_, output, scratch, 0xff, false
 	);
 	scratch.cell_samples.clear();
 	for (unsigned int face_index = 0;
@@ -766,7 +848,43 @@ WtChunkMeshingStatus WtChunkMesher::mesh_regular_blocks(
 	}
 	scratch.reset_samples();
 	WtChunkMeshingStatus status = mesh_regular_cells(
-		input, source, backend_, output, scratch, block_mask
+		input, source, backend_, output, scratch, block_mask, false
+	);
+	if (status == WtChunkMeshingStatus::Ok) {
+		wt_finalize_deformed_triangles(output.regular);
+	} else {
+		output.clear();
+	}
+	return status;
+}
+
+WtChunkMeshingStatus WtChunkMesher::mesh_regular_collision_blocks(
+	const WtChunkMeshingInput &input,
+	const WtChunkSampleSource &source,
+	std::uint8_t block_mask,
+	WtChunkMeshResult &output,
+	WtChunkMeshingScratch &scratch
+) const {
+	output.clear();
+	if (!wt_is_valid_chunk_key(input.key) || input.key.lod != 0 ||
+		block_mask == 0 || !std::isfinite(input.isovalue)) {
+		return WtChunkMeshingStatus::InvalidInput;
+	}
+	output.key = input.key;
+	output.world_origin = wt_chunk_bounds(input.key).minimum;
+	output.regular.prepare(
+		kWtMaximumRegularChunkVertices,
+		kWtMaximumRegularChunkIndices,
+		kWtInitialRegularChunkVertices,
+		kWtInitialRegularChunkIndices
+	);
+	for (WtChunkMeshBuffer &transition : output.transitions) {
+		transition.prepare(kWtMaximumTransitionFaceVertices,
+			kWtMaximumTransitionFaceIndices, 0, 0);
+	}
+	scratch.reset_samples();
+	WtChunkMeshingStatus status = mesh_regular_cells(
+		input, source, backend_, output, scratch, block_mask, true
 	);
 	if (status == WtChunkMeshingStatus::Ok) {
 		wt_finalize_deformed_triangles(output.regular);

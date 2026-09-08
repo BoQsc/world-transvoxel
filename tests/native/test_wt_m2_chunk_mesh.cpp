@@ -113,6 +113,29 @@ struct ObservatoryCraterSource final : wt::WtChunkSampleSource {
 	}
 };
 
+struct CountingSource final : wt::WtChunkSampleSource {
+	const wt::WtChunkSampleSource &source;
+	mutable std::size_t calls = 0;
+	explicit CountingSource(const wt::WtChunkSampleSource &source_) : source(source_) {}
+	bool sample(const wt::WtGridPoint &point, wt::WtScalarSample &output) const noexcept override {
+		++calls;
+		return source.sample(point, output);
+	}
+};
+
+bool expanded_faces_equal(
+	const wt::WtChunkMeshBuffer &left,
+	const wt::WtChunkMeshBuffer &right
+) {
+	if (left.indices.size() != right.indices.size()) return false;
+	for (std::size_t index = 0; index < left.indices.size(); ++index) {
+		const wt::WtVec3 &a = left.vertices[left.indices[index]].position;
+		const wt::WtVec3 &b = right.vertices[right.indices[index]].position;
+		if (a.x != b.x || a.y != b.y || a.z != b.z) return false;
+	}
+	return true;
+}
+
 QuantizedPoint quantize_world(
 	const wt::WtVec3 &position,
 	const wt::WtGridPoint &origin
@@ -1017,6 +1040,68 @@ void test_recorded_gpu_cell_replay() {
 	);
 }
 
+void test_collision_cell_gradient_face_identity(
+	const wt::WtChunkMesher &mesher,
+	wt::WtChunkMeshingScratch &scratch
+) {
+	FlatYSource flat;
+	ObservatoryCraterSource crater;
+	SphereSource sphere;
+	sphere.center = { 8, 8, 8 };
+	for (const wt::WtChunkSampleSource *source : {
+		static_cast<const wt::WtChunkSampleSource *>(&flat),
+		static_cast<const wt::WtChunkSampleSource *>(&crater),
+		static_cast<const wt::WtChunkSampleSource *>(&sphere),
+	}) {
+		for (const std::uint8_t mask : { std::uint8_t{ 0xa0U }, std::uint8_t{ 0xffU } }) {
+			wt::WtChunkMeshResult reference;
+			wt::WtChunkMeshResult collision;
+			const wt::WtChunkMeshingInput input = {
+				{ 0, 0, 0, 0 }, 0, 0, 0.0F, 0.25F,
+			};
+			check(
+				mesher.mesh_regular_blocks(input, *source, mask, reference, scratch) ==
+					wt::WtChunkMeshingStatus::Ok &&
+				mesher.mesh_regular_collision_blocks(
+					input, *source, mask, collision, scratch
+				) == wt::WtChunkMeshingStatus::Ok,
+				"collision cell-gradient comparison mesh failed"
+			);
+			check(
+				expanded_faces_equal(reference.regular, collision.regular),
+				"collision cell gradients changed faces or winding"
+			);
+		}
+	}
+
+	CountingSource reference_source(flat);
+	CountingSource collision_source(flat);
+	wt::WtChunkMeshResult reference;
+	wt::WtChunkMeshResult collision;
+	const wt::WtChunkMeshingInput input = {
+		{ 0, 0, 0, 0 }, 0, 0, 0.0F, 0.25F,
+	};
+	check(
+		mesher.mesh_regular_blocks(
+			input, reference_source, 0xffU, reference, scratch
+		) == wt::WtChunkMeshingStatus::Ok &&
+		mesher.mesh_regular_collision_blocks(
+			input, collision_source, 0xffU, collision, scratch
+		) == wt::WtChunkMeshingStatus::Ok,
+		"collision cell-gradient sample-count mesh failed"
+	);
+	check(
+		collision_source.calls < reference_source.calls,
+		"collision cell gradients did not reduce source samples"
+	);
+	std::printf(
+		"COLLISION_CELL_GRADIENT_SAMPLES reference=%zu collision=%zu\n",
+		reference_source.calls,
+		collision_source.calls
+	);
+}
+
+
 } // namespace
 
 int main() {
@@ -1083,6 +1168,7 @@ int main() {
 	test_incremental_regular_block_meshing(mesher, scratch);
 	test_bounded_initial_mesh_reservation(mesher, scratch);
 	test_recorded_gpu_cell_replay();
+	test_collision_cell_gradient_face_identity(mesher, scratch);
 
 	constexpr std::uint64_t expected_hash = 0xf3ebfec883e2de19ULL;
 	check(hash == expected_hash, "M2 chunk aggregate hash mismatch");
