@@ -717,6 +717,29 @@ void WorldTransvoxelTerrain::flush_ready_chunk_replacements() {
 			continue;
 		}
 		clear_visibility_coverage_priority_request(record.key);
+		// External GPU activation and interactive collision publication commit
+		// independently. Once both sinks already hold this exact generation, the
+		// shared frontend marker has no publication work left. Detach it before
+		// regional LOD closure so a completed edit cannot seed an unrelated swap.
+		const bool visual_applied = !record.visual_required ||
+			render_sink_->applied_generation(record.key) == record.generation;
+		const bool collision_applied = !record.collision_required ||
+			collision_sink_->applied_generation(record.key) == record.generation;
+		if (visual_applied && collision_applied) {
+			const auto independent = std::lower_bound(
+				independently_publishable_chunk_replacements_.begin(),
+				independently_publishable_chunk_replacements_.end(),
+				*iterator
+			);
+			if (independent !=
+					independently_publishable_chunk_replacements_.end() &&
+					*independent == *iterator) {
+				independently_publishable_chunk_replacements_.erase(independent);
+			}
+			iterator = pending_chunk_replacements_.erase(iterator);
+			++completed_split_replacements_detached_;
+			continue;
+		}
 		if (cpu_causal_trace_active_ && lifecycle_) {
 			lifecycle_->record_frontend_visibility(
 				WtCausalTraceEventKind::VisibilityReplacementReady,
@@ -904,6 +927,7 @@ void WorldTransvoxelTerrain::reset_world_application(std::size_t capacity) {
 	regional_visibility_publications_ = 0;
 	regional_visibility_replacements_ = 0;
 	regional_visibility_retirements_ = 0;
+	completed_split_replacements_detached_ = 0;
 	application_ = std::make_unique<WtChunkApplicationService>(
 		staging_capacity,
 		capacity,

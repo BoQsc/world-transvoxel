@@ -1478,6 +1478,14 @@ or failed candidate while retaining old coverage. Multi-chunk, regional,
 transition-changing, streaming, and LOD cohorts continue through the normal
 deferred publication graph.
 
+After an external same-layout visual activation and independent collision
+publication have both reached the exact application generation, their shared
+frontend replacement marker is complete and is detached directly. It must not
+seed or join a later regional LOD publication merely because unrelated viewer
+retirements overlap the key. Detachment requires both required sinks to report
+the exact generation; staged or stale work continues through the normal atomic
+publication graph.
+
 The production 16-request GPU capture queue reserves four admission slots for
 incremental interaction generations. Background reservations, queued captures,
 and in-flight captures share the remaining twelve-slot bound. A newer

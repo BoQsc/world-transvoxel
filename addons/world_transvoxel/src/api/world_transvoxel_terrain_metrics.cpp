@@ -1019,6 +1019,11 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		"regional_visibility_retirements",
 		regional_visibility_retirements_
 	);
+	set_metric(
+		output,
+		"completed_split_replacements_detached",
+		completed_split_replacements_detached_
+	);
 	output["visibility_coverage_priority_pending"] =
 		static_cast<std::int64_t>(
 			visibility_coverage_priority_requests_.size()

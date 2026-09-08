@@ -387,6 +387,7 @@ private:
 	std::uint64_t regional_visibility_publications_ = 0;
 	std::uint64_t regional_visibility_replacements_ = 0;
 	std::uint64_t regional_visibility_retirements_ = 0;
+	std::uint64_t completed_split_replacements_detached_ = 0;
 	std::unique_ptr<WtChunkApplicationService> application_;
 	std::unique_ptr<WtGodotRenderSink> render_sink_;
 	std::unique_ptr<WtGodotCollisionSink> collision_sink_;
