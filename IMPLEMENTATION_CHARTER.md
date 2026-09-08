@@ -78,16 +78,18 @@ exact key membership is unchanged. Readiness, generation, active content and
 transition masks are never cached by this graph. Membership changes invalidate
 the affected index; ending the GPU session releases its retained storage.
 
-The optional staged runtime can activate the visual viewer's immediate
-27-chunk interaction neighborhood independently of distant background refinement through
+The optional staged runtime can activate exact interaction-focus lease keys
+independently of distant background refinement through
 `hierarchical_lod_viewer_activation_enabled` (default false). This changes work
 admission, not meshing or authority: target-plan demand, visual readiness,
 2:1 balancing, and atomic publication remain required. Viewer activation may
-coarsen obsolete distant detail. This mode projects all foreground paths to the
-target resolution in one balanced request, without waiting for intermediate LOD
-publication. It does not delay edit refinement for coarse edited feedback. The
-legacy staged mode retains its content-first behavior. GPU integration must measure movement and edit latency
-before qualifying this opt-in policy.
+coarsen obsolete distant detail. Exact LOD0 lease keys are inserted before
+balanced planning, and this mode projects only those foreground paths to target
+resolution in one balanced request. Broad viewer topology advances through the
+background staging path. It does not delay edit refinement for coarse edited
+feedback. The legacy staged mode retains its content-first behavior. GPU
+integration must measure movement and edit latency before qualifying this
+opt-in policy.
 
 The first production backend uses Eric Lengyel's official MIT-licensed
 Transvoxel implementation and lookup data.
@@ -1391,24 +1393,25 @@ with interaction warming is never cancelled through meshing ownership. Storage
 and page-runtime metrics report queued dependency cancellations so interaction
 lane reclamation is measurable without weakening queue capacity.
 
-Interaction-focus leases also warm missing LOD0 source pages without adding them
-to the desired set. Each unique active focus key uses the reserved interaction
-storage lane and is decoded into the bounded page cache when its immutable load
-completes. Warming cannot create application, collision, or visual publication
-records; later balanced demand remains the sole authority for chunk activation.
+Interaction-focus leases warm missing LOD0 source pages and request those exact
+keys as leaves of the next balanced visual plan. Forced leaves refine only their
+ancestor paths; the planner adds required siblings and 2:1 neighbors, and
+hierarchical publication retains old coverage until the balanced replacement is
+ready. Each unique active focus key uses the reserved interaction storage lane
+and is decoded into the bounded page cache when its immutable load completes.
 Focus movement does not cancel an already executing immutable load, and ordinary
 cache eviction reconstructs it from storage plus the authoritative journal.
-Admissions, coalescing, cache hits, completions, and rejections are observable.
+Admissions, coalescing, cache hits, completions, topology refreshes, and
+rejections are observable.
 
-The production player projects each LOD0 support or tool-focus path into a
+The production player projects each LOD0 support or current tool target into a
 one-chunk three-dimensional interaction shell before updating its foreground
 leases. Lease construction admits every exact path center first, then fills
 nearest Manhattan halo layers across all centers, and stops at the native
 64-key per-source capacity. A single focus therefore warms its complete 27-key
-neighborhood; a long tool ray retains every traversed center before optional
-halo keys. Shell loading uses the existing bounded interaction storage lane and
-must not reject requests or block input, physics, or rendering. It changes
-priority and derived-cache warmth only; viewer demand, balanced topology, and
+neighborhood. Shell loading uses the existing bounded interaction storage lane
+and must not reject requests or block input, physics, or rendering. It changes
+priority, derived-cache warmth, and exact target topology; balanced planning and
 atomic regional publication remain authoritative.
 
 Asynchronous meshing also preserves its reserved interaction worker after
@@ -1494,15 +1497,16 @@ background generation may replace older queued work in place without consuming
 the interaction reserve. Interaction-only dequeue is an internal scheduling
 operation; publication ordering and the public API remain unchanged.
 
-An interaction GPU capture may consume its exact, prerequisite-safe resident
+Any GPU capture may consume its exact, prerequisite-safe resident
 placeholder from the bounded publication queue when the capture reaches the
 frontend after that frame's normal publication drain. The key, generation,
-interaction flag, render kind, and placeholder source must all match, and an
-earlier same-generation `ExpectChunk` prevents extraction. Native applies only
-that lightweight visual expectation before capture admission. A missing match
-waits without occupying a GPU slot; superseded generations are rejected by the
-existing readiness checks. Collision readiness and regional publication remain
-unchanged.
+render kind, and placeholder source must all match, and an earlier
+same-generation `ExpectChunk` prevents extraction. Native applies only that
+lightweight visual expectation before capture admission. A required collision
+branch must already be ready; visual-only replacement generations do not invent
+a collision dependency. A missing match waits without occupying a GPU slot;
+superseded generations are rejected by the existing readiness checks. Regional
+publication remains unchanged.
 
 The native GPU identity exports whether the scheduler job is at or above
 interaction-focus priority. The render-thread frontend uses that fact, together
@@ -1515,12 +1519,12 @@ until the existing cohort commit and asynchronous summary validation complete.
 Background extraction has four outstanding completion tokens and interaction
 extraction has eight; their queued admission bounds remain independent.
 
-An incremental capture may reach the frontend before its exact CPU application
-record. Every later readiness query retries the generation-matched resident
-placeholder once collision is ready, then re-reads application state before
-answering. A waiting capture remains bounded and prioritized but cannot prevent
-the frontend from dequeuing other native captures in the same frame. Retry
-status and the exact deferred identity remain observable.
+A capture may reach the frontend before its exact CPU application record.
+Every later readiness query retries the generation-matched resident placeholder
+once any required collision is ready, then re-reads application state before
+answering. A waiting incremental capture remains bounded and prioritized but
+cannot prevent the frontend from dequeuing other native captures in the same
+frame. Retry status and the exact deferred identity remain observable.
 
 LOD-map validation and balancing use exact dyadic ancestor and face-neighbor
 lookups. They do not scan all pairs of active leaves. Staged planning builds one

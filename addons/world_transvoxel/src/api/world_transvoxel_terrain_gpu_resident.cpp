@@ -20,12 +20,14 @@ bool WorldTransvoxelTerrain::reconcile_interaction_gpu_placeholder(
 	WtGenerationToken generation,
 	bool incremental_edit
 ) {
-	if (!incremental_edit || !lifecycle_ || !application_ || !render_sink_) {
+	(void)incremental_edit;
+	if (!lifecycle_ || !application_ || !render_sink_) {
 		return false;
 	}
 	WtChunkApplicationRecord record;
 	if (!application_->copy_record(key, record) ||
-		record.generation != generation || !record.collision_ready ||
+		record.generation != generation || !record.visual_required ||
+		(record.collision_required && !record.collision_ready) ||
 		record.visual_generation == generation) {
 		return false;
 	}

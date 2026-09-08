@@ -339,7 +339,7 @@ bool WtReadOnlyWorldRuntime::pop_interaction_gpu_placeholder_publication(
 		for (std::size_t offset = 0; offset < count; ++offset) {
 			const std::size_t index = (head + offset) % slots.size();
 			const WtReadOnlyPublication &candidate = slots[index];
-			if (!candidate.interaction_critical || candidate.key != key ||
+			if (candidate.key != key ||
 				candidate.generation != generation ||
 				candidate.kind != WtReadOnlyPublicationKind::RenderPayload ||
 				!candidate.render || candidate.render->publication_source !=

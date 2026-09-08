@@ -61,7 +61,8 @@ public:
 		const WtCollisionPolicy &collision_policy,
 		WtBalancedLodPlan &output,
 		bool visual_viewer_collision_enabled = true,
-		const std::function<bool()> &cancel_requested = {}
+		const std::function<bool()> &cancel_requested = {},
+		const std::vector<WtChunkKey> &forced_leaf_keys = {}
 	) const;
 	WtBalancedLodPlannerStatus stage_toward(
 		const WtBalancedLodPlan &target,
@@ -95,13 +96,15 @@ private:
 		const WtChunkKey &key,
 		const std::vector<WtLodPlannerViewer> &viewers,
 		const std::vector<WtChunkKey> &refined_ancestors,
+		const std::vector<WtChunkKey> &forced_leaf_keys,
 		std::vector<WtChunkKey> &leaves,
 		const std::function<bool()> &cancel_requested
 	) const;
 	bool should_refine(
 		const WtChunkKey &key,
 		const std::vector<WtLodPlannerViewer> &viewers,
-		const std::vector<WtChunkKey> &refined_ancestors
+		const std::vector<WtChunkKey> &refined_ancestors,
+		const std::vector<WtChunkKey> &forced_leaf_keys
 	) const noexcept;
 	WtBalancedLodPlannerStatus refine_leaf(
 		std::vector<WtChunkKey> &leaves,

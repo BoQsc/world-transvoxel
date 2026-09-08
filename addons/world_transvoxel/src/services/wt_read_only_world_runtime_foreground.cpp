@@ -165,6 +165,11 @@ bool WtReadOnlyWorldRuntime::process_foreground_priority_event() {
 	}
 
 	foreground_priority_leases_ = std::move(candidate_leases);
+	if (event.request.priority_class ==
+			WtForegroundPriorityClass::InteractionFocus) {
+		std::lock_guard<std::mutex> lock(input_mutex_);
+		foreground_topology_refresh_pending_ = true;
+	}
 	const bool release = event.request.keys.empty();
 	causal_trace_.record(
 		WtCausalTraceEventKind::ForegroundPriorityLeaseApplied,

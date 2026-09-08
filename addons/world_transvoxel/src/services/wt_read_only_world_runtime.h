@@ -253,6 +253,7 @@ private:
 		UpdateCollision,
 		RemoveCollision,
 		RefreshEditLodRetention,
+		RefreshForegroundTopology,
 		AdvanceStaging,
 	};
 	struct ViewerEvent {
@@ -434,6 +435,7 @@ private:
 	std::vector<CollisionViewer> collision_viewers_;
 	std::vector<EditLodRetentionZone> edit_lod_retention_zones_;
 	bool edit_lod_retention_refresh_pending_ = false;
+	bool foreground_topology_refresh_pending_ = false;
 	std::vector<WtDesiredChunk> pending_transition_remeshes_;
 	std::vector<WtChunkKey> readiness_repair_candidate_keys_;
 	std::vector<CollisionReadinessRepairAttempt>

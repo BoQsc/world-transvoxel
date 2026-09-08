@@ -369,9 +369,18 @@ bool WtBalancedLodPlanner::catalog_contains(
 bool WtBalancedLodPlanner::should_refine(
 	const WtChunkKey &key,
 	const std::vector<WtLodPlannerViewer> &viewers,
-	const std::vector<WtChunkKey> &refined_ancestors
+	const std::vector<WtChunkKey> &refined_ancestors,
+	const std::vector<WtChunkKey> &forced_leaf_keys
 ) const noexcept {
 	if (key.lod == 0) return false;
+	if (std::any_of(
+			forced_leaf_keys.begin(), forced_leaf_keys.end(),
+			[&key](const WtChunkKey &leaf) {
+				return key.lod > leaf.lod && bounds_contain(key, leaf);
+			}
+		)) {
+		return true;
+	}
 	const double child_extent = static_cast<double>(wt_chunk_extent(key.lod - 1));
 	const bool was_refined = std::binary_search(
 		refined_ancestors.begin(), refined_ancestors.end(), key
@@ -405,18 +414,20 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::append_subtree(
 	const WtChunkKey &key,
 	const std::vector<WtLodPlannerViewer> &viewers,
 	const std::vector<WtChunkKey> &refined_ancestors,
+	const std::vector<WtChunkKey> &forced_leaf_keys,
 	std::vector<WtChunkKey> &leaves,
 	const std::function<bool()> &cancel_requested
 ) const {
 	if (cancel_requested && cancel_requested()) {
 		return WtBalancedLodPlannerStatus::Cancelled;
 	}
-	if (should_refine(key, viewers, refined_ancestors)) {
+	if (should_refine(key, viewers, refined_ancestors, forced_leaf_keys)) {
 		std::array<WtChunkKey, 8> children{};
 		if (page_hierarchy_.complete_children(key, children)) {
 			for (const WtChunkKey &child : children) {
 				const WtBalancedLodPlannerStatus status = append_subtree(
-					child, viewers, refined_ancestors, leaves, cancel_requested
+					child, viewers, refined_ancestors, forced_leaf_keys, leaves,
+					cancel_requested
 				);
 				if (status != WtBalancedLodPlannerStatus::Ok) return status;
 			}
@@ -487,7 +498,8 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 	const WtCollisionPolicy &collision_policy,
 	WtBalancedLodPlan &output,
 	bool visual_viewer_collision_enabled,
-	const std::function<bool()> &cancel_requested
+	const std::function<bool()> &cancel_requested,
+	const std::vector<WtChunkKey> &forced_leaf_keys
 ) const {
 	output.clear();
 	if (!valid_ || !wt_is_valid_collision_policy(collision_policy)) {
@@ -516,6 +528,12 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 			return WtBalancedLodPlannerStatus::DuplicateViewer;
 		}
 		maximum_lod = std::max(maximum_lod, viewer.maximum_lod);
+	}
+	for (const WtChunkKey &key : forced_leaf_keys) {
+		if (!wt_is_valid_chunk_key(key) || key.lod != 0 ||
+				!catalog_contains(key)) {
+			return WtBalancedLodPlannerStatus::InvalidLodMap;
+		}
 	}
 	if (ordered.empty()) return WtBalancedLodPlannerStatus::Ok;
 	std::vector<WtChunkKey> refined_ancestors;
@@ -577,13 +595,18 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 		}
 		roots.insert(roots.end(), viewer_roots.begin(), viewer_roots.end());
 	}
+	for (WtChunkKey key : forced_leaf_keys) {
+		while (key.lod < maximum_lod) key = wt_parent_chunk_key(key);
+		roots.push_back(key);
+	}
 	std::sort(roots.begin(), roots.end());
 	roots.erase(std::unique(roots.begin(), roots.end()), roots.end());
 	std::vector<WtChunkKey> leaves;
 	leaves.reserve(active_capacity_);
 	for (const WtChunkKey &root : roots) {
 		const WtBalancedLodPlannerStatus append_status = append_subtree(
-			root, ordered, refined_ancestors, leaves, cancel_requested
+			root, ordered, refined_ancestors, forced_leaf_keys, leaves,
+			cancel_requested
 		);
 		if (append_status != WtBalancedLodPlannerStatus::Ok) return append_status;
 	}
