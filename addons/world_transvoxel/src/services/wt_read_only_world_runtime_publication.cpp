@@ -770,6 +770,34 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 					defer_gpu_capture
 				);
 			}
+			if (status == WtPageMeshingRuntimeStatus::Ok &&
+				pre_mesh_reservation && application_record.visual_required &&
+				application_record.staged_replacement) {
+				// The reserved immutable field capture is independent of CPU
+				// collision extraction. Publish its geometry-free expectation as
+				// soon as asynchronous dispatch succeeds so the next render
+				// callback can consume the capture while collision work continues.
+				auto render = std::make_shared<WtRenderPayload>();
+				render->key = job.key;
+				render->generation = job.generation;
+				render->world_origin = wt_chunk_bounds(job.key).minimum;
+				render->transition_mask = trace_transition_mask;
+				render->publication_source =
+					WtRenderPublicationSource::GpuResidentPlaceholder;
+				WtReadOnlyPublication publication;
+				publication.kind = WtReadOnlyPublicationKind::RenderPayload;
+				publication.key = job.key;
+				publication.generation = job.generation;
+				publication.render = std::move(render);
+				publication.staged_replacement = true;
+				publication.interaction_critical =
+					application_record.independently_publishable_replacement ||
+					is_interaction_critical_key(job.key);
+				if (!push_publication(std::move(publication)) &&
+					!stop_requested_.load()) {
+					set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
+				}
+			}
 		}
 		const auto job_finished = std::chrono::steady_clock::now();
 		const std::uint64_t job_time_ns =

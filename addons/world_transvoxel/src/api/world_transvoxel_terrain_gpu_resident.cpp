@@ -27,7 +27,6 @@ bool WorldTransvoxelTerrain::reconcile_interaction_gpu_placeholder(
 	WtChunkApplicationRecord record;
 	if (!application_->copy_record(key, record) ||
 		record.generation != generation || !record.visual_required ||
-		(record.collision_required && !record.collision_ready) ||
 		record.visual_generation == generation) {
 		return false;
 	}

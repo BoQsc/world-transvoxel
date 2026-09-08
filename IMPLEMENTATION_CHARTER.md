@@ -1453,6 +1453,14 @@ visual publication ring must therefore not hold an already prepared collision
 behind the matching render publication. Visual staging and regional activation
 remain atomic; only authoritative collision readiness advances independently.
 
+An authoritative empty collision result removes its physics body but retains a
+bounded key-and-generation tombstone in the collision sink. Exact-generation
+readiness, split visual/collision completion, and non-density generation carry
+must treat that tombstone as applied collision. A later nonempty payload or
+chunk retirement removes it, and world shutdown clears all tombstones. Runtime
+metrics expose the tombstone count so empty terrain cannot create unreported
+resource growth.
+
 Cached source pages remain immutable base data keyed by source revision. An edit
 does not evict that base page: journal replay derives the requested world revision
 when sampling the replacement. The runtime admits and starts committed-edit work
@@ -1513,11 +1521,20 @@ placeholder from the bounded publication queue when the capture reaches the
 frontend after that frame's normal publication drain. The key, generation,
 render kind, and placeholder source must all match, and an earlier
 same-generation `ExpectChunk` prevents extraction. Native applies only that
-lightweight visual expectation before capture admission. A required collision
-branch must already be ready; visual-only replacement generations do not invent
-a collision dependency. A missing match waits without occupying a GPU slot;
+lightweight visual expectation before capture admission. The matching collision
+branch proceeds independently and does not gate visual placeholder admission;
+visual-only replacement generations do not invent a collision dependency. A
+missing application generation waits without occupying a GPU slot;
 superseded generations are rejected by the existing readiness checks. Regional
 publication remains unchanged.
+
+For an asynchronous mesh job with an immutable pre-mesh capture reservation,
+successful dispatch queues the geometry-free visual placeholder immediately.
+The render callback may consume the captured field while CPU collision
+extraction continues. Mesh completion may deliver the same placeholder again;
+exact generation and transition checks make that delivery idempotent. A failed
+dispatch or failed bounded publication admission remains a runtime failure and
+cannot expose a candidate.
 
 The native GPU identity exports whether the scheduler job is at or above
 interaction-focus priority. The render-thread frontend uses that fact, together
@@ -1532,8 +1549,8 @@ extraction has eight; their queued admission bounds remain independent.
 
 A capture may reach the frontend before its exact CPU application record.
 Every later readiness query retries the generation-matched resident placeholder
-once any required collision is ready, then re-reads application state before
-answering. A waiting incremental capture remains bounded and prioritized but
+as soon as that application generation exists, then re-reads application state
+before answering. A waiting incremental capture remains bounded and prioritized but
 cannot prevent the frontend from dequeuing other native captures in the same
 frame. Retry status and the exact deferred identity remain observable.
 

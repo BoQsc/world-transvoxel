@@ -27,6 +27,7 @@ public:
 	void clear();
 	std::size_t resource_count() const noexcept;
 	std::size_t staged_count() const noexcept;
+	std::size_t empty_generation_count() const noexcept;
 	void set_new_record_staging_enabled(bool enabled) noexcept;
 	void set_staging_reference_chunks(const std::vector<WtChunkKey> &keys);
 	bool has_staged_records() const noexcept;
@@ -60,6 +61,10 @@ private:
 	godot::Node3D &owner_;
 	std::thread::id owner_thread_;
 	std::map<WtChunkKey, Record> records_;
+	// Authoritative empty collision still has a generation. Keep the token
+	// without retaining a StaticBody3D so readiness and supersession remain
+	// exact after an empty carve result.
+	std::map<WtChunkKey, WtGenerationToken> empty_generations_;
 	std::vector<WtChunkKey> staging_reference_chunks_;
 	bool new_record_staging_enabled_ = false;
 };

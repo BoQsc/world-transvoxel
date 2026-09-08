@@ -54,7 +54,12 @@ bool WtGodotCollisionSink::apply_collision(const WtCollisionPayload &payload) {
 	if (!on_owner_thread()) return false;
 	if (payload.preserve_existing) {
 		const auto iterator = records_.find(payload.key);
-		if (iterator == records_.end() || !iterator->second.active) return false;
+		if (iterator == records_.end() || !iterator->second.active) {
+			const auto empty = empty_generations_.find(payload.key);
+			if (empty == empty_generations_.end()) return false;
+			empty->second = payload.generation;
+			return true;
+		}
 		Record &record = iterator->second;
 		record.generation = payload.generation;
 		for (auto &shape : record.staged_shapes) shape.unref();
@@ -79,8 +84,10 @@ bool WtGodotCollisionSink::apply_collision(const WtCollisionPayload &payload) {
 			return true;
 		}
 		remove_collision(payload.key);
+		empty_generations_[payload.key] = payload.generation;
 		return true;
 	}
+	empty_generations_.erase(payload.key);
 	const auto existing = records_.find(payload.key);
 	const bool created = existing == records_.end();
 	if (created && payload.dirty_block_mask != kWtCollisionAllBlocksMask) {
@@ -163,13 +170,14 @@ bool WtGodotCollisionSink::remove_collision(const WtChunkKey &key) {
 	}
 	const auto iterator = records_.find(key);
 	if (iterator == records_.end()) {
-		return false;
+		return empty_generations_.erase(key) != 0;
 	}
 	if (iterator->second.active) {
 		owner_.remove_child(iterator->second.body);
 	}
 	iterator->second.body->queue_free();
 	records_.erase(iterator);
+	empty_generations_.erase(key);
 	return true;
 }
 
@@ -184,6 +192,7 @@ void WtGodotCollisionSink::clear() {
 		entry.second.body->queue_free();
 	}
 	records_.clear();
+	empty_generations_.clear();
 }
 
 std::size_t WtGodotCollisionSink::resource_count() const noexcept {
@@ -200,6 +209,10 @@ std::size_t WtGodotCollisionSink::staged_count() const noexcept {
 		count += entry.second.staged ? 1U : 0U;
 	}
 	return count;
+}
+
+std::size_t WtGodotCollisionSink::empty_generation_count() const noexcept {
+	return empty_generations_.size();
 }
 
 void WtGodotCollisionSink::set_new_record_staging_enabled(
@@ -250,9 +263,11 @@ bool WtGodotCollisionSink::publish_staged_record(
 	Record &record = iterator->second;
 	if (record.body == nullptr || record.staged_dirty_block_mask == 0) return false;
 	if (record.staged_empty) {
+		const WtGenerationToken empty_generation = record.staged_generation;
 		if (record.active) owner_.remove_child(record.body);
 		record.body->queue_free();
 		records_.erase(iterator);
+		empty_generations_[key] = empty_generation;
 		return true;
 	}
 	if (!record.active) {
@@ -290,8 +305,12 @@ WtGenerationToken WtGodotCollisionSink::applied_generation(
 	const WtChunkKey &key
 ) const noexcept {
 	const auto iterator = records_.find(key);
-	return iterator == records_.end() || !iterator->second.active ?
-		WtGenerationToken{} : iterator->second.generation;
+	if (iterator != records_.end() && iterator->second.active) {
+		return iterator->second.generation;
+	}
+	const auto empty = empty_generations_.find(key);
+	return empty == empty_generations_.end() ? WtGenerationToken{} :
+		empty->second;
 }
 
 WtGenerationToken WtGodotCollisionSink::staged_generation(

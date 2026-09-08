@@ -1103,6 +1103,9 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	output["staged_collision_resources"] = static_cast<std::int64_t>(
 		collision_sink_->staged_count()
 	);
+	output["empty_collision_generations"] = static_cast<std::int64_t>(
+		collision_sink_->empty_generation_count()
+	);
 	return output;
 }
 
