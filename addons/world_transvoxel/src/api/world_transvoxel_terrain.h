@@ -306,6 +306,11 @@ private:
 
 	void emit_lifecycle_state(WtWorldLifecycleState state);
 	void notify_lifecycle_state();
+	bool reconcile_interaction_gpu_placeholder(
+		const WtChunkKey &key,
+		WtGenerationToken generation,
+		bool incremental_edit
+	);
 	bool drain_world_publications(
 		std::size_t &collision_publication_count,
 		std::uint64_t collision_apply_time_ns_start

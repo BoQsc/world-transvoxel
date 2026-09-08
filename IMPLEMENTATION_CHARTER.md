@@ -1515,6 +1515,13 @@ until the existing cohort commit and asynchronous summary validation complete.
 Background extraction has four outstanding completion tokens and interaction
 extraction has eight; their queued admission bounds remain independent.
 
+An incremental capture may reach the frontend before its exact CPU application
+record. Every later readiness query retries the generation-matched resident
+placeholder once collision is ready, then re-reads application state before
+answering. A waiting capture remains bounded and prioritized but cannot prevent
+the frontend from dequeuing other native captures in the same frame. Retry
+status and the exact deferred identity remain observable.
+
 LOD-map validation and balancing use exact dyadic ancestor and face-neighbor
 lookups. They do not scan all pairs of active leaves. Staged planning builds one
 immutable descendant-priority summary per target and reuses it for selection,

@@ -15,6 +15,37 @@
 
 namespace world_transvoxel {
 
+bool WorldTransvoxelTerrain::reconcile_interaction_gpu_placeholder(
+	const WtChunkKey &key,
+	WtGenerationToken generation,
+	bool incremental_edit
+) {
+	if (!incremental_edit || !lifecycle_ || !application_ || !render_sink_) {
+		return false;
+	}
+	WtChunkApplicationRecord record;
+	if (!application_->copy_record(key, record) ||
+		record.generation != generation || !record.collision_ready ||
+		record.visual_generation == generation) {
+		return false;
+	}
+	WtReadOnlyPublication placeholder;
+	if (!lifecycle_->pop_interaction_gpu_placeholder_publication(
+			key, generation, placeholder
+		) || !placeholder.render) {
+		return false;
+	}
+	const WtApplicationStatus status =
+		application_->apply_gpu_resident_placeholder(
+			placeholder.render, *render_sink_
+		);
+	lifecycle_->record_frontend_publication(
+		placeholder, static_cast<std::int64_t>(status)
+	);
+	lifecycle_->notify_application_progress();
+	return status == WtApplicationStatus::Ok;
+}
+
 namespace {
 
 struct ParsedGpuChunkInventory {
@@ -394,26 +425,9 @@ godot::Dictionary WorldTransvoxelTerrain::pop_gpu_resident_render_request(
 	}
 	WtGpuMeshingShadowRequest request;
 	if (!gpu_meshing_shadow_->pop(request, interaction_only)) return result;
-	if (request.incremental_edit && lifecycle_ && application_ && render_sink_) {
-		WtChunkApplicationRecord record;
-		if (application_->copy_record(request.job.key, record) &&
-			record.generation == request.job.generation && record.collision_ready &&
-			record.visual_generation != request.job.generation) {
-			WtReadOnlyPublication placeholder;
-			if (lifecycle_->pop_interaction_gpu_placeholder_publication(
-					request.job.key, request.job.generation, placeholder
-				) && placeholder.render) {
-				const WtApplicationStatus status =
-					application_->apply_gpu_resident_placeholder(
-						placeholder.render, *render_sink_
-					);
-				lifecycle_->record_frontend_publication(
-					placeholder, static_cast<std::int64_t>(status)
-				);
-				lifecycle_->notify_application_progress();
-			}
-		}
-	}
+	reconcile_interaction_gpu_placeholder(
+		request.job.key, request.job.generation, request.incremental_edit
+	);
 	const godot::Dictionary packed = wt_gpu_meshing_shadow_packed_input(request);
 	if (packed.get("status", "FAIL") != "PASS") {
 		WtGpuMeshingShadowIdentity identity;
@@ -468,6 +482,7 @@ godot::Dictionary WorldTransvoxelTerrain::validate_gpu_resident_render_request(
 	result["request_accepted"] = false;
 	result["cpu_render_publication_unchanged"] = true;
 	result["cpu_collision_publication_unchanged"] = true;
+	result["interaction_placeholder_reconciled"] = false;
 	++gpu_resident_render_validation_attempts_;
 	if (!gpu_resident_render_publication_enabled_ || !gpu_meshing_shadow_ ||
 		request_id <= 0) {
@@ -521,6 +536,7 @@ get_gpu_resident_render_chunk_readiness(
 	result["ready"] = false;
 	result["cpu_render_publication_unchanged"] = true;
 	result["cpu_collision_publication_unchanged"] = true;
+	result["interaction_placeholder_reconciled"] = false;
 	++gpu_resident_render_readiness_attempts_;
 	WtGpuMeshingShadowIdentity identity;
 	if (!gpu_resident_render_publication_enabled_ ||
@@ -539,6 +555,12 @@ get_gpu_resident_render_chunk_readiness(
 		result["error"] = "GPU resident application services are unavailable";
 		return result;
 	}
+	result["interaction_placeholder_reconciled"] =
+		reconcile_interaction_gpu_placeholder(
+			identity.key,
+			identity.generation,
+			static_cast<bool>(identity_dictionary.get("incremental_edit", false))
+		);
 	WtChunkApplicationRecord record;
 	if (!application_->copy_record(identity.key, record) ||
 		record.generation != identity.generation || !record.visual_required) {
