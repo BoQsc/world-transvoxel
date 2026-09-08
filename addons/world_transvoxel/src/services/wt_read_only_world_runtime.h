@@ -438,7 +438,6 @@ private:
 	WtBalancedLodPlan current_plan_;
 	WtBalancedLodPlan staging_target_plan_;
 	bool staging_pending_ = false;
-	bool visual_plan_established_ = false;
 	std::uint8_t staging_root_lod_ = 0;
 	std::uint64_t staging_observed_visual_activation_sequence_ = 0;
 	std::uint64_t plan_revision_ = 0;

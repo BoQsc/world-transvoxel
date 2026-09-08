@@ -387,7 +387,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	bool interaction_shell_event = false;
 	{
 		std::lock_guard<std::mutex> lock(input_mutex_);
-		if (interaction_shell_refresh_pending_ && visual_plan_established_) {
+		if (interaction_shell_refresh_pending_) {
 			interaction_shell_refresh_pending_ = false;
 			interaction_shell_event = true;
 			event.kind = ViewerEventKind::RefreshInteractionShell;
@@ -1037,10 +1037,6 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	planner_viewers_ = std::move(candidate_viewers);
 	collision_viewers_ = std::move(candidate_collision_viewers);
 	current_plan_ = std::move(candidate_plan);
-	if (!config_.hierarchical_lod_staging_enabled && !collision_event &&
-			!interaction_shell_event) {
-		visual_plan_established_ = true;
-	}
 	{
 		std::lock_guard<std::mutex> lock(visual_activation_mutex_);
 		visual_activations_.erase(
@@ -1057,7 +1053,6 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	if (staged_plan) {
 		staging_target_plan_ = std::move(candidate_staging_target);
 		staging_pending_ = !staging_complete;
-		visual_plan_established_ = visual_plan_established_ || staging_complete;
 		staging_root_lod_ = candidate_staging_root_lod;
 		staging_observed_visual_activation_sequence_ =
 			candidate_visual_activation_sequence;
