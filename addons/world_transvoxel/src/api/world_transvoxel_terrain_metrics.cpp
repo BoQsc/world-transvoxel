@@ -150,6 +150,13 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	set_metric(output, "collision_viewer_updates", runtime.collision_viewer_updates);
 	set_metric(output, "collision_viewer_removals", runtime.collision_viewer_removals);
 	set_metric(output, "coalesced_viewer_events", runtime.coalesced_viewer_events);
+	set_metric(output, "viewer_plan_rejections", runtime.viewer_plan_rejections);
+	set_metric(output, "viewer_base_plan_rejections", runtime.viewer_base_plan_rejections);
+	set_metric(output, "viewer_stage_plan_rejections", runtime.viewer_stage_plan_rejections);
+	set_metric(output, "viewer_last_plan_status", runtime.viewer_last_plan_status);
+	set_metric(output, "viewer_hysteresis_fallbacks", runtime.viewer_hysteresis_fallbacks);
+	set_metric(output, "viewer_demand_capacity_rejections", runtime.viewer_demand_capacity_rejections);
+	set_metric(output, "viewer_desired_set_rejections", runtime.viewer_desired_set_rejections);
 	set_metric(output, "planned_demands", runtime.planned_demands);
 	set_metric(
 		output,
@@ -417,6 +424,63 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	);
 	set_metric(output, "published_events", runtime.published_events);
 	set_metric(output, "rejected_events", runtime.rejected_events);
+	set_metric(output, "pending_viewer_events", runtime.pending_viewer_events);
+	set_metric(
+		output, "committed_visual_viewer_revision",
+		runtime.committed_visual_viewer_revision
+	);
+	output["committed_visual_viewer_position_x"] =
+		runtime.committed_visual_viewer_position_x;
+	output["committed_visual_viewer_position_z"] =
+		runtime.committed_visual_viewer_position_z;
+	set_metric(
+		output, "committed_collision_viewer_revision",
+		runtime.committed_collision_viewer_revision
+	);
+	output["committed_collision_viewer_position_x"] =
+		runtime.committed_collision_viewer_position_x;
+	output["committed_collision_viewer_position_z"] =
+		runtime.committed_collision_viewer_position_z;
+	set_metric(
+		output, "pending_publication_events", runtime.pending_publication_events
+	);
+	set_metric(
+		output, "pending_priority_publication_events",
+		runtime.pending_priority_publication_events
+	);
+	set_metric(output, "desired_collision_chunks", runtime.desired_collision_chunks);
+	set_metric(
+		output, "collision_readiness_repair_attempt_count",
+		runtime.collision_readiness_repair_attempt_count
+	);
+	set_metric(
+		output, "collision_readiness_repair_passes",
+		runtime.collision_readiness_repair_passes
+	);
+	set_metric(
+		output, "collision_readiness_repair_publication_blocks",
+		runtime.collision_readiness_repair_publication_blocks
+	);
+	set_metric(
+		output, "collision_readiness_repair_application_blocks",
+		runtime.collision_readiness_repair_application_blocks
+	);
+	set_metric(
+		output, "collision_readiness_repair_pipeline_blocks",
+		runtime.collision_readiness_repair_pipeline_blocks
+	);
+	set_metric(
+		output, "collision_readiness_repair_obsolete_clears",
+		runtime.collision_readiness_repair_obsolete_clears
+	);
+	set_metric(
+		output, "collision_readiness_repair_duplicate_skips",
+		runtime.collision_readiness_repair_duplicate_skips
+	);
+	set_metric(
+		output, "collision_readiness_repair_timed_wakes",
+		runtime.collision_readiness_repair_timed_wakes
+	);
 	set_metric(
 		output, "viewer_plan_cancellations", runtime.viewer_plan_cancellations
 	);

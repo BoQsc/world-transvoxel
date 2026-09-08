@@ -1,4 +1,5 @@
 #include "services/wt_read_only_world_runtime.h"
+#include "services/wt_chunk_application.h"
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_edit_journal_store.h"
 #include "storage/wt_hash256.h"
@@ -26,6 +27,70 @@ namespace world_transvoxel::testing {
 // Step the runtime without worker timing so a full queue and its retry are
 // deterministic. No test-only public runtime API or production branch is needed.
 struct WtRuntimeEventTestAccess {
+	static bool obsolete_collision_demand_bypasses_payload_deduplication(
+		WtAsyncStorageService &storage
+	) {
+		WtRuntimeConfig config;
+		config.active_chunk_capacity = 8;
+		config.viewer_capacity = 1;
+		config.demand_capacity_per_viewer = 8;
+		config.meshing_worker_count = 0;
+		WtReadOnlyWorldRuntime runtime(config, storage);
+		if (!runtime.valid()) return false;
+		const WtChunkKey key { 4, 0, 0, 0 };
+		const WtGenerationToken generation { 1 };
+		WtDesiredSetDelta delta;
+		if (runtime.desired_->update_viewer(
+				{ 1, 72.0, 8.0, 8.0, 1 },
+				{ { key, 100, false, true } },
+				delta
+			) != WtMultiViewerDesiredSetStatus::Ok) {
+			return false;
+		}
+		if (runtime.application_->expect_chunk(
+				key, generation, true, true, true, true,
+				storage.world_revision()
+			) != WtApplicationStatus::Ok) {
+			return false;
+		}
+		runtime.collision_readiness_repair_attempts_.push_back({
+			key,
+			generation,
+		});
+		if (!runtime.process_collision_readiness_repairs()) return false;
+		WtReadOnlyPublication publication;
+		const bool retained_visual_role_cleared =
+			runtime.pop_publication(publication) &&
+			publication.kind == WtReadOnlyPublicationKind::SetCollisionRequired &&
+			publication.key == key && publication.generation == generation &&
+			!publication.collision_required;
+
+		WtReadOnlyWorldRuntime removed_runtime(config, storage);
+		if (!removed_runtime.valid()) return false;
+		removed_runtime.collision_viewers_.push_back({
+			{ 2, 184.0, 8.0, 8.0, 1 },
+			0,
+		});
+		if (removed_runtime.application_->expect_chunk(
+				key, generation, true, false, true, true,
+				storage.world_revision()
+			) != WtApplicationStatus::Ok) {
+			return false;
+		}
+		removed_runtime.collision_readiness_repair_attempts_.push_back({
+			key,
+			generation,
+		});
+		if (!removed_runtime.process_collision_readiness_repairs()) return false;
+		publication = {};
+		const bool removed_explicit_role_cleared =
+			removed_runtime.pop_publication(publication) &&
+			publication.kind == WtReadOnlyPublicationKind::SetCollisionRequired &&
+			publication.key == key && publication.generation == generation &&
+			!publication.collision_required;
+		return retained_visual_role_cleared && removed_explicit_role_cleared;
+	}
+
 	static bool refresh_survives_full_queue(
 		WtAsyncStorageService &storage, std::size_t mesh_workers
 	) {
@@ -716,6 +781,25 @@ bool run_g21_near_field_capacity_regression(
 		hierarchy.page_count() == 299520 &&
 		hierarchy.metrics().explicit_index_entries == 0,
 		"g21 implicit page hierarchy size mismatch"
+	);
+	wt::WtProceduralWorldDescriptor clipped_descriptor = descriptor;
+	clipped_descriptor.chunk_count_x = 127;
+	clipped_descriptor.chunk_count_z = 127;
+	wt::WtPageHierarchy clipped =
+		wt::WtPageHierarchy::implicit_procedural(clipped_descriptor);
+	std::vector<wt::WtChunkKey> clipped_children;
+	check(
+		clipped.refinable_children({ 63, -4, 63, 1 }, clipped_children) &&
+		!clipped_children.empty() && clipped_children.size() < 8,
+		"implicit procedural edge parent did not expose clipped children"
+	);
+	wt::WtBalancedLodPlanner clipped_planner(8192, std::move(clipped), 3, true);
+	wt::WtBalancedLodPlan clipped_plan;
+	check(
+		clipped_planner.plan({ { { 1, 2016.0, 8.0, 2016.0, 1 }, 2, 3, 0 } },
+			{}, {}, clipped_plan) == wt::WtBalancedLodPlannerStatus::Ok &&
+		!clipped_plan.entries.empty(),
+		"implicit procedural clipped edge could not produce a balanced plan"
 	);
 	wt::WtBalancedLodPlanner planner(8192, std::move(hierarchy), 3, true);
 	wt::WtBalancedLodPlan plan;
@@ -2520,6 +2604,10 @@ int main(int argc, char **argv) {
 		storage.has_page({ 5, 1, 1, 0 }) &&
 		!storage.has_page({ 6, 0, 0, 0 }),
 		"transition page catalog mismatch");
+	const bool obsolete_collision_dedup_ok = wtt::WtRuntimeEventTestAccess::
+		obsolete_collision_demand_bypasses_payload_deduplication(storage);
+	check(obsolete_collision_dedup_ok,
+		"obsolete collision demand was blocked by an earlier payload attempt");
 	check(wtt::WtRuntimeEventTestAccess::refresh_survives_full_queue(storage, 0),
 		"queued edit-retention refresh lost identity or external viewer (zero workers)");
 	check(wtt::WtRuntimeEventTestAccess::refresh_survives_full_queue(storage, 1),
@@ -2803,6 +2891,7 @@ int main(int argc, char **argv) {
 	append_u64(evidence, hierarchical_staging_ok ? 1U : 0U);
 	append_u64(evidence, hierarchical_runtime_ok ? 1U : 0U);
 	append_u64(evidence, hierarchical_bounded_edit_planning_ok ? 1U : 0U);
+	append_u64(evidence, obsolete_collision_dedup_ok ? 1U : 0U);
 	append_u64(
 		evidence,
 		static_cast<std::uint64_t>(g21_nearest_coarse_distance)
@@ -2825,6 +2914,7 @@ int main(int argc, char **argv) {
 		"collision_publication_priority=%d collision_publication_coalescing=%d "
 		"hierarchical_staging=%d hierarchical_runtime=%d "
 		"hierarchical_bounded_edit_planning=%d "
+		"obsolete_collision_dedup=%d "
 		"g21_entries=%zu "
 		"g21_nearest_coarse=%.1f transition_completions=%llu\n",
 		plan.entries.size(),
@@ -2859,6 +2949,7 @@ int main(int argc, char **argv) {
 		hierarchical_staging_ok ? 1 : 0,
 		hierarchical_runtime_ok ? 1 : 0,
 		hierarchical_bounded_edit_planning_ok ? 1 : 0,
+		obsolete_collision_dedup_ok ? 1 : 0,
 		g21_entry_count,
 		g21_nearest_coarse_distance,
 		static_cast<unsigned long long>(metrics.transition_mesh_completions)
@@ -2874,6 +2965,7 @@ int main(int argc, char **argv) {
 		"hierarchical_staging=1 "
 		"hierarchical_runtime=1 "
 		"hierarchical_bounded_edit_planning=1 "
+		"obsolete_collision_dedup=1 "
 		"g21_near_field=1 backend=MIT\n"
 	);
 	return 0;

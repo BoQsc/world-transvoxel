@@ -422,8 +422,8 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::append_subtree(
 		return WtBalancedLodPlannerStatus::Cancelled;
 	}
 	if (should_refine(key, viewers, refined_ancestors, forced_leaf_keys)) {
-		std::array<WtChunkKey, 8> children{};
-		if (page_hierarchy_.complete_children(key, children)) {
+		std::vector<WtChunkKey> children;
+		if (page_hierarchy_.refinable_children(key, children)) {
 			for (const WtChunkKey &child : children) {
 				const WtBalancedLodPlannerStatus status = append_subtree(
 					child, viewers, refined_ancestors, forced_leaf_keys, leaves,
@@ -448,12 +448,12 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::refine_leaf(
 	if (leaf_index >= leaves.size() || leaves[leaf_index].lod == 0) {
 		return WtBalancedLodPlannerStatus::InvalidLodMap;
 	}
-	if (leaves.size() > active_capacity_ - 7U) {
-		return WtBalancedLodPlannerStatus::CapacityExceeded;
-	}
-	std::array<WtChunkKey, 8> children{};
-	if (!page_hierarchy_.complete_children(leaves[leaf_index], children)) {
+	std::vector<WtChunkKey> children;
+	if (!page_hierarchy_.refinable_children(leaves[leaf_index], children)) {
 		return WtBalancedLodPlannerStatus::IncompleteHierarchy;
+	}
+	if (leaves.size() - 1U + children.size() > active_capacity_) {
+		return WtBalancedLodPlannerStatus::CapacityExceeded;
 	}
 	leaves.erase(leaves.begin() + static_cast<std::ptrdiff_t>(leaf_index));
 	leaves.insert(leaves.end(), children.begin(), children.end());
@@ -544,7 +544,12 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 		if (cancel_requested && cancel_requested()) {
 			return WtBalancedLodPlannerStatus::Cancelled;
 		}
-		if (!wt_is_valid_chunk_key(desired.key)) {
+		// Collision viewers are an independent LOD0 overlay. Treating their
+		// collision-only leaves as prior visual refinement makes a later visual
+		// move inherit refinement outside the visual plan. In sparse worlds that
+		// can force balancing through children which do not exist and reject the
+		// viewer update as IncompleteHierarchy.
+		if (!desired.visual_required || !wt_is_valid_chunk_key(desired.key)) {
 			continue;
 		}
 		WtChunkKey ancestor = desired.key;
@@ -820,8 +825,8 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 			const bool target_contains_parent =
 				plan_covers_key(target.entries, parent);
 			if (!target_contains_parent) continue;
-			std::array<WtChunkKey, 8> children{};
-			if (!page_hierarchy_.complete_children(parent, children)) {
+			std::vector<WtChunkKey> children;
+			if (!page_hierarchy_.refinable_children(parent, children)) {
 				return WtBalancedLodPlannerStatus::IncompleteHierarchy;
 			}
 			const bool complete_family = std::all_of(
@@ -893,8 +898,8 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 			const std::int32_t priority = preferred_refinement ?
 				target_summary->deepest_priority :
 				target_summary->background_priority;
-			std::array<WtChunkKey, 8> children{};
-			if (!page_hierarchy_.complete_children(leaf, children)) {
+			std::vector<WtChunkKey> children;
+			if (!page_hierarchy_.refinable_children(leaf, children)) {
 				return WtBalancedLodPlannerStatus::IncompleteHierarchy;
 			}
 			const bool priority_precedes = selected == nullptr ||
@@ -1013,8 +1018,8 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_foreground(
 		const bool foreground = std::any_of(foreground_keys.begin(), foreground_keys.end(),
 			[&](const WtChunkKey &focus) { return bounds_contain(key, focus); });
 		if (foreground && key.lod > 0 && std::binary_search(refined_ancestors.begin(), refined_ancestors.end(), key)) {
-			std::array<WtChunkKey, 8> children{};
-			if (!page_hierarchy_.complete_children(key, children)) return WtBalancedLodPlannerStatus::IncompleteHierarchy;
+			std::vector<WtChunkKey> children;
+			if (!page_hierarchy_.refinable_children(key, children)) return WtBalancedLodPlannerStatus::IncompleteHierarchy;
 			// Pending leaves plus completed leaves are the actual output bound.
 			if (leaves.size() + work.size() - cursor - 1 + children.size() > active_capacity_) {
 				return WtBalancedLodPlannerStatus::CapacityExceeded;

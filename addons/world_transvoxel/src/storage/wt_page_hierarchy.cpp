@@ -128,6 +128,28 @@ bool WtPageHierarchy::complete_children(
 	);
 }
 
+bool WtPageHierarchy::refinable_children(
+	const WtChunkKey &parent,
+	std::vector<WtChunkKey> &children
+) const {
+	children.clear();
+	++metrics_.child_queries;
+	if (!valid_ || parent.lod == 0 || !contains(parent)) return false;
+	const std::array<WtChunkKey, 8> candidates = child_keys(parent);
+	if (kind_ == WtPageHierarchyKind::ExplicitCatalog) {
+		if (!std::all_of(candidates.begin(), candidates.end(),
+				[&](const WtChunkKey &child) { return contains(child); })) {
+			return false;
+		}
+		children.assign(candidates.begin(), candidates.end());
+		return true;
+	}
+	for (const WtChunkKey &child : candidates) {
+		if (contains(child)) children.push_back(child);
+	}
+	return !children.empty();
+}
+
 bool WtPageHierarchy::ancestor(
 	const WtChunkKey &key,
 	std::uint8_t ancestor_lod,

@@ -1363,6 +1363,45 @@ worker reports itself idle, and a queued collision publication records the
 generation's collision branch as pending so readiness repair cannot schedule a
 duplicate generation.
 
+That pending-attempt marker deduplicates payload or remesh work only while the
+desired set still requires collision. When viewer motion removes its collision
+role while retaining the visual chunk, or removes the chunk while an explicit
+collision viewer owns collision, readiness repair must publish the matching
+negative requirement even if an earlier payload attempt remains recorded;
+obsolete collision demand cannot hold a regional replacement or retirement
+open. Frontend application of either
+render or collision work notifies the runtime so deferred bounded queues continue
+their readiness repair without another viewer event.
+
+Outgoing visual chunks receive temporary collision promotion only when visual
+viewers own collision demand. Once an explicit collision viewer exists, its
+bounded LOD0 set is the sole collision authority; visual LOD retirement cannot
+create collision work outside that set.
+
+Runtime metrics report collision-repair passes, their publication/application/
+pipeline gates, active deduplication attempts, obsolete-demand clears, duplicate
+skips, desired collision count, and both bounded publication queue depths. A
+stationary trace must therefore distinguish active work, capacity backpressure,
+and a logically stranded readiness state.
+
+While any application record has required collision debt, the runtime retries
+the bounded repair pass after at most four milliseconds even if no producer
+notification arrives. The retry becomes dormant as soon as every required
+record holds its current collision generation. This guarantees stationary
+fixed-point progress without a permanent polling loop; timed wakes are measured.
+
+Implicit procedural hierarchies may end on dimensions that are not powers of
+two. Such boundary parents refine to their declared in-world children; clipped
+octants outside the descriptor are not treated as missing hierarchy. Explicit
+page catalogs retain the strict complete-eight-child requirement. The LOD map
+still enforces 2:1 balance across every declared neighboring chunk.
+
+An incremental collision block patch requires a resident complete collision
+base. If a moving edit reaches a newly streamed chunk before that base is
+installed or after it was evicted, the already completed CPU mesh produces one
+complete collision payload. Later generations resume bounded block replacement;
+an unbased patch is never submitted to the physics sink.
+
 Collision preparation does not reserve GPU capture capacity. Water-only and material-only journal
 revisions advance the installed collision generation while preserving its
 unchanged shapes. Full regular collision payloads are marked separately from

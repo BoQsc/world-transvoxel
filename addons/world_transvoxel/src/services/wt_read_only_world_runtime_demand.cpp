@@ -656,7 +656,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 					maximum_refinement_radius_chunks,
 					maximum_retention_viewers
 				);
-				return lod_planner_->plan(
+				WtBalancedLodPlannerStatus status = lod_planner_->plan(
 					planning_viewers,
 					desired_->get_desired_chunks(),
 					collision_policy,
@@ -665,6 +665,22 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 					cancel_for_pending_edit,
 					interaction_topology_keys
 				);
+				if (status == WtBalancedLodPlannerStatus::IncompleteHierarchy) {
+					// Prior visual refinement is only hysteresis. At a sparse catalog
+					// edge it can require unavailable balancing children after the
+					// viewer has moved. Recompute the complete current target without
+					// that history; publication still retains old coverage until the
+					// replacement target is ready.
+					status = lod_planner_->plan(
+						planning_viewers, {}, collision_policy, candidate_plan,
+						config_.visual_viewer_collision_enabled,
+						cancel_for_pending_edit, {});
+					if (status == WtBalancedLodPlannerStatus::Ok) {
+						std::lock_guard<std::mutex> lock(metrics_mutex_);
+						++metrics_.viewer_hysteresis_fallbacks;
+					}
+				}
+				return status;
 			};
 		plan_status = try_plan_with_retention(
 			kWtEditLodRetentionMaximumRefinementRadiusChunks,
@@ -720,6 +736,16 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 					cancel_for_pending_edit,
 					interaction_topology_keys
 				);
+				if (plan_status == WtBalancedLodPlannerStatus::IncompleteHierarchy) {
+					plan_status = lod_planner_->plan(
+						planning_viewers, {}, collision_policy, candidate_plan,
+						config_.visual_viewer_collision_enabled,
+						cancel_for_pending_edit, {});
+					if (plan_status == WtBalancedLodPlannerStatus::Ok) {
+						std::lock_guard<std::mutex> lock(metrics_mutex_);
+						++metrics_.viewer_hysteresis_fallbacks;
+					}
+				}
 			}
 		}
 	}
@@ -733,6 +759,9 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			plan_revision_ == std::numeric_limits<std::uint64_t>::max()) {
 		std::lock_guard<std::mutex> lock(metrics_mutex_);
 		++metrics_.rejected_events;
+		++metrics_.viewer_plan_rejections;
+		++metrics_.viewer_base_plan_rejections;
+		metrics_.viewer_last_plan_status = static_cast<std::uint64_t>(plan_status);
 		return true;
 	}
 	if (!collision_event && config_.hierarchical_lod_staging_enabled) {
@@ -860,6 +889,9 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		if (plan_status != WtBalancedLodPlannerStatus::Ok) {
 			std::lock_guard<std::mutex> lock(metrics_mutex_);
 			++metrics_.rejected_events;
+			++metrics_.viewer_plan_rejections;
+			++metrics_.viewer_stage_plan_rejections;
+			metrics_.viewer_last_plan_status = static_cast<std::uint64_t>(plan_status);
 			return true;
 		}
 		candidate_plan = std::move(staged);
@@ -949,6 +981,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	if (merged_demands.size() > config_.active_chunk_capacity) {
 		std::lock_guard<std::mutex> lock(metrics_mutex_);
 		++metrics_.rejected_events;
+		++metrics_.viewer_demand_capacity_rejections;
 		return true;
 	}
 
@@ -969,9 +1002,10 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	plan_snapshot.revision = plan_revision_ + 1;
 	if (candidate_desired.update_viewer(
 			plan_snapshot, merged_demands, delta
-		) != WtMultiViewerDesiredSetStatus::Ok) {
+	) != WtMultiViewerDesiredSetStatus::Ok) {
 		std::lock_guard<std::mutex> lock(metrics_mutex_);
 		++metrics_.rejected_events;
+		++metrics_.viewer_desired_set_rejections;
 		return true;
 	}
 
@@ -1009,7 +1043,8 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	// withdrawn physical demand from cached geometry. Existing required collision
 	// still follows the unchanged front-end retirement/coverage handover.
 	std::vector<WtReadOnlyPublication> outgoing_collision_publications;
-	if (config_.visual_viewer_collision_enabled && !delta.removed.empty()) {
+	if (config_.visual_viewer_collision_enabled && collision_viewers_.empty() &&
+		!delta.removed.empty()) {
 		outgoing_collision_publications.reserve(delta.removed.size() * 2U);
 		const WtCollisionPolicy outgoing_collision_policy {
 			kWtDefaultCollisionThinRatioSquared,

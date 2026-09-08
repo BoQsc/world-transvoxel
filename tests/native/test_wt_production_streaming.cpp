@@ -1036,13 +1036,9 @@ void test_collision_retirement_locality(std::size_t mesh_workers, bool gpu_enabl
 	collect();
 	check(old_removed && new_visual_ready && !new_support_lost,
 		"collision locality changed visual completion or removed current physical demand");
-	if (visual_collision_enabled) {
-		check(outgoing_promotions > 0 && outgoing_payloads > 0 && outgoing_faces > 0,
-			"legacy visual collision handover lost its safety geometry");
-	} else {
-		check(outgoing_promotions == 0 && outgoing_payloads == 0 && outgoing_faces == 0,
-			"explicit collision demand was expanded by visual-only retirement");
-	}
+	check(outgoing_promotions == 0 && outgoing_payloads == 0 &&
+		outgoing_faces == 0,
+		"explicit collision demand was expanded by visual-only retirement");
 	check(status.load() == wt::WtReadOnlyRuntimeStatus::Ok, "collision locality runtime did not stop cleanly");
 	std::printf("COLLISION_RETIREMENT_LOCALITY workers=%zu gpu=%d visual_collision=%d promotions=%zu payloads=%zu faces=%zu support_faces=%zu\n",
 		mesh_workers, gpu_enabled, visual_collision_enabled, outgoing_promotions, outgoing_payloads, outgoing_faces, new_collision_faces);

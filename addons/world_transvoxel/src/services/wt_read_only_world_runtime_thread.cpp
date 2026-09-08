@@ -1,6 +1,7 @@
 #include "services/wt_read_only_world_runtime.h"
 
 #include "services/wt_chunk_resource_cache.h"
+#include "services/wt_chunk_application.h"
 #include "services/wt_edit_runtime_replacement.h"
 #include "services/wt_page_meshing_runtime.h"
 #include "storage/wt_async_storage_service.h"
@@ -8,6 +9,7 @@
 #include "streaming/wt_stream_scheduler.h"
 
 #include <algorithm>
+#include <chrono>
 #include <utility>
 
 namespace world_transvoxel {
@@ -66,11 +68,35 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 		refresh_metrics_snapshot();
 		if (last_status_.load() != WtReadOnlyRuntimeStatus::Ok) break;
 		if (!progressed) {
+			const std::vector<WtChunkApplicationRecord> application_records =
+				application_->get_records();
+			const bool collision_repair_pending = std::any_of(
+				application_records.begin(),
+				application_records.end(),
+				[](const WtChunkApplicationRecord &record) {
+					return record.collision_required &&
+						(!record.collision_ready ||
+							record.collision_generation != record.generation);
+				}
+			);
 			std::unique_lock<std::mutex> lock(wake_mutex_);
-			wake_condition_.wait(lock, [&]() {
+			const auto wake_predicate = [&]() {
 				return stop_requested_.load() ||
 					wake_sequence_ != observed_wake;
-			});
+			};
+			if (collision_repair_pending) {
+				const bool signaled = wake_condition_.wait_for(
+					lock,
+					std::chrono::milliseconds(4),
+					wake_predicate
+				);
+				if (!signaled) {
+					std::lock_guard<std::mutex> metrics_lock(metrics_mutex_);
+					++metrics_.collision_readiness_repair_timed_wakes;
+				}
+			} else {
+				wake_condition_.wait(lock, wake_predicate);
+			}
 			observed_wake = wake_sequence_;
 		}
 	}
@@ -541,6 +567,41 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 	{
 		std::lock_guard<std::mutex> lock(metrics_mutex_);
 		snapshot = metrics_;
+	}
+	{
+		std::lock_guard<std::mutex> lock(publication_mutex_);
+		snapshot.pending_publication_events = publication_count_;
+		snapshot.pending_priority_publication_events =
+			priority_publication_count_;
+	}
+	{
+		std::lock_guard<std::mutex> lock(input_mutex_);
+		snapshot.pending_viewer_events = viewer_events_.size();
+	}
+	if (!planner_viewers_.empty()) {
+		snapshot.committed_visual_viewer_revision =
+			planner_viewers_.front().snapshot.revision;
+		snapshot.committed_visual_viewer_position_x = static_cast<std::int64_t>(
+			planner_viewers_.front().snapshot.x
+		);
+		snapshot.committed_visual_viewer_position_z = static_cast<std::int64_t>(
+			planner_viewers_.front().snapshot.z
+		);
+	}
+	if (!collision_viewers_.empty()) {
+		snapshot.committed_collision_viewer_revision =
+			collision_viewers_.front().snapshot.revision;
+		snapshot.committed_collision_viewer_position_x =
+			static_cast<std::int64_t>(collision_viewers_.front().snapshot.x);
+		snapshot.committed_collision_viewer_position_z =
+			static_cast<std::int64_t>(collision_viewers_.front().snapshot.z);
+	}
+	snapshot.collision_readiness_repair_attempt_count =
+		collision_readiness_repair_attempts_.size();
+	if (desired_) {
+		for (const WtDesiredChunk &item : desired_->get_desired_chunks()) {
+			if (item.collision_required) ++snapshot.desired_collision_chunks;
+		}
 	}
 	snapshot.page_cache_encoded_entry_capacity =
 		config_.encoded_page_entry_capacity;

@@ -46,6 +46,10 @@ public:
 		const WtChunkKey &parent,
 		std::array<WtChunkKey, 8> &children
 	) const noexcept;
+	bool refinable_children(
+		const WtChunkKey &parent,
+		std::vector<WtChunkKey> &children
+	) const;
 	bool ancestor(
 		const WtChunkKey &key,
 		std::uint8_t ancestor_lod,

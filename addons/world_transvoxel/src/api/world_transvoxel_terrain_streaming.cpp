@@ -70,7 +70,8 @@ void WorldTransvoxelTerrain::_process(double delta) {
 			collision_apply_deadline_ns_) {
 		++collision_apply_frame_deadline_overruns_;
 	}
-	if (lifecycle_ && (drained_publications || applied.render_processed != 0)) {
+	if (lifecycle_ && (drained_publications || applied.render_processed != 0 ||
+		applied.collision_processed != 0)) {
 		lifecycle_->notify_application_progress();
 	}
 	flush_ready_independent_publication_regions();

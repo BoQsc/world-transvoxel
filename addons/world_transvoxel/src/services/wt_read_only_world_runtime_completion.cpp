@@ -147,10 +147,22 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 			}
 			cached_collision = std::move(merged);
 		} else {
-			// The sink can still patch its resident block shapes. Do not replace
-			// the cache's complete payload with an incomplete generation when its
-			// merge base has already been evicted.
-			cached_collision.reset();
+			// A moving edit can reach a chunk before its first collision payload
+			// becomes resident. An incremental block patch has no authoritative
+			// base in that case and the physics sink must reject it. The mixed
+			// generation already produced the complete CPU mesh, so establish one
+			// full base now; subsequent edits return to block replacement.
+			auto complete = std::make_shared<WtCollisionPayload>();
+			if (wt_build_regular_collision_payload(
+					*completion.mesh, completion.generation,
+					collision_policy, *complete) != WtCollisionBuildStatus::Ok) {
+				set_failure(
+					WtReadOnlyRuntimeStatus::PipelineTerrainMeshCompletionFailure
+				);
+				return false;
+			}
+			collision = complete;
+			cached_collision = std::move(complete);
 		}
 	}
 	if ((!completion.incremental_edit && resource_cache_->insert_mesh(
@@ -416,9 +428,19 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 
 bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 	if (!desired_) return false;
-	if (has_publication_backlog() ||
-		application_->queued_collision_count() != 0 ||
+	{
+		std::lock_guard<std::mutex> lock(metrics_mutex_);
+		++metrics_.collision_readiness_repair_passes;
+	}
+	if (has_publication_backlog()) {
+		std::lock_guard<std::mutex> lock(metrics_mutex_);
+		++metrics_.collision_readiness_repair_publication_blocks;
+		return false;
+	}
+	if (application_->queued_collision_count() != 0 ||
 		application_->deferred_collision_count() != 0) {
+		std::lock_guard<std::mutex> lock(metrics_mutex_);
+		++metrics_.collision_readiness_repair_application_blocks;
 		return false;
 	}
 	const WtSchedulerMetrics scheduler_metrics = scheduler_->get_metrics();
@@ -430,6 +452,8 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 		page_metrics.mesh_worker_queued_jobs != 0 ||
 		page_metrics.mesh_worker_active_jobs != 0 ||
 		page_metrics.mesh_worker_queued_completions != 0) {
+		std::lock_guard<std::mutex> lock(metrics_mutex_);
+		++metrics_.collision_readiness_repair_pipeline_blocks;
 		return false;
 	}
 	const WtCollisionPolicy collision_policy {
@@ -473,9 +497,15 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 				record.collision_generation == record.generation)) {
 			continue;
 		}
-		if (repair_already_published(record.key, record.generation)) continue;
 		const WtDesiredChunk *desired = desired_->find_desired(record.key);
-		if (desired != nullptr && !desired->collision_required) {
+		const bool obsolete_collision_demand =
+			(desired != nullptr && !desired->collision_required) ||
+			(desired == nullptr && !collision_viewers_.empty());
+		if (obsolete_collision_demand) {
+			// A prior payload/remesh attempt only deduplicates work for an active
+			// collision demand. It must never suppress removal of collision demand
+			// after the viewer moves away. Otherwise the obsolete application record
+			// remains collision-required forever and blocks its regional retirement.
 			if (!push_publication({
 					WtReadOnlyPublicationKind::SetCollisionRequired,
 					record.key,
@@ -494,8 +524,17 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 				record.key,
 				record.generation,
 			});
+			{
+				std::lock_guard<std::mutex> lock(metrics_mutex_);
+				++metrics_.collision_readiness_repair_obsolete_clears;
+			}
 			++repairs;
 			if (repairs >= kMaxCollisionRepairsPerPass) break;
+			continue;
+		}
+		if (repair_already_published(record.key, record.generation)) {
+			std::lock_guard<std::mutex> lock(metrics_mutex_);
+			++metrics_.collision_readiness_repair_duplicate_skips;
 			continue;
 		}
 		const WtChunkRecord *chunk_record = scheduler_->find_record(record.key);
