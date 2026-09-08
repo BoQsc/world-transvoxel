@@ -493,6 +493,24 @@ bool wt_chunk_publication_region_has_complete_coverage(
 	return true;
 }
 
+void wt_chunk_publication_region_append_retained_coverage(
+	WtChunkPublicationRegion &region,
+	const std::vector<WtChunkKey> &retained_coverage
+) {
+	if (region.retirements.empty()) return;
+	for (const WtChunkKey &key : retained_coverage) {
+		if (!wt_is_valid_chunk_key(key) || !std::any_of(
+				region.retirements.begin(), region.retirements.end(),
+				[&key](const WtChunkKey &retirement) {
+					return bounds_overlap(key, retirement);
+				}
+			)) {
+			continue;
+		}
+		insert_key(region.replacements, key);
+	}
+}
+
 bool wt_chunk_publication_region_has_complete_authoritative_coverage(
 	const WtChunkPublicationRegion &region,
 	const std::function<bool(const WtChunkKey &)> &is_authoritative

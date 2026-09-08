@@ -50,6 +50,31 @@ bool WorldTransvoxelTerrain::reconcile_interaction_gpu_placeholder(
 
 namespace {
 
+void append_retained_gpu_coverage(
+	WtChunkApplicationService &application,
+	WtGodotRenderSink &render_sink,
+	const std::vector<WtChunkKey> &pending_retirements,
+	WtChunkPublicationRegion &region
+) {
+	if (region.retirements.empty()) return;
+	std::vector<WtChunkKey> retained_coverage;
+	for (const WtChunkApplicationRecord &record : application.get_records()) {
+		if (!record.visual_required || !record.visual_ready ||
+			std::binary_search(
+				pending_retirements.begin(), pending_retirements.end(), record.key
+			) || !render_sink.gpu_resident_replacement_matches(
+				record.key, record.generation,
+				record.external_visual_transition_mask
+			)) {
+			continue;
+		}
+		retained_coverage.push_back(record.key);
+	}
+	wt_chunk_publication_region_append_retained_coverage(
+		region, retained_coverage
+	);
+}
+
 struct ParsedGpuChunkInventory {
 	WtGpuMeshingShadowIdentity identity;
 	bool water_expected = false;
@@ -259,7 +284,7 @@ bool build_gpu_publication_cohort(
 	if (inspected_visual_retirements) {
 		*inspected_visual_retirements = visual_retirements;
 	}
-	return wt_build_gpu_chunk_publication_cohort(
+	const bool built = wt_build_gpu_chunk_publication_cohort(
 		seed, candidates, visual_retirements,
 		[&application, &render_sink, &retirements, &edit_replacements, inspected_boundaries](const WtChunkKey &key, WtGpuPublicationBoundary &boundary) {
 			// A shared pending retirement is no longer desired visual coverage,
@@ -305,6 +330,16 @@ bool build_gpu_publication_cohort(
 			return true;
 		}, region, waiting_masks, 4096, dependencies
 	);
+	if (built) {
+		// Unsafe-face closure can retire fine chunks immediately outside the new
+		// replacement bounds. Retained, current GPU leaves covering those chunks
+		// are part of the authoritative atomic cohort even though they require no
+		// new capture or activation.
+		append_retained_gpu_coverage(
+			application, render_sink, retirements, region
+		);
+	}
+	return built;
 }
 
 } // namespace
@@ -772,6 +807,33 @@ get_gpu_resident_render_activation_cohort(
 	result["authoritative_coverage_complete"] = covered;
 	result["same_layout_edit"] = same_layout_edit;
 	if (!covered) {
+		result["selected_replacements"] = gpu_cohort_keys(region.replacements);
+		result["selected_retirements"] = gpu_cohort_keys(region.retirements);
+		result["geometric_coverage_complete"] = region.retirements.empty() ||
+			wt_chunk_publication_region_has_complete_coverage(region);
+		std::int64_t non_authoritative_replacements = 0;
+		std::int64_t non_authoritative_retirements = 0;
+		godot::Dictionary first_non_authoritative_replacement;
+		godot::Dictionary first_non_authoritative_retirement;
+		if (lifecycle_) {
+			const WtPageHierarchy hierarchy = lifecycle_->page_hierarchy();
+			for (const WtChunkKey &key : region.replacements) {
+				if (hierarchy.contains(key)) continue;
+				if (non_authoritative_replacements++ == 0) {
+					first_non_authoritative_replacement = gpu_cohort_key(key);
+				}
+			}
+			for (const WtChunkKey &key : region.retirements) {
+				if (hierarchy.contains(key)) continue;
+				if (non_authoritative_retirements++ == 0) {
+					first_non_authoritative_retirement = gpu_cohort_key(key);
+				}
+			}
+		}
+		result["non_authoritative_replacement_count"] = non_authoritative_replacements;
+		result["non_authoritative_retirement_count"] = non_authoritative_retirements;
+		result["first_non_authoritative_replacement"] = first_non_authoritative_replacement;
+		result["first_non_authoritative_retirement"] = first_non_authoritative_retirement;
 		result["status"] = "WAITING_COHORT";
 		result["error"] = "GPU resident boundary cohort is incomplete or exceeds capacity";
 		return result;

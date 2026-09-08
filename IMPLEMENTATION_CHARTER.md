@@ -1482,6 +1482,17 @@ cohort validation must reject a missing, stale, mixed-revision, or failed
 candidate while retaining old coverage. Transition-changing, streaming, and
 LOD cohorts continue through the normal deferred publication graph.
 
+Unsafe-face closure may pull retiring fine leaves immediately outside a new
+coarse replacement's volume into the same atomic GPU cohort. Current desired
+GPU leaves that remain active at their exact generation and transition mask are
+admitted as retained cohort members when they overlap that retirement volume.
+They participate in the authoritative coverage proof and immutable activation
+inventory without new capture or activation. This permits the complete swap
+while retaining continuous coverage; stale, retiring, mismatched, or
+nonvisual leaves cannot satisfy the proof. A failed coverage query reports its
+selected replacements and retirements, geometric coverage result, and first
+non-authoritative member so a persistent publication wait is self-identifying.
+
 After an external same-layout visual activation and independent collision
 publication have both reached the exact application generation, their shared
 frontend replacement marker is complete and is detached directly. It must not

@@ -138,6 +138,25 @@ void compare_coverage(const wt::WtChunkPublicationRegion &region, const Authorit
 void coverage_regression() {
 	std::mt19937 random(0xc0be);
 	const Authority all = [](const auto &) { return true; };
+	{
+		// A coarse replacement can pull adjacent fine retirements into an atomic
+		// unsafe-face swap. Existing desired coarse coverage on the far side must
+		// participate in the proof without being rebuilt or reactivated.
+		wt::WtChunkPublicationRegion region {
+			{{3, 1, 2, 2}},
+			{{16, 4, 10, 0}, {16, 5, 10, 0},
+			 {16, 4, 11, 0}, {16, 5, 11, 0}},
+		};
+		check(!wt::wt_chunk_publication_region_has_complete_coverage(region),
+			"unsafe-face retirements unexpectedly covered by new replacement");
+		wt::wt_chunk_publication_region_append_retained_coverage(
+			region, {{99, 99, 99, 0}, {2, 0, 1, 3}, {2, 0, 1, 3}}
+		);
+		check(region.replacements.size() == 2,
+			"retained coverage admission was not bounded and unique");
+		check(wt::wt_chunk_publication_region_has_complete_coverage(region),
+			"retained active coverage did not close unsafe-face retirements");
+	}
 	const Authority clipped = [](const auto &key) {
 		const auto b = wt::wt_chunk_bounds(key);
 		return b.minimum.x < -16 && b.maximum.x > -96 && b.minimum.y < 112 && b.maximum.y > 16 &&

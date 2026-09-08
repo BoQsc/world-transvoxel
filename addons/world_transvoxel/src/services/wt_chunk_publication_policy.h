@@ -57,6 +57,13 @@ bool wt_chunk_publication_region_has_complete_coverage(
 	const WtChunkPublicationRegion &region
 ) noexcept;
 
+// Adds current desired GPU leaves which remain visible and cover retirement
+// volume pulled into a cohort solely by unsafe face closure.
+void wt_chunk_publication_region_append_retained_coverage(
+	WtChunkPublicationRegion &region,
+	const std::vector<WtChunkKey> &retained_coverage
+);
+
 bool wt_chunk_publication_region_has_complete_authoritative_coverage(
 	const WtChunkPublicationRegion &region,
 	const std::function<bool(const WtChunkKey &)> &is_authoritative
