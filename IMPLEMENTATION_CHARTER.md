@@ -1504,6 +1504,17 @@ waits without occupying a GPU slot; superseded generations are rejected by the
 existing readiness checks. Collision readiness and regional publication remain
 unchanged.
 
+The native GPU identity exports whether the scheduler job is at or above
+interaction-focus priority. The render-thread frontend uses that fact, together
+with the incremental-edit flag, to select a reserved interaction dispatch lane;
+it must not infer interaction locality from LOD or distance. GPU extraction
+writes a per-slot generation-and-ticket completion token after all mesh writes.
+That token releases only dispatch-lane capacity. Candidate geometry remains
+provisional, old coverage remains active, and reclamation remains forbidden
+until the existing cohort commit and asynchronous summary validation complete.
+Background extraction has four outstanding completion tokens and interaction
+extraction has eight; their queued admission bounds remain independent.
+
 LOD-map validation and balancing use exact dyadic ancestor and face-neighbor
 lookups. They do not scan all pairs of active leaves. Staged planning builds one
 immutable descendant-priority summary per target and reuses it for selection,

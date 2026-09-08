@@ -70,6 +70,8 @@ godot::Dictionary wt_gpu_meshing_shadow_identity(
 		WtGpuMeshingShadowSurface::StaticWater ? 1 : 0;
 	identity["sample_count"] = sample_count;
 	identity["incremental_edit"] = request.incremental_edit;
+	identity["interaction_priority"] = request.job.priority >=
+		world_transvoxel::kWtInteractionFocusPriority;
 	identity["dirty_regular_brick_mask"] = request.dirty_regular_brick_mask;
 	if (request.has_dirty_edit_bounds) {
 		identity["dirty_bounds_min"] = godot::Vector3i(
