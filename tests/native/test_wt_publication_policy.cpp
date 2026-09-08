@@ -337,6 +337,28 @@ void dependency_snapshot_regression() {
 	std::cout << "PUBLICATION_DEPENDENCY_SNAPSHOT_PASS unchanged_queries=100 mask_readiness_mutations=128 isolated_invalidation=1\n";
 }
 
+void sparse_fine_face_cohort_regression() {
+	const wt::WtChunkKey coarse {0, 0, 0, 1};
+	const wt::WtChunkKey fine {2, 0, 0, 0};
+	Keys authoritative {coarse, fine};
+	normalize(authoritative);
+	wt::WtChunkPublicationRegion region;
+	Keys waiting;
+	const auto lookup = [&authoritative](
+			const wt::WtChunkKey &key, wt::WtGpuPublicationBoundary &boundary) {
+		if (!contains(authoritative, key)) return false;
+		boundary = {0, false};
+		return true;
+	};
+	check(wt::wt_build_gpu_chunk_publication_cohort(
+		coarse, authoritative, {}, lookup, region, waiting, 64
+	), "sparse authoritative fine face cohort was rejected");
+	check(region.replacements.size() == 2 && contains(region.replacements, coarse) &&
+		contains(region.replacements, fine),
+		"GPU cohort invented absent fine-face siblings");
+	std::cout << "GPU_SPARSE_FINE_FACE_COHORT_PASS authoritative=2 invented=0\n";
+}
+
 wt::WtChunkKey read_key() {
 	wt::WtChunkKey key; int lod;
 	check(bool(std::cin >> key.x >> key.y >> key.z >> lod) && lod >= 0 && lod <= wt::kWtMaximumLod,
@@ -432,6 +454,7 @@ int main(int argc, char **argv) {
 		regression();
 		spatial_dependency_regression();
 		dependency_snapshot_regression();
+		sparse_fine_face_cohort_regression();
 		coverage_regression();
 	}
 }

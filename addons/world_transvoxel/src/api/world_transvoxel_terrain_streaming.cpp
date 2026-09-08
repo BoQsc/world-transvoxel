@@ -693,6 +693,18 @@ void WorldTransvoxelTerrain::flush_ready_render_retirements() {
 }
 
 void WorldTransvoxelTerrain::flush_ready_chunk_replacements() {
+	// Viewer supersession can forget an application record after its key moved
+	// from the pending queue into the ready regional queue. Remove those keys
+	// here as well: no producer remains that could prepare their visual branch,
+	// and retaining one makes every later overlapping cohort wait forever.
+	ready_staged_chunk_replacements_.erase(std::remove_if(
+		ready_staged_chunk_replacements_.begin(),
+		ready_staged_chunk_replacements_.end(),
+		[this](const WtChunkKey &key) {
+			WtChunkApplicationRecord record;
+			return !application_->copy_record(key, record) ||
+				!record.visual_required;
+		}), ready_staged_chunk_replacements_.end());
 	for (auto iterator = pending_chunk_replacements_.begin();
 			iterator != pending_chunk_replacements_.end();) {
 		WtChunkApplicationRecord record;

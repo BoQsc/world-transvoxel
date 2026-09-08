@@ -1602,6 +1602,18 @@ until the existing cohort commit and asynchronous summary validation complete.
 Background extraction has four outstanding completion tokens and interaction
 extraction has eight; their queued admission bounds remain independent.
 
+A visual replacement key without an application record is obsolete queue
+residue, not an incomplete cohort member. Viewer supersession may remove the
+record after the key moves from pending work into the ready regional queue, so
+the frontend prunes both pending and ready staging queues and cohort selection
+also excludes missing records. A live incomplete replacement always retains its
+generation-bearing application record and continues to wait for exact visual
+preparation. This prevents an unreachable member from holding later overlapping
+LOD publication cohorts indefinitely without weakening atomic publication.
+Face closure may add only fine neighbors accepted by the authoritative boundary
+lookup. Other coordinates on the same four-child face are outside the live
+publication set and cannot be invented as generation-zero cohort members.
+
 A capture may reach the frontend before its exact CPU application record.
 Every later readiness query retries the generation-matched resident placeholder
 as soon as that application generation exists, then re-reads application state

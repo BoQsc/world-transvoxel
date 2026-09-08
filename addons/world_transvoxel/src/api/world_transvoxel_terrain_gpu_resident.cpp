@@ -259,11 +259,14 @@ bool build_gpu_publication_cohort(
 	candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
 	// The shared staging queues also contain collision-only LOD0 records. They
 	// may spatially overlap a desired visual parent and are not visual coverage.
-	// Preserve missing records so genuinely incomplete publication still waits.
+	// A key without an application record was superseded after it entered a
+	// staging queue. It has no generation that can ever become prepared, so it
+	// must not remain a permanent member of a later visual cohort. An incomplete
+	// live publication still has a record and continues to wait below.
 	candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
 		[&application](const WtChunkKey &key) {
 			WtChunkApplicationRecord record;
-			return application.copy_record(key, record) && !record.visual_required;
+			return !application.copy_record(key, record) || !record.visual_required;
 		}), candidates.end());
 	// Chunk retirement is shared by visual and collision-only records. Only a
 	// replacement currently active in the GPU render sink contributes visible

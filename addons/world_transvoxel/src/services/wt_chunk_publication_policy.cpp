@@ -461,8 +461,8 @@ bool wt_build_gpu_chunk_publication_cohort(
 				if ((boundary.transition_mask & bit) == 0) insert_key(waiting_masks, key);
 				for (const WtChunkKey &fine : fine_keys) {
 					WtGpuPublicationBoundary fine_boundary;
-					if (!read(fine, fine_boundary) || !fine_boundary.compatible_active ||
-							(fine_boundary.transition_mask & opposite_bit) != 0) {
+					if (read(fine, fine_boundary) && (!fine_boundary.compatible_active ||
+							(fine_boundary.transition_mask & opposite_bit) != 0)) {
 						if (!add(fine)) return false;
 					}
 				}
