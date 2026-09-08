@@ -1461,6 +1461,22 @@ chunk retirement removes it, and world shutdown clears all tombstones. Runtime
 metrics expose the tombstone count so empty terrain cannot create unreported
 resource growth.
 
+An incremental LOD0 edit publishes only the intersecting 8-cubed collision
+blocks identified by its dirty-brick mask. The payload must retain that exact
+mask through collision preparation and Godot application; unselected block
+shapes stay active from the preceding generation. The resource cache stores a
+merged complete generation when its prior complete payload remains resident,
+and never replaces complete cached coverage with a partial patch. A partial
+construction may extend an authoritative empty-generation tombstone by creating
+the block body with empty unselected shapes. These rules prevent a local edit
+from removing collision elsewhere in the same chunk.
+`collision_payload_prepared` causal events report the exact dirty-block mask in
+their status field so runtime evidence distinguishes partial and complete work.
+Page replay validates and applies each command in one pass over a temporary
+page, adopting the page only after every resulting sample is finite. This keeps
+command application atomic while avoiding a duplicate full-page SDF evaluation;
+SDF support-band behavior outside geometric brush bounds remains authoritative.
+
 Cached source pages remain immutable base data keyed by source revision. An edit
 does not evict that base page: journal replay derives the requested world revision
 when sampling the replacement. The runtime admits and starts committed-edit work

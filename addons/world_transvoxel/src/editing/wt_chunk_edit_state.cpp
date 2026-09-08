@@ -401,19 +401,14 @@ bool may_intersect_page(
 		bounds.minimum.z <= page_bounds.maximum.z;
 }
 
-bool density_result_is_finite(
-	const WtChunkPage &page,
+bool apply_values(
+	WtChunkPage &page,
 	const WtEditCommand &command,
-	const WtProceduralWorldDescriptor *procedural_descriptor
+	const WtProceduralWorldDescriptor *procedural_descriptor,
+	std::size_t &changed
 ) noexcept {
-	const bool additive = command.operation == WtEditOperation::AddDensity;
-	const bool sdf = command.operation == WtEditOperation::SdfCarve ||
-		command.operation == WtEditOperation::SdfConstruct;
-	const bool static_water =
-		command.operation == WtEditOperation::PlaceStaticWater ||
-		command.operation == WtEditOperation::RemoveStaticWater;
-	if ((!additive && !sdf && !static_water) ||
-		!may_intersect_page(page.metadata, command.bounds)) {
+	changed = 0;
+	if (!may_intersect_page(page.metadata, command.bounds)) {
 		return true;
 	}
 	std::size_t index = 0;
@@ -427,50 +422,20 @@ bool density_result_is_finite(
 					)) {
 					continue;
 				}
-				WtScalarSample sample = page.samples[index];
-				bool changed = false;
+				WtScalarSample &sample = page.samples[index];
+				bool sample_changed = false;
 				if (!apply_valid_command_to_sample(
-						command, point, sample, changed
+						command, point, sample, sample_changed
 					)) {
 					return false;
 				}
-			}
-		}
-	}
-	return true;
-}
-
-std::size_t apply_values(
-	WtChunkPage &page,
-	const WtEditCommand &command,
-	const WtProceduralWorldDescriptor *procedural_descriptor
-) noexcept {
-	if (!may_intersect_page(page.metadata, command.bounds)) {
-		return 0;
-	}
-	std::size_t changed = 0;
-	std::size_t index = 0;
-	for (int z = -1; z <= 17; ++z) {
-		for (int y = -1; y <= 17; ++y) {
-			for (int x = -1; x <= 17; ++x, ++index) {
-				const WtGridPoint point = sample_point(page.metadata, x, y, z);
-				if (procedural_descriptor != nullptr &&
-					wt_procedural_bottom_boundary_protects_sample(
-						*procedural_descriptor, point
-					)) {
-					continue;
-				}
-				WtScalarSample &sample = page.samples[index];
-				bool sample_changed = false;
-				if (apply_valid_command_to_sample(
-						command, point, sample, sample_changed
-					) && sample_changed) {
+				if (sample_changed) {
 					++changed;
 				}
 			}
 		}
 	}
-	return changed;
+	return true;
 }
 
 } // namespace
@@ -567,21 +532,29 @@ WtChunkEditStatus WtChunkEditState::apply_command(
 	}
 	const WtProceduralWorldDescriptor *procedural_descriptor =
 		has_procedural_descriptor_ ? &procedural_descriptor_ : nullptr;
-	if (!density_result_is_finite(page_, command, procedural_descriptor)) {
-		last_status_ = WtChunkEditStatus::NonFiniteResult;
-		return last_status_;
+	std::size_t command_changed_sample_count = 0;
+	const bool intersects = may_intersect_page(page_.metadata, command.bounds);
+	if (intersects) {
+		WtChunkPage candidate = page_;
+		if (!apply_values(
+				candidate,
+				command,
+				procedural_descriptor,
+				command_changed_sample_count
+			)) {
+			last_status_ = WtChunkEditStatus::NonFiniteResult;
+			return last_status_;
+		}
+		page_ = std::move(candidate);
 	}
 	const bool invalidates_surface_shift =
-		page_.metadata.key.lod > 0 &&
-		may_intersect_page(page_.metadata, command.bounds);
+		page_.metadata.key.lod > 0 && intersects;
 	if (command.world_revision != current_world_revision_) {
 		current_world_revision_ = command.world_revision;
 		next_sequence_ = 0;
 	}
-	changed_sample_count_ += apply_values(
-		page_, command, procedural_descriptor
-	);
-	if (may_intersect_page(page_.metadata, command.bounds)) {
+	changed_sample_count_ += command_changed_sample_count;
+	if (intersects) {
 		if (!has_surface_shift_dirty_bounds_) {
 			surface_shift_dirty_bounds_ = command.bounds;
 			has_surface_shift_dirty_bounds_ = true;

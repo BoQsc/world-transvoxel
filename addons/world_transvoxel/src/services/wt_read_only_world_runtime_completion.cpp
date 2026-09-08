@@ -88,7 +88,9 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 				&completion.key,
 				completion.generation,
 				record->world_revision,
-				collision->metrics.output_triangles
+				collision->metrics.output_triangles,
+				0,
+				collision->dirty_block_mask
 			);
 			return true;
 		}
@@ -105,23 +107,61 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 			&completion.key,
 			completion.generation,
 			record->world_revision,
-			0
+			0,
+			0,
+			collision->dirty_block_mask
 		);
 		return true;
+	}
+	const WtCollisionBuildStatus collision_status =
+		completion.incremental_edit && completion.key.lod == 0 ?
+			wt_build_regular_collision_patch(
+				*completion.mesh,
+				completion.generation,
+				collision_policy,
+				completion.dirty_regular_brick_mask,
+				*collision
+			) :
+			wt_build_regular_collision_payload(
+				*completion.mesh,
+				completion.generation,
+				collision_policy,
+				*collision
+			);
+	std::shared_ptr<const WtCollisionPayload> cached_collision = collision;
+	if (collision_status == WtCollisionBuildStatus::Ok &&
+		collision->incremental_patch &&
+		collision->dirty_block_mask != kWtCollisionAllBlocksMask) {
+		const std::shared_ptr<const WtCollisionPayload> previous =
+			resource_cache_->find_collision(
+				completion.key, application_record.collision_generation
+			);
+		if (previous) {
+			auto merged = std::make_shared<WtCollisionPayload>();
+			if (wt_merge_collision_patch(*previous, *collision, *merged) !=
+					WtCollisionBuildStatus::Ok) {
+				set_failure(
+					WtReadOnlyRuntimeStatus::PipelineTerrainMeshCompletionFailure
+				);
+				return false;
+			}
+			cached_collision = std::move(merged);
+		} else {
+			// The sink can still patch its resident block shapes. Do not replace
+			// the cache's complete payload with an incomplete generation when its
+			// merge base has already been evicted.
+			cached_collision.reset();
+		}
 	}
 	if ((!completion.incremental_edit && resource_cache_->insert_mesh(
 			completion.mesh,
 			completion.generation,
 			record->generation
 		) != WtChunkResourceCacheStatus::Ok) ||
-		wt_build_regular_collision_payload(
-			*completion.mesh,
-			completion.generation,
-			collision_policy,
-			*collision
-		) != WtCollisionBuildStatus::Ok ||
-		resource_cache_->insert_collision(collision, record->generation) !=
-			WtChunkResourceCacheStatus::Ok) {
+		collision_status != WtCollisionBuildStatus::Ok ||
+		(cached_collision && resource_cache_->insert_collision(
+			cached_collision, record->generation
+		) != WtChunkResourceCacheStatus::Ok)) {
 		set_failure(
 			WtReadOnlyRuntimeStatus::PipelineTerrainMeshCompletionFailure
 		);
@@ -133,7 +173,9 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 		&completion.key,
 		completion.generation,
 		record->world_revision,
-		collision->metrics.output_triangles
+		collision->metrics.output_triangles,
+		0,
+		collision->dirty_block_mask
 	);
 	return true;
 }

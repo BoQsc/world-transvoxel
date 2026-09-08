@@ -87,12 +87,16 @@ bool WtGodotCollisionSink::apply_collision(const WtCollisionPayload &payload) {
 		empty_generations_[payload.key] = payload.generation;
 		return true;
 	}
-	empty_generations_.erase(payload.key);
 	const auto existing = records_.find(payload.key);
 	const bool created = existing == records_.end();
-	if (created && payload.dirty_block_mask != kWtCollisionAllBlocksMask) {
+	const auto empty_base = empty_generations_.find(payload.key);
+	const bool extends_empty_generation = empty_base != empty_generations_.end() &&
+		empty_base->second.value < payload.generation.value;
+	if (created && payload.dirty_block_mask != kWtCollisionAllBlocksMask &&
+		!extends_empty_generation) {
 		return false;
 	}
+	empty_generations_.erase(payload.key);
 	std::array<godot::Ref<godot::Shape3D>, kWtCollisionBlockCount>
 		candidate_shapes{};
 	for (std::size_t block = 0; block < payload.blocks.size(); ++block) {
