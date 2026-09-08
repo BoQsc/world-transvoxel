@@ -346,6 +346,14 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		runtime.foreground_priority_missing_keys);
 	set_metric(output, "foreground_priority_changed_priorities",
 		runtime.foreground_priority_changed_priorities);
+	set_metric(output, "interaction_shell_refreshes",
+		runtime.interaction_shell_refreshes);
+	set_metric(output, "interaction_shell_added_chunks",
+		runtime.interaction_shell_added_chunks);
+	set_metric(output, "interaction_shell_rejections",
+		runtime.interaction_shell_rejections);
+	set_metric(output, "interaction_shell_planning_ns_max",
+		runtime.interaction_shell_planning_ns_max);
 	set_metric(output, "foreground_priority_last_source_id",
 		runtime.foreground_priority_last_source_id);
 	set_metric(output, "foreground_priority_last_revision",

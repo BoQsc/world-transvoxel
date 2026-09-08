@@ -253,6 +253,7 @@ private:
 		UpdateCollision,
 		RemoveCollision,
 		RefreshEditLodRetention,
+		RefreshInteractionShell,
 		AdvanceStaging,
 	};
 	struct ViewerEvent {
@@ -396,6 +397,7 @@ private:
 	mutable std::mutex input_mutex_;
 	std::vector<ViewerEvent> viewer_events_;
 	std::size_t viewer_event_capacity_ = 0;
+	bool interaction_shell_refresh_pending_ = false;
 	std::vector<ForegroundPriorityEvent> foreground_priority_events_;
 	std::size_t foreground_priority_event_capacity_ = 0;
 	std::vector<WorldOperation> world_operations_;

@@ -81,6 +81,12 @@ public:
 		const std::vector<WtChunkKey> &foreground_keys,
 		WtBalancedLodPlan &output, bool &complete
 	) const;
+	WtBalancedLodPlannerStatus refine_interaction_shell(
+		const WtBalancedLodPlan &current,
+		const std::vector<WtChunkKey> &interaction_keys,
+		std::int32_t interaction_priority,
+		WtBalancedLodPlan &output
+	) const;
 	std::size_t catalog_size() const noexcept;
 	WtPageHierarchyMetrics hierarchy_metrics() const noexcept;
 

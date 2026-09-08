@@ -2467,6 +2467,46 @@ int main(int argc, char **argv) {
 		check(bounded.stage_foreground(target, empty, {}, 3, focus, rejected, complete) == wt::WtBalancedLodPlannerStatus::CapacityExceeded,
 			"foreground projection exceeded configured capacity");
 		std::printf("FOREGROUND_PROJECTION_PASS full_resolution_keys=%zu requested_leaves=%zu intermediate_publications=0\n", focus.size(), projected.entries.size());
+
+		wt::WtLodMap coarse_map(2048);
+		std::vector<wt::WtChunkKey> coarse_keys;
+		for (int x = 0; x < 3; ++x) coarse_keys.push_back({x, 0, 0, 3});
+		check(coarse_map.set_active_chunks(coarse_keys) == wt::WtLodMapStatus::Ok,
+			"interaction shell coarse map invalid");
+		wt::WtBalancedLodPlan coarse, shell;
+		coarse.entries = coarse_map.get_entries();
+		for (const auto &entry : coarse.entries) {
+			coarse.demands.push_back({entry.key, 7, false, true});
+		}
+		const std::vector<wt::WtChunkKey> shell_keys {{2, 2, 2, 0}};
+		check(planner.refine_interaction_shell(
+			coarse, shell_keys, 1000, shell
+		) == wt::WtBalancedLodPlannerStatus::Ok,
+			"incremental interaction shell refinement failed");
+		check(find_entry(shell, shell_keys.front()) != nullptr,
+			"incremental interaction shell omitted exact LOD0 key");
+		check(find_entry(shell, {2, 0, 0, 3}) != nullptr,
+			"incremental interaction shell changed unrelated coverage");
+		const auto shell_demand = std::find_if(
+			shell.demands.begin(), shell.demands.end(),
+			[&](const wt::WtViewerChunkDemand &demand) {
+				return demand.key == shell_keys.front();
+			}
+		);
+		check(shell_demand != shell.demands.end() &&
+			shell_demand->priority == 1000 && shell_demand->visual_required,
+			"incremental interaction shell priority contract failed");
+		wt::WtLodMap shell_map(2048);
+		std::vector<wt::WtChunkKey> shell_leaves;
+		for (const auto &entry : shell.entries) shell_leaves.push_back(entry.key);
+		check(shell_map.set_active_chunks(shell_leaves) == wt::WtLodMapStatus::Ok,
+			"incremental interaction shell produced invalid or unbalanced topology");
+		wt::WtBalancedLodPlanner tight(16, catalog);
+		check(tight.refine_interaction_shell(
+			coarse, shell_keys, 1000, rejected
+		) == wt::WtBalancedLodPlannerStatus::CapacityExceeded,
+			"incremental interaction shell exceeded configured capacity");
+		std::printf("INTERACTION_SHELL_REFINEMENT_PASS focus=1 retained=1 balanced=1\n");
 	}
 	const bool hierarchical_staging_ok =
 		run_hierarchical_staging_regression();

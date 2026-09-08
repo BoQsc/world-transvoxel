@@ -1391,14 +1391,22 @@ with interaction warming is never cancelled through meshing ownership. Storage
 and page-runtime metrics report queued dependency cancellations so interaction
 lane reclamation is measurable without weakening queue capacity.
 
-Interaction-focus leases also warm missing LOD0 source pages without adding them
-to the desired set. Each unique active focus key uses the reserved interaction
-storage lane and is decoded into the bounded page cache when its immutable load
-completes. Warming cannot create application, collision, or visual publication
-records; later balanced demand remains the sole authority for chunk activation.
+Interaction-focus leases warm missing LOD0 source pages before demand admission.
+Each unique active focus key uses the reserved interaction storage lane and is
+decoded into the bounded page cache when its immutable load completes. Warming
+cannot create application, collision, or visual publication records.
 Focus movement does not cancel an already executing immutable load, and ordinary
 cache eviction reconstructs it from storage plus the authoritative journal.
 Admissions, coalescing, cache hits, completions, and rejections are observable.
+
+An accepted interaction-focus lease also refines the currently published visual
+leaf set directly to its exact LOD0 keys. The operation splits only containing
+ancestors, adds the minimum neighboring families needed to restore exact 2:1
+balance, and retains unrelated coverage. It does not traverse or rebuild the
+broad viewer target. The resulting delta uses the existing generation-safe plan
+publication path; the next ordinary viewer plan reclaims the previous shell.
+Capacity remains bounded, and refresh count, added leaves, rejection count, and
+worst planning time are reported by runtime metrics.
 
 The production player projects each LOD0 support or tool-focus path into a
 one-chunk three-dimensional interaction shell before updating its foreground
@@ -1407,9 +1415,8 @@ nearest Manhattan halo layers across all centers, and stops at the native
 64-key per-source capacity. A single focus therefore warms its complete 27-key
 neighborhood; a long tool ray retains every traversed center before optional
 halo keys. Shell loading uses the existing bounded interaction storage lane and
-must not reject requests or block input, physics, or rendering. It changes
-priority and derived-cache warmth only; viewer demand, balanced topology, and
-atomic regional publication remain authoritative.
+must not reject requests or block input, physics, or rendering. Balanced topology
+and atomic regional publication remain authoritative.
 
 Asynchronous meshing also preserves its reserved interaction worker after
 admission. When an atomic GPU publication identifies a queued background mesh as
