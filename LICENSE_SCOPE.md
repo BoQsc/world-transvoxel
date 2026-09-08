@@ -23,3 +23,9 @@ MIT backend must remove all Transvoxel MIT code and data from a distribution.
 
 Downloaded papers and external repositories under `references/downloaded/`
 are local research material and are intentionally untracked.
+
+Unmodified papers under `references/preserved/papers/` retain their authors'
+copyright and their individual Creative Commons terms. They are not covered by
+the root 0BSD license. Attribution, license links, immutable hashes, and the
+boundary between vendored and link-only papers are recorded in
+`references/PRESERVATION.md` and `references/manifest.json`.

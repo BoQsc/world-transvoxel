@@ -1,62 +1,105 @@
 {
   "schema": "world-transvoxel.references.v1",
-  "reviewed_date": "2026-06-20",
+  "reviewed_date": "2026-09-08",
   "papers": [
     {
       "id": "lengyel_voxel_terrain_2010",
       "title": "Voxel-Based Terrain for Real-Time Virtual Simulations",
       "url": "https://transvoxel.org/Lengyel-VoxelTerrain.pdf",
       "target": "papers/Lengyel-VoxelTerrain.pdf",
-      "role": "canonical_transvoxel_system"
+      "role": "canonical_transvoxel_system",
+      "bytes": 59370083,
+      "sha256": "c1c86dc1c441fa86dbe6b4b38a521ffb26a5eec3c4eede0f5782508a6ad41160",
+      "license": "CC-BY-ND-3.0",
+      "license_url": "https://creativecommons.org/licenses/by-nd/3.0/",
+      "preservation_status": "vendored",
+      "preserved_path": "references/preserved/papers/Lengyel-VoxelTerrain.pdf"
     },
     {
       "id": "ju_dual_contouring_2002",
       "title": "Dual Contouring of Hermite Data",
       "url": "https://www.cs.rice.edu/~jwarren/papers/dualcontour.pdf",
       "target": "papers/Dual-Contouring-Hermite-Data.pdf",
-      "role": "sharp_feature_alternative"
+      "role": "sharp_feature_alternative",
+      "bytes": 2341560,
+      "sha256": "30e6950d68a0294ecb953763ca622ec50d5ec78fa7c687c8527e1a36764b6db1",
+      "license": "unconfirmed",
+      "preservation_status": "link_and_hash_only"
     },
     {
       "id": "wald_amr_iso_2020",
       "title": "A Simple, General, and GPU Friendly Method for Computing Dual Mesh and Iso-Surfaces of Adaptive Mesh Refinement Data",
       "url": "https://arxiv.org/pdf/2004.08475",
       "target": "papers/Wald-AMR-IsoSurface-2020.pdf",
-      "role": "gpu_adaptive_alternative"
+      "role": "gpu_adaptive_alternative",
+      "bytes": 6644072,
+      "sha256": "3c8f0bf41c9130e8e556b35a9b9764a703bb9ee4d23da7c155fe6e9cfb642c19",
+      "license": "arXiv-nonexclusive-distrib-1.0",
+      "license_url": "https://arxiv.org/licenses/nonexclusive-distrib/1.0/",
+      "preservation_status": "link_and_hash_only"
     },
     {
       "id": "mcgrids_2024",
       "title": "McGrids: Monte Carlo-Driven Adaptive Grids for Iso-Surface Extraction",
       "url": "https://arxiv.org/pdf/2409.06710",
       "target": "papers/McGrids-2024.pdf",
-      "role": "adaptive_sampling_research"
+      "role": "adaptive_sampling_research",
+      "bytes": 42652809,
+      "sha256": "15b2eb8fd5d943d2e9edfc45ac412e5b17b76cb0e5cc02b45887b5aef2915d8b",
+      "license": "CC-BY-4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "preservation_status": "vendored",
+      "preserved_path": "references/preserved/papers/McGrids-2024.pdf"
     },
     {
       "id": "tetweave_2025",
       "title": "TetWeave: Isosurface Extraction using On-The-Fly Delaunay Tetrahedral Grids for Gradient-Based Mesh Optimization",
       "url": "https://arxiv.org/pdf/2505.04590",
       "target": "papers/TetWeave-2025.pdf",
-      "role": "watertight_optimization_research"
+      "role": "watertight_optimization_research",
+      "bytes": 46075153,
+      "sha256": "455702ce786b74e9a2d6c6460bde300822ecb9fc3c27b55e377cec5f68790cc5",
+      "license": "CC-BY-4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "preservation_status": "vendored",
+      "preserved_path": "references/preserved/papers/TetWeave-2025.pdf"
     },
     {
       "id": "power_diagram_adaptive_2025",
       "title": "Power Diagram Enhanced Adaptive Isosurface Extraction from Signed Distance Fields",
       "url": "https://arxiv.org/pdf/2506.09579",
       "target": "papers/Power-Diagram-Adaptive-Isosurface-2025.pdf",
-      "role": "offline_adaptive_research"
+      "role": "offline_adaptive_research",
+      "bytes": 37976658,
+      "sha256": "386c25fb023c85e449f93a7509e5d3d2f199412bf3ae0b116b1e988409a04069",
+      "license": "arXiv-nonexclusive-distrib-1.0",
+      "license_url": "https://arxiv.org/licenses/nonexclusive-distrib/1.0/",
+      "preservation_status": "link_and_hash_only"
     },
     {
       "id": "power_isosurfacing_2025",
       "title": "Isosurface Extraction for Signed Distance Functions using Power Diagrams",
       "url": "https://cybertron.cg.tu-berlin.de/projects/power-isosurfacing/power_isosurfacing.pdf",
       "target": "papers/Power-Isosurfacing-2025.pdf",
-      "role": "sdf_quality_research"
+      "role": "sdf_quality_research",
+      "bytes": 49270418,
+      "sha256": "94d58d16726d6d5f60f904a11dfad652afad3bda19e4e512bb95b05dd8eb1109",
+      "license": "CC-BY",
+      "license_url": "https://diglib.eg.org/items/4912370a-050c-42d0-b838-178b6609cf94",
+      "preservation_status": "vendored",
+      "preserved_path": "references/preserved/papers/Power-Isosurfacing-2025.pdf"
     },
     {
       "id": "dual_contouring_sdf_2026",
       "title": "Dual Contouring of Signed Distance Data",
       "url": "https://arxiv.org/pdf/2604.00157",
       "target": "papers/Dual-Contouring-Signed-Distance-2026.pdf",
-      "role": "latest_sharp_feature_research"
+      "role": "latest_sharp_feature_research",
+      "bytes": 10644234,
+      "sha256": "bcd76702fc5d612cbf7bb3502874a2db6da90742184e4b67660cd108c6974cd4",
+      "license": "conflicting: PDF notice CC-BY-NC-ND-4.0; metadata and arXiv CC-BY-NC-SA-4.0",
+      "license_url": "https://arxiv.org/abs/2604.00157",
+      "preservation_status": "link_and_hash_only"
     }
   ],
   "repositories": [
