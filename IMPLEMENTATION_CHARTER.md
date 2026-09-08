@@ -1361,6 +1361,11 @@ worker reports itself idle, and a queued collision publication records the
 generation's collision branch as pending so readiness repair cannot schedule a
 duplicate generation.
 
+The reserved lane admits collision work carrying player-support,
+interaction-focus, or committed-edit priority. Committed edits remain first
+within that lane. Numeric reprioritization must promote queued collision work
+into the lane; it cannot leave foreground work behind an active background job.
+
 Collision preparation does not reserve GPU capture capacity. Water-only and material-only journal
 revisions advance the installed collision generation while preserving its
 unchanged shapes. Full regular collision payloads are marked separately from
