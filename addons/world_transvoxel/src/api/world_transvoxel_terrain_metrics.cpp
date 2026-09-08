@@ -418,6 +418,14 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	set_metric(output, "published_events", runtime.published_events);
 	set_metric(output, "rejected_events", runtime.rejected_events);
 	set_metric(
+		output, "viewer_plan_cancellations", runtime.viewer_plan_cancellations
+	);
+	set_metric(
+		output,
+		"viewer_plan_cancel_latency_ns_maximum",
+		runtime.viewer_plan_cancel_latency_ns_maximum
+	);
+	set_metric(
 		output,
 		"scheduler_requested_records",
 		runtime.scheduler_requested_records

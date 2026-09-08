@@ -41,6 +41,11 @@ bool WtReadOnlyWorldRuntime::enqueue_world_operation(
 		);
 		world_operations_.insert(insertion, std::move(operation));
 		if (edit) {
+			if (!pending_edit_operation_.load(std::memory_order_relaxed)) {
+				pending_edit_operation_started_ns_.store(
+					wt_causal_trace_now_ns(), std::memory_order_relaxed
+				);
+			}
 			pending_edit_operation_.store(true, std::memory_order_release);
 		}
 		notify_work();
@@ -166,6 +171,11 @@ bool WtReadOnlyWorldRuntime::process_world_operation_event() {
 				another_edit_is_pending,
 				std::memory_order_release
 			);
+			if (!another_edit_is_pending) {
+				pending_edit_operation_started_ns_.store(
+					0, std::memory_order_relaxed
+				);
+			}
 		}
 	}
 	switch (operation.kind) {

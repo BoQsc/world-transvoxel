@@ -537,6 +537,9 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	std::uint64_t candidate_visual_activation_sequence =
 		staging_observed_visual_activation_sequence_;
 	WtBalancedLodPlannerStatus plan_status = WtBalancedLodPlannerStatus::Ok;
+	const auto cancel_for_pending_edit = [this]() {
+		return has_pending_edit_operation();
+	};
 	if (collision_event) {
 		// Collision viewers are an independent working-set overlay. Reusing the
 		// current visual plan avoids retraversing and reprioritizing the entire
@@ -567,7 +570,8 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 					desired_->get_desired_chunks(),
 					collision_policy,
 					candidate_plan,
-					config_.visual_viewer_collision_enabled
+					config_.visual_viewer_collision_enabled,
+					cancel_for_pending_edit
 				);
 			};
 		plan_status = try_plan_with_retention(
@@ -575,6 +579,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			retention_viewer_capacity
 		);
 		if (plan_status != WtBalancedLodPlannerStatus::Ok &&
+				plan_status != WtBalancedLodPlannerStatus::Cancelled &&
 				edit_retention_viewers != 0) {
 			edit_retention_fallback = true;
 			const std::size_t retry_retention_viewers = edit_retention_viewers;
@@ -592,6 +597,9 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 				}
 				while (viewer_limit > 0) {
 					plan_status = try_plan_with_retention(radius, viewer_limit);
+					if (plan_status == WtBalancedLodPlannerStatus::Cancelled) {
+						break;
+					}
 					if (plan_status == WtBalancedLodPlannerStatus::Ok &&
 							edit_retention_viewers != 0) {
 						accepted_degraded_retention = true;
@@ -600,12 +608,14 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 					--viewer_limit;
 				}
 				if (accepted_degraded_retention ||
+						plan_status == WtBalancedLodPlannerStatus::Cancelled ||
 						radius ==
 							kWtEditLodRetentionMinimumRefinementRadiusChunks) {
 					break;
 				}
 			}
-			if (!accepted_degraded_retention) {
+			if (!accepted_degraded_retention &&
+					plan_status != WtBalancedLodPlannerStatus::Cancelled) {
 				edit_retention_viewers = 0;
 				planning_viewers = candidate_viewers;
 				candidate_plan.clear();
@@ -614,10 +624,60 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 					desired_->get_desired_chunks(),
 					collision_policy,
 					candidate_plan,
-					config_.visual_viewer_collision_enabled
+					config_.visual_viewer_collision_enabled,
+					cancel_for_pending_edit
 				);
 			}
 		}
+	}
+	if (plan_status == WtBalancedLodPlannerStatus::Cancelled) {
+		const std::uint64_t now_ns = wt_causal_trace_now_ns();
+		const std::uint64_t edit_started_ns =
+			pending_edit_operation_started_ns_.load(std::memory_order_relaxed);
+		const std::uint64_t cancel_latency_ns =
+			edit_started_ns != 0 && now_ns >= edit_started_ns ?
+				now_ns - edit_started_ns : 0;
+		{
+			std::lock_guard<std::mutex> lock(metrics_mutex_);
+			++metrics_.viewer_plan_cancellations;
+			metrics_.viewer_plan_cancel_latency_ns_maximum = std::max(
+				metrics_.viewer_plan_cancel_latency_ns_maximum,
+				cancel_latency_ns
+			);
+		}
+		if (trace_enabled) {
+			causal_trace_.record(
+				WtCausalTraceEventKind::ViewerPlanCancelled,
+				WtCausalTraceThreadRole::Runtime,
+				nullptr,
+				{},
+				event.snapshot.revision,
+				static_cast<std::uint64_t>(event.kind),
+				now_ns - planning_started_ns
+			);
+		}
+		std::lock_guard<std::mutex> lock(input_mutex_);
+		if (retention_refresh_event) {
+			edit_lod_retention_refresh_pending_ = true;
+		} else if (!staging_event) {
+			const bool newer_event_queued = std::any_of(
+				viewer_events_.begin(), viewer_events_.end(),
+				[&](const ViewerEvent &queued) {
+					if (queued.kind == ViewerEventKind::RefreshEditLodRetention ||
+						queued.kind == ViewerEventKind::AdvanceStaging) return false;
+					const bool queued_collision =
+						queued.kind == ViewerEventKind::UpdateCollision ||
+						queued.kind == ViewerEventKind::RemoveCollision;
+					return queued_collision == collision_event &&
+						queued.snapshot.id == event.snapshot.id &&
+						queued.snapshot.revision >= event.snapshot.revision;
+				}
+			);
+			if (!newer_event_queued) {
+				viewer_events_.insert(viewer_events_.begin(), event);
+			}
+		}
+		return true;
 	}
 	if (plan_status != WtBalancedLodPlannerStatus::Ok ||
 			plan_revision_ == std::numeric_limits<std::uint64_t>::max()) {

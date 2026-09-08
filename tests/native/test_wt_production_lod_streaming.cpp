@@ -783,6 +783,22 @@ bool run_g21_near_field_capacity_regression(
 		minimum_collision_priority > maximum_visual_only_priority,
 		"player collision demand does not outrank visual-only streaming"
 	);
+	std::size_t cancellation_checks = 0;
+	wt::WtBalancedLodPlan cancelled_plan = plan;
+	const wt::WtBalancedLodPlannerStatus cancelled_status = planner.plan(
+		viewers,
+		{},
+		{},
+		cancelled_plan,
+		false,
+		[&]() { return ++cancellation_checks >= 32U; }
+	);
+	check(
+		cancelled_status == wt::WtBalancedLodPlannerStatus::Cancelled &&
+			cancelled_plan.entries.empty() && cancelled_plan.demands.empty() &&
+			cancellation_checks == 32U,
+		"balanced LOD planning did not cancel cleanly at a traversal boundary"
+	);
 	wt::WtBalancedLodPlan visual_only_plan;
 	check(
 		planner.plan(viewers, {}, {}, visual_only_plan, false) ==

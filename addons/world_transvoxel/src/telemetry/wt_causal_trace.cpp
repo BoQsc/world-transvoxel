@@ -154,6 +154,8 @@ const char *wt_causal_trace_event_kind_name(
 		case WtCausalTraceEventKind::TraceStopped: return "trace_stopped";
 		case WtCausalTraceEventKind::ViewerPlanStarted: return "viewer_plan_started";
 		case WtCausalTraceEventKind::ViewerPlanApplied: return "viewer_plan_applied";
+		case WtCausalTraceEventKind::ViewerPlanCancelled:
+			return "viewer_plan_cancelled";
 		case WtCausalTraceEventKind::ChunkDemandAccepted: return "chunk_demand_accepted";
 		case WtCausalTraceEventKind::EditSubmitted: return "edit_submitted";
 		case WtCausalTraceEventKind::EditProcessingStarted: return "edit_processing_started";

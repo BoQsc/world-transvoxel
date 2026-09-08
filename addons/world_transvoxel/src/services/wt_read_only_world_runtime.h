@@ -402,6 +402,7 @@ private:
 	std::size_t world_operation_capacity_ = 0;
 	std::uint64_t next_request_id_ = 0;
 	std::atomic<bool> pending_edit_operation_{ false };
+	std::atomic<std::uint64_t> pending_edit_operation_started_ns_{ 0 };
 
 	mutable std::mutex publication_mutex_;
 	std::condition_variable publication_space_available_;

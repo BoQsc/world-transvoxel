@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 namespace world_transvoxel {
@@ -35,6 +36,7 @@ enum class WtBalancedLodPlannerStatus : std::uint8_t {
 	CapacityExceeded,
 	IncompleteHierarchy,
 	InvalidLodMap,
+	Cancelled,
 };
 
 class WtBalancedLodPlanner {
@@ -58,7 +60,8 @@ public:
 		const std::vector<WtDesiredChunk> &current_desired,
 		const WtCollisionPolicy &collision_policy,
 		WtBalancedLodPlan &output,
-		bool visual_viewer_collision_enabled = true
+		bool visual_viewer_collision_enabled = true,
+		const std::function<bool()> &cancel_requested = {}
 	) const;
 	WtBalancedLodPlannerStatus stage_toward(
 		const WtBalancedLodPlan &target,
@@ -86,11 +89,12 @@ public:
 
 private:
 	bool catalog_contains(const WtChunkKey &key) const noexcept;
-	bool append_subtree(
+	WtBalancedLodPlannerStatus append_subtree(
 		const WtChunkKey &key,
 		const std::vector<WtLodPlannerViewer> &viewers,
 		const std::vector<WtChunkKey> &refined_ancestors,
-		std::vector<WtChunkKey> &leaves
+		std::vector<WtChunkKey> &leaves,
+		const std::function<bool()> &cancel_requested
 	) const;
 	bool should_refine(
 		const WtChunkKey &key,
@@ -103,7 +107,8 @@ private:
 	) const;
 	WtBalancedLodPlannerStatus balance(
 		std::vector<WtChunkKey> &leaves,
-		WtLodMap &lod_map
+		WtLodMap &lod_map,
+		const std::function<bool()> &cancel_requested = {}
 	) const;
 
 	std::size_t active_capacity_ = 0;

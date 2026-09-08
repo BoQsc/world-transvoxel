@@ -10,6 +10,8 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t collision_viewer_updates = 0;
 	std::uint64_t collision_viewer_removals = 0;
 	std::uint64_t coalesced_viewer_events = 0;
+	std::uint64_t viewer_plan_cancellations = 0;
+	std::uint64_t viewer_plan_cancel_latency_ns_maximum = 0;
 	std::uint64_t planned_demands = 0;
 	std::uint64_t hierarchical_lod_staging_plans = 0;
 	std::uint64_t hierarchical_lod_staging_completed = 0;

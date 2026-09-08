@@ -401,26 +401,33 @@ bool WtBalancedLodPlanner::should_refine(
 	return false;
 }
 
-bool WtBalancedLodPlanner::append_subtree(
+WtBalancedLodPlannerStatus WtBalancedLodPlanner::append_subtree(
 	const WtChunkKey &key,
 	const std::vector<WtLodPlannerViewer> &viewers,
 	const std::vector<WtChunkKey> &refined_ancestors,
-	std::vector<WtChunkKey> &leaves
+	std::vector<WtChunkKey> &leaves,
+	const std::function<bool()> &cancel_requested
 ) const {
+	if (cancel_requested && cancel_requested()) {
+		return WtBalancedLodPlannerStatus::Cancelled;
+	}
 	if (should_refine(key, viewers, refined_ancestors)) {
 		std::array<WtChunkKey, 8> children{};
 		if (page_hierarchy_.complete_children(key, children)) {
 			for (const WtChunkKey &child : children) {
-				if (!append_subtree(
-						child, viewers, refined_ancestors, leaves
-					)) return false;
+				const WtBalancedLodPlannerStatus status = append_subtree(
+					child, viewers, refined_ancestors, leaves, cancel_requested
+				);
+				if (status != WtBalancedLodPlannerStatus::Ok) return status;
 			}
-			return true;
+			return WtBalancedLodPlannerStatus::Ok;
 		}
 	}
-	if (leaves.size() >= active_capacity_) return false;
+	if (leaves.size() >= active_capacity_) {
+		return WtBalancedLodPlannerStatus::CapacityExceeded;
+	}
 	leaves.push_back(key);
-	return true;
+	return WtBalancedLodPlannerStatus::Ok;
 }
 
 WtBalancedLodPlannerStatus WtBalancedLodPlanner::refine_leaf(
@@ -445,11 +452,15 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::refine_leaf(
 
 WtBalancedLodPlannerStatus WtBalancedLodPlanner::balance(
 	std::vector<WtChunkKey> &leaves,
-	WtLodMap &lod_map
+	WtLodMap &lod_map,
+	const std::function<bool()> &cancel_requested
 ) const {
 	const std::size_t maximum_refinements =
 		(active_capacity_ - leaves.size()) / 7U;
 	for (std::size_t pass = 0; pass <= maximum_refinements; ++pass) {
+		if (cancel_requested && cancel_requested()) {
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
 		const WtLodMapStatus status = lod_map.set_active_chunks(leaves);
 		if (status == WtLodMapStatus::Ok) {
 			return WtBalancedLodPlannerStatus::Ok;
@@ -475,7 +486,8 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 	const std::vector<WtDesiredChunk> &current_desired,
 	const WtCollisionPolicy &collision_policy,
 	WtBalancedLodPlan &output,
-	bool visual_viewer_collision_enabled
+	bool visual_viewer_collision_enabled,
+	const std::function<bool()> &cancel_requested
 ) const {
 	output.clear();
 	if (!valid_ || !wt_is_valid_collision_policy(collision_policy)) {
@@ -487,6 +499,9 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 	});
 	std::uint8_t maximum_lod = 0;
 	for (std::size_t index = 0; index < ordered.size(); ++index) {
+		if (cancel_requested && cancel_requested()) {
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
 		const WtLodPlannerViewer &viewer = ordered[index];
 		if (viewer.snapshot.id == 0 || viewer.snapshot.revision == 0 ||
 			!std::isfinite(viewer.snapshot.x) ||
@@ -508,6 +523,9 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 		current_desired.size() * static_cast<std::size_t>(maximum_lod)
 	);
 	for (const WtDesiredChunk &desired : current_desired) {
+		if (cancel_requested && cancel_requested()) {
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
 		if (!wt_is_valid_chunk_key(desired.key)) {
 			continue;
 		}
@@ -537,6 +555,9 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 		}
 	}
 	for (const WtLodPlannerViewer &viewer : ordered) {
+		if (cancel_requested && cancel_requested()) {
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
 		std::int32_t center_x = 0;
 		std::int32_t center_y = 0;
 		std::int32_t center_z = 0;
@@ -561,17 +582,23 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::plan(
 	std::vector<WtChunkKey> leaves;
 	leaves.reserve(active_capacity_);
 	for (const WtChunkKey &root : roots) {
-		if (!append_subtree(root, ordered, refined_ancestors, leaves)) {
-			return WtBalancedLodPlannerStatus::CapacityExceeded;
-		}
+		const WtBalancedLodPlannerStatus append_status = append_subtree(
+			root, ordered, refined_ancestors, leaves, cancel_requested
+		);
+		if (append_status != WtBalancedLodPlannerStatus::Ok) return append_status;
 	}
 	std::sort(leaves.begin(), leaves.end());
 	WtLodMap lod_map(active_capacity_);
-	const WtBalancedLodPlannerStatus balance_status = balance(leaves, lod_map);
+	const WtBalancedLodPlannerStatus balance_status =
+		balance(leaves, lod_map, cancel_requested);
 	if (balance_status != WtBalancedLodPlannerStatus::Ok) return balance_status;
 	output.entries = lod_map.get_entries();
 	output.demands.reserve(output.entries.size());
 	for (const WtLodMapEntry &entry : output.entries) {
+		if (cancel_requested && cancel_requested()) {
+			output.clear();
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
 		double nearest = std::numeric_limits<double>::infinity();
 		bool collision_required = false;
 		const WtDesiredChunk *current = find_current(current_desired, entry.key);
@@ -973,6 +1000,8 @@ const char *wt_balanced_lod_planner_status_message(
 			return "balanced LOD page hierarchy is incomplete";
 		case WtBalancedLodPlannerStatus::InvalidLodMap:
 			return "balanced LOD map is invalid";
+		case WtBalancedLodPlannerStatus::Cancelled:
+			return "balanced LOD planning was cancelled";
 	}
 	return "unknown balanced LOD planner status";
 }
