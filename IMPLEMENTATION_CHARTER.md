@@ -1469,14 +1469,15 @@ pending. Collision readiness remains independent of this visual fast path.
 
 The render activation cohort query exposes its immutable regional flag and
 replacement/retirement counts as soon as the cohort graph is built, before
-payload readiness. A controller may precommit only a one-replacement,
-zero-retirement, same-layout incremental edit after every required surface is
-present and the normal preparation and request-validation contracts succeed.
-Its activation command may wait behind candidate extraction in the same render
-callback; render-thread cohort validation must still reject a missing, stale,
-or failed candidate while retaining old coverage. Multi-chunk, regional,
-transition-changing, streaming, and LOD cohorts continue through the normal
-deferred publication graph.
+payload readiness. A controller may precommit a zero-retirement, same-layout
+incremental edit only after it has gathered the exact replacement count from
+one source/world revision, every required surface is present, and normal
+preparation and request validation succeed for every member. The controller
+commits the complete native cohort and queues one GPU activation command in the
+same callback. A partially gathered revision remains pending. Render-thread
+cohort validation must reject a missing, stale, mixed-revision, or failed
+candidate while retaining old coverage. Transition-changing, streaming, and
+LOD cohorts continue through the normal deferred publication graph.
 
 After an external same-layout visual activation and independent collision
 publication have both reached the exact application generation, their shared
