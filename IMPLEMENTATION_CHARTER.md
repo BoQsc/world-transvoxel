@@ -1558,6 +1558,13 @@ the block body with empty unselected shapes. These rules prevent a local edit
 from removing collision elsewhere in the same chunk.
 `collision_payload_prepared` causal events report the exact dirty-block mask in
 their status field so runtime evidence distinguishes partial and complete work.
+The Godot authority node drains completed interaction-critical collision
+publications again at physics priority -100, immediately before ordinary player
+physics callbacks. This bounded drain uses the existing collision item and time
+budgets, applies only collision payloads whose publication prerequisites have
+already cleared, and leaves background render and collision work on the normal
+idle-process path. Runtime metrics report physics-boundary calls, applied items,
+total time, and maximum time.
 Page replay validates and applies each command in one pass over a temporary
 page, adopting the page only after every resulting sample is finite. This keeps
 command application atomic while avoiding a duplicate full-page SDF evaluation;

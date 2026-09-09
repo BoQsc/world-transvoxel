@@ -27,6 +27,8 @@ WorldTransvoxelTerrain::WorldTransvoxelTerrain() {
 	application_benchmark_ =
 		std::make_unique<WtM5ApplicationBenchmarkFixture>();
 	set_process(true);
+	set_physics_process(true);
+	set_physics_process_priority(-100);
 }
 
 WorldTransvoxelTerrain::~WorldTransvoxelTerrain() = default;

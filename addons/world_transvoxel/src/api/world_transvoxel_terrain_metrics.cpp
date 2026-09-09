@@ -987,6 +987,26 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		"collision_apply_frame_deadline_overruns",
 		collision_apply_frame_deadline_overruns_
 	);
+	set_metric(
+		output,
+		"physics_boundary_collision_apply_calls",
+		physics_boundary_collision_apply_calls_
+	);
+	set_metric(
+		output,
+		"physics_boundary_collision_apply_items",
+		physics_boundary_collision_apply_items_
+	);
+	set_metric(
+		output,
+		"physics_boundary_collision_apply_time_ns_total",
+		physics_boundary_collision_apply_time_ns_total_
+	);
+	set_metric(
+		output,
+		"physics_boundary_collision_apply_time_ns_maximum",
+		physics_boundary_collision_apply_time_ns_maximum_
+	);
 	output["active_chunk_records"] = static_cast<std::int64_t>(
 		application_->get_records().size()
 	);

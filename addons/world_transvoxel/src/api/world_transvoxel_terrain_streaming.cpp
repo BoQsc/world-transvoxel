@@ -10,6 +10,68 @@
 #include <limits>
 #include <string>
 namespace world_transvoxel {
+
+void WorldTransvoxelTerrain::_physics_process(double delta) {
+	(void)delta;
+	drain_interaction_collision_publications_at_physics_boundary();
+}
+
+void WorldTransvoxelTerrain::
+drain_interaction_collision_publications_at_physics_boundary() {
+	if (!lifecycle_ || !application_ || !collision_sink_) return;
+	const auto started = std::chrono::steady_clock::now();
+	const std::uint64_t apply_time_start =
+		application_->get_metrics().collision_apply_time_ns_total;
+	std::size_t applied_items = 0;
+	for (std::size_t attempts = 0;
+			attempts < collision_apply_budget_; ++attempts) {
+		const std::uint64_t used_ns =
+			application_->get_metrics().collision_apply_time_ns_total -
+			apply_time_start;
+		if (collision_apply_deadline_ns_ != 0U &&
+			used_ns >= collision_apply_deadline_ns_) {
+			break;
+		}
+		WtReadOnlyPublication publication;
+		if (!lifecycle_->pop_interaction_collision_publication(publication)) {
+			break;
+		}
+		if (!publication.collision ||
+			application_->submit_collision(publication.collision, true) !=
+				WtApplicationStatus::Ok) {
+			continue;
+		}
+		const std::uint64_t remaining_ns =
+			collision_apply_deadline_ns_ == 0U ? 0U :
+			collision_apply_deadline_ns_ > used_ns ?
+				collision_apply_deadline_ns_ - used_ns : 0U;
+		const WtApplicationBatchResult result =
+			application_->apply_with_collision_deadline(
+				0U, 1U, remaining_ns, *render_sink_, *collision_sink_
+			);
+		if (result.collision_processed == 0) continue;
+		++applied_items;
+		lifecycle_->record_frontend_collision_residency(
+			publication.key,
+			collision_sink_->applied_generation(publication.key)
+		);
+	}
+	if (applied_items == 0) return;
+	const std::uint64_t elapsed_ns = static_cast<std::uint64_t>(
+		std::chrono::duration_cast<std::chrono::nanoseconds>(
+			std::chrono::steady_clock::now() - started
+		).count()
+	);
+	++physics_boundary_collision_apply_calls_;
+	physics_boundary_collision_apply_items_ += applied_items;
+	physics_boundary_collision_apply_time_ns_total_ += elapsed_ns;
+	physics_boundary_collision_apply_time_ns_maximum_ = std::max(
+		physics_boundary_collision_apply_time_ns_maximum_, elapsed_ns
+	);
+	publish_ready_independent_collision_coverage();
+	lifecycle_->notify_application_progress();
+}
+
 void WorldTransvoxelTerrain::_process(double delta) {
 	(void)delta;
 	const WtApplicationMetrics application_before =
@@ -952,6 +1014,10 @@ void WorldTransvoxelTerrain::reset_world_application(std::size_t capacity) {
 	collision_apply_frame_items_last_ = 0;
 	collision_apply_frame_items_maximum_ = 0;
 	collision_apply_frame_deadline_overruns_ = 0;
+	physics_boundary_collision_apply_calls_ = 0;
+	physics_boundary_collision_apply_items_ = 0;
+	physics_boundary_collision_apply_time_ns_total_ = 0;
+	physics_boundary_collision_apply_time_ns_maximum_ = 0;
 	const std::size_t staging_capacity = capacity <=
 		std::numeric_limits<std::size_t>::max() / 2U ?
 		capacity * 2U : std::numeric_limits<std::size_t>::max();

@@ -46,6 +46,7 @@ public:
 	WorldTransvoxelTerrain();
 	~WorldTransvoxelTerrain() override;
 	void _process(double delta) override;
+	void _physics_process(double delta) override;
 
 	godot::String get_addon_version() const;
 	godot::String get_milestone() const;
@@ -315,6 +316,7 @@ private:
 		std::size_t &collision_publication_count,
 		std::uint64_t collision_apply_time_ns_start
 	);
+	void drain_interaction_collision_publications_at_physics_boundary();
 	void publish_ready_independent_collision_coverage();
 	void stage_chunk_retirement(const WtChunkKey &key);
 	void cancel_chunk_retirement(const WtChunkKey &key);
@@ -407,6 +409,10 @@ private:
 	std::uint64_t collision_apply_frame_items_last_ = 0;
 	std::uint64_t collision_apply_frame_items_maximum_ = 0;
 	std::uint64_t collision_apply_frame_deadline_overruns_ = 0;
+	std::uint64_t physics_boundary_collision_apply_calls_ = 0;
+	std::uint64_t physics_boundary_collision_apply_items_ = 0;
+	std::uint64_t physics_boundary_collision_apply_time_ns_total_ = 0;
+	std::uint64_t physics_boundary_collision_apply_time_ns_maximum_ = 0;
 	bool cpu_causal_trace_active_ = false;
 	std::size_t trace_pending_replacements_ = 0;
 	std::size_t trace_pending_retirements_ = 0;
