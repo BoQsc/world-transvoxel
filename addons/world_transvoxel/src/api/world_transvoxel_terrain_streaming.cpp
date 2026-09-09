@@ -277,7 +277,8 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 				!gpu_resident_placeholder &&
 				render_count >= render_apply_budget_) ||
 			(publication.kind == WtReadOnlyPublicationKind::CollisionPayload &&
-				(collision_publication_count >= collision_apply_budget_ ||
+				((!publication.interaction_critical &&
+					collision_publication_count >= collision_apply_budget_) ||
 					collision_deadline_reached))) {
 			deferred_publication_ = std::move(publication);
 			has_deferred_publication_ = true;

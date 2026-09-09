@@ -1713,6 +1713,14 @@ accepted desired-set priority, so LOD1/LOD2 reconstruction cannot queue ahead of
 LOD0 collision during a rapid edit burst. Every affected generation still uses
 the same committed journal revision and atomic visual publication rules.
 
+The frontend collision item budget limits background publication. An
+interaction-critical collision payload may continue past that item count while
+the configured collision-apply deadline still has time. Every payload is still
+applied immediately after dequeue, and the first indivisible shape that crosses
+the deadline ends the frame's collision drain. This uses reserved physics time
+instead of forcing a two-item multi-chunk edit across additional physics frames;
+it does not remove the deadline or enlarge any queue or resource capacity.
+
 ## 24. Final definition of success
 
 Success is a maintainable native Godot terrain addon, not merely generated
