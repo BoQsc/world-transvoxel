@@ -892,17 +892,19 @@ get_gpu_resident_render_activation_cohort(
 	result["cohort_same_lod_face_members"] = static_cast<std::int64_t>(cohort_diagnostics.same_lod_face_members);
 	result["cohort_coarse_face_members"] = static_cast<std::int64_t>(cohort_diagnostics.coarse_face_members);
 	result["cohort_fine_face_members"] = static_cast<std::int64_t>(cohort_diagnostics.fine_face_members);
-	constexpr std::size_t kDiagnosticCohortSampleCapacity = 24;
-	result["cohort_selected_sample"] = gpu_cohort_keys(std::vector<WtChunkKey>(
-		replacements.begin(), replacements.begin() + std::min(
-			replacements.size(), kDiagnosticCohortSampleCapacity
-		)
-	));
-	result["cohort_retirement_sample"] = gpu_cohort_keys(std::vector<WtChunkKey>(
-		retirements.begin(), retirements.begin() + std::min(
-			retirements.size(), kDiagnosticCohortSampleCapacity
-		)
-	));
+	if (measure_timing) {
+		constexpr std::size_t kDiagnosticCohortSampleCapacity = 24;
+		result["cohort_selected_sample"] = gpu_cohort_keys(std::vector<WtChunkKey>(
+			replacements.begin(), replacements.begin() + std::min(
+				replacements.size(), kDiagnosticCohortSampleCapacity
+			)
+		));
+		result["cohort_retirement_sample"] = gpu_cohort_keys(std::vector<WtChunkKey>(
+			retirements.begin(), retirements.begin() + std::min(
+				retirements.size(), kDiagnosticCohortSampleCapacity
+			)
+		));
+	}
 	std::vector<WtChunkApplicationRecord> ready_records;
 	ready_records.reserve(replacements.size());
 	std::int64_t activation_required_count = 0;

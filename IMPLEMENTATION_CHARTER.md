@@ -1565,6 +1565,13 @@ budgets, applies only collision payloads whose publication prerequisites have
 already cleared, and leaves background render and collision work on the normal
 idle-process path. Runtime metrics report physics-boundary calls, applied items,
 total time, and maximum time.
+GPU activation cohort queries keep full member inventories only for cohorts that
+can commit. Waiting queries return the exact blocking member and scalar closure
+counts; large diagnostic member samples and native phase timing are opt-in and
+sampled by the controller. Waiting controller seeds are parked by that blocking
+member's complete generation route and wake when it becomes prepared, with a
+bounded fallback probe. This prevents diagnostic marshalling and repeated
+unchanged regional closure queries from becoming frame work.
 Page replay validates and applies each command in one pass over a temporary
 page, adopting the page only after every resulting sample is finite. This keeps
 command application atomic while avoiding a duplicate full-page SDF evaluation;
