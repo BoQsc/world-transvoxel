@@ -365,6 +365,34 @@ WtChunkResourceCache::find_collision(
 	return entry->payload;
 }
 
+std::shared_ptr<const WtCollisionPayload>
+WtChunkResourceCache::find_collision_predecessor(
+	const WtChunkKey &key,
+	WtGenerationToken generation
+) {
+	if (generation.value == 0) {
+		++metrics_.collision.misses;
+		return {};
+	}
+	const auto identity = std::make_pair(key, generation);
+	auto entry = std::lower_bound(
+		collisions_.begin(), collisions_.end(), identity,
+		identity_less<CollisionEntry>
+	);
+	if (entry == collisions_.begin()) {
+		++metrics_.collision.misses;
+		return {};
+	}
+	--entry;
+	if (entry->key != key || entry->generation.value >= generation.value) {
+		++metrics_.collision.misses;
+		return {};
+	}
+	entry->last_access = next_access();
+	++metrics_.collision.hits;
+	return entry->payload;
+}
+
 WtChunkResourceCacheStatus
 WtChunkResourceCache::find_or_rebuild_collision(
 	const WtChunkKey &key,

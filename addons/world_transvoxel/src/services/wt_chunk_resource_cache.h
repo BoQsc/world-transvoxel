@@ -95,6 +95,10 @@ public:
 		const WtChunkKey &key,
 		WtGenerationToken generation
 	);
+	std::shared_ptr<const WtCollisionPayload> find_collision_predecessor(
+		const WtChunkKey &key,
+		WtGenerationToken generation
+	);
 	WtChunkResourceCacheStatus find_or_rebuild_collision(
 		const WtChunkKey &key,
 		WtGenerationToken generation,

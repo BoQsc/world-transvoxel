@@ -1357,13 +1357,16 @@ Collision geometry remains CPU authoritative and cannot depend on GPU readback.
 ### 23.2 Incremental interaction collision contract
 
 Loaded LOD0 collision is stored in eight independently replaceable 8-by-8-by-8
-cell blocks. Until dirty-block extraction includes verified ownership halos,
-density edits rebuild the complete regular CPU mesh and replace all eight blocks
-as one generation. This prevents a partial mesh from clearing still-authoritative
-support triangles. Empty and nonempty collision replacements publish as soon as
-the complete matching CPU generation is ready; GPU capture capacity and visual
-activation cannot delay them. A superseding generation cancels queued and active
-collision work and discards stale completions.
+cell blocks. Density edits may still extract the complete regular CPU mesh, but
+the collision builder selects only blocks intersecting the authoritative dirty
+bounds plus the one-cell ownership halo. It merges those blocks with the newest
+cached same-key collision generation preceding the replacement, while the
+physics sink retains every clean block. Internal application readiness is not a
+cache identity source because frontend publication can advance independently.
+Empty and nonempty collision patches publish as soon as the matching CPU
+generation is ready; GPU capture capacity and visual activation cannot delay
+them. A superseding generation cancels queued and active collision work and
+discards stale completions.
 
 One configured mesh worker and one bounded queue lane are reserved for
 foreground collision patches. Background storage, LOD, and visual work cannot

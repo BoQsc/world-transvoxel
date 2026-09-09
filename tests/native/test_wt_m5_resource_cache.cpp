@@ -290,6 +290,15 @@ void test_collision_tier(
 			cache.find_collision(collisions[0]->key, { 50 }),
 		"collision cache hit failed"
 	);
+	const auto collision_predecessor =
+		cache.find_collision_predecessor(collisions[0]->key, { 60 });
+	check(
+		collision_predecessor &&
+		collision_predecessor->generation == collisions[0]->generation &&
+		!cache.find_collision_predecessor(collisions[0]->key, { 50 }) &&
+		!cache.find_collision_predecessor({ -1, 0, 0, 0 }, { 60 }),
+		"collision predecessor lookup crossed key or generation bounds"
+	);
 	check(
 		cache.insert_collision(collisions[2], { 52 }) ==
 			wt::WtChunkResourceCacheStatus::Ok &&

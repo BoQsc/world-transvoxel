@@ -65,8 +65,8 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 			record->world_revision
 		)) {
 		const std::shared_ptr<const WtCollisionPayload> previous =
-			resource_cache_->find_collision(
-				completion.key, application_record.collision_generation
+			resource_cache_->find_collision_predecessor(
+				completion.key, completion.generation
 			);
 		if (previous) {
 			collision = std::make_shared<WtCollisionPayload>(*previous);
@@ -133,8 +133,8 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 		collision->incremental_patch &&
 		collision->dirty_block_mask != kWtCollisionAllBlocksMask) {
 		const std::shared_ptr<const WtCollisionPayload> previous =
-			resource_cache_->find_collision(
-				completion.key, application_record.collision_generation
+			resource_cache_->find_collision_predecessor(
+				completion.key, completion.generation
 			);
 		if (previous) {
 			auto merged = std::make_shared<WtCollisionPayload>();
