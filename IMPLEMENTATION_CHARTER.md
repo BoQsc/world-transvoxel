@@ -1684,6 +1684,15 @@ compare the expanded face sequence against the full-quality regular mesher for
 planar, curved, and excavated terrain; this optimization cannot change visual
 meshing, transition topology, collision capacity, or generation semantics.
 
+Interactive collision admission is measured independently from background mesh
+traffic. Runtime metrics expose the last, total, and maximum queue wait for jobs
+accepted into the interaction lane, in addition to aggregate mesh-worker wait.
+Only incremental jobs that require collision contribute to these counters,
+including jobs executed by a background worker assisting the interaction queue.
+Road and burst-edit qualification must use the interaction counters when
+attributing collision latency; aggregate wait alone cannot justify changing the
+collision lane or its capacity.
+
 ## 24. Final definition of success
 
 Success is a maintainable native Godot terrain addon, not merely generated

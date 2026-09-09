@@ -1389,6 +1389,9 @@ int main(int argc, char **argv) {
 		metrics.mesh_worker_interactive_started_jobs == 0 &&
 		metrics.mesh_worker_interactive_completed_jobs == 0 &&
 		metrics.mesh_worker_interactive_queued_jobs == 0 &&
+		metrics.mesh_worker_interactive_queue_wait_ns_last == 0 &&
+		metrics.mesh_worker_interactive_queue_wait_ns_total == 0 &&
+		metrics.mesh_worker_interactive_queue_wait_ns_maximum == 0 &&
 		metrics.mesh_worker_queue_rejections == 0 &&
 		metrics.mesh_job_time_ns_total != 0 &&
 		worker_mesh_starts == metrics.mesh_worker_started_jobs &&

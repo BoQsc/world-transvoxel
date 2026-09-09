@@ -770,6 +770,12 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 			page.mesh_worker_interactive_completed_jobs;
 		snapshot.mesh_worker_interactive_queued_jobs =
 			page.mesh_worker_interactive_queued_jobs;
+		snapshot.mesh_worker_interactive_queue_wait_ns_last =
+			page.mesh_worker_interactive_queue_wait_ns_last;
+		snapshot.mesh_worker_interactive_queue_wait_ns_total =
+			page.mesh_worker_interactive_queue_wait_ns_total;
+		snapshot.mesh_worker_interactive_queue_wait_ns_maximum =
+			page.mesh_worker_interactive_queue_wait_ns_maximum;
 		snapshot.mesh_worker_queue_wait_ns_last =
 			page.mesh_worker_queue_wait_ns_last;
 		snapshot.mesh_worker_queue_wait_ns_total =

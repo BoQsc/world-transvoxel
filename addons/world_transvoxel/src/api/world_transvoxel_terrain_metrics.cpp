@@ -259,6 +259,21 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	);
 	set_metric(
 		output,
+		"mesh_worker_interactive_queue_wait_ns_last",
+		runtime.mesh_worker_interactive_queue_wait_ns_last
+	);
+	set_metric(
+		output,
+		"mesh_worker_interactive_queue_wait_ns_total",
+		runtime.mesh_worker_interactive_queue_wait_ns_total
+	);
+	set_metric(
+		output,
+		"mesh_worker_interactive_queue_wait_ns_maximum",
+		runtime.mesh_worker_interactive_queue_wait_ns_maximum
+	);
+	set_metric(
+		output,
 		"mesh_worker_queue_wait_ns_last",
 		runtime.mesh_worker_queue_wait_ns_last
 	);

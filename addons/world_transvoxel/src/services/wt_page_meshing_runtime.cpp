@@ -327,6 +327,12 @@ struct WtPageMeshingRuntimeService::AsyncState {
 					interactive_queued_after_pop;
 				if (prepared.interaction_lane) {
 					++metrics.mesh_worker_interactive_started_jobs;
+					metrics.mesh_worker_interactive_queue_wait_ns_last = queue_wait;
+					metrics.mesh_worker_interactive_queue_wait_ns_total += queue_wait;
+					metrics.mesh_worker_interactive_queue_wait_ns_maximum = std::max(
+						metrics.mesh_worker_interactive_queue_wait_ns_maximum,
+						queue_wait
+					);
 				}
 				metrics.mesh_worker_queue_wait_ns_last = queue_wait;
 				metrics.mesh_worker_queue_wait_ns_total += queue_wait;
@@ -762,6 +768,12 @@ void WtPageMeshingRuntimeService::merge_async_metrics(
 		asynchronous.mesh_worker_interactive_completed_jobs;
 	snapshot.mesh_worker_interactive_queued_jobs =
 		asynchronous.mesh_worker_interactive_queued_jobs;
+	snapshot.mesh_worker_interactive_queue_wait_ns_last =
+		asynchronous.mesh_worker_interactive_queue_wait_ns_last;
+	snapshot.mesh_worker_interactive_queue_wait_ns_total =
+		asynchronous.mesh_worker_interactive_queue_wait_ns_total;
+	snapshot.mesh_worker_interactive_queue_wait_ns_maximum =
+		asynchronous.mesh_worker_interactive_queue_wait_ns_maximum;
 	snapshot.mesh_worker_queue_wait_ns_last =
 		asynchronous.mesh_worker_queue_wait_ns_last;
 	snapshot.mesh_worker_queue_wait_ns_total =
