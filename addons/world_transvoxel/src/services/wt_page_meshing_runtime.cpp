@@ -161,8 +161,16 @@ struct WtPageMeshingRuntimeService::AsyncState {
 	bool pop_completion(PreparedMeshCompletion &completion) {
 		std::lock_guard<std::mutex> lock(completion_mutex);
 		if (completions.empty()) return false;
-		completion = std::move(completions.front());
-		completions.erase(completions.begin());
+		const auto interactive = std::find_if(
+			completions.begin(), completions.end(),
+			[](const PreparedMeshCompletion &candidate) {
+				return candidate.prepared.interaction_lane;
+			}
+		);
+		const auto selected = interactive != completions.end() ?
+			interactive : completions.begin();
+		completion = std::move(*selected);
+		completions.erase(selected);
 		{
 			std::lock_guard<std::mutex> metrics_lock(metrics_mutex);
 			metrics.mesh_worker_queued_completions = completions.size();

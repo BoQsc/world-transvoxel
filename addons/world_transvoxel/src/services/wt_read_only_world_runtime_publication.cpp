@@ -25,6 +25,7 @@ namespace world_transvoxel {
 namespace {
 
 constexpr std::size_t kWtDeferredGpuCaptureCapacity = 4;
+constexpr std::size_t kWtMeshCompletionBatchLimit = 4;
 
 class GpuMeshingCaptureReservation {
 public:
@@ -973,7 +974,10 @@ bool WtReadOnlyWorldRuntime::process_async_mesh_completions() {
 	const WtPageMeshingRuntimeStatus status =
 		page_runtime_->process_async_mesh_completions(
 			*scheduler_,
-			static_cast<std::size_t>(config_.active_chunk_capacity),
+			std::min(
+				static_cast<std::size_t>(config_.active_chunk_capacity),
+				kWtMeshCompletionBatchLimit
+			),
 			processed
 		);
 	if (status != WtPageMeshingRuntimeStatus::Ok) {

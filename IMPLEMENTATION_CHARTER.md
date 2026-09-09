@@ -1750,6 +1750,15 @@ shutdown are durability barriers and wait until every preceding segment has
 reached stable storage. The synchronous journal-store append remains available
 to offline tools and preserves its original durable-return contract.
 
+Completed asynchronous meshes are consumed in fixed four-item dispatcher
+slices rather than draining up to the active-chunk capacity in one pass. Within
+each slice, completed interaction-collision work is selected before background
+work. The completion queue capacity and generation checks are unchanged; work
+left after a slice remains queued for the next runtime pass. This prevents a
+burst of completed background meshes from monopolizing edit admission while
+still allowing twelve completions across the three normal completion points in
+one dispatcher iteration.
+
 ## 24. Final definition of success
 
 Success is a maintainable native Godot terrain addon, not merely generated
