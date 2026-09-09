@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 
 namespace world_transvoxel {
 
@@ -26,6 +27,7 @@ enum class WtEditJournalStoreStatus : std::uint8_t {
 class WtEditJournalStore {
 public:
 	WtEditJournalStore();
+	~WtEditJournalStore();
 
 	WtEditJournalStoreStatus open(
 		const std::filesystem::path &path,
@@ -35,6 +37,11 @@ public:
 	WtEditJournalStoreStatus append(
 		const WtEditTransaction &transaction
 	);
+	WtEditJournalStoreStatus append_deferred(
+		const WtEditTransaction &transaction
+	);
+	WtEditJournalStoreStatus flush_deferred();
+	WtEditJournalStoreStatus deferred_status() const noexcept;
 	void close() noexcept;
 
 	bool is_open() const noexcept;
@@ -46,9 +53,11 @@ public:
 	std::size_t byte_size() const noexcept;
 
 private:
+	struct AsyncState;
 	WtEditJournal journal_;
 	std::filesystem::path path_;
 	bool open_ = false;
+	std::unique_ptr<AsyncState> async_;
 };
 
 const char *wt_edit_journal_store_status_message(

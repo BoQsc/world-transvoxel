@@ -376,20 +376,22 @@ bool WtReadOnlyWorldRuntime::process_snapshot_operation(
 	WtWorldSnapshotStoreResult result;
 	const bool compact =
 		operation.kind == WorldOperationKind::CompactSnapshot;
-	const WtWorldSnapshotStoreStatus status = compact ?
-		wt_write_compacted_world_snapshot(
+	WtWorldSnapshotStoreStatus status = WtWorldSnapshotStoreStatus::IoFailure;
+	if (edit_journal_store_->flush_deferred() ==
+		WtEditJournalStoreStatus::Ok) {
+		status = compact ? wt_write_compacted_world_snapshot(
 			storage_,
 			edit_journal_store_->journal(),
 			operation.output_directory,
 			operation.new_source_revision,
 			result
-		) :
-		wt_write_migrated_world_snapshot(
+		) : wt_write_migrated_world_snapshot(
 			storage_,
 			edit_journal_store_->journal(),
 			operation.output_directory,
 			result
 		);
+	}
 	WtReadOnlyPublication publication;
 	publication.kind = status == WtWorldSnapshotStoreStatus::Ok ?
 		WtReadOnlyPublicationKind::WorldSnapshotReady :

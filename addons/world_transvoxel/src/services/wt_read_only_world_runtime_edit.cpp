@@ -131,7 +131,7 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 		}
 		return true;
 	}
-	if (edit_journal_store_->append(transaction) !=
+	if (edit_journal_store_->append_deferred(transaction) !=
 		WtEditJournalStoreStatus::Ok) {
 		if (!reject(WtReadOnlyEditStatus::JournalFailure) &&
 			!stop_requested_.load()) {

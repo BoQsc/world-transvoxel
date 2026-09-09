@@ -5,6 +5,7 @@
 #include "services/wt_edit_runtime_replacement.h"
 #include "services/wt_page_meshing_runtime.h"
 #include "storage/wt_async_storage_service.h"
+#include "storage/wt_edit_journal_store.h"
 #include "storage/wt_storage_page_cache.h"
 #include "streaming/wt_stream_scheduler.h"
 
@@ -30,6 +31,12 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 	}
 	std::uint64_t observed_wake = 0;
 	while (!stop_requested_.load()) {
+		if (edit_journal_store_ != nullptr &&
+			edit_journal_store_->deferred_status() !=
+				WtEditJournalStoreStatus::Ok) {
+			set_failure(WtReadOnlyRuntimeStatus::EditFailure);
+			break;
+		}
 		// Foreground edits must not sit behind a potentially large viewer-plan
 		// delta. Viewer events are coalesced and may safely follow the edit; the
 		// edit journal remains authoritative for chunks requested afterward.
@@ -109,6 +116,11 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 	}
 	page_runtime_->set_mesh_completion_notifier({});
 	storage_.set_completion_notifier({});
+	if (edit_journal_store_ != nullptr &&
+		edit_journal_store_->flush_deferred() !=
+			WtEditJournalStoreStatus::Ok) {
+		set_failure(WtReadOnlyRuntimeStatus::EditFailure);
+	}
 	refresh_metrics_snapshot();
 	return last_status_.load();
 }

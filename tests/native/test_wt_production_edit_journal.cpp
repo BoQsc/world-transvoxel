@@ -161,6 +161,27 @@ int main() {
 		"truncated journal tail did not recover and durably truncate");
 
 	store.close();
+	const std::filesystem::path deferred_path =
+		fixture.path / "deferred.wtedit";
+	check(store.open(deferred_path, 7001, 12) ==
+		wt::WtEditJournalStoreStatus::Ok,
+		"deferred journal did not initialize");
+	check(store.append_deferred(transaction(7, 12)) ==
+			wt::WtEditJournalStoreStatus::Ok &&
+		store.current_world_revision() == 13 &&
+		store.transaction_count() == 1,
+		"deferred journal did not commit authoritative memory state");
+	check(store.flush_deferred() == wt::WtEditJournalStoreStatus::Ok &&
+		store.deferred_status() == wt::WtEditJournalStoreStatus::Ok &&
+		std::filesystem::file_size(deferred_path) == store.byte_size(),
+		"deferred journal flush did not publish complete durable bytes");
+	store.close();
+	check(store.open(deferred_path, 7001, 12) ==
+			wt::WtEditJournalStoreStatus::Ok &&
+		store.current_world_revision() == 13,
+		"deferred journal did not survive reopen");
+
+	store.close();
 	std::vector<std::uint8_t> corrupt = first_bytes;
 	corrupt[corrupt.size() / 2] ^= 0x40U;
 	check(write_file(journal_path, corrupt),

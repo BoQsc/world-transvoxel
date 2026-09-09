@@ -1,7 +1,11 @@
 #include "storage/wt_edit_journal_store.h"
 
 #include <cstdio>
+#include <condition_variable>
+#include <deque>
 #include <fstream>
+#include <mutex>
+#include <thread>
 #include <vector>
 
 #if defined(_WIN32)
@@ -74,12 +78,127 @@ WtEditJournalStoreStatus map_journal_status(
 
 } // namespace
 
+struct WtEditJournalStore::AsyncState {
+	struct Job {
+		std::vector<std::uint8_t> bytes;
+		std::uintmax_t previous_size = 0;
+	};
+
+	explicit AsyncState(std::filesystem::path value, std::uintmax_t size) :
+			path(std::move(value)), scheduled_size(size),
+			worker([this]() { run(); }) {
+	}
+
+	~AsyncState() {
+		flush();
+		{
+			std::lock_guard<std::mutex> lock(mutex);
+			stopping = true;
+		}
+		available.notify_all();
+		if (worker.joinable()) worker.join();
+	}
+
+	WtEditJournalStoreStatus commit_and_enqueue(
+		WtEditJournal &journal,
+		std::vector<std::uint8_t> segment
+	) {
+		std::lock_guard<std::mutex> lock(mutex);
+		if (failure != WtEditJournalStoreStatus::Ok || stopping ||
+			pending_bytes > kWtProductionJournalByteCapacity - segment.size()) {
+			return failure == WtEditJournalStoreStatus::Ok ?
+				WtEditJournalStoreStatus::CapacityExceeded : failure;
+		}
+		const WtEditJournalStatus committed = journal.commit_append({
+			segment.data(), segment.size(),
+		});
+		if (committed != WtEditJournalStatus::Ok) {
+			return map_journal_status(committed);
+		}
+		const std::size_t size = segment.size();
+		jobs.push_back({ std::move(segment), scheduled_size });
+		scheduled_size += size;
+		pending_bytes += size;
+		available.notify_one();
+		return WtEditJournalStoreStatus::Ok;
+	}
+
+	WtEditJournalStoreStatus flush() {
+		std::unique_lock<std::mutex> lock(mutex);
+		completed.wait(lock, [this]() {
+			return failure != WtEditJournalStoreStatus::Ok ||
+				(jobs.empty() && !active);
+		});
+		return failure;
+	}
+
+	WtEditJournalStoreStatus status() const noexcept {
+		std::lock_guard<std::mutex> lock(mutex);
+		return failure;
+	}
+
+	void run() {
+		while (true) {
+			Job job;
+			{
+				std::unique_lock<std::mutex> lock(mutex);
+				available.wait(lock, [this]() { return stopping || !jobs.empty(); });
+				if (stopping && jobs.empty()) return;
+				job = std::move(jobs.front());
+				jobs.pop_front();
+				active = true;
+			}
+			std::error_code error;
+			const bool exists = std::filesystem::exists(path, error);
+			const std::uintmax_t actual_size = !error && exists ?
+				std::filesystem::file_size(path, error) : 0;
+			FILE *file = !error && actual_size == job.previous_size ?
+				open_append(path) : nullptr;
+			const bool written = file != nullptr && std::fwrite(
+				job.bytes.data(), 1, job.bytes.size(), file
+			) == job.bytes.size();
+			const bool durable = written && flush_durable(file);
+			const bool closed = file != nullptr && std::fclose(file) == 0;
+			if (!(durable && closed)) {
+				resize_and_sync(path, job.previous_size);
+			}
+			{
+				std::lock_guard<std::mutex> lock(mutex);
+				pending_bytes -= job.bytes.size();
+				active = false;
+				if (!(durable && closed)) {
+					failure = WtEditJournalStoreStatus::IoFailure;
+					jobs.clear();
+					pending_bytes = 0;
+				}
+			}
+			completed.notify_all();
+		}
+	}
+
+	std::filesystem::path path;
+	mutable std::mutex mutex;
+	std::condition_variable available;
+	std::condition_variable completed;
+	std::deque<Job> jobs;
+	std::uintmax_t scheduled_size = 0;
+	std::size_t pending_bytes = 0;
+	bool active = false;
+	bool stopping = false;
+	WtEditJournalStoreStatus failure = WtEditJournalStoreStatus::Ok;
+	std::thread worker;
+};
+
 WtEditJournalStore::WtEditJournalStore() :
 		journal_(
 			kWtProductionJournalTransactionCapacity,
 			kWtProductionJournalCommandCapacity,
 			kWtProductionJournalByteCapacity
 		) {
+}
+
+WtEditJournalStore::~WtEditJournalStore() {
+	close();
 }
 
 WtEditJournalStoreStatus WtEditJournalStore::open(
@@ -146,6 +265,11 @@ WtEditJournalStoreStatus WtEditJournalStore::append(
 	const WtEditTransaction &transaction
 ) {
 	if (!open_) return WtEditJournalStoreStatus::NotOpen;
+	if (async_) {
+		const WtEditJournalStoreStatus status = async_->flush();
+		async_.reset();
+		if (status != WtEditJournalStoreStatus::Ok) return status;
+	}
 	std::vector<std::uint8_t> segment;
 	const WtEditJournalStatus prepare =
 		journal_.prepare_append(transaction, segment);
@@ -181,7 +305,39 @@ WtEditJournalStoreStatus WtEditJournalStore::append(
 	return WtEditJournalStoreStatus::Ok;
 }
 
+WtEditJournalStoreStatus WtEditJournalStore::append_deferred(
+	const WtEditTransaction &transaction
+) {
+	if (!open_) return WtEditJournalStoreStatus::NotOpen;
+	std::vector<std::uint8_t> segment;
+	const WtEditJournalStatus prepared =
+		journal_.prepare_append(transaction, segment);
+	if (prepared != WtEditJournalStatus::Ok) {
+		return map_journal_status(prepared);
+	}
+	if (!async_) {
+		std::error_code error;
+		const bool exists = std::filesystem::exists(path_, error);
+		const std::uintmax_t size = !error && exists ?
+			std::filesystem::file_size(path_, error) : 0;
+		if (error || size != journal_.byte_size()) {
+			return WtEditJournalStoreStatus::IoFailure;
+		}
+		async_ = std::make_unique<AsyncState>(path_, size);
+	}
+	return async_->commit_and_enqueue(journal_, std::move(segment));
+}
+
+WtEditJournalStoreStatus WtEditJournalStore::flush_deferred() {
+	return async_ ? async_->flush() : WtEditJournalStoreStatus::Ok;
+}
+
+WtEditJournalStoreStatus WtEditJournalStore::deferred_status() const noexcept {
+	return async_ ? async_->status() : WtEditJournalStoreStatus::Ok;
+}
+
 void WtEditJournalStore::close() noexcept {
+	async_.reset();
 	open_ = false;
 	path_.clear();
 	journal_.reset(0, 0);

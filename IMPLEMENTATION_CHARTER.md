@@ -1740,6 +1740,16 @@ rules without copying the complete 19-cubed page for every intersecting journal
 command. Page ownership remains private to the replay state, and the rollback
 list is bounded by the fixed page sample count.
 
+Runtime edit admission commits the validated encoded transaction to the bounded
+in-memory journal before replacement planning begins. The identical encoded
+segment then enters a single ordered persistence lane whose pending bytes cannot
+exceed the journal byte capacity. Durable file flush and close run outside the
+terrain dispatcher. Persistence failure is terminal and observable to the
+runtime; no later edit may hide it. Snapshot creation and orderly runtime
+shutdown are durability barriers and wait until every preceding segment has
+reached stable storage. The synchronous journal-store append remains available
+to offline tools and preserves its original durable-return contract.
+
 ## 24. Final definition of success
 
 Success is a maintainable native Godot terrain addon, not merely generated
