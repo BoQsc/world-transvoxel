@@ -952,6 +952,10 @@ void test_failures() {
 	wt::WtChunkPage overflow_page = pages[0];
 	const std::size_t center_index =
 		sample_index(overflow_page, { 0, 0, 0 });
+	const std::size_t preceding_index =
+		sample_index(overflow_page, { -1, 0, 0 });
+	const wt::WtScalarSample preceding_before =
+		overflow_page.samples[preceding_index];
 	overflow_page.samples[center_index].density =
 		std::numeric_limits<float>::max();
 	check(
@@ -959,14 +963,24 @@ void test_failures() {
 			wt::WtChunkEditStatus::Ok,
 		"overflow fixture initialization failed"
 	);
-	wt::WtEditCommand overflow = valid;
+	wt::WtEditCommand overflow = sphere(
+		21,
+		0,
+		1,
+		wt::WtEditOperation::AddDensity,
+		0,
+		wt::kWtEditCoordinateScale,
+		std::numeric_limits<float>::max()
+	);
 	overflow.density_value = std::numeric_limits<float>::max();
 	check(
 		state.apply_command(overflow) ==
 				wt::WtChunkEditStatus::NonFiniteResult &&
 			state.current_world_revision() == 0 &&
 			state.page().samples[center_index].density ==
-				std::numeric_limits<float>::max(),
+				std::numeric_limits<float>::max() &&
+			state.page().samples[preceding_index].density ==
+				preceding_before.density,
 		"non-finite edit result mutated page or revision"
 	);
 }

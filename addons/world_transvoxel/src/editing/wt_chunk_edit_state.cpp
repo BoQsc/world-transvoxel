@@ -407,10 +407,15 @@ bool apply_values(
 	const WtProceduralWorldDescriptor *procedural_descriptor,
 	std::size_t &changed
 ) noexcept {
+	struct ChangedSample {
+		std::size_t index = 0;
+		WtScalarSample previous;
+	};
 	changed = 0;
 	if (!may_intersect_page(page.metadata, command.bounds)) {
 		return true;
 	}
+	std::vector<ChangedSample> changed_samples;
 	std::size_t index = 0;
 	for (int z = -1; z <= 17; ++z) {
 		for (int y = -1; y <= 17; ++y) {
@@ -423,13 +428,20 @@ bool apply_values(
 					continue;
 				}
 				WtScalarSample &sample = page.samples[index];
+				const WtScalarSample previous = sample;
 				bool sample_changed = false;
 				if (!apply_valid_command_to_sample(
 						command, point, sample, sample_changed
 					)) {
+					for (auto rollback = changed_samples.rbegin();
+							rollback != changed_samples.rend(); ++rollback) {
+						page.samples[rollback->index] = rollback->previous;
+					}
+					changed = 0;
 					return false;
 				}
 				if (sample_changed) {
+					changed_samples.push_back({ index, previous });
 					++changed;
 				}
 			}
@@ -535,9 +547,8 @@ WtChunkEditStatus WtChunkEditState::apply_command(
 	std::size_t command_changed_sample_count = 0;
 	const bool intersects = may_intersect_page(page_.metadata, command.bounds);
 	if (intersects) {
-		WtChunkPage candidate = page_;
 		if (!apply_values(
-				candidate,
+				page_,
 				command,
 				procedural_descriptor,
 				command_changed_sample_count
@@ -545,7 +556,6 @@ WtChunkEditStatus WtChunkEditState::apply_command(
 			last_status_ = WtChunkEditStatus::NonFiniteResult;
 			return last_status_;
 		}
-		page_ = std::move(candidate);
 	}
 	const bool invalidates_surface_shift =
 		page_.metadata.key.lod > 0 && intersects;

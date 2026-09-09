@@ -1732,6 +1732,14 @@ the deadline ends the frame's collision drain. This uses reserved physics time
 instead of forcing a two-item multi-chunk edit across additional physics frames;
 it does not remove the deadline or enlarge any queue or resource capacity.
 
+Authoritative edit replay mutates an owned candidate page in place and records
+only the samples changed by the current command. If evaluation fails, those
+samples are restored in reverse order before failure is returned. This preserves
+command atomicity and all revision, sequence, material, water, and surface-shift
+rules without copying the complete 19-cubed page for every intersecting journal
+command. Page ownership remains private to the replay state, and the rollback
+list is bounded by the fixed page sample count.
+
 ## 24. Final definition of success
 
 Success is a maintainable native Godot terrain addon, not merely generated
