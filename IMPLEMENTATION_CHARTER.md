@@ -1759,6 +1759,12 @@ burst of completed background meshes from monopolizing edit admission while
 still allowing twelve completions across the three normal completion points in
 one dispatcher iteration.
 
+Storage completions are likewise decoded and admitted in fixed two-item slices.
+If an edit arrives during that slice, the dispatcher commits it before resuming
+background loading records. Remaining storage completions stay in the existing
+bounded completion ring and retain their original ownership and validation;
+this changes dispatcher residency rather than storage capacity or page order.
+
 ## 24. Final definition of success
 
 Success is a maintainable native Godot terrain addon, not merely generated

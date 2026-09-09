@@ -26,6 +26,7 @@ namespace {
 
 constexpr std::size_t kWtDeferredGpuCaptureCapacity = 4;
 constexpr std::size_t kWtMeshCompletionBatchLimit = 4;
+constexpr std::size_t kWtStorageCompletionBatchLimit = 2;
 
 class GpuMeshingCaptureReservation {
 public:
@@ -476,8 +477,11 @@ bool WtReadOnlyWorldRuntime::process_pending_transition_remeshes() {
 
 bool WtReadOnlyWorldRuntime::process_storage_completions() {
 	bool progressed = false;
+	std::size_t processed = 0;
 	WtPageLoadCompletion completion;
-	while (storage_.pop_completion(completion)) {
+	while (processed < kWtStorageCompletionBatchLimit &&
+		storage_.pop_completion(completion)) {
+		++processed;
 		progressed = true;
 		causal_trace_.record(
 			WtCausalTraceEventKind::StorageCompletionConsumed,

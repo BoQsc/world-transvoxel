@@ -50,6 +50,9 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 		// mesh queue in this runtime iteration.
 		progressed = process_scheduler_jobs() || progressed;
 		progressed = process_storage_completions() || progressed;
+		if (has_pending_edit_operation()) {
+			progressed = process_world_operation_event() || progressed;
+		}
 		progressed = page_runtime_->resume_loading_records(
 			storage_,
 			*page_cache_,
