@@ -1321,6 +1321,15 @@ count, and transferred bytes on one bounded timeline. Instrumentation is
 disabled by default and cannot alter scheduling or publication. Optimization
 claims require matching traced and untraced deterministic routes.
 
+Interactive edit admission preserves the order of accepted commands even when
+several transactions are created from the same currently committed revision.
+An edit that matches the committed revision when it enters the bounded runtime
+queue is eligible for queue-order rebasing after an earlier admitted edit
+commits. Rebasing regenerates the canonical transaction ID, command IDs, and
+all revision fields before durable append. A transaction already stale when it
+enters the queue remains stale and is rejected; journal order and replay
+identity therefore remain authoritative.
+
 ### 23.1 GPU interaction derived-cache contract
 
 Loaded LOD0 terrain in the interaction working set uses 8 by 8 by 8 regular

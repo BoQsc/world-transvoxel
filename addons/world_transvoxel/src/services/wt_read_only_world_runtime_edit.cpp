@@ -56,8 +56,14 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::submit_edit(
 }
 
 bool WtReadOnlyWorldRuntime::process_edit_operation(
-	const WtEditTransaction &transaction
+	WtEditTransaction transaction,
+	bool rebase_queued_edit
 ) {
+	const std::uint64_t current_revision = world_revision_.load();
+	if (rebase_queued_edit && transaction.base_revision != current_revision &&
+		!wt_rebase_edit_transaction(transaction, current_revision)) {
+		rebase_queued_edit = false;
+	}
 	causal_trace_.record(
 		WtCausalTraceEventKind::EditProcessingStarted,
 		WtCausalTraceThreadRole::Runtime,

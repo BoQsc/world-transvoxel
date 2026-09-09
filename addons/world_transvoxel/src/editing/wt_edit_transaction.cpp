@@ -379,6 +379,70 @@ bool decode_commit(
 
 } // namespace
 
+WtId128 wt_edit_transaction_id(
+	std::uint64_t source_revision,
+	std::uint64_t committed_revision
+) noexcept {
+	WtId128 id{};
+	for (std::size_t index = 0; index < 8; ++index) {
+		id[index] = static_cast<std::uint8_t>(
+			(source_revision ^ 0x5754545849443031ULL) >> (index * 8U)
+		);
+		id[8 + index] = static_cast<std::uint8_t>(
+			(committed_revision ^ 0x4544495454524e31ULL) >> (index * 8U)
+		);
+	}
+	return id;
+}
+
+WtId128 wt_edit_command_id(
+	std::uint64_t committed_revision,
+	std::uint32_t sequence
+) noexcept {
+	WtId128 id{};
+	const std::uint64_t encoded_revision =
+		committed_revision ^ 0x5754434d44494431ULL;
+	for (std::size_t index = 0; index < 8; ++index) {
+		id[index] = static_cast<std::uint8_t>(
+			encoded_revision >> (index * 8U)
+		);
+	}
+	id[8] = static_cast<std::uint8_t>(sequence);
+	id[9] = static_cast<std::uint8_t>(sequence >> 8U);
+	id[10] = static_cast<std::uint8_t>(sequence >> 16U);
+	id[11] = static_cast<std::uint8_t>(sequence >> 24U);
+	id[12] = 'C';
+	id[13] = 'M';
+	id[14] = 'D';
+	id[15] = '1';
+	return id;
+}
+
+bool wt_rebase_edit_transaction(
+	WtEditTransaction &transaction,
+	std::uint64_t base_revision
+) noexcept {
+	if (base_revision == std::numeric_limits<std::uint64_t>::max() ||
+		transaction.commands.empty() ||
+		transaction.commands.size() > kWtMaximumEditCommandCount) {
+		return false;
+	}
+	transaction.base_revision = base_revision;
+	transaction.committed_revision = base_revision + 1;
+	transaction.transaction_id = wt_edit_transaction_id(
+		transaction.source_revision, transaction.committed_revision
+	);
+	for (std::size_t index = 0; index < transaction.commands.size(); ++index) {
+		WtEditCommand &command = transaction.commands[index];
+		command.sequence = static_cast<std::uint32_t>(index);
+		command.world_revision = transaction.committed_revision;
+		command.command_id = wt_edit_command_id(
+			transaction.committed_revision, command.sequence
+		);
+	}
+	return true;
+}
+
 WtEditTransactionStatus wt_write_edit_transaction(
 	const WtEditTransaction &transaction,
 	std::vector<std::uint8_t> &output

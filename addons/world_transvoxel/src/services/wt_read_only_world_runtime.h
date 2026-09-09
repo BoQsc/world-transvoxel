@@ -273,6 +273,7 @@ private:
 	struct WorldOperation {
 		WorldOperationKind kind = WorldOperationKind::Edit;
 		WtEditTransaction transaction;
+		bool rebase_queued_edit = false;
 		WtGridPoint point;
 		std::vector<WtGridPoint> points;
 		std::uint8_t lod = 0;
@@ -331,7 +332,10 @@ private:
 	bool enqueue_world_operation(WorldOperation &operation);
 	bool has_pending_edit_operation();
 	bool process_world_operation_event();
-	bool process_edit_operation(const WtEditTransaction &transaction);
+	bool process_edit_operation(
+		WtEditTransaction transaction,
+		bool rebase_queued_edit
+	);
 	bool process_sample_query_operation(const WorldOperation &operation);
 	bool process_sample_batch_query_operation(const WorldOperation &operation);
 	bool process_snapshot_operation(const WorldOperation &operation);

@@ -10,40 +10,6 @@
 namespace world_transvoxel {
 namespace {
 
-void write_u64(WtId128 &id, std::size_t offset, std::uint64_t value) {
-	for (std::size_t index = 0; index < 8; ++index) {
-		id[offset + index] =
-			static_cast<std::uint8_t>(value >> (index * 8U));
-	}
-}
-
-WtId128 transaction_id(
-	std::uint64_t source_revision,
-	std::uint64_t committed_revision
-) {
-	WtId128 id{};
-	write_u64(id, 0, source_revision ^ 0x5754545849443031ULL);
-	write_u64(id, 8, committed_revision ^ 0x4544495454524e31ULL);
-	return id;
-}
-
-WtId128 command_id(
-	std::uint64_t committed_revision,
-	std::uint32_t sequence
-) {
-	WtId128 id{};
-	write_u64(id, 0, committed_revision ^ 0x5754434d44494431ULL);
-	id[8] = static_cast<std::uint8_t>(sequence);
-	id[9] = static_cast<std::uint8_t>(sequence >> 8U);
-	id[10] = static_cast<std::uint8_t>(sequence >> 16U);
-	id[11] = static_cast<std::uint8_t>(sequence >> 24U);
-	id[12] = 'C';
-	id[13] = 'M';
-	id[14] = 'D';
-	id[15] = '1';
-	return id;
-}
-
 bool to_q16(double value, std::int64_t &output) noexcept {
 	if (!std::isfinite(value)) return false;
 	const long double scaled =
@@ -146,7 +112,7 @@ void WorldTransvoxelEditTransaction::initialize(
 	transaction_.base_revision = base_revision;
 	transaction_.committed_revision = base_revision + 1;
 	transaction_.author_id = author_id;
-	transaction_.transaction_id = transaction_id(
+	transaction_.transaction_id = wt_edit_transaction_id(
 		source_revision, transaction_.committed_revision
 	);
 	initialized_ = base_revision != std::numeric_limits<std::uint64_t>::max();
@@ -168,7 +134,7 @@ bool WorldTransvoxelEditTransaction::append_command(WtEditCommand command) {
 		transaction_.commands.size()
 	);
 	command.world_revision = transaction_.committed_revision;
-	command.command_id = command_id(
+	command.command_id = wt_edit_command_id(
 		transaction_.committed_revision, command.sequence
 	);
 	if (!wt_is_valid_edit_command(command)) {

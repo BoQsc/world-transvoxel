@@ -2219,6 +2219,74 @@ bool run_global_coarse_lod_coverage_regression(
 	return failure_count == 0;
 }
 
+bool run_queued_edit_revision_regression(
+	wt::WtAsyncStorageService &storage,
+	const std::filesystem::path &root
+) {
+	wt::WtEditJournalStore journal;
+	const std::filesystem::path journal_path =
+		root / "queued_edit_revision.wtedit";
+	if (journal.open(
+			journal_path,
+			storage.source_revision(),
+			storage.world_revision()
+		) != wt::WtEditJournalStoreStatus::Ok) {
+		check(false, "queued edit revision journal open failed");
+		return false;
+	}
+	wt::WtRuntimeConfig config;
+	config.active_chunk_capacity = 64;
+	config.viewer_capacity = 2;
+	config.demand_capacity_per_viewer = 27;
+	wt::WtReadOnlyWorldRuntime runtime(config, storage, &journal);
+	if (!runtime.valid()) {
+		check(false, "queued edit revision runtime configuration rejected");
+		journal.close();
+		return false;
+	}
+	const std::uint64_t base_revision = runtime.world_revision();
+	const wt::WtEditTransaction first = carve_transaction(
+		storage.source_revision(), base_revision, 211U, 8.0
+	);
+	const wt::WtEditTransaction second = carve_transaction(
+		storage.source_revision(), base_revision, 229U, 24.0
+	);
+	const bool submitted =
+		runtime.submit_edit(first) == wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.submit_edit(second) == wt::WtReadOnlyRuntimeStatus::Ok;
+	check(submitted, "same-base queued edits were not admitted");
+
+	std::atomic<wt::WtReadOnlyRuntimeStatus> run_status {
+		wt::WtReadOnlyRuntimeStatus::Ok
+	};
+	std::thread worker([&]() { run_status.store(runtime.run()); });
+	const bool committed = submitted && wait_for_edit_commit_idle(
+		runtime, base_revision + 2, 2
+	);
+	check(committed, "same-base queued edits did not commit in order");
+	const wt::WtReadOnlyRuntimeMetrics committed_metrics = runtime.get_metrics();
+	check(committed_metrics.edit_commits == 2 &&
+		committed_metrics.edit_rejections == 0,
+		"same-base queued edit revision metrics mismatch");
+	const bool stale_submitted = runtime.submit_edit(first) ==
+		wt::WtReadOnlyRuntimeStatus::Ok;
+	const bool stale_rejected = stale_submitted && wait_for_runtime(runtime, [&]() {
+		const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+		return metrics.edit_rejections >= 1 && runtime_idle(metrics);
+	});
+	check(stale_rejected,
+		"edit stale before admission was incorrectly queue-rebased");
+	const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+	runtime.request_stop();
+	worker.join();
+	journal.close();
+	check(run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok,
+		"queued edit revision runtime did not stop cleanly");
+	return committed && stale_rejected && metrics.edit_commits == 2 &&
+		metrics.edit_rejections == 1 &&
+		run_status.load() == wt::WtReadOnlyRuntimeStatus::Ok;
+}
+
 bool run_edit_retention_fallback_regression(
 	wt::WtAsyncStorageService &storage,
 	const std::filesystem::path &root
@@ -2835,6 +2903,8 @@ int main(int argc, char **argv) {
 		"multi-LOD runtime metrics mismatch");
 	const bool fallback_retention_ok =
 		run_edit_retention_fallback_regression(storage, fixture.path);
+	const bool queued_edit_revision_ok =
+		run_queued_edit_revision_regression(storage, fixture.path);
 	const bool many_zone_retention_ok =
 		run_edit_retention_many_zone_regression(storage, fixture.path);
 	const bool edit_viewer_second_edit_ok =
@@ -2878,6 +2948,7 @@ int main(int argc, char **argv) {
 	append_u64(evidence, metrics.transition_mesh_completions);
 	append_u64(evidence, storage.page_count());
 	append_u64(evidence, fallback_retention_ok ? 1U : 0U);
+	append_u64(evidence, queued_edit_revision_ok ? 1U : 0U);
 	append_u64(evidence, global_coarse_ok ? 1U : 0U);
 	append_u64(evidence, many_zone_retention_ok ? 1U : 0U);
 	append_u64(evidence, lod_hysteresis_ok ? 1U : 0U);
@@ -2905,7 +2976,8 @@ int main(int argc, char **argv) {
 	std::printf(
 		"PRODUCTION_LOD_STREAMING_EVIDENCE entries=%zu mask=%u "
 		"retained_entries=%zu retained_edit_key=%d "
-		"fallback_retention=%d bridge0=%llu/%llu bridge1=%llu/%llu "
+		"fallback_retention=%d queued_edit_revision=%d "
+		"bridge0=%llu/%llu bridge1=%llu/%llu "
 		"staged_expects=%zu staged_collision_preserve_expects=%zu "
 		"transition_stage_generations=%zu transition_preserve_generations=%zu "
 		"global_coarse=%d many_zone_retention=%d lod_hysteresis=%d "
@@ -2922,6 +2994,7 @@ int main(int argc, char **argv) {
 		retained_plan.entries.size(),
 		find_entry(retained_plan, retained_edit_key) != nullptr ? 1 : 0,
 		fallback_retention_ok ? 1 : 0,
+		queued_edit_revision_ok ? 1 : 0,
 		static_cast<unsigned long long>(
 			publications.bridge_vertices[bridge_render_indices[0]]
 		),
@@ -2958,7 +3031,7 @@ int main(int argc, char **argv) {
 	print_hash(wt::wt_sha256(evidence.data(), evidence.size()));
 	std::printf(
 		"PRODUCTION_LOD_STREAMING_PASS pages=28 viewers=2 transitions=3 "
-		"lod_hysteresis=1 collision_reactivation=1 "
+		"lod_hysteresis=1 queued_edit_revision=1 collision_reactivation=1 "
 		"edit_viewer_second_edit=1 "
 		"replacement_collision_continuity=1 collision_publication_priority=1 "
 		"collision_publication_coalescing=1 "

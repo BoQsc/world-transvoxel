@@ -107,6 +107,21 @@ enum class WtEditTransactionStatus : std::uint8_t {
 
 bool wt_is_zero_id(const WtId128 &id) noexcept;
 
+WtId128 wt_edit_transaction_id(
+	std::uint64_t source_revision,
+	std::uint64_t committed_revision
+) noexcept;
+
+WtId128 wt_edit_command_id(
+	std::uint64_t committed_revision,
+	std::uint32_t sequence
+) noexcept;
+
+bool wt_rebase_edit_transaction(
+	WtEditTransaction &transaction,
+	std::uint64_t base_revision
+) noexcept;
+
 bool wt_edit_sphere_bounds(
 	const WtEditSphere &sphere,
 	WtEditBounds &output,

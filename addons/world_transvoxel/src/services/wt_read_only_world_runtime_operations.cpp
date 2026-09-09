@@ -29,6 +29,10 @@ bool WtReadOnlyWorldRuntime::enqueue_world_operation(
 		operation.request_id = ++next_request_id_;
 	}
 	if (edit || coverage_priority) {
+		if (edit) {
+			operation.rebase_queued_edit =
+				operation.transaction.base_revision == world_revision_.load();
+		}
 		const auto insertion = std::find_if(
 			world_operations_.begin(),
 			world_operations_.end(),
@@ -180,7 +184,10 @@ bool WtReadOnlyWorldRuntime::process_world_operation_event() {
 	}
 	switch (operation.kind) {
 		case WorldOperationKind::Edit:
-			return process_edit_operation(operation.transaction);
+			return process_edit_operation(
+				std::move(operation.transaction),
+				operation.rebase_queued_edit
+			);
 		case WorldOperationKind::AuthoritativeSample:
 			return process_sample_query_operation(operation);
 		case WorldOperationKind::AuthoritativeSampleBatch:
