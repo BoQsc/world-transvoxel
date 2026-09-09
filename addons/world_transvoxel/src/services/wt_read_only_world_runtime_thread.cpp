@@ -34,6 +34,10 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 		// delta. Viewer events are coalesced and may safely follow the edit; the
 		// edit journal remains authoritative for chunks requested afterward.
 		bool progressed = process_world_operation_event();
+		// A reserved interaction worker can finish between runtime iterations.
+		// Consume that result before entering scheduler dispatch, where preparing a
+		// cold background mesh may copy or capture many page dependencies.
+		progressed = process_async_mesh_completions() || progressed;
 		// An accepted edit owns the highest scheduler priority. Admit its sample
 		// before planning another viewer delta so a cached page can reach the
 		// mesh queue in this runtime iteration.
@@ -770,6 +774,8 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 			page.mesh_worker_interactive_completed_jobs;
 		snapshot.mesh_worker_interactive_queued_jobs =
 			page.mesh_worker_interactive_queued_jobs;
+		snapshot.mesh_worker_interactive_active_jobs =
+			page.mesh_worker_interactive_active_jobs;
 		snapshot.mesh_worker_interactive_queue_wait_ns_last =
 			page.mesh_worker_interactive_queue_wait_ns_last;
 		snapshot.mesh_worker_interactive_queue_wait_ns_total =

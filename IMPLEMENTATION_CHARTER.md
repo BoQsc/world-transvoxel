@@ -1375,7 +1375,9 @@ For GPU-resident LOD0 edits with a matching live collision base, the CPU worker
 extracts only the dirty 8-cubed collision blocks and their ownership halo. It
 does not build the complete regular chunk or transition mesh for collision;
 visual extraction continues from the immutable GPU field capture. Jobs without
-a matching live base retain the complete CPU mesh fallback.
+a matching live base extract all regular collision blocks through the same
+collision-only mesher, establishing a complete patch base without building CPU
+render or transition geometry.
 The reserved interactive collision worker never accepts background work.
 Background mesh workers remain work-conserving: while interactive collision
 patches are queued they assist that queue before taking background meshes. This
@@ -1391,6 +1393,15 @@ consume that worker. Completion becomes visible to the runtime before the
 worker reports itself idle, and a queued collision publication records the
 generation's collision branch as pending so readiness repair cannot schedule a
 duplicate generation.
+The runtime drains asynchronous completions before scheduler dispatch. While an
+interactive collision mesh remains queued or executing, scheduler dispatch
+admits only committed-edit-priority sample work and waits before preparing
+another mesh. This prevents synchronous dependency
+preparation for a cold background mesh from occupying the runtime thread after
+the reserved worker has produced an authoritative collision result. Existing
+background workers continue executing and all queues retain their configured
+bounds. Runtime metrics expose queued and actively executing interaction meshes
+separately; canceled queued jobs therefore cannot leave the dispatch gate set.
 
 That pending-attempt marker deduplicates payload or remesh work only while the
 desired set still requires collision. When viewer motion removes its collision
