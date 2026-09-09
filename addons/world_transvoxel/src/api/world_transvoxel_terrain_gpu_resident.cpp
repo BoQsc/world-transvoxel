@@ -178,16 +178,22 @@ SameLayoutEditCohortStatus build_same_layout_edit_cohort(
 	const std::vector<WtChunkKey> &retirements,
 	const std::vector<WtChunkKey> &edit_replacements,
 	WtChunkPublicationRegion &region,
-	std::vector<WtChunkKey> &waiting_masks
+	std::vector<WtChunkKey> &waiting_masks,
+	const char **rejection_reason = nullptr,
+	WtChunkKey *rejection_key = nullptr
 ) {
+	if (rejection_key) *rejection_key = seed;
+	if (rejection_reason) *rejection_reason = "none";
 	if (!std::binary_search(
 			edit_replacements.begin(), edit_replacements.end(), seed
 		)) {
+		if (rejection_reason) *rejection_reason = "seed_not_incremental_edit";
 		return SameLayoutEditCohortStatus::NotApplicable;
 	}
 	WtChunkApplicationRecord seed_record;
 	if (!application.copy_record(seed, seed_record) ||
 		!seed_record.visual_required || seed_record.world_revision == 0) {
+		if (rejection_reason) *rejection_reason = "seed_application_unavailable";
 		return SameLayoutEditCohortStatus::NotApplicable;
 	}
 
@@ -202,10 +208,14 @@ SameLayoutEditCohortStatus build_same_layout_edit_cohort(
 		// An exact-key retirement means this is a layout change, even if an older
 		// GPU instance is still visible for the key.
 		if (std::binary_search(retirements.begin(), retirements.end(), key)) {
+			if (rejection_key) *rejection_key = key;
+			if (rejection_reason) *rejection_reason = "exact_key_retirement";
 			return SameLayoutEditCohortStatus::NotApplicable;
 		}
 		std::uint8_t active_mask = 0;
 		if (!render_sink.get_gpu_resident_boundary_mask(key, active_mask)) {
+			if (rejection_key) *rejection_key = key;
+			if (rejection_reason) *rejection_reason = "active_gpu_coverage_missing";
 			return SameLayoutEditCohortStatus::NotApplicable;
 		}
 		candidate.replacements.push_back(key);
@@ -214,10 +224,13 @@ SameLayoutEditCohortStatus build_same_layout_edit_cohort(
 			continue;
 		}
 		if (record.external_visual_transition_mask != active_mask) {
+			if (rejection_key) *rejection_key = key;
+			if (rejection_reason) *rejection_reason = "transition_mask_changed";
 			return SameLayoutEditCohortStatus::NotApplicable;
 		}
 	}
 	if (candidate.replacements.empty()) {
+		if (rejection_reason) *rejection_reason = "no_matching_revision_edits";
 		return SameLayoutEditCohortStatus::NotApplicable;
 	}
 	region = std::move(candidate);
@@ -240,12 +253,15 @@ bool build_gpu_publication_cohort(
 	std::vector<WtChunkKey> *inspected_candidates = nullptr,
 	std::vector<WtChunkKey> *inspected_visual_retirements = nullptr,
 	WtPublicationDependencyGraph *dependencies = nullptr,
-	bool *same_layout_edit = nullptr
+	bool *same_layout_edit = nullptr,
+	const char **same_layout_edit_rejection_reason = nullptr,
+	WtChunkKey *same_layout_edit_rejection_key = nullptr
 ) {
 	if (same_layout_edit) *same_layout_edit = false;
 	const SameLayoutEditCohortStatus edit_status = build_same_layout_edit_cohort(
 		application, render_sink, seed, retirements, edit_replacements,
-		region, waiting_masks
+		region, waiting_masks, same_layout_edit_rejection_reason,
+		same_layout_edit_rejection_key
 	);
 	if (edit_status != SameLayoutEditCohortStatus::NotApplicable) {
 		if (same_layout_edit) *same_layout_edit = true;
@@ -362,11 +378,14 @@ godot::Dictionary WorldTransvoxelTerrain::inspect_gpu_resident_publication(
 	std::vector<WtChunkKey> visual_candidates;
 	std::vector<WtChunkKey> visual_retirements;
 	bool same_layout_edit = false;
+	const char *same_layout_edit_rejection_reason = "none";
+	WtChunkKey same_layout_edit_rejection_key = seed;
 	const bool built = build_gpu_publication_cohort(
 		*application_, *render_sink_, seed, pending_chunk_replacements_,
 		ready_staged_chunk_replacements_, pending_chunk_retirements_,
 		independently_publishable_chunk_replacements_, region, waiting_masks, &boundaries, &visual_candidates,
-		&visual_retirements, nullptr, &same_layout_edit
+		&visual_retirements, nullptr, &same_layout_edit,
+		&same_layout_edit_rejection_reason, &same_layout_edit_rejection_key
 	);
 	result["seed"] = gpu_cohort_key(seed);
 	result["built"] = built;
@@ -382,6 +401,10 @@ godot::Dictionary WorldTransvoxelTerrain::inspect_gpu_resident_publication(
 	result["retirements"] = gpu_cohort_keys(region.retirements);
 	result["waiting_masks"] = gpu_cohort_keys(waiting_masks);
 	result["same_layout_edit"] = same_layout_edit;
+	result["same_layout_edit_rejection_reason"] = same_layout_edit_rejection_reason;
+	result["same_layout_edit_rejection_key"] = gpu_cohort_key(
+		same_layout_edit_rejection_key
+	);
 	// Only successful lookups are needed to replay the selector. Other keys are
 	// absent. No priority requests, activation, or GPU readback occurs here.
 	result["boundaries"] = boundaries;
@@ -751,13 +774,16 @@ get_gpu_resident_render_activation_cohort(
 		return result;
 	}
 	WtChunkApplicationRecord seed_record;
+	const bool seed_pending_retirement = std::binary_search(
+		pending_chunk_retirements_.begin(), pending_chunk_retirements_.end(), identity.key
+	);
 	if (!application_->copy_record(identity.key, seed_record) ||
-		!seed_record.visual_required || std::binary_search(
-			pending_chunk_retirements_.begin(), pending_chunk_retirements_.end(), identity.key
-		) ||
+		!seed_record.visual_required || seed_pending_retirement ||
 		seed_record.generation != identity.generation ||
 		seed_record.visual_generation != identity.generation ||
 		seed_record.external_visual_transition_mask != identity.transition_mask) {
+		result["same_layout_edit_rejection_reason"] = seed_pending_retirement ?
+			"seed_pending_retirement" : "seed_became_stale";
 		result["error"] = "GPU resident cohort seed became stale";
 		return result;
 	}
@@ -789,6 +815,8 @@ get_gpu_resident_render_activation_cohort(
 	std::vector<WtChunkKey> waiting_masks;
 	std::vector<WtChunkKey> visual_retirements;
 	bool same_layout_edit = false;
+	const char *same_layout_edit_rejection_reason = "none";
+	WtChunkKey same_layout_edit_rejection_key = identity.key;
 	record_phase("seed_validation");
 	const bool built = build_gpu_publication_cohort(
 			*application_, *render_sink_, identity.key,
@@ -796,7 +824,9 @@ get_gpu_resident_render_activation_cohort(
 			pending_chunk_retirements_, independently_publishable_chunk_replacements_,
 			region, waiting_masks,
 			nullptr, nullptr, &visual_retirements,
-			gpu_publication_dependencies_.get(), &same_layout_edit
+			gpu_publication_dependencies_.get(), &same_layout_edit,
+			&same_layout_edit_rejection_reason,
+			&same_layout_edit_rejection_key
 		);
 	record_phase("selection");
 	const bool covered = built && (region.retirements.empty() ||
@@ -808,6 +838,10 @@ get_gpu_resident_render_activation_cohort(
 	result["cohort_built"] = built;
 	result["authoritative_coverage_complete"] = covered;
 	result["same_layout_edit"] = same_layout_edit;
+	result["same_layout_edit_rejection_reason"] = same_layout_edit_rejection_reason;
+	result["same_layout_edit_rejection_key"] = gpu_cohort_key(
+		same_layout_edit_rejection_key
+	);
 	if (!covered) {
 		result["selected_replacements"] = gpu_cohort_keys(region.replacements);
 		result["selected_retirements"] = gpu_cohort_keys(region.retirements);

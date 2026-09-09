@@ -43,6 +43,7 @@ struct WtEditRuntimeReplacementRecord {
 	std::size_t evicted_resource_entries = 0;
 	bool collision_required = false;
 	bool visual_required = true;
+	bool independently_publishable = false;
 };
 
 struct WtEditRuntimeReplacementMetrics {
@@ -108,6 +109,7 @@ private:
 		bool collision_required = false;
 		bool visual_required = true;
 		bool foreground_interaction = false;
+		bool independently_publishable = false;
 	};
 
 	std::size_t replacement_capacity_ = 0;

@@ -188,7 +188,8 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 		publication.visual_required = replacement.visual_required;
 		publication.staged_replacement = true;
 		publication.preserve_collision_ready = replacement.collision_required;
-		publication.independently_publishable_replacement = true;
+		publication.independently_publishable_replacement =
+			replacement.independently_publishable;
 		if (!config_.hierarchical_lod_viewer_activation_enabled &&
 			replacement.visual_required && replacement.key.lod != 0) {
 			std::lock_guard<std::mutex> lock(visual_activation_mutex_);

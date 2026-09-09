@@ -72,6 +72,24 @@ bool contains_command_center(
 	return false;
 }
 
+bool intersects_owned_cells(
+	const WtChunkKey &key,
+	const WtEditTransaction &transaction
+) noexcept {
+	const WtChunkBounds bounds = wt_chunk_bounds(key);
+	for (const WtEditCommand &command : transaction.commands) {
+		if (command.bounds.maximum.x >= bounds.minimum.x &&
+			command.bounds.minimum.x < bounds.maximum.x &&
+			command.bounds.maximum.y >= bounds.minimum.y &&
+			command.bounds.minimum.y < bounds.maximum.y &&
+			command.bounds.maximum.z >= bounds.minimum.z &&
+			command.bounds.minimum.z < bounds.maximum.z) {
+			return true;
+		}
+	}
+	return false;
+}
+
 } // namespace
 
 WtEditRuntimeReplacementService::WtEditRuntimeReplacementService(
@@ -170,6 +188,7 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 			collision_required,
 			visual_required,
 			key.lod == 0 && contains_command_center(key, transaction),
+			intersects_owned_cells(key, transaction),
 		});
 	}
 	std::sort(
@@ -261,7 +280,7 @@ WtEditRuntimeReplacementService::apply_prepared(
 				true,
 				replacement.collision_required,
 				current->world_revision,
-				true
+				replacement.independently_publishable
 			) != WtApplicationStatus::Ok) {
 			++metrics_.application_failures;
 			return WtEditRuntimeReplacementStatus::ApplicationFailure;
@@ -287,6 +306,7 @@ WtEditRuntimeReplacementService::apply_prepared(
 			resource_entries,
 			replacement.collision_required,
 			replacement.visual_required,
+			replacement.independently_publishable,
 		});
 		metrics_.evicted_page_entries += page_entries;
 		metrics_.evicted_resource_entries += resource_entries;

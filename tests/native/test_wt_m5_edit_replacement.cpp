@@ -603,7 +603,7 @@ void test_foreground_interaction_ordering() {
 		{ 1, 0, 1, 0 },
 		{ 0, 0, 0, 1 },
 	};
-	const wt::WtChunkKey foreground_key = { 1, 0, 1, 0 };
+	const wt::WtChunkKey foreground_key = { 1, 0, 0, 0 };
 	const wt::WtChunkKey background_lod_key = { 0, 0, 0, 1 };
 	wt::WtEditSpatialIndex spatial(keys.size(), 64, keys.size());
 	check(spatial.rebuild(keys) == wt::WtEditSpatialStatus::Ok,
@@ -636,7 +636,7 @@ void test_foreground_interaction_ordering() {
 	});
 	wt::WtEditRuntimeReplacementService service(keys.size());
 	check(service.replace_loaded_chunks(
-		transaction_at(source_revision, 7, 16, 8, 16, 50),
+		transaction_at(source_revision, 7, 16, 8, 14, 50),
 		spatial,
 		scheduler,
 		page_cache,
@@ -649,6 +649,13 @@ void test_foreground_interaction_ordering() {
 	check(replacements.size() == keys.size() &&
 		replacements.front().key == foreground_key,
 		"interacted chunk was not the first replacement");
+	const std::size_t independently_publishable = static_cast<std::size_t>(
+		std::count_if(replacements.begin(), replacements.end(), [](const auto &entry) {
+			return entry.independently_publishable;
+		})
+	);
+	check(independently_publishable == 3,
+		"sampling-halo-only replacements entered the atomic edit cohort");
 	wt::WtChunkJob job;
 	check(scheduler.pop_job(job) &&
 		job.key == foreground_key &&

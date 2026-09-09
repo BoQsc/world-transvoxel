@@ -1771,6 +1771,17 @@ completion must rearm foreground topology refresh while that exact key remains
 leased. Visual admission therefore cannot wait for an unrelated later viewer,
 collision, or edit event. Superseded or released lease keys do not rearm it.
 
+GPU publication does not connect equal-LOD cold candidates into one cohort
+when neither shared face carries a transition. Their deterministic boundary
+samples permit independent publication; parent/child replacement coverage and
+all transition-bearing faces remain atomic. An edit additionally distinguishes
+chunks whose owned cells intersect the command from chunks reached only through
+the required sampling halo. Owned-cell replacements form the atomic edit cohort
+and remain independently publishable. Halo-only chunks still regenerate at the
+same journal revision, but cannot delay publication of unchanged owned topology.
+Internal cohort inspection reports the bounded reason and first key whenever
+the same-layout edit path is unavailable.
+
 ## 24. Final definition of success
 
 Success is a maintainable native Godot terrain addon, not merely generated

@@ -19,6 +19,9 @@ struct WtChunkPublicationRegion {
 struct WtGpuPublicationBoundary {
 	std::uint8_t transition_mask = 0;
 	bool compatible_active = false;
+	// False only when this candidate replaces density changed by the current
+	// edit. Same-LOD edit neighbors must publish together even with mask zero.
+	bool content_current = true;
 };
 
 WtGpuPublicationBoundary wt_gpu_publication_boundary(

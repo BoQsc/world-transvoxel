@@ -359,6 +359,38 @@ void sparse_fine_face_cohort_regression() {
 	std::cout << "GPU_SPARSE_FINE_FACE_COHORT_PASS authoritative=2 invented=0\n";
 }
 
+void cold_same_lod_cohort_regression() {
+	const wt::WtChunkKey seed {0, 0, 0, 0};
+	const wt::WtChunkKey edited_neighbor {1, 0, 0, 0};
+	const wt::WtChunkKey cold_neighbor {2, 0, 0, 0};
+	Keys candidates {seed, edited_neighbor, cold_neighbor};
+	wt::WtChunkPublicationRegion region;
+	Keys waiting;
+	const auto cold_lookup = [&candidates](
+			const wt::WtChunkKey &key, wt::WtGpuPublicationBoundary &boundary) {
+		if (!contains(candidates, key)) return false;
+		boundary = {0, false, true};
+		return true;
+	};
+	check(wt::wt_build_gpu_chunk_publication_cohort(
+		seed, candidates, {}, cold_lookup, region, waiting, 64
+	), "cold same-LOD cohort was rejected");
+	check(region.replacements == Keys {seed},
+		"cold same-LOD candidates formed an unbounded publication chain");
+	const auto edit_lookup = [&candidates, &edited_neighbor](
+			const wt::WtChunkKey &key, wt::WtGpuPublicationBoundary &boundary) {
+		if (!contains(candidates, key)) return false;
+		boundary = {0, false, key != edited_neighbor};
+		return true;
+	};
+	check(wt::wt_build_gpu_chunk_publication_cohort(
+		seed, candidates, {}, edit_lookup, region, waiting, 64
+	), "same-LOD edit cohort was rejected");
+	check(region.replacements == Keys({seed, edited_neighbor}),
+		"same-LOD edited face neighbor was not retained atomically");
+	std::cout << "GPU_COLD_SAME_LOD_COHORT_PASS cold_members=1 edit_members=2\n";
+}
+
 wt::WtChunkKey read_key() {
 	wt::WtChunkKey key; int lod;
 	check(bool(std::cin >> key.x >> key.y >> key.z >> lod) && lod >= 0 && lod <= wt::kWtMaximumLod,
@@ -455,6 +487,7 @@ int main(int argc, char **argv) {
 		spatial_dependency_regression();
 		dependency_snapshot_regression();
 		sparse_fine_face_cohort_regression();
+		cold_same_lod_cohort_regression();
 		coverage_regression();
 	}
 }

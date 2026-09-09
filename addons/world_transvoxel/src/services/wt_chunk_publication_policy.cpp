@@ -277,7 +277,11 @@ WtGpuPublicationBoundary wt_gpu_publication_boundary(
 	const std::uint8_t mask = !candidate_mask_known && active_present ?
 		active_mask : candidate_mask;
 	// Matching seam masks cannot join old and new density across an edit.
-	return { mask, active_present && mask == active_mask && active_content_current };
+	return {
+		mask,
+		active_present && mask == active_mask && active_content_current,
+		active_content_current
+	};
 }
 
 bool wt_build_chunk_publication_region(
@@ -400,10 +404,12 @@ bool wt_build_gpu_chunk_publication_cohort(
 				if (neighbor_requires_transition) {
 					insert_key(waiting_masks, adjacent);
 				}
-				// Candidate masks describe the future layout, not retained geometry.
-				// Until that neighbor is compatible on screen, keep its replacement
-				// in the atomic swap even if both future masks are zero.
-				if (!neighbor.compatible_active || neighbor_requires_transition) {
+				// Equal-LOD, zero-transition chunks share deterministic boundary
+				// samples and do not form a publication dependency merely because a
+				// cold neighbor has no active GPU instance. Otherwise a moving cold
+				// shell flood-fills into one ever-growing cohort. Density edits remain
+				// atomic across affected face neighbors through content_current.
+				if (neighbor_requires_transition || !neighbor.content_current) {
 					if (!add(adjacent)) return false;
 				}
 				continue;
