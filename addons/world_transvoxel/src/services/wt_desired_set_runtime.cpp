@@ -226,11 +226,17 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 	}
 	for (const WtDesiredChunk &item : delta.updated) {
 		WtChunkApplicationRecord application_record;
+		const bool copied_application_record =
+			application.copy_record(item.key, application_record);
 		const bool promote_visual =
-			application.copy_record(item.key, application_record) &&
+			copied_application_record &&
 			!application_record.visual_required && item.visual_required;
 		const bool promote_collision =
+			copied_application_record &&
 			!application_record.collision_required && item.collision_required;
+		const bool withdraw_collision =
+			copied_application_record &&
+			application_record.collision_required && !item.collision_required;
 		const WtChunkRecord *record = scheduler.find_record(item.key);
 		const bool interactive_edit_in_flight =
 			record != nullptr &&
@@ -283,6 +289,10 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 				) != WtApplicationStatus::Ok) {
 				++metrics_.application_failures;
 				return WtDesiredSetRuntimeStatus::ApplicationFailure;
+			}
+			if (withdraw_collision) {
+				metrics_.evicted_resource_entries +=
+					resource_cache.erase_collision_key(item.key);
 			}
 			continue;
 		}
@@ -350,6 +360,10 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 			application_status != WtApplicationStatus::AlreadyCurrent) {
 			++metrics_.application_failures;
 			return WtDesiredSetRuntimeStatus::ApplicationFailure;
+		}
+		if (withdraw_collision) {
+			metrics_.evicted_resource_entries +=
+				resource_cache.erase_collision_key(item.key);
 		}
 	}
 	for (const WtDesiredChunk &item : delta.added) {

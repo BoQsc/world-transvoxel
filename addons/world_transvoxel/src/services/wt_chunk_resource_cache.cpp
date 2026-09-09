@@ -504,6 +504,22 @@ std::size_t WtChunkResourceCache::erase_visual_key(const WtChunkKey &key) {
 	return erased;
 }
 
+std::size_t WtChunkResourceCache::erase_collision_key(
+	const WtChunkKey &key
+) {
+	std::size_t erased = 0;
+	for (auto iterator = collisions_.begin(); iterator != collisions_.end();) {
+		if (iterator->key == key) {
+			collision_resident_bytes_ -= iterator->resident_bytes;
+			iterator = collisions_.erase(iterator);
+			++erased;
+		} else {
+			++iterator;
+		}
+	}
+	return erased;
+}
+
 void WtChunkResourceCache::clear() noexcept {
 	meshes_.clear();
 	renders_.clear();

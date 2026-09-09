@@ -1363,6 +1363,9 @@ bounds plus the one-cell ownership halo. It merges those blocks with the newest
 cached same-key collision generation preceding the replacement, while the
 physics sink retains every clean block. Internal application readiness is not a
 cache identity source because frontend publication can advance independently.
+Withdrawing collision demand evicts the cached collision generation at the same
+desired-set transition that retires the physics shape, so later re-entry cannot
+mistake a cache-only predecessor for a live block base.
 Empty and nonempty collision patches publish as soon as the matching CPU
 generation is ready; GPU capture capacity and visual activation cannot delay
 them. A superseding generation cancels queued and active collision work and

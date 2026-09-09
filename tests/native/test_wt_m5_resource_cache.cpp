@@ -324,6 +324,13 @@ void test_collision_tier(
 		cache.find_collision(collisions[0]->key, { 60 }),
 		"collision generation supersession failed"
 	);
+	check(
+		cache.erase_collision_key(collisions[2]->key) == 1 &&
+		!cache.find_collision(collisions[2]->key, { 52 }) &&
+		cache.insert_collision(collisions[2], { 52 }) ==
+			wt::WtChunkResourceCacheStatus::Ok,
+		"collision-only cache eviction affected retention or reinsertion"
+	);
 }
 
 void test_collision_recovery_from_terrain_mesh(
@@ -428,7 +435,7 @@ int main() {
 		"render cache metrics mismatch"
 	);
 	check(
-		metrics.collision.insertions == 4 &&
+		metrics.collision.insertions == 5 &&
 			metrics.collision.refreshes == 1 &&
 			metrics.collision.evictions == 1 &&
 			metrics.collision.superseded == 1,

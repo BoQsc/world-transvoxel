@@ -109,6 +109,7 @@ public:
 
 	std::size_t erase_key(const WtChunkKey &key);
 	std::size_t erase_visual_key(const WtChunkKey &key);
+	std::size_t erase_collision_key(const WtChunkKey &key);
 	void clear() noexcept;
 
 	std::size_t mesh_entry_count() const noexcept;
