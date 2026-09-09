@@ -166,9 +166,10 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 			record->generation,
 			record->source_revision,
 			record->world_revision,
+			record->priority,
 			collision_required,
 			visual_required,
-			contains_command_center(key, transaction),
+			key.lod == 0 && contains_command_center(key, transaction),
 		});
 	}
 	std::sort(
@@ -239,7 +240,9 @@ WtEditRuntimeReplacementService::apply_prepared(
 				replacement.key,
 				replacement.source_revision,
 				transaction.committed_revision,
-				kWtInteractiveEditPriority
+				replacement.collision_required ||
+					replacement.foreground_interaction ?
+					kWtInteractiveEditPriority : replacement.priority
 			);
 		if (scheduler_status != WtSchedulerStatus::Ok) {
 			++metrics_.scheduler_failures;

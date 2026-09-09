@@ -1706,6 +1706,13 @@ reach sampling and the collision worker during sustained rapid input instead of
 waiting for the command queue to become empty. The one-job bound preserves
 intake time for viewer and collision-viewer control events.
 
+An edit does not promote every intersecting loaded LOD to interaction priority.
+Collision-required chunks and LOD0 chunks containing a brush center enter the
+maximum interaction band. Other visual-only replacements retain their previously
+accepted desired-set priority, so LOD1/LOD2 reconstruction cannot queue ahead of
+LOD0 collision during a rapid edit burst. Every affected generation still uses
+the same committed journal revision and atomic visual publication rules.
+
 ## 24. Final definition of success
 
 Success is a maintainable native Godot terrain addon, not merely generated

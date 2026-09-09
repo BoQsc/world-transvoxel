@@ -104,6 +104,7 @@ private:
 		WtGenerationToken previous_generation;
 		std::uint64_t source_revision = 0;
 		std::uint64_t previous_world_revision = 0;
+		std::int32_t priority = 0;
 		bool collision_required = false;
 		bool visual_required = true;
 		bool foreground_interaction = false;

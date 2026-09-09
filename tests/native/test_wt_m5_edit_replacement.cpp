@@ -601,8 +601,10 @@ void test_foreground_interaction_ordering() {
 		{ 0, 0, 1, 0 },
 		{ 1, 0, 0, 0 },
 		{ 1, 0, 1, 0 },
+		{ 0, 0, 0, 1 },
 	};
 	const wt::WtChunkKey foreground_key = { 1, 0, 1, 0 };
+	const wt::WtChunkKey background_lod_key = { 0, 0, 0, 1 };
 	wt::WtEditSpatialIndex spatial(keys.size(), 64, keys.size());
 	check(spatial.rebuild(keys) == wt::WtEditSpatialStatus::Ok,
 		"foreground ordering spatial rebuild failed");
@@ -612,7 +614,9 @@ void test_foreground_interaction_ordering() {
 		const wt::WtGenerationToken generation = request_ready(
 			scheduler, key, source_revision, 7, 1
 		);
-		check(application.expect_chunk(key, generation, true, true) ==
+		check(application.expect_chunk(
+			key, generation, key != background_lod_key, true
+		) ==
 			wt::WtApplicationStatus::Ok,
 			"foreground ordering application setup failed");
 	}
@@ -648,8 +652,13 @@ void test_foreground_interaction_ordering() {
 	wt::WtChunkJob job;
 	check(scheduler.pop_job(job) &&
 		job.key == foreground_key &&
-		job.stage == wt::WtChunkJobStage::Sample,
+		job.stage == wt::WtChunkJobStage::Sample &&
+		job.priority == wt::kWtInteractiveEditPriority,
 		"interacted chunk was not the first scheduled edit job");
+	const wt::WtChunkRecord *background_record =
+		scheduler.find_record(background_lod_key);
+	check(background_record != nullptr && background_record->priority == 1,
+		"visual-only higher-LOD edit was promoted into the interaction band");
 }
 
 void test_repeated_bounded_replacement(std::vector<std::uint8_t> &evidence) {
