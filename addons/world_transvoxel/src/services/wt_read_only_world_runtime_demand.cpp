@@ -440,6 +440,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		edit_content_waiting = !edit_content_activation_waits_.empty();
 	}
 	ViewerEvent event;
+	std::vector<ViewerEvent> viewer_event_batch;
 	bool staging_event = false;
 	bool retention_refresh_event = false;
 	bool foreground_topology_refresh_event = false;
@@ -478,6 +479,24 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		} else {
 			event = viewer_events_.front();
 			viewer_events_.erase(viewer_events_.begin());
+			viewer_event_batch.push_back(event);
+			const bool collision_batch =
+				event.kind == ViewerEventKind::UpdateCollision ||
+				event.kind == ViewerEventKind::RemoveCollision;
+			if (collision_batch) {
+				for (auto iterator = viewer_events_.begin();
+						iterator != viewer_events_.end();) {
+					const bool queued_collision =
+						iterator->kind == ViewerEventKind::UpdateCollision ||
+						iterator->kind == ViewerEventKind::RemoveCollision;
+					if (!queued_collision) {
+						++iterator;
+						continue;
+					}
+					viewer_event_batch.push_back(*iterator);
+					iterator = viewer_events_.erase(iterator);
+				}
+			}
 			staging_event = event.kind == ViewerEventKind::AdvanceStaging;
 			retention_refresh_event =
 				event.kind == ViewerEventKind::RefreshEditLodRetention;
@@ -485,6 +504,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 				event.kind == ViewerEventKind::RefreshForegroundTopology;
 		}
 	}
+	if (viewer_event_batch.empty()) viewer_event_batch.push_back(event);
 	const bool trace_enabled = causal_trace_.enabled();
 	if (trace_enabled) {
 		causal_trace_.record(
@@ -572,43 +592,48 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		candidate_viewers.erase(viewer);
 		}
 	} else {
-		const auto viewer = std::lower_bound(
-			candidate_collision_viewers.begin(),
-			candidate_collision_viewers.end(),
-			event.snapshot.id,
-			[](const CollisionViewer &item, std::uint64_t id) {
-				return item.snapshot.id < id;
-			}
-		);
-		if (event.kind == ViewerEventKind::UpdateCollision) {
-			if (viewer != candidate_collision_viewers.end() &&
-				viewer->snapshot.id == event.snapshot.id) {
-				if (event.snapshot.revision <= viewer->snapshot.revision) {
+		for (const ViewerEvent &collision_update : viewer_event_batch) {
+			const auto viewer = std::lower_bound(
+				candidate_collision_viewers.begin(),
+				candidate_collision_viewers.end(),
+				collision_update.snapshot.id,
+				[](const CollisionViewer &item, std::uint64_t id) {
+					return item.snapshot.id < id;
+				}
+			);
+			if (collision_update.kind == ViewerEventKind::UpdateCollision) {
+				if (viewer != candidate_collision_viewers.end() &&
+						viewer->snapshot.id == collision_update.snapshot.id) {
+					if (collision_update.snapshot.revision <=
+							viewer->snapshot.revision) {
+						std::lock_guard<std::mutex> lock(metrics_mutex_);
+						++metrics_.rejected_events;
+						continue;
+					}
+					*viewer = {
+						collision_update.snapshot, collision_update.radius_chunks
+					};
+				} else if (candidate_collision_viewers.size() >=
+						config_.viewer_capacity) {
 					std::lock_guard<std::mutex> lock(metrics_mutex_);
 					++metrics_.rejected_events;
-					return true;
+					continue;
+				} else {
+					candidate_collision_viewers.insert(viewer, {
+						collision_update.snapshot, collision_update.radius_chunks
+					});
 				}
-				*viewer = { event.snapshot, event.radius_chunks };
-			} else if (candidate_collision_viewers.size() >=
-				config_.viewer_capacity) {
-				std::lock_guard<std::mutex> lock(metrics_mutex_);
-				++metrics_.rejected_events;
-				return true;
 			} else {
-				candidate_collision_viewers.insert(
-					viewer,
-					{ event.snapshot, event.radius_chunks }
-				);
+				if (viewer == candidate_collision_viewers.end() ||
+						viewer->snapshot.id != collision_update.snapshot.id ||
+						collision_update.snapshot.revision <=
+							viewer->snapshot.revision) {
+					std::lock_guard<std::mutex> lock(metrics_mutex_);
+					++metrics_.rejected_events;
+					continue;
+				}
+				candidate_collision_viewers.erase(viewer);
 			}
-		} else {
-			if (viewer == candidate_collision_viewers.end() ||
-				viewer->snapshot.id != event.snapshot.id ||
-				event.snapshot.revision <= viewer->snapshot.revision) {
-				std::lock_guard<std::mutex> lock(metrics_mutex_);
-				++metrics_.rejected_events;
-				return true;
-			}
-			candidate_collision_viewers.erase(viewer);
 		}
 	}
 
@@ -1105,7 +1130,11 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 				candidate_visual_activation_sequence;
 		} else {
 			std::lock_guard<std::mutex> lock(input_mutex_);
-			viewer_events_.insert(viewer_events_.begin(), event);
+			viewer_events_.insert(
+				viewer_events_.begin(),
+				viewer_event_batch.begin(),
+				viewer_event_batch.end()
+			);
 		}
 		return true;
 	}
@@ -1265,16 +1294,23 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	}
 	{
 		std::lock_guard<std::mutex> lock(metrics_mutex_);
-		if (event.kind == ViewerEventKind::Update) {
-			++metrics_.viewer_updates;
+		for (const ViewerEvent &processed_event : viewer_event_batch) {
+			if (processed_event.kind == ViewerEventKind::Update) {
+				++metrics_.viewer_updates;
+			} else if (processed_event.kind == ViewerEventKind::Remove) {
+				++metrics_.viewer_removals;
+			} else if (processed_event.kind == ViewerEventKind::UpdateCollision) {
+				++metrics_.collision_viewer_updates;
+			} else if (processed_event.kind == ViewerEventKind::RemoveCollision) {
+				++metrics_.collision_viewer_removals;
+			}
+		}
+		if (event.kind == ViewerEventKind::Update ||
+				event.kind == ViewerEventKind::UpdateCollision) {
 			metrics_.planned_demands += planned_demand_count;
-		} else if (event.kind == ViewerEventKind::Remove) {
-			++metrics_.viewer_removals;
-		} else if (event.kind == ViewerEventKind::UpdateCollision) {
-			++metrics_.collision_viewer_updates;
-			metrics_.planned_demands += planned_demand_count;
-		} else if (event.kind == ViewerEventKind::RemoveCollision) {
-			++metrics_.collision_viewer_removals;
+		}
+		if (viewer_event_batch.size() > 1) {
+			metrics_.coalesced_viewer_events += viewer_event_batch.size() - 1;
 		}
 		if (staged_plan) {
 			++metrics_.hierarchical_lod_staging_plans;

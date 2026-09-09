@@ -1614,6 +1614,14 @@ Face closure may add only fine neighbors accepted by the authoritative boundary
 lookup. Other coordinates on the same four-child face are outside the live
 publication set and cannot be invented as generation-zero cohort members.
 
+The runtime drains all collision-viewer changes already queued at the start of
+a planning pass into one immutable candidate collision-viewer set. It applies
+one desired-set delta for that set, preserves each viewer's revision checks and
+update/removal metrics, and requeues the complete batch in order under scheduler
+backpressure. Current support, predictive support, and tool collision viewers
+therefore share one collision overlay plan whenever they arrive together rather
+than successively superseding the same page work.
+
 A capture may reach the frontend before its exact CPU application record.
 Every later readiness query retries the generation-matched resident placeholder
 as soon as that application generation exists, then re-reads application state
