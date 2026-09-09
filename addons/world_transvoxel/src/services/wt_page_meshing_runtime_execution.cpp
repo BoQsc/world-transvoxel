@@ -332,6 +332,8 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		completion.prepared.gpu_resident_visual_only;
 	completion.gpu_resident_skip_cpu_meshing =
 		completion.prepared.gpu_resident_skip_cpu_meshing;
+	completion.collision_dirty_regular_brick_mask =
+		completion.prepared.dirty_regular_brick_mask;
 	const auto primary = std::lower_bound(
 		completion.prepared.dependencies.begin(),
 		completion.prepared.dependencies.end(),
@@ -440,6 +442,9 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		}
 		completion.collision_patch_mesh =
 			std::make_shared<WtChunkMeshResult>();
+		completion.collision_dirty_regular_brick_mask =
+			completion.prepared.live_collision_patch_base ?
+				completion.prepared.dirty_regular_brick_mask : 0xff;
 		return mesher.mesh_regular_collision_blocks(
 			{
 				completion.prepared.job.key,
@@ -449,7 +454,7 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 				0.25F,
 			},
 			*source,
-			completion.prepared.dirty_regular_brick_mask,
+			completion.collision_dirty_regular_brick_mask,
 			*completion.collision_patch_mesh,
 			scratch
 		);
@@ -463,8 +468,7 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 			terrain_status = WtChunkMeshingStatus::CellBackendFailure;
 		} else if (completion.prepared.gpu_resident_skip_cpu_meshing ||
 			(completion.prepared.incremental_edit &&
-				completion.prepared.collision_required &&
-				completion.prepared.live_collision_patch_base)) {
+				completion.prepared.collision_required)) {
 			terrain_status = build_incremental_collision_patch();
 			initialize_gpu_placeholder_mesh(*completion.mesh);
 		} else {
@@ -652,7 +656,7 @@ WtPageMeshingRuntimeService::accept_prepared_mesh_completion(
 				record->generation,
 				collision_mesh,
 				completion.prepared.incremental_edit,
-				completion.prepared.dirty_regular_brick_mask,
+				completion.collision_dirty_regular_brick_mask,
 				completion.collision_patch_mesh != nullptr,
 			})) {
 			record_time();

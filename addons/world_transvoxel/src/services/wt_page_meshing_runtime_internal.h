@@ -36,6 +36,7 @@ struct WtPageMeshingRuntimeService::PreparedMeshCompletion {
 	PreparedMeshJob prepared;
 	std::shared_ptr<WtChunkMeshResult> mesh;
 	std::shared_ptr<WtChunkMeshResult> collision_patch_mesh;
+	std::uint8_t collision_dirty_regular_brick_mask = 0xff;
 	std::shared_ptr<WtChunkMeshResult> water_mesh;
 	std::vector<WtRecordedMeshingCell> terrain_records;
 	std::vector<WtRecordedMeshingCell> water_records;

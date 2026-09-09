@@ -1683,6 +1683,11 @@ winding before block ownership and physics publication. Native parity tests
 compare the expanded face sequence against the full-quality regular mesher for
 planar, curved, and excavated terrain; this optimization cannot change visual
 meshing, transition topology, collision capacity, or generation semantics.
+When no live physics base exists, the same collision-specific path extracts all
+eight blocks and publishes a complete replacement. A GPU-resident visual edit
+must not run the full CPU render mesher merely to establish its first collision
+base. The GPU capture retains the edit's original dirty-brick mask; widening the
+CPU collision mask cannot widen visual regeneration.
 
 Interactive collision admission is measured independently from background mesh
 traffic. Runtime metrics expose the last, total, and maximum queue wait for jobs
