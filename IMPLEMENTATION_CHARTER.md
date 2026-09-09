@@ -1563,19 +1563,6 @@ page, adopting the page only after every resulting sample is finite. This keeps
 command application atomic while avoiding a duplicate full-page SDF evaluation;
 SDF support-band behavior outside geometric brush bounds remains authoritative.
 
-The page-meshing runtime retains a bounded derived cache of immutable edited
-pages for active source and journal epochs. A later world revision begins from
-the newest cached revision at or below its target and replays only newer journal
-transactions. Range lookup starts at the first newer transaction. An exact
-revision reuses the immutable page and its last dirty bounds, preserving brick
-selection for repeated GPU and collision generations. Revision zero never fills
-this cache. Entries use least-recently-used eviction with a capacity between 64
-and 512 pages derived from the existing runtime record capacity; source or
-initial-world-revision changes cannot reuse an entry. Runtime metrics report
-hits, incremental updates, misses, evictions, entries, capacity, and retained
-bytes. Eviction is always safe because source pages plus the authoritative
-journal reconstruct any derived page.
-
 Cached source pages remain immutable base data keyed by source revision. An edit
 does not evict that base page: journal replay derives the requested world revision
 when sampling the replacement. The runtime admits and starts committed-edit work

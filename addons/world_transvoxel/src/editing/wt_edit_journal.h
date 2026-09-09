@@ -71,11 +71,6 @@ public:
 		std::uint64_t maximum_revision,
 		WtEditReplaySink &sink
 	) const;
-	WtEditJournalStatus replay_range(
-		std::uint64_t after_revision,
-		std::uint64_t maximum_revision,
-		WtEditReplaySink &sink
-	) const;
 
 	bool initialized() const noexcept;
 	std::uint64_t source_revision() const noexcept;

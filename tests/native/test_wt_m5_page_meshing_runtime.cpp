@@ -1431,83 +1431,6 @@ bool wait_completion(
 	return completed;
 }
 
-std::uint64_t mesh_edited_revision(
-	wt::WtPageMeshingRuntimeService &runtime,
-	wt::WtStreamScheduler &scheduler,
-	wt::WtAsyncStorageService &storage,
-	wt::WtStoragePageCache &cache,
-	const wt::WtEditJournal &journal,
-	const wt::WtChunkKey &key,
-	std::uint64_t source_revision,
-	std::uint64_t world_revision
-) {
-	check(
-		scheduler.request_chunk_version(
-			key, source_revision, world_revision, 9
-		) == wt::WtSchedulerStatus::Ok,
-		"edited-page cache request failed"
-	);
-	wt::WtChunkJob sample_job;
-	check(
-		scheduler.pop_job(sample_job) &&
-			sample_job.stage == wt::WtChunkJobStage::Sample &&
-			runtime.begin_sample_job(
-				sample_job, 0, storage, cache, scheduler
-			) == wt::WtPageMeshingRuntimeStatus::Ok,
-		"edited-page cache sample start failed"
-	);
-	wt::WtChunkJob mesh_job;
-	scheduler.apply_completions(8);
-	if (!scheduler.pop_job(mesh_job)) {
-		wt::WtPageLoadCompletion page_completion;
-		check(
-			wait_completion(storage, page_completion) &&
-				runtime.accept_storage_completion(
-					page_completion, cache, scheduler
-				) == wt::WtPageMeshingRuntimeStatus::Ok,
-			"edited-page cache storage completion failed"
-		);
-		scheduler.apply_completions(8);
-		check(scheduler.pop_job(mesh_job), "edited-page cache mesh job missing");
-	}
-	check(
-		mesh_job.stage == wt::WtChunkJobStage::Mesh,
-		"edited-page cache emitted a non-mesh job"
-	);
-	const wt::WtChunkMesher mesher(wt::wt_get_transvoxel_mit_backend());
-	wt::WtChunkMeshingScratch scratch;
-	check(
-		runtime.execute_mesh_job(
-			mesh_job,
-			mesher,
-			scratch,
-			scheduler,
-			&journal,
-			0,
-			&storage
-		) == wt::WtPageMeshingRuntimeStatus::Ok,
-		"edited-page cache mesh execution failed"
-	);
-	check(
-		scheduler.apply_completions(8) == 1,
-		"edited-page cache mesh completion failed"
-	);
-	wt::WtPageMeshCompletion completion;
-	check(
-		runtime.pop_mesh_completion(completion) && completion.mesh != nullptr,
-		"edited-page cache mesh result missing"
-	);
-	std::uint64_t hash = 14695981039346656037ULL;
-	if (completion.mesh) hash_result(hash, *completion.mesh);
-	check(
-		runtime.release_chunk(key) == wt::WtPageMeshingRuntimeStatus::Ok &&
-			scheduler.cancel_chunk(key) == wt::WtSchedulerStatus::Ok &&
-			scheduler.forget_chunk(key) == wt::WtSchedulerStatus::Ok,
-		"edited-page cache generation release failed"
-	);
-	return hash;
-}
-
 void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 	for (std::size_t index = 0; index < 8; ++index) {
 		bytes.push_back(static_cast<std::uint8_t>(value >> (index * 8)));
@@ -2237,114 +2160,6 @@ void test_edited_coarse_procedural_rebuild(
 	storage.close();
 }
 
-void test_incremental_edited_page_cache(
-	std::vector<std::uint8_t> &evidence
-) {
-	wt::WtProceduralWorldDescriptor descriptor;
-	descriptor.chunk_count_x = 8;
-	descriptor.chunk_count_y = 8;
-	descriptor.chunk_count_z = 8;
-	descriptor.source_revision = 7202;
-	descriptor.world_revision = 0;
-	descriptor.seed = 19;
-	descriptor.mode = wt::WtProceduralWorldMode::Flat;
-	wt::WtAsyncStorageService storage({ 4, 4, wt::kWtMaximumContainerSize });
-	check(
-		storage.open_procedural(descriptor) == wt::WtAsyncStorageStatus::Ok,
-		"edited-page cache procedural storage open failed"
-	);
-
-	wt::WtEditJournal journal(2, 2, 4096);
-	journal.reset(descriptor.source_revision, 0);
-	for (std::uint64_t revision = 1; revision <= 2; ++revision) {
-		wt::WtEditCommand command;
-		command.command_id = repro_id(1100 + revision);
-		command.sequence = 0;
-		command.world_revision = revision;
-		command.operation = wt::WtEditOperation::AddDensity;
-		command.shape = wt::WtEditShape::Sphere;
-		command.density_value = 4.0F;
-		command.sphere = {
-			q16(3.0 + static_cast<double>(revision) * 2.0),
-			q16(8.0),
-			q16(5.0),
-			uq16(2.0),
-		};
-		check(
-			wt::wt_edit_sphere_bounds(command.sphere, command.bounds),
-			"edited-page cache command bounds failed"
-		);
-		wt::WtEditTransaction transaction;
-		transaction.source_revision = descriptor.source_revision;
-		transaction.transaction_id = repro_id(1200 + revision);
-		transaction.base_revision = revision - 1;
-		transaction.committed_revision = revision;
-		transaction.commands = { command };
-		std::vector<std::uint8_t> segment;
-		check(
-			journal.append(transaction, segment) ==
-				wt::WtEditJournalStatus::Ok,
-			"edited-page cache journal append failed"
-		);
-	}
-
-	const wt::WtChunkKey key = { 0, 0, 0, 0 };
-	wt::WtStoragePageCache cache({
-		4,
-		wt::kWtMaximumContainerSize,
-		4,
-		wt::kWtMaximumContainerSize,
-	});
-	wt::WtStreamScheduler scheduler(4, 4, 4, 1);
-	wt::WtPageMeshingRuntimeService runtime(4);
-	const std::uint64_t revision_one_hash = mesh_edited_revision(
-		runtime, scheduler, storage, cache, journal, key,
-		descriptor.source_revision, 1
-	);
-	const std::uint64_t incremental_hash = mesh_edited_revision(
-		runtime, scheduler, storage, cache, journal, key,
-		descriptor.source_revision, 2
-	);
-	const std::uint64_t exact_hit_hash = mesh_edited_revision(
-		runtime, scheduler, storage, cache, journal, key,
-		descriptor.source_revision, 2
-	);
-
-	wt::WtStoragePageCache cold_cache({
-		4,
-		wt::kWtMaximumContainerSize,
-		4,
-		wt::kWtMaximumContainerSize,
-	});
-	wt::WtStreamScheduler cold_scheduler(4, 4, 4, 1);
-	wt::WtPageMeshingRuntimeService cold_runtime(4);
-	const std::uint64_t cold_hash = mesh_edited_revision(
-		cold_runtime, cold_scheduler, storage, cold_cache, journal, key,
-		descriptor.source_revision, 2
-	);
-	const wt::WtPageMeshingRuntimeMetrics metrics = runtime.get_metrics();
-	check(
-		revision_one_hash != 0 && incremental_hash == cold_hash &&
-			exact_hit_hash == cold_hash,
-		"incremental edited-page cache changed authoritative geometry"
-	);
-	check(
-		metrics.edited_page_cache_misses == 1 &&
-			metrics.edited_page_cache_updates == 1 &&
-			metrics.edited_page_cache_hits == 1 &&
-			metrics.edited_page_cache_evictions == 0 &&
-			metrics.edited_page_cache_entries == 1 &&
-			metrics.edited_page_cache_entries <=
-				metrics.edited_page_cache_capacity &&
-			metrics.edited_page_cache_resident_bytes != 0,
-		"edited-page cache did not perform bounded incremental reuse"
-	);
-	append_u64(evidence, revision_one_hash);
-	append_u64(evidence, incremental_hash);
-	append_u64(evidence, metrics.edited_page_cache_resident_bytes);
-	storage.close();
-}
-
 void test_storage_backpressure_retry(const RuntimeFixture &fixture) {
 	wt::WtAsyncStorageService storage({ 2, 32, wt::kWtMaximumContainerSize });
 	check(
@@ -2826,7 +2641,6 @@ int main() {
 	test_runtime_lifecycle(fixture, evidence);
 	test_parallel_mesh_equivalence_and_stale_rejection(fixture, evidence);
 	test_edited_coarse_procedural_rebuild(evidence);
-	test_incremental_edited_page_cache(evidence);
 	test_storage_backpressure_retry(fixture);
 	test_priority_ordered_loading_retry(fixture);
 	test_shared_page_completion_fanout(fixture);
@@ -2845,7 +2659,7 @@ int main() {
 		"priority_ordered_loading_retry=1 shared_page_fanout=1 "
 		"shared_page_cancellation_fanout=1 "
 		"large_rolling_hills_cave_lod2_mask_regression=1 "
-		"human_boundary_repro=1 edited_coarse_rebuild=1 edited_page_cache=1 "
+		"human_boundary_repro=1 edited_coarse_rebuild=1 "
 		"sphere_difference_topology=1 smooth_sphere_difference=1 "
 		"material_volume_distance=1 procedural_water_volume=1 "
 		"authored_water_volume=1\n"

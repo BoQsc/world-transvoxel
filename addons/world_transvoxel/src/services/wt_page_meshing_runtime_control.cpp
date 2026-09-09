@@ -1,7 +1,6 @@
 #include "services/wt_page_meshing_runtime.h"
 
 #include "storage/wt_async_storage_service.h"
-#include "storage/wt_chunk_page.h"
 
 #include <algorithm>
 
@@ -247,15 +246,6 @@ std::size_t WtPageMeshingRuntimeService::pinned_page_count() const noexcept {
 WtPageMeshingRuntimeMetrics
 WtPageMeshingRuntimeService::get_metrics() const noexcept {
 	WtPageMeshingRuntimeMetrics snapshot = metrics_;
-	snapshot.edited_page_cache_entries = edited_page_cache_.size();
-	snapshot.edited_page_cache_capacity = edited_page_cache_capacity_;
-	for (const EditedPageCacheEntry &entry : edited_page_cache_) {
-		if (!entry.page) continue;
-		snapshot.edited_page_cache_resident_bytes += sizeof(WtChunkPage) +
-			entry.page->samples.capacity() * sizeof(WtScalarSample) +
-			entry.page->surface_shift_records.capacity() *
-				sizeof(WtChunkSurfaceShiftRecord);
-	}
 	merge_async_metrics(snapshot);
 	for (const Record &record : records_) {
 		switch (record.phase) {

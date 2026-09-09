@@ -117,13 +117,6 @@ struct WtPageMeshingRuntimeMetrics {
 	std::uint64_t cancelled_dependency_requests = 0;
 	std::uint64_t dependency_cache_hits = 0;
 	std::uint64_t dependency_cache_misses = 0;
-	std::uint64_t edited_page_cache_hits = 0;
-	std::uint64_t edited_page_cache_updates = 0;
-	std::uint64_t edited_page_cache_misses = 0;
-	std::uint64_t edited_page_cache_evictions = 0;
-	std::uint64_t edited_page_cache_entries = 0;
-	std::uint64_t edited_page_cache_capacity = 0;
-	std::uint64_t edited_page_cache_resident_bytes = 0;
 	std::uint64_t accepted_storage_completions = 0;
 	std::uint64_t stale_storage_completions = 0;
 	std::uint64_t storage_failures = 0;
@@ -356,16 +349,6 @@ private:
 		WtChunkKey key;
 		std::int32_t priority = 0;
 	};
-	struct EditedPageCacheEntry {
-		WtChunkKey key;
-		std::uint64_t source_revision = 0;
-		std::uint64_t initial_world_revision = 0;
-		std::uint64_t applied_world_revision = 0;
-		std::uint64_t last_use = 0;
-		WtEditBounds dirty_bounds;
-		bool has_dirty_bounds = false;
-		std::shared_ptr<const WtChunkPage> page;
-	};
 
 	std::vector<Record>::iterator find_record(
 		const WtChunkKey &key
@@ -441,9 +424,6 @@ private:
 	bool valid_ = false;
 	std::vector<Record> records_;
 	std::vector<LoadingRetryCandidate> loading_retry_candidates_;
-	std::vector<EditedPageCacheEntry> edited_page_cache_;
-	std::size_t edited_page_cache_capacity_ = 0;
-	std::uint64_t edited_page_cache_clock_ = 0;
 	WtPageMeshingRuntimeMetrics metrics_;
 	WtChunkMeshingScratch preparation_scratch_;
 	std::unique_ptr<AsyncState> async_;

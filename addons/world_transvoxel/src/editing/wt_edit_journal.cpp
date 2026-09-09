@@ -250,31 +250,14 @@ WtEditJournalStatus WtEditJournal::replay_until(
 	std::uint64_t maximum_revision,
 	WtEditReplaySink &sink
 ) const {
-	return replay_range(initial_world_revision_, maximum_revision, sink);
-}
-
-WtEditJournalStatus WtEditJournal::replay_range(
-	std::uint64_t after_revision,
-	std::uint64_t maximum_revision,
-	WtEditReplaySink &sink
-) const {
 	if (!initialized_) return WtEditJournalStatus::NotInitialized;
-	if (after_revision < initial_world_revision_ ||
-		after_revision > maximum_revision ||
+	if (maximum_revision < initial_world_revision_ ||
 		maximum_revision > current_world_revision_) {
 		return WtEditJournalStatus::WorldRevisionMismatch;
 	}
-	const auto first = std::upper_bound(
-		transactions_.begin(),
-		transactions_.end(),
-		after_revision,
-		[](std::uint64_t revision, const WtEditTransaction &transaction) {
-			return revision < transaction.committed_revision;
-		}
-	);
-	for (auto transaction = first; transaction != transactions_.end(); ++transaction) {
-		if (transaction->committed_revision > maximum_revision) break;
-		for (const WtEditCommand &command : transaction->commands) {
+	for (const WtEditTransaction &transaction : transactions_) {
+		if (transaction.committed_revision > maximum_revision) break;
+		for (const WtEditCommand &command : transaction.commands) {
 			if (!sink.apply(command)) {
 				return WtEditJournalStatus::ReplayFailure;
 			}

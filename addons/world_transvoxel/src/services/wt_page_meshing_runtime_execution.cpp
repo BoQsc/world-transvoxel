@@ -202,8 +202,7 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 	std::uint8_t dirty_regular_brick_mask = 0xff;
 	WtEditBounds dirty_edit_bounds;
 	bool has_dirty_edit_bounds = false;
-	if (source_valid && edit_journal != nullptr &&
-		record->world_revision > initial_world_revision) {
+	if (source_valid && edit_journal != nullptr) {
 		WtProceduralWorldDescriptor procedural_descriptor;
 		const WtProceduralWorldDescriptor *procedural_descriptor_pointer =
 			authoritative_storage != nullptr &&
@@ -222,51 +221,15 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 		}
 		bool surface_shift_failure = false;
 		for (Dependency &dependency : record->dependencies) {
-			auto cached = edited_page_cache_.end();
-			for (auto candidate = edited_page_cache_.begin();
-					candidate != edited_page_cache_.end(); ++candidate) {
-				if (candidate->key == dependency.key &&
-					candidate->source_revision == record->source_revision &&
-					candidate->initial_world_revision == initial_world_revision &&
-					candidate->applied_world_revision <= record->world_revision &&
-					(cached == edited_page_cache_.end() ||
-						candidate->applied_world_revision >
-							cached->applied_world_revision)) {
-					cached = candidate;
-				}
-			}
-			if (cached != edited_page_cache_.end() &&
-				cached->applied_world_revision == record->world_revision) {
-				cached->last_use = ++edited_page_cache_clock_;
-				dependency.page = cached->page;
-				if (dependency.key == record->key && cached->has_dirty_bounds) {
-					incremental_edit =
-						record->world_revision > initial_world_revision;
-					dirty_edit_bounds = cached->dirty_bounds;
-					has_dirty_edit_bounds = true;
-					dirty_regular_brick_mask = dirty_regular_bricks(
-						record->key, cached->dirty_bounds
-					);
-				}
-				++metrics_.edited_page_cache_hits;
-				continue;
-			}
-
 			WtChunkEditState edit_state;
-			const std::shared_ptr<const WtChunkPage> replay_base =
-				cached != edited_page_cache_.end() ? cached->page : dependency.page;
-			const std::uint64_t replay_after = cached != edited_page_cache_.end() ?
-				cached->applied_world_revision : initial_world_revision;
-			if (!replay_base ||
+			if (!dependency.page ||
 				edit_state.initialize(
-					*replay_base,
+					*dependency.page,
 					record->source_revision,
-					replay_after,
+					initial_world_revision,
 					procedural_descriptor_pointer
 				) != WtChunkEditStatus::Ok ||
-				edit_journal->replay_range(
-					replay_after, record->world_revision, edit_state
-				) !=
+				edit_journal->replay_until(record->world_revision, edit_state) !=
 					WtEditJournalStatus::Ok ||
 				edit_state.current_world_revision() != record->world_revision) {
 				source_valid = false;
@@ -285,10 +248,10 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 				}
 			}
 			if (!edited_page.surface_shift_valid) {
-				const WtChunkPageSampleSource current_source(edited_page);
+				const WtChunkPageSampleSource retained_source(*dependency.page);
 				const WtEditSurfaceShiftSource local_source(
-					edited_source ? static_cast<const WtChunkSampleSource &>(*edited_source) : current_source,
-					*replay_base, edit_state.surface_shift_dirty_bounds());
+					edited_source ? static_cast<const WtChunkSampleSource &>(*edited_source) : retained_source,
+					*dependency.page, edit_state.surface_shift_dirty_bounds());
 				if (!edited_source || !edited_source->valid() ||
 					wt_build_surface_shift_records(
 						edited_page,
@@ -305,44 +268,6 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 			dependency.page = std::make_shared<const WtChunkPage>(
 				std::move(edited_page)
 			);
-			if (cached != edited_page_cache_.end()) {
-				cached->applied_world_revision = record->world_revision;
-				cached->last_use = ++edited_page_cache_clock_;
-				cached->has_dirty_bounds =
-					edit_state.surface_shift_dirty_bounds() != nullptr;
-				if (cached->has_dirty_bounds) {
-					cached->dirty_bounds = *edit_state.surface_shift_dirty_bounds();
-				}
-				cached->page = dependency.page;
-				++metrics_.edited_page_cache_updates;
-			} else {
-				if (edited_page_cache_.size() >= edited_page_cache_capacity_) {
-					const auto oldest = std::min_element(
-						edited_page_cache_.begin(),
-						edited_page_cache_.end(),
-						[](const EditedPageCacheEntry &left,
-							const EditedPageCacheEntry &right) {
-							return left.last_use < right.last_use;
-						}
-					);
-					if (oldest != edited_page_cache_.end()) {
-						edited_page_cache_.erase(oldest);
-						++metrics_.edited_page_cache_evictions;
-					}
-				}
-				edited_page_cache_.push_back({
-					dependency.key,
-					record->source_revision,
-					initial_world_revision,
-					record->world_revision,
-					++edited_page_cache_clock_,
-					edit_state.surface_shift_dirty_bounds() != nullptr ?
-						*edit_state.surface_shift_dirty_bounds() : WtEditBounds {},
-					edit_state.surface_shift_dirty_bounds() != nullptr,
-					dependency.page,
-				});
-				++metrics_.edited_page_cache_misses;
-			}
 		}
 		if (!source_valid) {
 			for (Dependency &dependency : record->dependencies) {
