@@ -319,6 +319,15 @@ void WtReadOnlyWorldRuntime::record_frontend_sink(
 	);
 }
 
+void WtReadOnlyWorldRuntime::record_frontend_collision_residency(
+	const WtChunkKey &key,
+	WtGenerationToken generation
+) {
+	if (resource_cache_) {
+		resource_cache_->set_active_collision_generation(key, generation);
+	}
+}
+
 void WtReadOnlyWorldRuntime::record_frontend_visibility(
 	WtCausalTraceEventKind kind,
 	const WtChunkKey *key,

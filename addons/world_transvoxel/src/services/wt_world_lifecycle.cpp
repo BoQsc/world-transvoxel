@@ -374,6 +374,16 @@ void WtWorldLifecycleService::record_frontend_sink(
 	);
 }
 
+void WtWorldLifecycleService::record_frontend_collision_residency(
+	const WtChunkKey &key,
+	WtGenerationToken generation
+) {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	if (runtime_) {
+		runtime_->record_frontend_collision_residency(key, generation);
+	}
+}
+
 void WtWorldLifecycleService::record_frontend_visibility(
 	WtCausalTraceEventKind kind,
 	const WtChunkKey *key,

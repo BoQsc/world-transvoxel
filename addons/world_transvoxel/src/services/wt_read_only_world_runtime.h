@@ -236,6 +236,10 @@ public:
 		std::uint64_t duration_ns,
 		bool applied
 	);
+	void record_frontend_collision_residency(
+		const WtChunkKey &key,
+		WtGenerationToken generation
+	);
 	void record_frontend_visibility(
 		WtCausalTraceEventKind kind,
 		const WtChunkKey *key,

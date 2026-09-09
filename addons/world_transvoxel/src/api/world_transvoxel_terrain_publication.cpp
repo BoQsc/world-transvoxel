@@ -40,6 +40,12 @@ void WorldTransvoxelTerrain::publish_ready_independent_collision_coverage() {
 				"independent collision coverage publication failed";
 			return;
 		}
+		if (lifecycle_) {
+			lifecycle_->record_frontend_collision_residency(
+				record.key,
+				collision_sink_->applied_generation(record.key)
+			);
+		}
 	}
 }
 
@@ -103,6 +109,9 @@ void WorldTransvoxelTerrain::flush_ready_collision_retirements() {
 			continue;
 		}
 		collision_sink_->remove_collision(key);
+		if (lifecycle_) {
+			lifecycle_->record_frontend_collision_residency(key, {});
+		}
 		pending_collision_retirements_.erase(
 			pending_collision_retirements_.begin() + index
 		);
@@ -266,6 +275,11 @@ void WorldTransvoxelTerrain::flush_ready_independent_publication_regions() {
 			application_->forget_chunk(retirement);
 			render_sink_->begin_render_retirement(retirement);
 			collision_sink_->remove_collision(retirement);
+			if (lifecycle_) {
+				lifecycle_->record_frontend_collision_residency(
+					retirement, {}
+				);
+			}
 			render_sink_->publish_staged_record(retirement);
 		}
 		bool published = true;
@@ -273,6 +287,12 @@ void WorldTransvoxelTerrain::flush_ready_independent_publication_regions() {
 			clear_visibility_coverage_priority_request(replacement);
 			published = render_sink_->publish_staged_record(replacement) &&
 				collision_sink_->publish_staged_record(replacement) && published;
+			if (lifecycle_) {
+				lifecycle_->record_frontend_collision_residency(
+					replacement,
+					collision_sink_->applied_generation(replacement)
+				);
+			}
 		}
 		if (!published) {
 			synchronous_world_error_ =

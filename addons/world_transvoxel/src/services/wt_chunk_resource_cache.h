@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 namespace world_transvoxel {
@@ -99,6 +100,10 @@ public:
 		const WtChunkKey &key,
 		WtGenerationToken generation
 	);
+	void set_active_collision_generation(
+		const WtChunkKey &key,
+		WtGenerationToken generation
+	);
 	WtChunkResourceCacheStatus find_or_rebuild_collision(
 		const WtChunkKey &key,
 		WtGenerationToken generation,
@@ -145,6 +150,10 @@ private:
 		std::size_t resident_bytes = 0;
 		std::uint64_t last_access = 0;
 	};
+	struct ActiveCollisionEntry {
+		WtChunkKey key;
+		WtGenerationToken generation;
+	};
 
 	std::uint64_t next_access() noexcept;
 	std::vector<MeshEntry>::iterator find_mesh_entry(
@@ -172,6 +181,8 @@ private:
 	std::vector<MeshEntry> meshes_;
 	std::vector<RenderEntry> renders_;
 	std::vector<CollisionEntry> collisions_;
+	mutable std::mutex active_collisions_mutex_;
+	std::vector<ActiveCollisionEntry> active_collisions_;
 	WtChunkResourceCacheMetrics metrics_;
 };
 

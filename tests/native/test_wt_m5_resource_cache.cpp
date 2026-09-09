@@ -290,6 +290,11 @@ void test_collision_tier(
 			cache.find_collision(collisions[0]->key, { 50 }),
 		"collision cache hit failed"
 	);
+	check(
+		!cache.find_collision_predecessor(collisions[0]->key, { 60 }),
+		"cache-only collision was exposed as a live predecessor"
+	);
+	cache.set_active_collision_generation(collisions[0]->key, { 50 });
 	const auto collision_predecessor =
 		cache.find_collision_predecessor(collisions[0]->key, { 60 });
 	check(
@@ -324,11 +329,13 @@ void test_collision_tier(
 		cache.find_collision(collisions[0]->key, { 60 }),
 		"collision generation supersession failed"
 	);
+	cache.set_active_collision_generation(collisions[2]->key, { 52 });
 	check(
 		cache.erase_collision_key(collisions[2]->key) == 1 &&
 		!cache.find_collision(collisions[2]->key, { 52 }) &&
 		cache.insert_collision(collisions[2], { 52 }) ==
-			wt::WtChunkResourceCacheStatus::Ok,
+			wt::WtChunkResourceCacheStatus::Ok &&
+		!cache.find_collision_predecessor(collisions[2]->key, { 60 }),
 		"collision-only cache eviction affected retention or reinsertion"
 	);
 }

@@ -1366,6 +1366,11 @@ cache identity source because frontend publication can advance independently.
 Withdrawing collision demand evicts the cached collision generation at the same
 desired-set transition that retires the physics shape, so later re-entry cannot
 mistake a cache-only predecessor for a live block base.
+The runtime records the exact collision generation active in the frontend
+physics sink. Incremental preparation may use a cached predecessor only when it
+matches that active generation. Prepared, staged, or cache-resident payloads do
+not establish a patch base; a first edit without a live base publishes a full
+collision payload from its already-complete CPU mesh.
 Empty and nonempty collision patches publish as soon as the matching CPU
 generation is ready; GPU capture capacity and visual activation cannot delay
 them. A superseding generation cancels queued and active collision work and

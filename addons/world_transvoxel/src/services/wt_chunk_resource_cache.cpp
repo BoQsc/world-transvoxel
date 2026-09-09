@@ -374,23 +374,58 @@ WtChunkResourceCache::find_collision_predecessor(
 		++metrics_.collision.misses;
 		return {};
 	}
-	const auto identity = std::make_pair(key, generation);
-	auto entry = std::lower_bound(
-		collisions_.begin(), collisions_.end(), identity,
-		identity_less<CollisionEntry>
-	);
-	if (entry == collisions_.begin()) {
+	WtGenerationToken active_generation;
+	{
+		std::lock_guard<std::mutex> lock(active_collisions_mutex_);
+		const auto active = std::lower_bound(
+			active_collisions_.begin(), active_collisions_.end(), key,
+			[](const ActiveCollisionEntry &entry, const WtChunkKey &value) {
+				return entry.key < value;
+			}
+		);
+		if (active == active_collisions_.end() || active->key != key) {
+			++metrics_.collision.misses;
+			return {};
+		}
+		active_generation = active->generation;
+	}
+	if (active_generation.value == 0 ||
+			active_generation.value >= generation.value) {
 		++metrics_.collision.misses;
 		return {};
 	}
-	--entry;
-	if (entry->key != key || entry->generation.value >= generation.value) {
+	auto entry = find_collision_entry(key, active_generation);
+	if (entry == collisions_.end()) {
 		++metrics_.collision.misses;
 		return {};
 	}
 	entry->last_access = next_access();
 	++metrics_.collision.hits;
 	return entry->payload;
+}
+
+void WtChunkResourceCache::set_active_collision_generation(
+	const WtChunkKey &key,
+	WtGenerationToken generation
+) {
+	std::lock_guard<std::mutex> lock(active_collisions_mutex_);
+	const auto iterator = std::lower_bound(
+		active_collisions_.begin(), active_collisions_.end(), key,
+		[](const ActiveCollisionEntry &entry, const WtChunkKey &value) {
+			return entry.key < value;
+		}
+	);
+	if (generation.value == 0) {
+		if (iterator != active_collisions_.end() && iterator->key == key) {
+			active_collisions_.erase(iterator);
+		}
+		return;
+	}
+	if (iterator != active_collisions_.end() && iterator->key == key) {
+		iterator->generation = generation;
+		return;
+	}
+	active_collisions_.insert(iterator, { key, generation });
 }
 
 WtChunkResourceCacheStatus
@@ -507,6 +542,7 @@ std::size_t WtChunkResourceCache::erase_visual_key(const WtChunkKey &key) {
 std::size_t WtChunkResourceCache::erase_collision_key(
 	const WtChunkKey &key
 ) {
+	set_active_collision_generation(key, {});
 	std::size_t erased = 0;
 	for (auto iterator = collisions_.begin(); iterator != collisions_.end();) {
 		if (iterator->key == key) {
@@ -521,6 +557,10 @@ std::size_t WtChunkResourceCache::erase_collision_key(
 }
 
 void WtChunkResourceCache::clear() noexcept {
+	{
+		std::lock_guard<std::mutex> lock(active_collisions_mutex_);
+		active_collisions_.clear();
+	}
 	meshes_.clear();
 	renders_.clear();
 	collisions_.clear();

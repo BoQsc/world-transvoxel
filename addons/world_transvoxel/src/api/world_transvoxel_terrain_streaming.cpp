@@ -44,6 +44,15 @@ void WorldTransvoxelTerrain::_process(double delta) {
 			*render_sink_,
 			*collision_sink_
 		);
+	if (lifecycle_ && applied.collision_processed != 0) {
+		for (const WtChunkApplicationRecord &record :
+				application_->get_records()) {
+			lifecycle_->record_frontend_collision_residency(
+				record.key,
+				collision_sink_->applied_generation(record.key)
+			);
+		}
+	}
 	if (collision_publication_count != 0 || applied.collision_processed != 0) {
 		publish_ready_independent_collision_coverage();
 	}
@@ -399,6 +408,12 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 							collision_apply_deadline_ns_) {
 						collision_deadline_exhausted = true;
 					}
+					if (lifecycle_) {
+						lifecycle_->record_frontend_collision_residency(
+							publication.key,
+							collision_sink_->applied_generation(publication.key)
+						);
+					}
 				}
 				break;
 			case WtReadOnlyPublicationKind::ViewerPlanStarted:
@@ -673,6 +688,9 @@ void WorldTransvoxelTerrain::flush_ready_chunk_retirements() {
 		application_->forget_chunk(key);
 		render_sink_->begin_render_retirement(key);
 		collision_sink_->remove_collision(key);
+		if (lifecycle_) {
+			lifecycle_->record_frontend_collision_residency(key, {});
+		}
 		pending_chunk_retirements_.erase(pending_chunk_retirements_.begin());
 	}
 }
@@ -795,6 +813,12 @@ void WorldTransvoxelTerrain::flush_ready_chunk_replacements() {
 				++iterator;
 				continue;
 			}
+			if (lifecycle_) {
+				lifecycle_->record_frontend_collision_residency(
+					*iterator,
+					collision_sink_->applied_generation(*iterator)
+				);
+			}
 			independently_publishable_chunk_replacements_.erase(independent);
 		} else {
 			const WtChunkKey key = *iterator;
@@ -894,6 +918,15 @@ void WorldTransvoxelTerrain::publish_staged_records_if_ready() {
 	}
 	if (collision_sink_->has_staged_records()) {
 		collision_sink_->publish_staged_records();
+		if (lifecycle_) {
+			for (const WtChunkApplicationRecord &record :
+					application_->get_records()) {
+				lifecycle_->record_frontend_collision_residency(
+					record.key,
+					collision_sink_->applied_generation(record.key)
+				);
+			}
+		}
 	}
 	ready_staged_chunk_replacements_.clear();
 	if (cpu_causal_trace_active_ && lifecycle_ &&
