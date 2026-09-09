@@ -44,14 +44,14 @@ std::uint8_t dirty_regular_bricks(
 		for (std::int32_t y = 0; y < 2; ++y) {
 			for (std::int32_t x = 0; x < 2; ++x) {
 				const WtGridPoint minimum = {
-					chunk_minimum.x + x * 8 - 1,
-					chunk_minimum.y + y * 8 - 1,
-					chunk_minimum.z + z * 8 - 1,
+					chunk_minimum.x + x * 8,
+					chunk_minimum.y + y * 8,
+					chunk_minimum.z + z * 8,
 				};
 				const WtGridPoint maximum = {
-					chunk_minimum.x + (x + 1) * 8 + 1,
-					chunk_minimum.y + (y + 1) * 8 + 1,
-					chunk_minimum.z + (z + 1) * 8 + 1,
+					chunk_minimum.x + (x + 1) * 8,
+					chunk_minimum.y + (y + 1) * 8,
+					chunk_minimum.z + (z + 1) * 8,
 				};
 				const bool intersects =
 					dirty.maximum.x >= minimum.x && dirty.minimum.x <= maximum.x &&
@@ -442,10 +442,27 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		}
 		completion.collision_patch_mesh =
 			std::make_shared<WtChunkMeshResult>();
-		completion.collision_dirty_regular_brick_mask =
-			completion.prepared.live_collision_patch_base ?
-				completion.prepared.dirty_regular_brick_mask : 0xff;
-		return mesher.mesh_regular_collision_blocks(
+		if (completion.prepared.live_collision_patch_base) {
+			completion.collision_dirty_regular_brick_mask =
+				completion.prepared.dirty_regular_brick_mask;
+			return mesher.mesh_regular_collision_blocks(
+				{
+					completion.prepared.job.key,
+					0,
+					0,
+					0.0F,
+					0.25F,
+				},
+				*source,
+				completion.collision_dirty_regular_brick_mask,
+				*completion.collision_patch_mesh,
+				scratch
+			);
+		}
+		// Without a verified live block set, publish a complete authoritative
+		// collision base. A partial payload cannot safely create a new body.
+		completion.collision_dirty_regular_brick_mask = 0xff;
+		return mesher.mesh(
 			{
 				completion.prepared.job.key,
 				0,
@@ -454,7 +471,6 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 				0.25F,
 			},
 			*source,
-			completion.collision_dirty_regular_brick_mask,
 			*completion.collision_patch_mesh,
 			scratch
 		);

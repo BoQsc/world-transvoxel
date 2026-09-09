@@ -705,7 +705,8 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 				continue;
 			}
 			WtTerrainMeshReadyCallback terrain_mesh_ready;
-			if (defer_gpu_capture || !application_record.visual_required ||
+			if (application_record.collision_required || defer_gpu_capture ||
+				!application_record.visual_required ||
 				!application_record.staged_replacement) {
 				terrain_mesh_ready =
 					[this](const WtTerrainMeshCompletion &completion) {

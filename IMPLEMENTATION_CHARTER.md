@@ -1357,9 +1357,10 @@ Collision geometry remains CPU authoritative and cannot depend on GPU readback.
 ### 23.2 Incremental interaction collision contract
 
 Loaded LOD0 collision is stored in eight independently replaceable 8-by-8-by-8
-cell blocks. Density edits may still extract the complete regular CPU mesh, but
-the collision builder selects only blocks intersecting the authoritative dirty
-bounds plus the one-cell ownership halo. It merges those blocks with the newest
+cell blocks. The edited-page dirty bounds already include the sampling and
+ownership support required by the edit; collision block selection must not add
+a second one-cell expansion across every block boundary. The collision builder
+selects only blocks intersecting those authoritative bounds and merges them with the newest
 cached same-key collision generation preceding the replacement, while the
 physics sink retains every clean block. Internal application readiness is not a
 cache identity source because frontend publication can advance independently.
@@ -1372,12 +1373,12 @@ matches that active generation. Prepared, staged, or cache-resident payloads do
 not establish a patch base; a first edit without a live base publishes a full
 collision payload from its already-complete CPU mesh.
 For GPU-resident LOD0 edits with a matching live collision base, the CPU worker
-extracts only the dirty 8-cubed collision blocks and their ownership halo. It
+extracts only the dirty 8-cubed collision blocks. It
 does not build the complete regular chunk or transition mesh for collision;
 visual extraction continues from the immutable GPU field capture. Jobs without
-a matching live base extract all regular collision blocks through the same
-collision-only mesher, establishing a complete patch base without building CPU
-render or transition geometry.
+a matching live base build a complete authoritative regular CPU mesh and
+publish a complete collision base; a partial block payload cannot safely create
+a new physics body.
 The reserved interactive collision worker never accepts background work.
 Background mesh workers remain work-conserving: while interactive collision
 patches are queued they assist that queue before taking background meshes. This
@@ -1386,6 +1387,12 @@ Empty and nonempty collision patches publish as soon as the matching CPU
 generation is ready; GPU capture capacity and visual activation cannot delay
 them. A superseding generation cancels queued and active collision work and
 discards stale completions.
+
+A collision-required job always installs its terrain-completion callback,
+including staged GPU visual replacements. The callback consumes the dedicated
+CPU collision mesh before the visual placeholder completes. A GPU placeholder
+is never accepted as collision geometry, and deferred visual completion never
+repeats collision preparation after the collision branch completed early.
 
 One configured mesh worker and one bounded queue lane are reserved for
 foreground collision patches. Background storage, LOD, and visual work cannot
