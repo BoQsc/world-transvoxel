@@ -255,7 +255,8 @@ bool build_gpu_publication_cohort(
 	WtPublicationDependencyGraph *dependencies = nullptr,
 	bool *same_layout_edit = nullptr,
 	const char **same_layout_edit_rejection_reason = nullptr,
-	WtChunkKey *same_layout_edit_rejection_key = nullptr
+	WtChunkKey *same_layout_edit_rejection_key = nullptr,
+	WtGpuPublicationCohortDiagnostics *cohort_diagnostics = nullptr
 ) {
 	if (same_layout_edit) *same_layout_edit = false;
 	const SameLayoutEditCohortStatus edit_status = build_same_layout_edit_cohort(
@@ -346,7 +347,7 @@ bool build_gpu_publication_cohort(
 				inspected_boundaries->push_back(member);
 			}
 			return true;
-		}, region, waiting_masks, 4096, dependencies
+		}, region, waiting_masks, 4096, dependencies, cohort_diagnostics
 	);
 	if (built) {
 		// Unsafe-face closure can retire fine chunks immediately outside the new
@@ -817,6 +818,7 @@ get_gpu_resident_render_activation_cohort(
 	bool same_layout_edit = false;
 	const char *same_layout_edit_rejection_reason = "none";
 	WtChunkKey same_layout_edit_rejection_key = identity.key;
+	WtGpuPublicationCohortDiagnostics cohort_diagnostics;
 	record_phase("seed_validation");
 	const bool built = build_gpu_publication_cohort(
 			*application_, *render_sink_, identity.key,
@@ -826,7 +828,8 @@ get_gpu_resident_render_activation_cohort(
 			nullptr, nullptr, &visual_retirements,
 			gpu_publication_dependencies_.get(), &same_layout_edit,
 			&same_layout_edit_rejection_reason,
-			&same_layout_edit_rejection_key
+			&same_layout_edit_rejection_key,
+			&cohort_diagnostics
 		);
 	record_phase("selection");
 	const bool covered = built && (region.retirements.empty() ||
@@ -884,6 +887,22 @@ get_gpu_resident_render_activation_cohort(
 	);
 	result["retirement_count"] = static_cast<std::int64_t>(retirement_count);
 	result["boundary_mask_wait_count"] = static_cast<std::int64_t>(waiting_masks.size());
+	result["cohort_candidate_count"] = static_cast<std::int64_t>(cohort_diagnostics.candidate_count);
+	result["cohort_overlap_members"] = static_cast<std::int64_t>(cohort_diagnostics.overlap_members);
+	result["cohort_same_lod_face_members"] = static_cast<std::int64_t>(cohort_diagnostics.same_lod_face_members);
+	result["cohort_coarse_face_members"] = static_cast<std::int64_t>(cohort_diagnostics.coarse_face_members);
+	result["cohort_fine_face_members"] = static_cast<std::int64_t>(cohort_diagnostics.fine_face_members);
+	constexpr std::size_t kDiagnosticCohortSampleCapacity = 24;
+	result["cohort_selected_sample"] = gpu_cohort_keys(std::vector<WtChunkKey>(
+		replacements.begin(), replacements.begin() + std::min(
+			replacements.size(), kDiagnosticCohortSampleCapacity
+		)
+	));
+	result["cohort_retirement_sample"] = gpu_cohort_keys(std::vector<WtChunkKey>(
+		retirements.begin(), retirements.begin() + std::min(
+			retirements.size(), kDiagnosticCohortSampleCapacity
+		)
+	));
 	std::vector<WtChunkApplicationRecord> ready_records;
 	ready_records.reserve(replacements.size());
 	std::int64_t activation_required_count = 0;

@@ -782,6 +782,54 @@ void test_collision_viewer_batch_planning() {
 	}
 }
 
+void test_visual_viewer_batch_planning() {
+	const int failures_before = failure_count;
+	FixtureRoot fixture;
+	std::filesystem::path world_path;
+	check(wtt::wt_write_production_streaming_fixture(
+		fixture.path, 7001, 12, world_path
+	), "visual viewer batch fixture write failed");
+	wt::WtAsyncStorageService storage({16, 16, wt::kWtMaximumContainerSize});
+	check(storage.open(world_path, fixture.path) == wt::WtAsyncStorageStatus::Ok,
+		"visual viewer batch fixture open failed");
+	wt::WtRuntimeConfig config;
+	config.active_chunk_capacity = 8;
+	config.viewer_capacity = 4;
+	config.demand_capacity_per_viewer = 125;
+	config.meshing_worker_count = 1;
+	wt::WtReadOnlyWorldRuntime runtime(config, storage);
+	check(runtime.valid(), "visual viewer batch runtime invalid");
+	check(runtime.update_viewer(viewer(1, 1, 8.0, 8.0), 0) ==
+			wt::WtReadOnlyRuntimeStatus::Ok &&
+		runtime.update_viewer(viewer(2, 1, 40.0, 8.0), 0) ==
+			wt::WtReadOnlyRuntimeStatus::Ok,
+		"same-frame visual viewer updates rejected");
+	std::atomic<wt::WtReadOnlyRuntimeStatus> status {
+		wt::WtReadOnlyRuntimeStatus::Ok
+	};
+	std::thread worker([&]() { status.store(runtime.run()); });
+	const auto deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(3);
+	while (runtime.get_metrics().viewer_updates < 2 &&
+			std::chrono::steady_clock::now() < deadline) {
+		wt::WtReadOnlyPublication publication;
+		while (runtime.pop_publication(publication)) {}
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	const auto metrics = runtime.get_metrics();
+	runtime.request_stop();
+	worker.join();
+	storage.close();
+	check(status.load() == wt::WtReadOnlyRuntimeStatus::Ok &&
+		metrics.viewer_updates == 2 &&
+		metrics.planned_demands == 2 &&
+		metrics.coalesced_viewer_events >= 1,
+		"same-frame visual viewers did not share one desired-set plan");
+	if (failure_count == failures_before) {
+		std::printf("VISUAL_VIEWER_BATCH_PASS updates=2 plans=1 demands=2\n");
+	}
+}
+
 void test_collision_promotion_before_mesh(
 	std::size_t mesh_workers,
 	bool supersede_before_release = false
@@ -1210,6 +1258,7 @@ int main(int argc, char **argv) {
 	test_collision_only_with_full_gpu_queue(0);
 	test_collision_only_with_full_gpu_queue(1);
 	test_collision_viewer_batch_planning();
+	test_visual_viewer_batch_planning();
 	test_g8_2000x2000_window_planning();
 	test_visibility_coverage_priority_generation_contract();
 	test_foreground_priority_lease_contract();

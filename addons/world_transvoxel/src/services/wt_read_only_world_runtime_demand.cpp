@@ -483,13 +483,20 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			const bool collision_batch =
 				event.kind == ViewerEventKind::UpdateCollision ||
 				event.kind == ViewerEventKind::RemoveCollision;
-			if (collision_batch) {
+			const bool visual_batch =
+				event.kind == ViewerEventKind::Update ||
+				event.kind == ViewerEventKind::Remove;
+			if (collision_batch || visual_batch) {
 				for (auto iterator = viewer_events_.begin();
 						iterator != viewer_events_.end();) {
 					const bool queued_collision =
 						iterator->kind == ViewerEventKind::UpdateCollision ||
 						iterator->kind == ViewerEventKind::RemoveCollision;
-					if (!queued_collision) {
+					const bool queued_visual =
+						iterator->kind == ViewerEventKind::Update ||
+						iterator->kind == ViewerEventKind::Remove;
+					if ((collision_batch && !queued_collision) ||
+						(visual_batch && !queued_visual)) {
 						++iterator;
 						continue;
 					}
@@ -553,43 +560,53 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		// likewise replans the retained internal viewers without fabricating a
 		// newer external viewer revision.
 	} else if (!collision_event) {
-		const auto viewer = std::lower_bound(
-			candidate_viewers.begin(),
-			candidate_viewers.end(),
-			event.snapshot.id,
-			[](const WtLodPlannerViewer &item, std::uint64_t id) {
-				return item.snapshot.id < id;
+		// Primary and predictive visual viewers are submitted together by the game.
+		// Apply every queued visual role to one immutable desired-set snapshot so a
+		// single movement does not create two superseding LOD cuts and publication
+		// regions. enqueue_viewer_event already retains only the newest revision for
+		// each role.
+		for (const ViewerEvent &visual_update : viewer_event_batch) {
+			const auto viewer = std::lower_bound(
+				candidate_viewers.begin(),
+				candidate_viewers.end(),
+				visual_update.snapshot.id,
+				[](const WtLodPlannerViewer &item, std::uint64_t id) {
+					return item.snapshot.id < id;
+				}
+			);
+			if (visual_update.kind == ViewerEventKind::Update) {
+				if (viewer != candidate_viewers.end() &&
+						viewer->snapshot.id == visual_update.snapshot.id) {
+					if (visual_update.snapshot.revision <=
+							viewer->snapshot.revision) {
+						std::lock_guard<std::mutex> lock(metrics_mutex_);
+						++metrics_.rejected_events;
+						continue;
+					}
+					*viewer = {
+						visual_update.snapshot, visual_update.radius_chunks,
+						visual_update.maximum_lod
+					};
+				} else if (candidate_viewers.size() >= config_.viewer_capacity) {
+					std::lock_guard<std::mutex> lock(metrics_mutex_);
+					++metrics_.rejected_events;
+					continue;
+				} else {
+					candidate_viewers.insert(viewer, {
+						visual_update.snapshot, visual_update.radius_chunks,
+						visual_update.maximum_lod
+					});
+				}
+			} else {
+				if (viewer == candidate_viewers.end() ||
+						viewer->snapshot.id != visual_update.snapshot.id ||
+						visual_update.snapshot.revision <= viewer->snapshot.revision) {
+					std::lock_guard<std::mutex> lock(metrics_mutex_);
+					++metrics_.rejected_events;
+					continue;
+				}
+				candidate_viewers.erase(viewer);
 			}
-		);
-		if (event.kind == ViewerEventKind::Update) {
-		if (viewer != candidate_viewers.end() &&
-			viewer->snapshot.id == event.snapshot.id) {
-			if (event.snapshot.revision <= viewer->snapshot.revision) {
-				std::lock_guard<std::mutex> lock(metrics_mutex_);
-				++metrics_.rejected_events;
-				return true;
-			}
-			*viewer = {
-				event.snapshot, event.radius_chunks, event.maximum_lod
-			};
-		} else if (candidate_viewers.size() >= config_.viewer_capacity) {
-			std::lock_guard<std::mutex> lock(metrics_mutex_);
-			++metrics_.rejected_events;
-			return true;
-		} else {
-			candidate_viewers.insert(viewer, {
-				event.snapshot, event.radius_chunks, event.maximum_lod
-			});
-		}
-		} else {
-		if (viewer == candidate_viewers.end() ||
-			viewer->snapshot.id != event.snapshot.id ||
-			event.snapshot.revision <= viewer->snapshot.revision) {
-			std::lock_guard<std::mutex> lock(metrics_mutex_);
-			++metrics_.rejected_events;
-			return true;
-		}
-		candidate_viewers.erase(viewer);
 		}
 	} else {
 		for (const ViewerEvent &collision_update : viewer_event_batch) {

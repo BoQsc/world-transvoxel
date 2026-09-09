@@ -24,6 +24,15 @@ struct WtGpuPublicationBoundary {
 	bool content_current = true;
 };
 
+struct WtGpuPublicationCohortDiagnostics {
+	std::size_t candidate_count = 0;
+	std::size_t selected_member_count = 0;
+	std::size_t overlap_members = 0;
+	std::size_t same_lod_face_members = 0;
+	std::size_t coarse_face_members = 0;
+	std::size_t fine_face_members = 0;
+};
+
 WtGpuPublicationBoundary wt_gpu_publication_boundary(
 	std::uint8_t candidate_mask, bool candidate_mask_known,
 	std::uint8_t active_mask, bool active_present,
@@ -41,7 +50,8 @@ bool wt_build_gpu_chunk_publication_cohort(
 	WtChunkPublicationRegion &output,
 	std::vector<WtChunkKey> &waiting_masks,
 	std::size_t maximum_members = 4096,
-	WtPublicationDependencyGraph *dependencies = nullptr
+	WtPublicationDependencyGraph *dependencies = nullptr,
+	WtGpuPublicationCohortDiagnostics *diagnostics = nullptr
 );
 
 bool wt_chunk_replacement_requires_regional_publication(

@@ -1662,6 +1662,13 @@ backpressure. Current support, predictive support, and tool collision viewers
 therefore share one collision overlay plan whenever they arrive together rather
 than successively superseding the same page work.
 
+The same immutable batching rule applies independently to queued visual-viewer
+changes. A primary viewer and its predictive interaction shell must enter one
+balanced LOD plan and one desired-set delta. They cannot create successive cuts
+whose overlapping replacements become a growing regional publication cohort.
+Collision and visual batches remain separate so collision demand keeps its
+dedicated scheduling and publication path.
+
 A capture may reach the frontend before its exact CPU application record.
 Every later readiness query retries the generation-matched resident placeholder
 as soon as that application generation exists, then re-reads application state

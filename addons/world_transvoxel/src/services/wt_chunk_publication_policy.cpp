@@ -309,10 +309,14 @@ bool wt_build_gpu_chunk_publication_cohort(
 	WtChunkPublicationRegion &output,
 	std::vector<WtChunkKey> &waiting_masks,
 	std::size_t maximum_members,
-	WtPublicationDependencyGraph *dependencies
+	WtPublicationDependencyGraph *dependencies,
+	WtGpuPublicationCohortDiagnostics *diagnostics
 ) {
 	output = {};
 	waiting_masks.clear();
+	WtGpuPublicationCohortDiagnostics diagnostic;
+	diagnostic.candidate_count = pending_replacements.size();
+	if (diagnostics != nullptr) *diagnostics = diagnostic;
 	if (!lookup || !wt_is_valid_chunk_key(seed) || maximum_members == 0) return false;
 	std::map<WtChunkKey, WtGpuPublicationBoundary> boundaries;
 	std::set<WtChunkKey> absent;
@@ -355,6 +359,13 @@ bool wt_build_gpu_chunk_publication_cohort(
 		if (selected.size() >= maximum_members) return false;
 		selected.insert(key);
 		queue.push_back(key);
+		diagnostic.selected_member_count = selected.size();
+		return true;
+	};
+	const auto add_dependency = [&](const WtChunkKey &key, std::size_t &counter) {
+		const std::size_t before = selected.size();
+		if (!add(key)) return false;
+		if (selected.size() != before) ++counter;
 		return true;
 	};
 	add(seed);
@@ -375,7 +386,7 @@ bool wt_build_gpu_chunk_publication_cohort(
 				key, graph.replacements(), graph.retirements(), region
 			);
 			for (const WtChunkKey &replacement : region.replacements) {
-				if (!add(replacement)) return false;
+				if (!add_dependency(replacement, diagnostic.overlap_members)) return false;
 				expanded_regions.insert(replacement);
 			}
 			for (const WtChunkKey &retirement : region.retirements) {
@@ -410,7 +421,7 @@ bool wt_build_gpu_chunk_publication_cohort(
 				// shell flood-fills into one ever-growing cohort. Density edits remain
 				// atomic across affected face neighbors through content_current.
 				if (neighbor_requires_transition || !neighbor.content_current) {
-					if (!add(adjacent)) return false;
+					if (!add_dependency(adjacent, diagnostic.same_lod_face_members)) return false;
 				}
 				continue;
 			}
@@ -430,7 +441,7 @@ bool wt_build_gpu_chunk_publication_cohort(
 						}
 						if (!neighbor.compatible_active ||
 								(neighbor.transition_mask & opposite_bit) == 0) {
-							if (!add(adjacent)) return false;
+							if (!add_dependency(adjacent, diagnostic.coarse_face_members)) return false;
 						}
 						continue;
 					}
@@ -469,13 +480,14 @@ bool wt_build_gpu_chunk_publication_cohort(
 					WtGpuPublicationBoundary fine_boundary;
 					if (read(fine, fine_boundary) && (!fine_boundary.compatible_active ||
 							(fine_boundary.transition_mask & opposite_bit) != 0)) {
-						if (!add(fine)) return false;
+						if (!add_dependency(fine, diagnostic.fine_face_members)) return false;
 					}
 				}
 			}
 		}
 	}
 	output.replacements.assign(selected.begin(), selected.end());
+	if (diagnostics != nullptr) *diagnostics = diagnostic;
 	return true;
 }
 
