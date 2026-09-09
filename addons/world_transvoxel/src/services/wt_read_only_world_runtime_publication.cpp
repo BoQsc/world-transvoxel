@@ -510,8 +510,16 @@ bool WtReadOnlyWorldRuntime::process_storage_completions() {
 					storage_.source_revision(),
 					warmed_page
 				) == WtStoragePageCacheStatus::Ok && warmed_page) {
-				std::lock_guard<std::mutex> lock(metrics_mutex_);
-				++metrics_.interaction_warm_completions;
+				{
+					std::lock_guard<std::mutex> lock(metrics_mutex_);
+					++metrics_.interaction_warm_completions;
+				}
+				// The lease event may have refreshed topology before this cold page
+				// finished decoding. That pass deliberately omitted unavailable pages.
+				// Rearm it now while the key is still leased so visual LOD0 admission
+				// cannot depend on a later viewer or collision update.
+				std::lock_guard<std::mutex> lock(input_mutex_);
+				foreground_topology_refresh_pending_ = true;
 			}
 		}
 		if (status != WtPageMeshingRuntimeStatus::Ok &&

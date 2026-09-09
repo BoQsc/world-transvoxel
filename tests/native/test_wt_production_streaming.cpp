@@ -499,6 +499,25 @@ void test_foreground_priority_runtime_contract() {
 		runtime.get_metrics().interaction_warm_completions == 0) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
+	bool warmed_visual_demanded = false;
+	const auto visual_demand_deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(2);
+	while (std::chrono::steady_clock::now() < visual_demand_deadline &&
+			!warmed_visual_demanded) {
+		for (const wt::WtCausalTraceEvent &event :
+				runtime.causal_trace_snapshot(0, 1024).events) {
+			if (event.key == wt::WtChunkKey{ 2, 0, 0, 0 } &&
+				event.kind == wt::WtCausalTraceEventKind::ChunkDemandAccepted) {
+				warmed_visual_demanded = true;
+				break;
+			}
+		}
+		if (!warmed_visual_demanded) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+	}
+	check(warmed_visual_demanded,
+		"cold interaction focus did not rearm visual topology after decode");
 	check(runtime.update_collision_viewer(viewer(77, 1, 40.0, 8.0), 0) ==
 		wt::WtReadOnlyRuntimeStatus::Ok,
 		"foreground runtime collision viewer rejected");

@@ -1765,6 +1765,12 @@ background loading records. Remaining storage completions stay in the existing
 bounded completion ring and retain their original ownership and validation;
 this changes dispatcher residency rather than storage capacity or page order.
 
+An active `InteractionFocus` lease is also a bounded visual LOD0 topology
+request. A cold focus page is omitted while unavailable, but successful storage
+completion must rearm foreground topology refresh while that exact key remains
+leased. Visual admission therefore cannot wait for an unrelated later viewer,
+collision, or edit event. Superseded or released lease keys do not rearm it.
+
 ## 24. Final definition of success
 
 Success is a maintainable native Godot terrain addon, not merely generated
