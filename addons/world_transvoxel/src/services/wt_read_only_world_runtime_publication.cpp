@@ -529,18 +529,23 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 	bool progressed = false;
 	WtChunkJob job;
 	for (std::size_t count = 0; count < 4; ++count) {
-		if (has_pending_edit_operation()) {
-			break;
-		}
+		const bool edit_pending = has_pending_edit_operation();
+		if (edit_pending && count != 0) break;
+		const auto eligible_job = [edit_pending](const WtChunkJob &candidate) {
+			return !edit_pending ||
+				candidate.priority == kWtInteractiveEditPriority;
+		};
 		WtChunkJob next_job;
-		if (!scheduler_->peek_job(next_job)) {
+		if (!scheduler_->peek_job(next_job, eligible_job)) {
 			break;
 		}
 		if (page_runtime_->asynchronous_meshing_enabled() &&
 			!page_runtime_->asynchronous_mesh_admission_available()) {
 			if (next_job.stage == WtChunkJobStage::Mesh &&
-				!scheduler_->peek_job(next_job, [](const WtChunkJob &candidate) {
-					return candidate.stage == WtChunkJobStage::Sample;
+				!scheduler_->peek_job(next_job, [edit_pending](const WtChunkJob &candidate) {
+					return candidate.stage == WtChunkJobStage::Sample &&
+						(!edit_pending ||
+							candidate.priority == kWtInteractiveEditPriority);
 				})) break;
 		}
 		std::shared_ptr<GpuMeshingCaptureReservation> pre_mesh_reservation;
@@ -564,7 +569,9 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 				} else {
 					// GPU backpressure must not stop sampling or collision-only work.
 					// Leave every blocked visual job in its original queue position.
-					if (!scheduler_->peek_job(next_job, [this](const WtChunkJob &candidate) {
+					if (!scheduler_->peek_job(next_job, [this, edit_pending](const WtChunkJob &candidate) {
+						if (edit_pending &&
+							candidate.priority != kWtInteractiveEditPriority) return false;
 						if (candidate.stage == WtChunkJobStage::Sample) return true;
 						WtChunkApplicationRecord record;
 						return application_->copy_record(candidate.key, record) &&

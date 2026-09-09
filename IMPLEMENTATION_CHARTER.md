@@ -1693,6 +1693,14 @@ Road and burst-edit qualification must use the interaction counters when
 attributing collision latency; aggregate wait alone cannot justify changing the
 collision lane or its capacity.
 
+Queued edit commands and the scheduler use bounded strict interleaving. After
+committing one edit, each scheduler pass may dequeue one maximum-priority
+interactive job while another edit remains queued; it may not dequeue background
+work and it may not globally stop scheduler progress. This lets an earlier edit
+reach sampling and the collision worker during sustained rapid input instead of
+waiting for the command queue to become empty. The one-job bound preserves
+intake time for viewer and collision-viewer control events.
+
 ## 24. Final definition of success
 
 Success is a maintainable native Godot terrain addon, not merely generated
