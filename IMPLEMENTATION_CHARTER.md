@@ -1371,6 +1371,11 @@ physics sink. Incremental preparation may use a cached predecessor only when it
 matches that active generation. Prepared, staged, or cache-resident payloads do
 not establish a patch base; a first edit without a live base publishes a full
 collision payload from its already-complete CPU mesh.
+For GPU-resident LOD0 edits with a matching live collision base, the CPU worker
+extracts only the dirty 8-cubed collision blocks and their ownership halo. It
+does not build the complete regular chunk or transition mesh for collision;
+visual extraction continues from the immutable GPU field capture. Jobs without
+a matching live base retain the complete CPU mesh fallback.
 Empty and nonempty collision patches publish as soon as the matching CPU
 generation is ready; GPU capture capacity and visual activation cannot delay
 them. A superseding generation cancels queued and active collision work and

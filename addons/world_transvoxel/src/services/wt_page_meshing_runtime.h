@@ -90,6 +90,7 @@ struct WtTerrainMeshCompletion {
 	std::shared_ptr<const WtChunkMeshResult> mesh;
 	bool incremental_edit = false;
 	std::uint8_t dirty_regular_brick_mask = 0xff;
+	bool collision_patch_mesh_only = false;
 };
 
 using WtTerrainMeshReadyCallback =
@@ -217,7 +218,8 @@ public:
 		const WtMeshCellCaptureCallback &cell_capture_callback = {},
 		bool pre_mesh_field_capture = false,
 		bool collision_required = false,
-		bool defer_gpu_capture = false
+		bool defer_gpu_capture = false,
+		bool live_collision_patch_base = false
 	);
 	WtPageMeshingRuntimeStatus dispatch_mesh_job(
 		const WtChunkJob &job,
@@ -231,7 +233,8 @@ public:
 		const WtMeshCellCaptureCallback &cell_capture_callback = {},
 		bool pre_mesh_field_capture = false,
 		bool collision_required = false,
-		bool defer_gpu_capture = false
+		bool defer_gpu_capture = false,
+		bool live_collision_patch_base = false
 	);
 	WtPageMeshingRuntimeStatus process_async_mesh_completions(
 		WtStreamScheduler &scheduler,
@@ -385,6 +388,7 @@ private:
 		bool pre_mesh_field_capture,
 		bool collision_required,
 		bool defer_gpu_capture,
+		bool live_collision_patch_base,
 		PreparedMeshJob &prepared
 	);
 	static PreparedMeshCompletion execute_prepared_mesh_job(

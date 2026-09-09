@@ -147,6 +147,12 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 			}
 			cached_collision = std::move(merged);
 		} else {
+			if (completion.collision_patch_mesh_only) {
+				set_failure(
+					WtReadOnlyRuntimeStatus::PipelineTerrainMeshCompletionFailure
+				);
+				return false;
+			}
 			// A moving edit can reach a chunk before its first collision payload
 			// becomes resident. An incremental block patch has no authoritative
 			// base in that case and the physics sink must reject it. The mixed
@@ -269,6 +275,7 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 					completion.mesh,
 					completion.incremental_edit,
 					completion.dirty_regular_brick_mask,
+					false,
 				},
 				replacement_collision
 			)) {

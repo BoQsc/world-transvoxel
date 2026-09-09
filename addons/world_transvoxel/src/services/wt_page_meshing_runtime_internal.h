@@ -17,6 +17,7 @@ struct WtPageMeshingRuntimeService::PreparedMeshJob {
 	bool collision_required = false;
 	bool gpu_resident_visual_only = false;
 	bool gpu_resident_skip_cpu_meshing = false;
+	bool live_collision_patch_base = false;
 	bool defer_gpu_capture = false;
 	std::vector<PreparedDependency> dependencies;
 	WtTerrainMeshReadyCallback terrain_mesh_ready;

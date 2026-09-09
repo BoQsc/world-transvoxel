@@ -704,6 +704,12 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			}
 			const bool pre_mesh_field_capture =
 				pre_mesh_reservation != nullptr || defer_gpu_capture;
+			const bool live_collision_patch_base =
+				application_record.collision_required &&
+				job.world_revision > initial_world_revision_ &&
+				resource_cache_->find_collision_predecessor(
+					job.key, job.generation
+				) != nullptr;
 			if (asynchronous_mesh) {
 				const WtMeshExecutionCallback execution_callback =
 					[this](const WtMeshExecutionEvent &event) {
@@ -750,7 +756,8 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 					cell_capture_callback,
 					pre_mesh_field_capture,
 					application_record.collision_required,
-					defer_gpu_capture
+					defer_gpu_capture,
+					live_collision_patch_base
 				);
 			} else {
 				status = page_runtime_->execute_mesh_job(
@@ -767,7 +774,8 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 					cell_capture_callback,
 					pre_mesh_field_capture,
 					application_record.collision_required,
-					defer_gpu_capture
+					defer_gpu_capture,
+					live_collision_patch_base
 				);
 			}
 			if (status == WtPageMeshingRuntimeStatus::Ok &&

@@ -151,6 +151,7 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 	bool pre_mesh_field_capture,
 	bool collision_required,
 	bool defer_gpu_capture,
+	bool live_collision_patch_base,
 	PreparedMeshJob &prepared
 ) {
 	const std::uint64_t started = steady_time_ns();
@@ -292,6 +293,7 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 	prepared.cell_capture_callback = cell_capture_callback;
 	prepared.pre_mesh_field_capture = pre_mesh_field_capture;
 	prepared.defer_gpu_capture = defer_gpu_capture;
+	prepared.live_collision_patch_base = live_collision_patch_base;
 	prepared.incremental_edit = incremental_edit;
 	prepared.dirty_regular_brick_mask = dirty_regular_brick_mask;
 	prepared.dirty_edit_bounds = dirty_edit_bounds;
@@ -459,7 +461,10 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 			completion.prepared.defer_gpu_capture)) {
 		if (!capture_pre_mesh_field(WtGpuMeshingShadowSurface::Terrain)) {
 			terrain_status = WtChunkMeshingStatus::CellBackendFailure;
-		} else if (completion.prepared.gpu_resident_skip_cpu_meshing) {
+		} else if (completion.prepared.gpu_resident_skip_cpu_meshing ||
+			(completion.prepared.incremental_edit &&
+				completion.prepared.collision_required &&
+				completion.prepared.live_collision_patch_base)) {
 			terrain_status = build_incremental_collision_patch();
 			initialize_gpu_placeholder_mesh(*completion.mesh);
 		} else {
@@ -648,6 +653,7 @@ WtPageMeshingRuntimeService::accept_prepared_mesh_completion(
 				collision_mesh,
 				completion.prepared.incremental_edit,
 				completion.prepared.dirty_regular_brick_mask,
+				completion.collision_patch_mesh != nullptr,
 			})) {
 			record_time();
 			return WtPageMeshingRuntimeStatus::TerrainMeshReadyCallbackFailure;
