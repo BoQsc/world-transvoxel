@@ -279,12 +279,10 @@ struct WtPageMeshingRuntimeService::AsyncState {
 				work_available.wait(lock, [this, interactive_only]() {
 					return stopping.load(std::memory_order_acquire) ||
 						(interactive_only ? !interactive_work.empty() :
-							(reserved_lane_enabled ? !work.empty() :
-								(!interactive_work.empty() || !work.empty())));
+							(!interactive_work.empty() || !work.empty()));
 				});
 				std::vector<PreparedMeshJob> &queue =
-					interactive_only ||
-						(!reserved_lane_enabled && !interactive_work.empty()) ?
+					interactive_only || !interactive_work.empty() ?
 					interactive_work : work;
 				if (stopping.load(std::memory_order_acquire) && queue.empty()) {
 					return;

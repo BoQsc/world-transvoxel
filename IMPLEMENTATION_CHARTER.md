@@ -1376,6 +1376,10 @@ extracts only the dirty 8-cubed collision blocks and their ownership halo. It
 does not build the complete regular chunk or transition mesh for collision;
 visual extraction continues from the immutable GPU field capture. Jobs without
 a matching live base retain the complete CPU mesh fallback.
+The reserved interactive collision worker never accepts background work.
+Background mesh workers remain work-conserving: while interactive collision
+patches are queued they assist that queue before taking background meshes. This
+preserves dedicated capacity without serializing a multi-chunk edit burst.
 Empty and nonempty collision patches publish as soon as the matching CPU
 generation is ready; GPU capture capacity and visual activation cannot delay
 them. A superseding generation cancels queued and active collision work and
