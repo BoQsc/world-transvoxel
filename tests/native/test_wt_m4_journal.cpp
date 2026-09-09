@@ -206,6 +206,20 @@ void test_load_and_replay(
 				wt::WtEditJournalStatus::WorldRevisionMismatch,
 		"journal accepted an out-of-range replay revision"
 	);
+	RecordingSink range_sink;
+	check(
+		loaded.replay_range(11, 12, range_sink) ==
+			wt::WtEditJournalStatus::Ok &&
+			range_sink.commands.size() == 2 &&
+			range_sink.commands.front().world_revision == 12 &&
+			range_sink.commands.back().sequence == 1,
+		"journal revision-range replay failed"
+	);
+	check(
+		loaded.replay_range(13, 12, range_sink) ==
+			wt::WtEditJournalStatus::WorldRevisionMismatch,
+		"journal accepted a reversed replay range"
+	);
 	RecordingSink failing_sink(3);
 	check(
 		loaded.replay(failing_sink) == wt::WtEditJournalStatus::ReplayFailure &&

@@ -437,9 +437,14 @@ WtPageMeshingRuntimeService::WtPageMeshingRuntimeService(
 		record_capacity_(record_capacity),
 		valid_(record_capacity > 0 &&
 			record_capacity <= kWtMaximumPageMeshingRuntimeRecords &&
-			meshing_worker_count <= 8) {
+			meshing_worker_count <= 8),
+		edited_page_cache_capacity_(std::min(
+			std::max(record_capacity, std::size_t { 64 }),
+			std::size_t { 512 }
+		)) {
 	if (valid_) {
 		records_.reserve(record_capacity_);
+		edited_page_cache_.reserve(edited_page_cache_capacity_);
 		loading_retry_candidates_.reserve(std::min(
 			record_capacity_,
 			std::size_t { 4 }

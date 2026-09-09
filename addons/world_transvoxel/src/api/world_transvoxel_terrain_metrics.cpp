@@ -744,6 +744,17 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		"page_dependency_cache_misses",
 		runtime.page_dependency_cache_misses
 	);
+	set_metric(output, "page_edited_cache_hits", runtime.page_edited_cache_hits);
+	set_metric(output, "page_edited_cache_updates", runtime.page_edited_cache_updates);
+	set_metric(output, "page_edited_cache_misses", runtime.page_edited_cache_misses);
+	set_metric(output, "page_edited_cache_evictions", runtime.page_edited_cache_evictions);
+	set_metric(output, "page_edited_cache_entries", runtime.page_edited_cache_entries);
+	set_metric(output, "page_edited_cache_capacity", runtime.page_edited_cache_capacity);
+	set_metric(
+		output,
+		"page_edited_cache_resident_bytes",
+		runtime.page_edited_cache_resident_bytes
+	);
 	set_metric(
 		output,
 		"page_accepted_storage_completions",
