@@ -124,8 +124,9 @@ struct WtPageMeshingRuntimeService::AsyncState {
 
 	bool submit(PreparedMeshJob prepared) {
 		std::lock_guard<std::mutex> lock(work_mutex);
-		const bool interactive_collision = prepared.incremental_edit &&
-			prepared.collision_required;
+		const bool interactive_collision = prepared.collision_required &&
+			(prepared.incremental_edit ||
+				prepared.job.priority >= kWtPlayerSupportPriority);
 		prepared.interaction_lane = interactive_collision;
 		std::vector<PreparedMeshJob> &queue = interactive_collision ?
 			interactive_work : work;
@@ -232,7 +233,8 @@ struct WtPageMeshingRuntimeService::AsyncState {
 			}
 			item->job.priority = priority;
 			bool promoted_to_interaction_lane = false;
-			if (reserved_lane_enabled && priority == kWtInteractiveEditPriority &&
+			if (reserved_lane_enabled && item->collision_required &&
+					priority >= kWtPlayerSupportPriority &&
 					interactive_work.size() < queue_capacity) {
 				item->interaction_lane = true;
 				interactive_work.push_back(std::move(*item));

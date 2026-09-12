@@ -1843,3 +1843,10 @@ The result is successful when:
 
 That is the finish line. Work that does not contribute to it should not steer
 the project.
+### Player-support collision lane
+
+Collision mesh preparation carrying `kWtPlayerSupportPriority` uses the same
+bounded reserved worker lane as committed edit collision patches. This keeps
+the current and predictive player-support shell independent of background GPU
+field capture and LOD meshing. Interaction-focus visual work and distant
+collision work remain on the bounded general worker queue.

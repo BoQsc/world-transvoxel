@@ -1746,7 +1746,9 @@ bool run_replacement_collision_continuity_regression(
 
 	bool replacement_ready = false;
 	if (initial_ready && !initial_visible_visual_only.empty()) {
-		check(runtime.update_viewer({ 1, 40.0, 8.0, 8.0, 2 }, 1, 1) ==
+		// Move beyond the initial radius so every initially visible visual-only
+		// chunk is guaranteed to leave, independent of worker completion order.
+		check(runtime.update_viewer({ 1, 72.0, 8.0, 8.0, 2 }, 1, 1) ==
 			wt::WtReadOnlyRuntimeStatus::Ok,
 			"replacement collision-continuity moving viewer was rejected");
 		replacement_ready = collect_runtime_until_quiescent(
