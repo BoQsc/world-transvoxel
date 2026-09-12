@@ -1877,11 +1877,3 @@ demand arrives.
 Superseding or removing the generation cancels its visual and collision outputs
 under the existing generation checks. Static-water capture follows the same
 immutable retained pages so later visual promotion cannot mix revisions.
-### Interaction-shell GPU publication
-
-An open background viewer-plan transaction must not globally block a complete
-LOD0 collision/interaction cohort. GPU cohort selection and activation may
-advance such a seed while other viewer plans remain open, but the normal
-generation, transition-mask, dependency-closure, authoritative-coverage, and
-atomic regional-activation checks still apply. This exception changes only the
-global admission barrier; it does not permit partial or mixed-revision draws.
