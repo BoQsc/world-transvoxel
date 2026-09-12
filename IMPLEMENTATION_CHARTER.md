@@ -1560,6 +1560,12 @@ and never replaces complete cached coverage with a partial patch. A partial
 construction may extend an authoritative empty-generation tombstone by creating
 the block body with empty unselected shapes. These rules prevent a local edit
 from removing collision elsewhere in the same chunk.
+Before publishing a partial patch, collision preparation compares its cached
+predecessor generation with the generation already applied to the physics sink.
+If they differ, an intervening queued generation may be superseded, so the
+latest complete merged block set is published as an independently applicable
+update. This prevents rapid edits in different blocks of one chunk from leaving
+an old solid block in Godot after stale application entries are discarded.
 `collision_payload_prepared` causal events report the exact dirty-block mask in
 their status field so runtime evidence distinguishes partial and complete work.
 The Godot authority node drains completed interaction-critical collision

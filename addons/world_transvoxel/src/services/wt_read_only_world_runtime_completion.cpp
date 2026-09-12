@@ -145,7 +145,18 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 				);
 				return false;
 			}
-			cached_collision = std::move(merged);
+			// A queued patch is only valid against the collision generation that is
+			// already applied in Godot. Rapid edits can supersede queued generations;
+			// the application service then correctly drops those stale entries, but a
+			// later patch must not assume their blocks reached the sink. Publish the
+			// complete merged generation whenever its predecessor is not applied.
+			if (application_record.collision_generation != previous->generation) {
+				merged->incremental_patch = true;
+				collision = merged;
+			}
+			auto cached_merged = std::make_shared<WtCollisionPayload>(*merged);
+			cached_merged->incremental_patch = false;
+			cached_collision = std::move(cached_merged);
 		} else {
 			if (completion.collision_patch_mesh_only) {
 				set_failure(
@@ -167,8 +178,11 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 				);
 				return false;
 			}
+			complete->incremental_patch = true;
 			collision = complete;
-			cached_collision = std::move(complete);
+			auto cached_complete = std::make_shared<WtCollisionPayload>(*complete);
+			cached_complete->incremental_patch = false;
+			cached_collision = std::move(cached_complete);
 		}
 	}
 	if ((!completion.incremental_edit && resource_cache_->insert_mesh(
