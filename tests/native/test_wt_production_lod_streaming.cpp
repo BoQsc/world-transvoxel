@@ -2644,14 +2644,48 @@ int main(int argc, char **argv) {
 		wt::WtBalancedLodPlanner planner(2048, catalog);
 		bool complete = false;
 		check(planner.stage_foreground(target, empty, {}, 3, focus, projected, complete) == wt::WtBalancedLodPlannerStatus::Ok,
-			"foreground projection failed without intermediate visual acknowledgements");
-		for (const auto &key : focus) check(find_entry(projected, key) != nullptr, "foreground projection omitted LOD0 interaction coverage");
-		check(!complete && find_entry(projected, {2,0,0,3}) != nullptr, "foreground projection refined distant target unnecessarily");
+			"foreground coverage stage failed");
+		check(!complete && find_entry(projected, {0,0,0,3}) != nullptr,
+			"foreground coverage skipped its acknowledged coarse stage");
+		std::size_t publication_waves = 1;
+		while (!complete && publication_waves < 5) {
+			std::vector<wt::WtChunkKey> ready;
+			for (const auto &entry : projected.entries) ready.push_back(entry.key);
+			wt::WtBalancedLodPlan next;
+			check(planner.stage_foreground(target, projected, ready, 3, focus,
+				next, complete) == wt::WtBalancedLodPlannerStatus::Ok,
+				"foreground acknowledged wave failed");
+			projected = std::move(next);
+			++publication_waves;
+		}
+		for (const auto &key : focus) check(find_entry(projected, key) != nullptr,
+			"foreground acknowledged waves omitted LOD0 interaction coverage");
+		check(publication_waves >= 4 && publication_waves <= 5 &&
+			find_entry(projected, {2,0,0,3}) != nullptr,
+			"foreground refinement did not advance one acknowledged level per wave");
 		wt::WtBalancedLodPlanner bounded(32, catalog);
-		wt::WtBalancedLodPlan rejected;
-		check(bounded.stage_foreground(target, empty, {}, 3, focus, rejected, complete) == wt::WtBalancedLodPlannerStatus::CapacityExceeded,
-			"foreground projection exceeded configured capacity");
-		std::printf("FOREGROUND_PROJECTION_PASS full_resolution_keys=%zu requested_leaves=%zu intermediate_publications=0\n", focus.size(), projected.entries.size());
+		wt::WtBalancedLodPlan bounded_stage;
+		complete = false;
+		check(bounded.stage_foreground(target, empty, {}, 3, focus,
+			bounded_stage, complete) == wt::WtBalancedLodPlannerStatus::Ok,
+			"bounded foreground coverage stage failed");
+		bool capacity_rejected = false;
+		for (std::size_t wave = 1; wave < 5 && !complete; ++wave) {
+			std::vector<wt::WtChunkKey> ready;
+			for (const auto &entry : bounded_stage.entries) ready.push_back(entry.key);
+			wt::WtBalancedLodPlan next;
+			const auto status = bounded.stage_foreground(target, bounded_stage,
+				ready, 3, focus, next, complete);
+			if (status == wt::WtBalancedLodPlannerStatus::CapacityExceeded) {
+				capacity_rejected = true;
+				break;
+			}
+			check(status == wt::WtBalancedLodPlannerStatus::Ok,
+				"bounded foreground wave failed unexpectedly");
+			bounded_stage = std::move(next);
+		}
+		check(capacity_rejected, "foreground waves exceeded configured capacity");
+		std::printf("FOREGROUND_PROJECTION_PASS full_resolution_keys=%zu requested_leaves=%zu publication_waves=%zu\n", focus.size(), projected.entries.size(), publication_waves);
 	}
 	const bool hierarchical_staging_ok =
 		run_hierarchical_staging_regression();

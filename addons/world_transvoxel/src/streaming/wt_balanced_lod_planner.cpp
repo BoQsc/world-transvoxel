@@ -982,8 +982,9 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_foreground(
 	const std::function<bool()> &cancel_requested
 ) const {
 	// Establish coverage and admit at most one obsolete family for coarsening.
-	// Foreground refinement itself is a tree projection, not a sequence of
-	// publish/wait/refine cycles. Only the final balanced map is requested.
+	// Refine one acknowledged foreground level per stage. A child introduced by
+	// this call cannot be split again until its visual activation is observed,
+	// keeping each atomic publication cohort bounded while old coverage remains.
 	output.clear();
 	complete = false;
 	for (const auto &key : foreground_keys) {
@@ -992,6 +993,9 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_foreground(
 		}
 		if (!wt_is_valid_chunk_key(key)) return WtBalancedLodPlannerStatus::InvalidLodMap;
 	}
+	std::vector<WtChunkKey> ready = visually_ready;
+	std::sort(ready.begin(), ready.end());
+	ready.erase(std::unique(ready.begin(), ready.end()), ready.end());
 	WtBalancedLodPlan base;
 	const auto status = stage_toward(target, current, visually_ready, staging_root_lod,
 		1, base, complete, {}, true, false, true, cancel_requested);
@@ -1017,7 +1021,10 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_foreground(
 		const auto key = work[cursor];
 		const bool foreground = std::any_of(foreground_keys.begin(), foreground_keys.end(),
 			[&](const WtChunkKey &focus) { return bounds_contain(key, focus); });
-		if (foreground && key.lod > 0 && std::binary_search(refined_ancestors.begin(), refined_ancestors.end(), key)) {
+		const bool acknowledged =
+			std::binary_search(ready.begin(), ready.end(), key);
+		if (foreground && acknowledged && key.lod > 0 &&
+				std::binary_search(refined_ancestors.begin(), refined_ancestors.end(), key)) {
 			std::vector<WtChunkKey> children;
 			if (!page_hierarchy_.refinable_children(key, children)) return WtBalancedLodPlannerStatus::IncompleteHierarchy;
 			// Pending leaves plus completed leaves are the actual output bound.
