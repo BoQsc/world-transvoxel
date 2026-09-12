@@ -325,9 +325,17 @@ void test_collision_tier(
 	check(
 		cache.insert_collision(superseding, { 60 }) ==
 			wt::WtChunkResourceCacheStatus::Ok &&
+		cache.find_collision(collisions[0]->key, { 50 }) &&
+		cache.find_collision(collisions[0]->key, { 60 }),
+		"candidate collision discarded the physics-published predecessor"
+	);
+	cache.set_active_collision_generation(collisions[0]->key, { 60 });
+	check(
+		cache.insert_collision(collisions[2], { 52 }) ==
+			wt::WtChunkResourceCacheStatus::Ok &&
 		!cache.find_collision(collisions[0]->key, { 50 }) &&
 		cache.find_collision(collisions[0]->key, { 60 }),
-		"collision generation supersession failed"
+		"retired collision predecessor remained pinned"
 	);
 	cache.set_active_collision_generation(collisions[2]->key, { 52 });
 	check(
@@ -442,10 +450,10 @@ int main() {
 		"render cache metrics mismatch"
 	);
 	check(
-		metrics.collision.insertions == 5 &&
+		metrics.collision.insertions == 6 &&
 			metrics.collision.refreshes == 1 &&
-			metrics.collision.evictions == 1 &&
-			metrics.collision.superseded == 1,
+			metrics.collision.evictions == 3 &&
+			metrics.collision.superseded == 0,
 		"collision cache metrics mismatch"
 	);
 

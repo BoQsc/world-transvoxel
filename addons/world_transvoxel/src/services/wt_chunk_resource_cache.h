@@ -168,6 +168,9 @@ private:
 		const WtChunkKey &key,
 		WtGenerationToken generation
 	);
+	WtGenerationToken active_collision_generation(
+		const WtChunkKey &key
+	) const noexcept;
 	void evict_mesh_to_limits();
 	void evict_render_to_limits();
 	void evict_collision_to_limits();

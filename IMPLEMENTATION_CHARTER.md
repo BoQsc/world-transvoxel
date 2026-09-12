@@ -4,6 +4,17 @@ Status: canonical project direction
 
 Last reviewed: 2026-06-25
 
+## Physics-published collision patch bases
+
+Incremental LOD0 collision preparation resolves its retained block base from
+the frontend physics-residency identity, with the application record as a
+generation-checked fallback. Candidate insertion and cache eviction preserve
+the generation currently published to physics while newer generations are in
+flight. Viewer-plan bookkeeping may not discard that base or force a complete
+collision rebuild. Generation ordering and cache identity must match before a
+partial patch is admitted; otherwise the runtime uses the complete
+authoritative rebuild fallback.
+
 Current state: M5 streaming production baseline complete on Windows x86-64
 with bounded storage/caches, multi-viewer/edit runtime ownership, page-backed
 official MIT meshing, real Godot render/physics application budgets, versioned

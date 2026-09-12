@@ -64,10 +64,16 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 		!edit_journal_store_->journal().revision_affects_density(
 			record->world_revision
 		)) {
-		const std::shared_ptr<const WtCollisionPayload> previous =
+		std::shared_ptr<const WtCollisionPayload> previous =
 			resource_cache_->find_collision_predecessor(
 				completion.key, completion.generation
 			);
+		if (!previous && application_record.collision_generation.value != 0 &&
+				application_record.collision_generation.value < completion.generation.value) {
+			previous = resource_cache_->find_collision(
+				completion.key, application_record.collision_generation
+			);
+		}
 		if (previous) {
 			collision = std::make_shared<WtCollisionPayload>(*previous);
 			collision->generation = completion.generation;
@@ -132,10 +138,17 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 	if (collision_status == WtCollisionBuildStatus::Ok &&
 		collision->incremental_patch &&
 		collision->dirty_block_mask != kWtCollisionAllBlocksMask) {
-		const std::shared_ptr<const WtCollisionPayload> previous =
+		std::shared_ptr<const WtCollisionPayload> previous =
 			resource_cache_->find_collision_predecessor(
 				completion.key, completion.generation
 			);
+		const bool predecessor_is_physics_active = previous != nullptr;
+		if (!previous && application_record.collision_generation.value != 0 &&
+				application_record.collision_generation.value < completion.generation.value) {
+			previous = resource_cache_->find_collision(
+				completion.key, application_record.collision_generation
+			);
+		}
 		if (previous) {
 			auto merged = std::make_shared<WtCollisionPayload>();
 			if (wt_merge_collision_patch(*previous, *collision, *merged) !=
@@ -150,7 +163,8 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 			// the application service then correctly drops those stale entries, but a
 			// later patch must not assume their blocks reached the sink. Publish the
 			// complete merged generation whenever its predecessor is not applied.
-			if (application_record.collision_generation != previous->generation) {
+			if (!predecessor_is_physics_active &&
+					application_record.collision_generation != previous->generation) {
 				merged->incremental_patch = true;
 				collision = merged;
 			}

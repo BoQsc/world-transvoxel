@@ -777,12 +777,23 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			}
 			const bool pre_mesh_field_capture =
 				pre_mesh_reservation != nullptr || defer_gpu_capture;
+			// Frontend residency identifies the generation that actually reached the
+			// physics sink. The application record is a checked fallback because
+			// viewer-plan bookkeeping can temporarily lag that publication.
+			const WtGenerationToken collision_generation =
+				application_record.collision_generation;
+			std::shared_ptr<const WtCollisionPayload> collision_patch_base =
+				resource_cache_->find_collision_predecessor(job.key, job.generation);
+			if (!collision_patch_base && collision_generation.value != 0 &&
+					collision_generation.value < job.generation.value) {
+				collision_patch_base = resource_cache_->find_collision(
+					job.key, collision_generation
+				);
+			}
 			const bool live_collision_patch_base =
 				application_record.collision_required &&
 				job.world_revision > initial_world_revision_ &&
-				resource_cache_->find_collision_predecessor(
-					job.key, job.generation
-				) != nullptr;
+				collision_patch_base != nullptr;
 			if (asynchronous_mesh) {
 				const WtMeshExecutionCallback execution_callback =
 					[this](const WtMeshExecutionEvent &event) {

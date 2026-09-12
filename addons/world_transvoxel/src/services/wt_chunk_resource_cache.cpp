@@ -280,8 +280,11 @@ WtChunkResourceCacheStatus WtChunkResourceCache::insert_collision(
 		evict_collision_to_limits();
 		return WtChunkResourceCacheStatus::Ok;
 	}
+	const WtGenerationToken active_generation =
+		active_collision_generation(collision->key);
 	for (auto iterator = collisions_.begin(); iterator != collisions_.end();) {
-		if (iterator->key == collision->key) {
+		if (iterator->key == collision->key &&
+			iterator->generation != active_generation) {
 			collision_resident_bytes_ -= iterator->resident_bytes;
 			iterator = collisions_.erase(iterator);
 			++metrics_.collision.superseded;
@@ -374,21 +377,8 @@ WtChunkResourceCache::find_collision_predecessor(
 		++metrics_.collision.misses;
 		return {};
 	}
-	WtGenerationToken active_generation;
-	{
-		std::lock_guard<std::mutex> lock(active_collisions_mutex_);
-		const auto active = std::lower_bound(
-			active_collisions_.begin(), active_collisions_.end(), key,
-			[](const ActiveCollisionEntry &entry, const WtChunkKey &value) {
-				return entry.key < value;
-			}
-		);
-		if (active == active_collisions_.end() || active->key != key) {
-			++metrics_.collision.misses;
-			return {};
-		}
-		active_generation = active->generation;
-	}
+	const WtGenerationToken active_generation =
+		active_collision_generation(key);
 	if (active_generation.value == 0 ||
 			active_generation.value >= generation.value) {
 		++metrics_.collision.misses;
@@ -402,6 +392,20 @@ WtChunkResourceCache::find_collision_predecessor(
 	entry->last_access = next_access();
 	++metrics_.collision.hits;
 	return entry->payload;
+}
+
+WtGenerationToken WtChunkResourceCache::active_collision_generation(
+	const WtChunkKey &key
+) const noexcept {
+	std::lock_guard<std::mutex> lock(active_collisions_mutex_);
+	const auto active = std::lower_bound(
+		active_collisions_.begin(), active_collisions_.end(), key,
+		[](const ActiveCollisionEntry &entry, const WtChunkKey &value) {
+			return entry.key < value;
+		}
+	);
+	return active != active_collisions_.end() && active->key == key ?
+		active->generation : WtGenerationToken{};
 }
 
 void WtChunkResourceCache::set_active_collision_generation(
@@ -668,11 +672,22 @@ void WtChunkResourceCache::evict_render_to_limits() {
 void WtChunkResourceCache::evict_collision_to_limits() {
 	while (collisions_.size() > limits_.collision_entry_capacity ||
 		collision_resident_bytes_ > limits_.collision_byte_capacity) {
-		const auto victim = std::min_element(
-			collisions_.begin(),
-			collisions_.end(),
-			eviction_precedes<CollisionEntry>
-		);
+		auto victim = collisions_.end();
+		for (auto candidate = collisions_.begin();
+				candidate != collisions_.end(); ++candidate) {
+			if (candidate->generation ==
+					active_collision_generation(candidate->key)) {
+				continue;
+			}
+			if (victim == collisions_.end() ||
+				eviction_precedes(*candidate, *victim)) {
+				victim = candidate;
+			}
+		}
+		// Active physics payloads are part of the configured collision working
+		// set. A valid configuration leaves at least one non-active candidate
+		// whenever eviction is required.
+		if (victim == collisions_.end()) break;
 		collision_resident_bytes_ -= victim->resident_bytes;
 		collisions_.erase(victim);
 		++metrics_.collision.evictions;
