@@ -447,6 +447,9 @@ bool apply_values(
 			}
 		}
 	}
+	if (changed != 0) {
+		page.static_water_summary_valid = false;
+	}
 	return true;
 }
 

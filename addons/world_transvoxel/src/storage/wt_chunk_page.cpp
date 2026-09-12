@@ -408,7 +408,24 @@ WtChunkPageStatus wt_decode_chunk_page(
 		}
 		sample.material_authored = material_authored != 0;
 		output.samples.push_back(sample);
+		if (sample.static_water_density != kWtNoStaticWaterDensity) {
+			output.static_water_explicit_inside =
+				output.static_water_explicit_inside ||
+				sample.static_water_density < 0.0F;
+			output.static_water_explicit_outside =
+				output.static_water_explicit_outside ||
+				sample.static_water_density >= 0.0F;
+			output.static_water_occupied = output.static_water_occupied ||
+				(sample.static_water_density < 0.0F &&
+				 sample.material == kWtStaticWaterMaterialId &&
+				 sample.density >= 0.0F);
+		} else {
+			output.static_water_occupied = output.static_water_occupied ||
+				(sample.material == kWtStaticWaterMaterialId &&
+				 sample.density >= 0.0F);
+		}
 	}
+	output.static_water_summary_valid = true;
 	if (reader.remaining() != 0) {
 		output = {};
 		return WtChunkPageStatus::InvalidMetadata;

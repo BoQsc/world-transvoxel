@@ -622,6 +622,7 @@ void test_static_water_placement() {
 	page.samples[solid_index].static_water_density = 5.0F;
 	page.samples[air_index] = { 2.0F, 1 };
 	page.samples[air_index].static_water_density = 4.0F;
+	page.static_water_summary_valid = true;
 	const wt::WtScalarSample outside_before = page.samples[outside_index];
 	wt::WtChunkEditState state;
 	check(
@@ -641,6 +642,10 @@ void test_static_water_placement() {
 	check(
 		state.apply_command(place) == wt::WtChunkEditStatus::Ok,
 		"static water placement failed"
+	);
+	check(
+		!state.page().static_water_summary_valid,
+		"page edit did not invalidate derived static-water summary"
 	);
 	const wt::WtScalarSample &solid = state.page().samples[solid_index];
 	const wt::WtScalarSample &air = state.page().samples[air_index];

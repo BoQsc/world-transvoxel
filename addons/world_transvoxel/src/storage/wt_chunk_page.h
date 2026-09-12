@@ -68,6 +68,13 @@ struct WtChunkSurfaceShiftRecord {
 struct WtChunkPage {
 	WtChunkPageMetadata metadata;
 	std::vector<WtScalarSample> samples;
+	// Immutable decoded pages cache the aggregate needed to decide whether a
+	// secondary static-water surface exists. This is derived data only and is
+	// deliberately absent from the persistence format.
+	bool static_water_summary_valid = false;
+	bool static_water_explicit_inside = false;
+	bool static_water_explicit_outside = false;
+	bool static_water_occupied = false;
 	float surface_shift_isovalue = 0.0F;
 	std::vector<WtChunkSurfaceShiftRecord> surface_shift_records;
 	bool surface_shift_valid = true;

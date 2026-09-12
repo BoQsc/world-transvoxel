@@ -178,6 +178,33 @@ void validate_page(
 		"decoded page rewrite failed"
 	);
 	check(rewritten == baked.bytes, "chunk page round trip changed bytes");
+	check(
+		decoded.static_water_summary_valid,
+		"decoded page did not cache static-water summary"
+	);
+
+	wt::WtChunkPage water_page = decoded;
+	water_page.samples[0].static_water_density = -1.0F;
+	water_page.samples[0].material = wt::kWtStaticWaterMaterialId;
+	water_page.samples[0].density = 1.0F;
+	water_page.samples[1].static_water_density = 1.0F;
+	std::vector<std::uint8_t> water_bytes;
+	wt::WtChunkPageView water_view;
+	wt::WtChunkPage decoded_water;
+	check(
+		wt::wt_write_chunk_page(water_page, water_bytes) ==
+				wt::WtChunkPageStatus::Ok &&
+		wt::wt_open_chunk_page(
+			{ water_bytes.data(), water_bytes.size() }, water_view
+		) == wt::WtChunkPageStatus::Ok &&
+		wt::wt_decode_chunk_page(water_view, decoded_water) ==
+				wt::WtChunkPageStatus::Ok &&
+		decoded_water.static_water_summary_valid &&
+		decoded_water.static_water_explicit_inside &&
+		decoded_water.static_water_explicit_outside &&
+		decoded_water.static_water_occupied,
+		"decoded static-water summary did not preserve page aggregates"
+	);
 }
 
 void test_schema_rejection(const wt::WtBakedChunkPage &valid) {

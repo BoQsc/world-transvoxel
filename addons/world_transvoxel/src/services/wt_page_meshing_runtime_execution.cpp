@@ -370,6 +370,18 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		for (const PreparedDependency &dependency :
 			completion.prepared.dependencies) {
 			if (!dependency.page) continue;
+			if (dependency.page->static_water_summary_valid) {
+				explicit_water_inside = explicit_water_inside ||
+					dependency.page->static_water_explicit_inside;
+				explicit_water_outside = explicit_water_outside ||
+					dependency.page->static_water_explicit_outside;
+				water_present = water_present ||
+					dependency.page->static_water_occupied;
+				water_present = water_present ||
+					(explicit_water_inside && explicit_water_outside);
+				if (water_present) break;
+				continue;
+			}
 			for (const WtScalarSample &sample : dependency.page->samples) {
 				if (sample.static_water_density != kWtNoStaticWaterDensity) {
 					explicit_water_inside = explicit_water_inside ||

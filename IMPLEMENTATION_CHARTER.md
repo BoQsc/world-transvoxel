@@ -1652,6 +1652,14 @@ exact generation and transition checks make that delivery idempotent. A failed
 dispatch or failed bounded publication admission remains a runtime failure and
 cannot expose a candidate.
 
+Decoded immutable pages cache the three static-water occupancy aggregates used
+by GPU pre-mesh preparation: explicit inside, explicit outside, and occupied.
+This derived metadata is absent from the persistence format and is rebuilt
+during decode. Terrain edits invalidate it before publishing an edited page.
+GPU-only visual preparation consumes valid aggregates instead of rescanning
+every retained page sample; invalid or synthetic pages retain the exact scan as
+a correctness fallback.
+
 The native GPU identity exports whether the scheduler job is at or above
 interaction-focus priority. The render-thread frontend uses that fact, together
 with the incremental-edit flag, to select a reserved interaction dispatch lane;
