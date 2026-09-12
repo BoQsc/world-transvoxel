@@ -1850,8 +1850,3 @@ bounded reserved worker lane as committed edit collision patches. This keeps
 the current and predictive player-support shell independent of background GPU
 field capture and LOD meshing. Interaction-focus visual work and distant
 collision work remain on the bounded general worker queue.
-
-Foreground visual refinement advances by one acknowledged hierarchy level per
-atomic publication. Newly requested children cannot trigger deeper refinement
-until their visual activation is observed. Collision-viewer LOD0 demands are
-merged after visual staging and therefore remain independent of these waves.
