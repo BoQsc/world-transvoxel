@@ -697,7 +697,8 @@ void test_collision_only_with_full_gpu_queue(std::size_t mesh_workers) {
 	const auto metrics = gpu->metrics();
 	check(collision_ready, "collision-only work blocked by full GPU visual queue");
 	check(!hidden_render && metrics.captured_requests == 0 &&
-		metrics.reserved_capture_slots == 2 && metrics.capture_reservation_attempts == 1,
+		metrics.reserved_capture_slots == 2 &&
+		metrics.capture_reservation_attempts == 1,
 		"collision-only work consumed GPU visual admission or published hidden render");
 	// Promoting the same chunk to visual must still obey GPU backpressure.
 	check(runtime.update_viewer(viewer(2, 1, 40.0, 8.0), 0) ==
@@ -717,7 +718,12 @@ void test_collision_only_with_full_gpu_queue(std::size_t mesh_workers) {
 	gpu->release_capture_slots(reservation);
 	PublicationCounts promoted;
 	std::vector<std::uint8_t> evidence;
-	check(collect_until(runtime, promoted, 1, 1, evidence) &&
+	const bool promotion_collected = collect_until(runtime, promoted, 1, 0, evidence);
+	std::printf("GPU_COLLISION_ADMISSION_RESUME workers=%zu collected=%d renders=%zu collisions=%zu vertices=%zu captures=%llu\n",
+		mesh_workers, promotion_collected, promoted.renders, promoted.collisions,
+		promoted.render_vertices,
+		static_cast<unsigned long long>(gpu->metrics().pre_mesh_field_captures));
+	check(promotion_collected &&
 		promoted.render_vertices == 0 && promoted.render_indices == 0 &&
 		gpu->metrics().pre_mesh_field_captures > 0,
 		"visual promotion failed to resume with resident input after capacity release");
@@ -730,6 +736,115 @@ void test_collision_only_with_full_gpu_queue(std::size_t mesh_workers) {
 	}
 	gpu->end();
 	storage.close();
+}
+
+void test_player_support_visual_promotion_reuses_collision_generation() {
+	const int failures_before = failure_count;
+	FixtureRoot fixture;
+	std::filesystem::path world_path;
+	check(wtt::wt_write_production_streaming_fixture(
+		fixture.path, 7005, 12, world_path
+	), "support promotion fixture write failed");
+	wt::WtAsyncStorageService storage({16, 16, wt::kWtMaximumContainerSize});
+	check(storage.open(world_path, fixture.path) == wt::WtAsyncStorageStatus::Ok,
+		"support promotion fixture open failed");
+	auto gpu = std::make_shared<wt::WtGpuMeshingShadowQueue>();
+	check(gpu->begin(8, true, wt::WtGpuMeshingCaptureStage::PreMeshField),
+		"support promotion GPU queue start failed");
+	wt::WtRuntimeConfig config;
+	config.active_chunk_capacity = 8;
+	config.viewer_capacity = 2;
+	config.demand_capacity_per_viewer = 125;
+	config.visual_viewer_collision_enabled = false;
+	config.meshing_worker_count = 1;
+	wt::WtReadOnlyWorldRuntime runtime(config, storage, nullptr, gpu);
+	check(runtime.valid() && runtime.begin_causal_trace(),
+		"support promotion runtime invalid");
+	std::atomic<wt::WtReadOnlyRuntimeStatus> status {
+		wt::WtReadOnlyRuntimeStatus::Ok
+	};
+	std::thread worker([&]() { status.store(runtime.run()); });
+	const wt::WtChunkKey target {2, 0, 0, 0};
+	check(runtime.update_foreground_priority_lease({
+		92, 1, wt::WtForegroundPriorityClass::PlayerSupport, {target}
+	}) == wt::WtReadOnlyRuntimeStatus::Ok,
+		"support promotion priority lease rejected");
+	check(runtime.update_collision_viewer(viewer(1, 1, 40.0, 8.0), 0) ==
+		wt::WtReadOnlyRuntimeStatus::Ok,
+		"support promotion collision viewer rejected");
+	wt::WtGenerationToken generation;
+	bool collision_ready = false;
+	bool hidden_render = false;
+	const auto deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(5);
+	while (!collision_ready &&
+			std::chrono::steady_clock::now() < deadline) {
+		wt::WtReadOnlyPublication publication;
+		while (runtime.pop_publication(publication)) {
+			if (publication.key != target) continue;
+			if (publication.kind == wt::WtReadOnlyPublicationKind::ExpectChunk) {
+				generation = publication.generation;
+			}
+			hidden_render |= publication.kind ==
+				wt::WtReadOnlyPublicationKind::RenderPayload;
+			collision_ready |= publication.kind ==
+				wt::WtReadOnlyPublicationKind::CollisionPayload &&
+				publication.collision && !publication.collision->faces.empty();
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	check(collision_ready && !hidden_render && generation.value != 0 &&
+		gpu->metrics().pre_mesh_field_captures == 0,
+		"support collision did not complete with a hidden speculative field");
+	check(runtime.update_viewer(viewer(2, 1, 40.0, 8.0), 0) ==
+		wt::WtReadOnlyRuntimeStatus::Ok,
+		"support visual promotion rejected");
+	bool promoted_render = false;
+	const auto promotion_deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(5);
+	while ((!promoted_render || gpu->metrics().pre_mesh_field_captures == 0) &&
+			std::chrono::steady_clock::now() < promotion_deadline) {
+		wt::WtReadOnlyPublication publication;
+		while (runtime.pop_publication(publication)) {
+			promoted_render |= publication.key == target &&
+				publication.generation == generation &&
+				publication.kind == wt::WtReadOnlyPublicationKind::RenderPayload &&
+				publication.render && publication.render->publication_source ==
+					wt::WtRenderPublicationSource::GpuResidentPlaceholder;
+		}
+		if (!promoted_render || gpu->metrics().pre_mesh_field_captures == 0) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+	}
+	runtime.request_stop();
+	worker.join();
+	runtime.end_causal_trace();
+	std::size_t mesh_jobs = 0;
+	for (const auto &event : runtime.causal_trace_snapshot(0, 4096).events) {
+		if (event.key == target &&
+			event.kind == wt::WtCausalTraceEventKind::MeshStarted) {
+			++mesh_jobs;
+		}
+	}
+	std::printf(
+		"GPU_SUPPORT_VISUAL_PROMOTION generation=%llu render=%d captures=%llu mesh_jobs=%zu\n",
+		static_cast<unsigned long long>(generation.value), promoted_render,
+		static_cast<unsigned long long>(gpu->metrics().pre_mesh_field_captures),
+		mesh_jobs
+	);
+	check(promoted_render && gpu->metrics().pre_mesh_field_captures > 0 &&
+		mesh_jobs == 1,
+		"support visual promotion restarted completed collision work");
+	check(status.load() == wt::WtReadOnlyRuntimeStatus::Ok,
+		"support promotion runtime did not stop cleanly");
+	gpu->end();
+	storage.close();
+	if (failure_count == failures_before) {
+		std::printf(
+			"GPU_SUPPORT_VISUAL_PROMOTION_PASS generation=%llu mesh_jobs=%zu\n",
+			static_cast<unsigned long long>(generation.value), mesh_jobs
+		);
+	}
 }
 
 void test_collision_viewer_batch_planning() {
@@ -1257,6 +1372,7 @@ int main(int argc, char **argv) {
 	test_gpu_native_visual_generation_lifecycle();
 	test_collision_only_with_full_gpu_queue(0);
 	test_collision_only_with_full_gpu_queue(1);
+	test_player_support_visual_promotion_reuses_collision_generation();
 	test_collision_viewer_batch_planning();
 	test_visual_viewer_batch_planning();
 	test_g8_2000x2000_window_planning();

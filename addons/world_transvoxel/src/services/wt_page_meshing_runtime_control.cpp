@@ -192,6 +192,7 @@ WtPageMeshingRuntimeService::get_records() const {
 			record.phase,
 			record.dependencies.size(),
 			pins,
+			record.pre_mesh_field_capture,
 		});
 	}
 	return snapshots;
@@ -221,6 +222,7 @@ bool WtPageMeshingRuntimeService::copy_record(
 		record->phase,
 		record->dependencies.size(),
 		pins,
+		record->pre_mesh_field_capture,
 	};
 	return true;
 }

@@ -292,6 +292,7 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 	prepared.execution_callback = execution_callback;
 	prepared.cell_capture_callback = cell_capture_callback;
 	prepared.pre_mesh_field_capture = pre_mesh_field_capture;
+	record->pre_mesh_field_capture = pre_mesh_field_capture;
 	prepared.defer_gpu_capture = defer_gpu_capture;
 	prepared.live_collision_patch_base = live_collision_patch_base;
 	prepared.incremental_edit = incremental_edit;
@@ -364,7 +365,8 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 	}
 	completion.mesh = std::make_shared<WtChunkMeshResult>();
 	bool water_present = false;
-	if (source_valid && completion.prepared.visual_required) {
+	if (source_valid && (completion.prepared.visual_required ||
+		completion.prepared.pre_mesh_field_capture)) {
 		bool explicit_water_inside = false;
 		bool explicit_water_outside = false;
 		for (const PreparedDependency &dependency :
@@ -550,7 +552,8 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 	const bool mesh_ok = terrain_status == WtChunkMeshingStatus::Ok;
 	completion.water_mesh = std::make_shared<WtChunkMeshResult>();
 	bool water_mesh_ok = mesh_ok;
-	if (mesh_ok && completion.prepared.visual_required && water_present) {
+	if (mesh_ok && (completion.prepared.visual_required ||
+		completion.prepared.pre_mesh_field_capture) && water_present) {
 		WtChunkMeshingStatus water_status =
 			WtChunkMeshingStatus::CellBackendFailure;
 		if (completion.prepared.pre_mesh_field_capture &&
@@ -756,6 +759,14 @@ WtPageMeshingRuntimeService::accept_prepared_mesh_completion(
 	if (!completion.deferred_gpu_captures.empty()) {
 		record->deferred_gpu_captures =
 			std::move(completion.deferred_gpu_captures);
+		if (!completion.prepared.visual_required) {
+			record->phase = WtPageMeshingRuntimePhase::MeshReady;
+			++metrics_.mesh_successes;
+			const WtPageMeshingRuntimeStatus status =
+				submit_pending_result(record_index, scheduler);
+			record_time();
+			return status;
+		}
 		record->phase = WtPageMeshingRuntimePhase::AwaitingGpuCapture;
 		++metrics_.mesh_successes;
 		record_time();
@@ -773,12 +784,17 @@ WtPageMeshingRuntimeService::accept_prepared_mesh_completion(
 }
 
 bool WtPageMeshingRuntimeService::peek_deferred_gpu_capture(
-	WtChunkJob &job
+	WtChunkJob &job,
+	const std::function<bool(const WtChunkJob &)> &eligible
 ) const noexcept {
 	const Record *selected = nullptr;
 	for (const Record &record : records_) {
-		if (record.phase != WtPageMeshingRuntimePhase::AwaitingGpuCapture ||
+		if ((record.phase != WtPageMeshingRuntimePhase::AwaitingGpuCapture &&
+				record.phase != WtPageMeshingRuntimePhase::Ready) ||
 			record.deferred_gpu_captures.empty()) {
+			continue;
+		}
+		if (eligible && !eligible(record.deferred_gpu_captures.front().job)) {
 			continue;
 		}
 		if (selected == nullptr || record.priority > selected->priority ||
@@ -805,12 +821,14 @@ WtPageMeshingRuntimeService::submit_deferred_gpu_capture(
 	auto record = find_record(job.key);
 	const WtChunkRecord *scheduler_record = scheduler.find_record(job.key);
 	if (record == records_.end() || scheduler_record == nullptr ||
-		record->phase != WtPageMeshingRuntimePhase::AwaitingGpuCapture ||
+		(record->phase != WtPageMeshingRuntimePhase::AwaitingGpuCapture &&
+			record->phase != WtPageMeshingRuntimePhase::Ready) ||
 		record->generation != job.generation ||
 		record->source_revision != job.source_revision ||
 		record->world_revision != job.world_revision ||
 		scheduler_record->generation != job.generation ||
-		scheduler_record->lifecycle != WtChunkLifecycle::Meshing) {
+		(scheduler_record->lifecycle != WtChunkLifecycle::Meshing &&
+			scheduler_record->lifecycle != WtChunkLifecycle::Ready)) {
 		return WtPageMeshingRuntimeStatus::StaleCompletion;
 	}
 	for (WtGpuMeshingShadowCapture &capture :
@@ -818,6 +836,9 @@ WtPageMeshingRuntimeService::submit_deferred_gpu_capture(
 		cell_capture_callback(std::move(capture));
 	}
 	record->deferred_gpu_captures.clear();
+	if (record->phase == WtPageMeshingRuntimePhase::Ready) {
+		return WtPageMeshingRuntimeStatus::Ok;
+	}
 	record->phase = WtPageMeshingRuntimePhase::MeshReady;
 	const std::size_t record_index = static_cast<std::size_t>(
 		record - records_.begin()
@@ -852,8 +873,7 @@ std::size_t WtPageMeshingRuntimeService::deferred_gpu_capture_count()
 		const noexcept {
 	return static_cast<std::size_t>(std::count_if(
 		records_.begin(), records_.end(), [](const Record &record) {
-			return record.phase ==
-				WtPageMeshingRuntimePhase::AwaitingGpuCapture;
+			return !record.deferred_gpu_captures.empty();
 		}
 	));
 }

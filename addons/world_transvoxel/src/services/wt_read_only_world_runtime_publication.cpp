@@ -254,6 +254,34 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 					return false;
 				}
 				if (!push_publication(std::move(expectation))) return false;
+				const auto cached_render = resource_cache_->find_render(
+					item.key, record->generation
+				);
+				WtPageMeshingRuntimeRecordSnapshot mesh_record;
+				const bool captured_generation = page_runtime_->copy_record(
+					item.key, record->generation, mesh_record
+				) && mesh_record.pre_mesh_field_capture;
+				if (cached_render || captured_generation) {
+					auto promoted_render = cached_render;
+					if (!promoted_render) {
+						auto placeholder = std::make_shared<WtRenderPayload>();
+						placeholder->key = item.key;
+						placeholder->generation = record->generation;
+						placeholder->world_origin = wt_chunk_bounds(item.key).minimum;
+						placeholder->transition_mask = mesh_record.transition_mask;
+						placeholder->publication_source =
+							WtRenderPublicationSource::GpuResidentPlaceholder;
+						promoted_render = std::move(placeholder);
+					}
+					WtReadOnlyPublication render_publication;
+					render_publication.kind =
+						WtReadOnlyPublicationKind::RenderPayload;
+					render_publication.key = item.key;
+					render_publication.generation = record->generation;
+					render_publication.render = std::move(promoted_render);
+					render_publication.staged_replacement = true;
+					if (!push_publication(std::move(render_publication))) return false;
+				}
 				queue_readiness_repair_candidate(item.key);
 			}
 			WtReadOnlyPublication visual;
@@ -578,7 +606,8 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 		const bool resident_input = gpu_meshing_shadow_ &&
 			gpu_meshing_shadow_->captures_pre_mesh_field();
 		WtChunkApplicationRecord admission_record;
-		// Collision-only work has no resident visual to capture or activate.
+		// Visual capture owns GPU admission. Collision-only work never reserves a
+		// slot and therefore cannot wait behind resident visual capacity.
 		if (next_job.stage == WtChunkJobStage::Mesh &&
 			resident_input &&
 			application_->copy_record(next_job.key, admission_record) &&
@@ -610,6 +639,15 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 					gpu_meshing_shadow_, reservation_id
 				);
 			}
+		}
+		if (next_job.stage == WtChunkJobStage::Mesh && resident_input &&
+			admission_record.generation == next_job.generation &&
+			!admission_record.visual_required &&
+			admission_record.collision_required &&
+			next_job.priority >= kWtPlayerSupportPriority &&
+			page_runtime_->deferred_gpu_capture_count() <
+				kWtDeferredGpuCaptureCapacity) {
+			defer_gpu_capture = true;
 		}
 		if (!scheduler_->pop_job(job, [&next_job](const WtChunkJob &candidate) {
 			return candidate.sequence == next_job.sequence;
@@ -932,12 +970,19 @@ bool WtReadOnlyWorldRuntime::process_deferred_gpu_captures() {
 	bool progressed = false;
 	for (std::size_t count = 0; count < 4; ++count) {
 		WtChunkJob job;
-		if (!page_runtime_->peek_deferred_gpu_capture(job)) break;
+		if (!page_runtime_->peek_deferred_gpu_capture(job, [this](
+				const WtChunkJob &candidate
+			) {
+			WtChunkApplicationRecord record;
+			return application_->copy_record(candidate.key, record) &&
+				record.generation == candidate.generation &&
+				record.visual_required;
+		})) break;
 		WtChunkApplicationRecord application_record;
 		const bool application_current = application_->copy_record(
 			job.key, application_record
 		) && application_record.generation == job.generation;
-		if (!application_current || !application_record.visual_required) {
+		if (!application_current) {
 			const WtPageMeshingRuntimeStatus discard_status =
 				page_runtime_->discard_deferred_gpu_capture(job, *scheduler_);
 			if (discard_status != WtPageMeshingRuntimeStatus::Ok &&

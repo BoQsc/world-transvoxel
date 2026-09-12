@@ -277,8 +277,15 @@ bool WtPageMeshingRuntimeService::owned_generation_accepts_role_promotion(
 	WtGenerationToken generation
 ) const noexcept {
 	const auto record = find_record(key);
-	return record != records_.end() && record->generation == generation &&
-		record->phase == WtPageMeshingRuntimePhase::AwaitingMesh;
+	if (record == records_.end() || record->generation != generation) {
+		return false;
+	}
+	if (record->phase == WtPageMeshingRuntimePhase::AwaitingMesh) return true;
+	return record->pre_mesh_field_capture &&
+		(record->phase == WtPageMeshingRuntimePhase::Meshing ||
+			record->phase == WtPageMeshingRuntimePhase::AwaitingGpuCapture ||
+			record->phase == WtPageMeshingRuntimePhase::MeshReady ||
+			record->phase == WtPageMeshingRuntimePhase::Ready);
 }
 
 std::vector<WtPageMeshingRuntimeService::Record>::iterator

@@ -1449,12 +1449,16 @@ installed or after it was evicted, the already completed CPU mesh produces one
 complete collision payload. Later generations resume bounded block replacement;
 an unbased patch is never submitted to the physics sink.
 
-Collision preparation does not reserve GPU capture capacity. Water-only and material-only journal
-revisions advance the installed collision generation while preserving its
-unchanged shapes. Full regular collision payloads are marked separately from
-transition-bearing payloads so the bounded cache can satisfy regular-only
-readiness without rebuilding CPU topology. GPU publication remains atomic and
-capacity bounded; collision authority remains entirely on the CPU.
+Collision preparation never reserves or waits for GPU capture capacity. A
+player-support collision job may retain a bounded immutable density-field
+capture because that same generation is likely to become visual at arrival.
+Retention completes the collision and scheduler branches before any GPU slot is
+requested. Water-only and material-only journal revisions advance the installed
+collision generation while preserving its unchanged shapes. Full regular
+collision payloads are marked separately from transition-bearing payloads so
+the bounded cache can satisfy regular-only readiness without rebuilding CPU
+topology. GPU publication remains atomic and capacity bounded; collision
+authority remains entirely on the CPU.
 
 GPU-resident placeholder publications are geometry-free main-thread state
 updates. They bypass the bounded CPU mesh apply queue and immediately establish
@@ -1850,3 +1854,20 @@ bounded reserved worker lane as committed edit collision patches. This keeps
 the current and predictive player-support shell independent of background GPU
 field capture and LOD meshing. Interaction-focus visual work and distant
 collision work remain on the bounded general worker queue.
+
+### Player-support role promotion
+
+A player-support collision generation that retained an immutable pre-mesh field keeps
+its ownership when visual demand reaches the same key. Promotion during CPU
+meshing, after mesh completion, or after scheduler readiness publishes the
+matching geometry-free GPU placeholder without creating a successor generation.
+The completed collision branch is never repeated. If bounded GPU admission was
+unavailable when collision began, visual promotion follows the normal bounded
+remesh path while the already published collision remains authoritative.
+
+Retained field data occupies no GPU admission slot and is invisible while a
+chunk remains collision-only. GPU capture is admitted only after matching visual
+demand arrives.
+Superseding or removing the generation cancels its visual and collision outputs
+under the existing generation checks. Static-water capture follows the same
+immutable retained pages so later visual promotion cannot mix revisions.

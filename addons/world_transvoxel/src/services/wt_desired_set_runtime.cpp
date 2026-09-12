@@ -54,8 +54,8 @@ bool role_promotion_requires_remesh(
 	WtGenerationToken generation,
 	const WtPageMeshingRuntimeOwner *page_meshing_runtime
 ) noexcept {
-	if (lifecycle == WtChunkLifecycle::Ready) return true;
-	if (lifecycle != WtChunkLifecycle::Meshing) return false;
+	if (lifecycle != WtChunkLifecycle::Meshing &&
+		lifecycle != WtChunkLifecycle::Ready) return false;
 	return page_meshing_runtime == nullptr ||
 		!page_meshing_runtime->owned_generation_accepts_role_promotion(
 			key, generation

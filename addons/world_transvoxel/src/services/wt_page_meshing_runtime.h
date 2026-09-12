@@ -66,6 +66,7 @@ struct WtPageMeshingRuntimeRecordSnapshot {
 	WtPageMeshingRuntimePhase phase = WtPageMeshingRuntimePhase::Loading;
 	std::size_t dependency_count = 0;
 	std::size_t pinned_page_count = 0;
+	bool pre_mesh_field_capture = false;
 };
 
 struct WtPageMeshingInvalidation {
@@ -248,7 +249,10 @@ public:
 	void set_mesh_completion_notifier(std::function<void()> notifier);
 	bool asynchronous_meshing_enabled() const noexcept;
 	bool asynchronous_mesh_admission_available() const noexcept;
-	bool peek_deferred_gpu_capture(WtChunkJob &job) const noexcept;
+	bool peek_deferred_gpu_capture(
+		WtChunkJob &job,
+		const std::function<bool(const WtChunkJob &)> &eligible = {}
+	) const noexcept;
 	WtPageMeshingRuntimeStatus submit_deferred_gpu_capture(
 		const WtChunkJob &job,
 		const WtMeshCellCaptureCallback &cell_capture_callback,
@@ -340,6 +344,7 @@ private:
 		std::shared_ptr<const WtChunkMeshResult> mesh;
 		std::shared_ptr<const WtChunkMeshResult> water_mesh;
 		bool gpu_resident_visual_only = false;
+		bool pre_mesh_field_capture = false;
 		bool collision_completed_early = false;
 		bool incremental_edit = false;
 		std::uint8_t dirty_regular_brick_mask = 0xff;

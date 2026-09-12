@@ -260,8 +260,26 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 		}
 		WtChunkApplicationRecord application_record;
 		if (!application_->copy_record(completion.key, application_record) ||
-			application_record.generation != completion.generation ||
-			!application_record.visual_required) {
+			application_record.generation != completion.generation) {
+			continue;
+		}
+		if (!application_record.visual_required) {
+			if (completion.gpu_resident_visual_only) {
+				auto render = std::make_shared<WtRenderPayload>();
+				render->key = completion.key;
+				render->generation = completion.generation;
+				render->world_origin = completion.mesh->world_origin;
+				render->transition_mask = completion.mesh->transition_mask;
+				render->publication_source =
+					WtRenderPublicationSource::GpuResidentPlaceholder;
+				if (resource_cache_->insert_render(render, record->generation) !=
+						WtChunkResourceCacheStatus::Ok) {
+					set_failure(
+						WtReadOnlyRuntimeStatus::PipelineRenderCompletionFailure
+					);
+					break;
+				}
+			}
 			continue;
 		}
 		std::shared_ptr<WtCollisionPayload> replacement_collision;
