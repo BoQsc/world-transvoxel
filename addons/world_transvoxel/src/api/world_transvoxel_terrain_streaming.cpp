@@ -23,8 +23,10 @@ drain_interaction_collision_publications_at_physics_boundary() {
 	const std::uint64_t apply_time_start =
 		application_->get_metrics().collision_apply_time_ns_total;
 	std::size_t applied_items = 0;
+	bool consumed_publication = false;
 	for (std::size_t attempts = 0;
-			attempts < collision_apply_budget_; ++attempts) {
+			attempts < collision_apply_budget_ &&
+			applied_items < collision_apply_budget_; ++attempts) {
 		const std::uint64_t used_ns =
 			application_->get_metrics().collision_apply_time_ns_total -
 			apply_time_start;
@@ -32,31 +34,51 @@ drain_interaction_collision_publications_at_physics_boundary() {
 			used_ns >= collision_apply_deadline_ns_) {
 			break;
 		}
-		WtReadOnlyPublication publication;
-		if (!lifecycle_->pop_interaction_collision_publication(publication)) {
-			break;
-		}
-		if (!publication.collision ||
-			application_->submit_collision(publication.collision, true) !=
-				WtApplicationStatus::Ok) {
-			continue;
-		}
 		const std::uint64_t remaining_ns =
 			collision_apply_deadline_ns_ == 0U ? 0U :
 			collision_apply_deadline_ns_ > used_ns ?
 				collision_apply_deadline_ns_ - used_ns : 0U;
-		const WtApplicationBatchResult result =
+		WtApplicationBatchResult result =
 			application_->apply_with_collision_deadline(
 				0U, 1U, remaining_ns, *render_sink_, *collision_sink_
 			);
-		if (result.collision_processed == 0) continue;
-		++applied_items;
-		lifecycle_->record_frontend_collision_residency(
-			publication.key,
-			collision_sink_->applied_generation(publication.key)
-		);
+		if (result.collision_processed == 0) {
+			WtReadOnlyPublication publication;
+			if (!lifecycle_->pop_interaction_collision_publication(publication)) {
+				break;
+			}
+			consumed_publication = true;
+			const WtApplicationStatus submit_status = publication.collision ?
+				application_->submit_collision(publication.collision, true) :
+				WtApplicationStatus::InvalidInput;
+			lifecycle_->record_frontend_publication(
+				publication, static_cast<std::int64_t>(submit_status)
+			);
+			if (submit_status != WtApplicationStatus::Ok) continue;
+			const std::uint64_t submit_used_ns =
+				application_->get_metrics().collision_apply_time_ns_total -
+				apply_time_start;
+			const std::uint64_t submit_remaining_ns =
+				collision_apply_deadline_ns_ == 0U ? 0U :
+				collision_apply_deadline_ns_ > submit_used_ns ?
+					collision_apply_deadline_ns_ - submit_used_ns : 0U;
+			result = application_->apply_with_collision_deadline(
+				0U, 1U, submit_remaining_ns, *render_sink_, *collision_sink_
+			);
+		}
+		if (result.collision_processed != 0) ++applied_items;
 	}
-	if (applied_items == 0) return;
+	if (applied_items == 0 && !consumed_publication) return;
+	if (applied_items != 0) {
+		for (const WtChunkApplicationRecord &record :
+				application_->get_records()) {
+			lifecycle_->record_frontend_collision_residency(
+				record.key,
+				collision_sink_->applied_generation(record.key)
+			);
+		}
+		publish_ready_independent_collision_coverage();
+	}
 	const std::uint64_t elapsed_ns = static_cast<std::uint64_t>(
 		std::chrono::duration_cast<std::chrono::nanoseconds>(
 			std::chrono::steady_clock::now() - started
@@ -68,7 +90,6 @@ drain_interaction_collision_publications_at_physics_boundary() {
 	physics_boundary_collision_apply_time_ns_maximum_ = std::max(
 		physics_boundary_collision_apply_time_ns_maximum_, elapsed_ns
 	);
-	publish_ready_independent_collision_coverage();
 	lifecycle_->notify_application_progress();
 }
 
@@ -82,42 +103,14 @@ void WorldTransvoxelTerrain::_process(double delta) {
 		application_before.collision_apply_time_ns_total
 	);
 	update_visibility_staging_state();
-	const WtApplicationMetrics application_after_drain =
-		application_->get_metrics();
-	const std::uint64_t collision_apply_time_ns_used =
-		application_after_drain.collision_apply_time_ns_total -
-		application_before.collision_apply_time_ns_total;
-	const std::size_t collision_apply_budget_remaining =
-		collision_publication_count < collision_apply_budget_ ?
-		collision_apply_budget_ - collision_publication_count : 0U;
-	const std::uint64_t collision_apply_deadline_ns_remaining =
-		collision_apply_deadline_ns_ == 0U ? 0U :
-		collision_apply_time_ns_used < collision_apply_deadline_ns_ ?
-		collision_apply_deadline_ns_ - collision_apply_time_ns_used : 0U;
-	const std::size_t bounded_collision_apply_budget =
-		collision_apply_deadline_ns_ == 0U ||
-			collision_apply_deadline_ns_remaining != 0U ?
-		collision_apply_budget_remaining : 0U;
 	const WtApplicationBatchResult applied =
 		application_->apply_with_collision_deadline(
 			render_apply_budget_,
-			bounded_collision_apply_budget,
-			collision_apply_deadline_ns_remaining,
+			0U,
+			0U,
 			*render_sink_,
 			*collision_sink_
 		);
-	if (lifecycle_ && applied.collision_processed != 0) {
-		for (const WtChunkApplicationRecord &record :
-				application_->get_records()) {
-			lifecycle_->record_frontend_collision_residency(
-				record.key,
-				collision_sink_->applied_generation(record.key)
-			);
-		}
-	}
-	if (collision_publication_count != 0 || applied.collision_processed != 0) {
-		publish_ready_independent_collision_coverage();
-	}
 	const WtApplicationMetrics application_after =
 		application_->get_metrics();
 	collision_apply_frame_time_ns_last_ =
@@ -141,8 +134,7 @@ void WorldTransvoxelTerrain::_process(double delta) {
 			collision_apply_deadline_ns_) {
 		++collision_apply_frame_deadline_overruns_;
 	}
-	if (lifecycle_ && (drained_publications || applied.render_processed != 0 ||
-		applied.collision_processed != 0)) {
+	if (lifecycle_ && (drained_publications || applied.render_processed != 0)) {
 		lifecycle_->notify_application_progress();
 	}
 	flush_ready_independent_publication_regions();

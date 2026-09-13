@@ -282,6 +282,20 @@ void WtReadOnlyWorldRuntime::record_frontend_publication(
 	const WtReadOnlyPublication &publication,
 	std::int64_t status
 ) {
+	if (publication.kind == WtReadOnlyPublicationKind::CollisionPayload) {
+		std::lock_guard<std::mutex> lock(publication_mutex_);
+		collision_readiness_repair_attempts_.erase(
+			std::remove_if(
+				collision_readiness_repair_attempts_.begin(),
+				collision_readiness_repair_attempts_.end(),
+				[&publication](const CollisionReadinessRepairAttempt &attempt) {
+					return attempt.key == publication.key &&
+						attempt.generation == publication.generation;
+				}
+			),
+			collision_readiness_repair_attempts_.end()
+		);
+	}
 	causal_trace_.record(
 		WtCausalTraceEventKind::FrontendPublicationProcessed,
 		WtCausalTraceThreadRole::Frontend,

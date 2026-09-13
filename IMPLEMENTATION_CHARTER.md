@@ -1946,3 +1946,16 @@ engine boundary. Visual publication remains independent and may complete first;
 the previous authoritative collision remains active until the matching
 generation is ready. Queue capacity, collision apply budgets, generation checks,
 and stale-payload rejection remain unchanged.
+
+Collision application is exclusive to the physics callback. The render callback
+submits and applies visual work with a zero collision budget. At each physics
+boundary, already-submitted collision work resumes before another runtime
+publication is accepted, so a deadline deferral cannot migrate collision work to
+the render callback or strand it between the two callbacks.
+
+The collision readiness repair marker belongs to an in-flight publication.
+The physics frontend acknowledges every consumed collision publication, including
+stale, rejected, and sink-failed payloads, and that acknowledgement releases the
+marker. Queue and pipeline occupancy suppress duplicate repair while work is
+real; an historical attempt cannot leave an idle collision-required chunk
+permanently unready.

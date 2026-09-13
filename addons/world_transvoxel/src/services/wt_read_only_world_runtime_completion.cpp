@@ -514,25 +514,53 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 		config_.collision_activation_distance,
 		config_.collision_deactivation_distance,
 	};
-	collision_readiness_repair_attempts_.erase(
-		std::remove_if(
-			collision_readiness_repair_attempts_.begin(),
-			collision_readiness_repair_attempts_.end(),
-			[this](const CollisionReadinessRepairAttempt &attempt) {
-				WtChunkApplicationRecord record;
-				return !application_->copy_record(attempt.key, record) ||
-					record.generation != attempt.generation ||
-					!record.collision_required ||
-					(record.collision_ready &&
-						record.collision_generation == record.generation);
+	std::vector<CollisionReadinessRepairAttempt> completed_attempts;
+	{
+		std::vector<CollisionReadinessRepairAttempt> attempts;
+		{
+			std::lock_guard<std::mutex> lock(publication_mutex_);
+			attempts = collision_readiness_repair_attempts_;
+		}
+		for (const CollisionReadinessRepairAttempt &attempt : attempts) {
+			WtChunkApplicationRecord record;
+			if (!application_->copy_record(attempt.key, record) ||
+				record.generation != attempt.generation ||
+				!record.collision_required ||
+				(record.collision_ready &&
+					record.collision_generation == record.generation)) {
+				completed_attempts.push_back(attempt);
 			}
-		),
-		collision_readiness_repair_attempts_.end()
-	);
+		}
+	}
+	if (!completed_attempts.empty()) {
+		std::lock_guard<std::mutex> lock(publication_mutex_);
+		collision_readiness_repair_attempts_.erase(
+			std::remove_if(
+				collision_readiness_repair_attempts_.begin(),
+				collision_readiness_repair_attempts_.end(),
+				[&completed_attempts](
+					const CollisionReadinessRepairAttempt &attempt
+				) {
+					return std::find_if(
+						completed_attempts.begin(),
+						completed_attempts.end(),
+						[&attempt](
+							const CollisionReadinessRepairAttempt &completed
+						) {
+							return completed.key == attempt.key &&
+								completed.generation == attempt.generation;
+						}
+					) != completed_attempts.end();
+				}
+			),
+			collision_readiness_repair_attempts_.end()
+		);
+	}
 	const auto repair_already_published = [this](
 		const WtChunkKey &key,
 		WtGenerationToken generation
 	) {
+		std::lock_guard<std::mutex> lock(publication_mutex_);
 		return std::find_if(
 			collision_readiness_repair_attempts_.begin(),
 			collision_readiness_repair_attempts_.end(),
@@ -573,10 +601,13 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 				return false;
 			}
 			progressed = true;
-			collision_readiness_repair_attempts_.push_back({
-				record.key,
-				record.generation,
-			});
+			{
+				std::lock_guard<std::mutex> lock(publication_mutex_);
+				collision_readiness_repair_attempts_.push_back({
+					record.key,
+					record.generation,
+				});
+			}
 			{
 				std::lock_guard<std::mutex> lock(metrics_mutex_);
 				++metrics_.collision_readiness_repair_obsolete_clears;
@@ -616,10 +647,13 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 			if (status == WtChunkResourceCacheStatus::NotFound &&
 				desired != nullptr && desired->collision_required) {
 				queue_transition_remeshes({ *desired });
-				collision_readiness_repair_attempts_.push_back({
-					record.key,
-					record.generation,
-				});
+				{
+					std::lock_guard<std::mutex> lock(publication_mutex_);
+					collision_readiness_repair_attempts_.push_back({
+						record.key,
+						record.generation,
+					});
+				}
 				progressed = true;
 				++repairs;
 				if (repairs >= kMaxCollisionRepairsPerPass) break;
@@ -642,10 +676,6 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 			return false;
 		}
 		progressed = true;
-		collision_readiness_repair_attempts_.push_back({
-			record.key,
-			record.generation,
-		});
 		++repairs;
 		if (repairs >= kMaxCollisionRepairsPerPass) break;
 	}

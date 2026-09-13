@@ -27,6 +27,37 @@ namespace world_transvoxel::testing {
 // Step the runtime without worker timing so a full queue and its retry are
 // deterministic. No test-only public runtime API or production branch is needed.
 struct WtRuntimeEventTestAccess {
+	static bool collision_publication_acknowledgement_releases_retry(
+		WtAsyncStorageService &storage
+	) {
+		WtRuntimeConfig config;
+		config.active_chunk_capacity = 8;
+		config.viewer_capacity = 1;
+		config.demand_capacity_per_viewer = 8;
+		config.meshing_worker_count = 0;
+		WtReadOnlyWorldRuntime runtime(config, storage);
+		if (!runtime.valid()) return false;
+		const WtChunkKey key { 4, 0, 0, 0 };
+		const WtChunkKey other_key { 5, 0, 0, 0 };
+		runtime.collision_readiness_repair_attempts_ = {
+			{ key, { 1 } },
+			{ key, { 2 } },
+			{ other_key, { 1 } },
+		};
+		WtReadOnlyPublication publication;
+		publication.kind = WtReadOnlyPublicationKind::CollisionPayload;
+		publication.key = key;
+		publication.generation = { 1 };
+		runtime.record_frontend_publication(publication, -1);
+		return runtime.collision_readiness_repair_attempts_.size() == 2 &&
+			runtime.collision_readiness_repair_attempts_[0].key == key &&
+			runtime.collision_readiness_repair_attempts_[0].generation ==
+				WtGenerationToken { 2 } &&
+			runtime.collision_readiness_repair_attempts_[1].key == other_key &&
+			runtime.collision_readiness_repair_attempts_[1].generation ==
+				WtGenerationToken { 1 };
+	}
+
 	static bool obsolete_collision_demand_bypasses_payload_deduplication(
 		WtAsyncStorageService &storage
 	) {
@@ -2678,6 +2709,9 @@ int main(int argc, char **argv) {
 		obsolete_collision_demand_bypasses_payload_deduplication(storage);
 	check(obsolete_collision_dedup_ok,
 		"obsolete collision demand was blocked by an earlier payload attempt");
+	check(wtt::WtRuntimeEventTestAccess::
+		collision_publication_acknowledgement_releases_retry(storage),
+		"consumed collision publication kept suppressing readiness repair");
 	check(wtt::WtRuntimeEventTestAccess::refresh_survives_full_queue(storage, 0),
 		"queued edit-retention refresh lost identity or external viewer (zero workers)");
 	check(wtt::WtRuntimeEventTestAccess::refresh_survives_full_queue(storage, 1),

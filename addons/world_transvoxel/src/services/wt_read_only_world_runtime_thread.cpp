@@ -678,6 +678,8 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 		snapshot.pending_publication_events = publication_count_;
 		snapshot.pending_priority_publication_events =
 			priority_publication_count_;
+		snapshot.collision_readiness_repair_attempt_count =
+			collision_readiness_repair_attempts_.size();
 	}
 	{
 		std::lock_guard<std::mutex> lock(input_mutex_);
@@ -701,8 +703,6 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 		snapshot.committed_collision_viewer_position_z =
 			static_cast<std::int64_t>(collision_viewers_.front().snapshot.z);
 	}
-	snapshot.collision_readiness_repair_attempt_count =
-		collision_readiness_repair_attempts_.size();
 	if (desired_) {
 		for (const WtDesiredChunk &item : desired_->get_desired_chunks()) {
 			if (item.collision_required) ++snapshot.desired_collision_chunks;
