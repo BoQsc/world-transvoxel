@@ -48,13 +48,19 @@ struct WtRuntimeEventTestAccess {
 		publication.kind = WtReadOnlyPublicationKind::CollisionPayload;
 		publication.key = key;
 		publication.generation = { 1 };
+		runtime.record_frontend_publication(publication, 0);
+		if (runtime.collision_readiness_repair_attempts_.size() != 3) {
+			return false;
+		}
+		runtime.record_frontend_collision_residency(key, { 1 });
+		if (runtime.collision_readiness_repair_attempts_.size() != 2) {
+			return false;
+		}
+		publication.generation = { 2 };
 		runtime.record_frontend_publication(publication, -1);
-		return runtime.collision_readiness_repair_attempts_.size() == 2 &&
-			runtime.collision_readiness_repair_attempts_[0].key == key &&
+		return runtime.collision_readiness_repair_attempts_.size() == 1 &&
+			runtime.collision_readiness_repair_attempts_[0].key == other_key &&
 			runtime.collision_readiness_repair_attempts_[0].generation ==
-				WtGenerationToken { 2 } &&
-			runtime.collision_readiness_repair_attempts_[1].key == other_key &&
-			runtime.collision_readiness_repair_attempts_[1].generation ==
 				WtGenerationToken { 1 };
 	}
 

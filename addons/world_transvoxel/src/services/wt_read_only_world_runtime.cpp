@@ -282,7 +282,8 @@ void WtReadOnlyWorldRuntime::record_frontend_publication(
 	const WtReadOnlyPublication &publication,
 	std::int64_t status
 ) {
-	if (publication.kind == WtReadOnlyPublicationKind::CollisionPayload) {
+	if (publication.kind == WtReadOnlyPublicationKind::CollisionPayload &&
+		status != 0) {
 		std::lock_guard<std::mutex> lock(publication_mutex_);
 		collision_readiness_repair_attempts_.erase(
 			std::remove_if(
@@ -342,6 +343,18 @@ void WtReadOnlyWorldRuntime::record_frontend_collision_residency(
 	if (resource_cache_) {
 		resource_cache_->set_active_collision_generation(key, generation);
 	}
+	std::lock_guard<std::mutex> lock(publication_mutex_);
+	collision_readiness_repair_attempts_.erase(
+		std::remove_if(
+			collision_readiness_repair_attempts_.begin(),
+			collision_readiness_repair_attempts_.end(),
+			[&](const CollisionReadinessRepairAttempt &attempt) {
+				return attempt.key == key &&
+					(generation.value == 0 || attempt.generation == generation);
+			}
+		),
+		collision_readiness_repair_attempts_.end()
+	);
 }
 
 void WtReadOnlyWorldRuntime::record_frontend_visibility(

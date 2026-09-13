@@ -1953,9 +1953,10 @@ boundary, already-submitted collision work resumes before another runtime
 publication is accepted, so a deadline deferral cannot migrate collision work to
 the render callback or strand it between the two callbacks.
 
-The collision readiness repair marker belongs to an in-flight publication.
-The physics frontend acknowledges every consumed collision publication, including
-stale, rejected, and sink-failed payloads, and that acknowledgement releases the
-marker. Queue and pipeline occupancy suppress duplicate repair while work is
-real; an historical attempt cannot leave an idle collision-required chunk
-permanently unready.
+The collision readiness repair marker belongs to collision work until residency
+is confirmed. A rejected or invalid frontend submission releases it immediately;
+an accepted submission retains it until the physics sink reports the matching
+active `(chunk, generation)`. Queue and pipeline occupancy suppress duplicate
+repair while work is real, without opening a consume-to-residency race that can
+rebuild the same collision every runtime wake. An historical failed attempt
+cannot leave an idle collision-required chunk permanently unready.
