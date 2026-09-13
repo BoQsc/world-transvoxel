@@ -136,7 +136,9 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 		std::make_unique<WtEditRuntimeReplacementService>(active);
 	page_runtime_ = std::make_unique<WtPageMeshingRuntimeService>(
 		active,
-		static_cast<std::size_t>(config_.meshing_worker_count)
+		static_cast<std::size_t>(config_.meshing_worker_count),
+		static_cast<std::size_t>(config_.decoded_page_entry_capacity),
+		static_cast<std::size_t>(config_.decoded_page_byte_capacity)
 	);
 	mesher_ = std::make_unique<WtChunkMesher>(
 		wt_get_transvoxel_mit_backend()

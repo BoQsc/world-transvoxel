@@ -221,15 +221,36 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 		}
 		bool surface_shift_failure = false;
 		for (Dependency &dependency : record->dependencies) {
+			std::shared_ptr<const WtChunkPage> replay_base = dependency.page;
+			std::uint64_t replay_base_revision = initial_world_revision;
+			if (record->world_revision > initial_world_revision) {
+				std::shared_ptr<const WtChunkPage> cached_page;
+				std::uint64_t cached_revision = 0;
+				if (find_edited_page(
+						dependency.key,
+						record->source_revision,
+						record->world_revision,
+						cached_revision,
+						cached_page
+					)) {
+					replay_base = std::move(cached_page);
+					replay_base_revision = cached_revision;
+					++metrics_.edited_page_cache_hits;
+				} else {
+					++metrics_.edited_page_cache_misses;
+				}
+			}
 			WtChunkEditState edit_state;
-			if (!dependency.page ||
+			if (!replay_base ||
 				edit_state.initialize(
-					*dependency.page,
+					*replay_base,
 					record->source_revision,
-					initial_world_revision,
+					replay_base_revision,
 					procedural_descriptor_pointer
 				) != WtChunkEditStatus::Ok ||
-				edit_journal->replay_until(record->world_revision, edit_state) !=
+				edit_journal->replay_after_until(
+					replay_base_revision, record->world_revision, edit_state
+				) !=
 					WtEditJournalStatus::Ok ||
 				edit_state.current_world_revision() != record->world_revision) {
 				source_valid = false;
@@ -258,10 +279,10 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 				}
 			}
 			if (!edited_page.surface_shift_valid) {
-				const WtChunkPageSampleSource retained_source(*dependency.page);
+				const WtChunkPageSampleSource retained_source(*replay_base);
 				const WtEditSurfaceShiftSource local_source(
 					edited_source ? static_cast<const WtChunkSampleSource &>(*edited_source) : retained_source,
-					*dependency.page, edit_state.surface_shift_dirty_bounds());
+					*replay_base, edit_state.surface_shift_dirty_bounds());
 				if (!edited_source || !edited_source->valid() ||
 					wt_build_surface_shift_records(
 						edited_page,
@@ -278,6 +299,14 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 			dependency.page = std::make_shared<const WtChunkPage>(
 				std::move(edited_page)
 			);
+			if (record->world_revision > initial_world_revision) {
+				store_edited_page(
+					dependency.key,
+					record->source_revision,
+					record->world_revision,
+					dependency.page
+				);
+			}
 		}
 		if (!source_valid) {
 			for (Dependency &dependency : record->dependencies) {
@@ -329,6 +358,71 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 	record->phase = WtPageMeshingRuntimePhase::Meshing;
 	record_time();
 	return WtPageMeshingRuntimeStatus::Ok;
+}
+
+bool WtPageMeshingRuntimeService::find_edited_page(
+	const WtChunkKey &key,
+	std::uint64_t source_revision,
+	std::uint64_t maximum_world_revision,
+	std::uint64_t &world_revision,
+	std::shared_ptr<const WtChunkPage> &page
+) noexcept {
+	EditedPageEntry *best = nullptr;
+	for (EditedPageEntry &entry : edited_pages_) {
+		if (entry.key != key || entry.source_revision != source_revision ||
+			entry.world_revision > maximum_world_revision || !entry.page) {
+			continue;
+		}
+		if (best == nullptr || entry.world_revision > best->world_revision) {
+			best = &entry;
+		}
+	}
+	if (best == nullptr) return false;
+	best->last_touch = ++edited_page_touch_;
+	world_revision = best->world_revision;
+	page = best->page;
+	return true;
+}
+
+void WtPageMeshingRuntimeService::store_edited_page(
+	const WtChunkKey &key,
+	std::uint64_t source_revision,
+	std::uint64_t world_revision,
+	std::shared_ptr<const WtChunkPage> page
+) {
+	if (edited_page_capacity_ == 0 || edited_page_byte_capacity_ == 0 || !page) return;
+	const std::size_t resident_bytes = sizeof(WtChunkPage) +
+		page->samples.capacity() * sizeof(WtScalarSample) +
+		page->surface_shift_records.capacity() *
+			sizeof(WtChunkSurfaceShiftRecord);
+	if (resident_bytes > edited_page_byte_capacity_) return;
+	for (auto entry = edited_pages_.begin(); entry != edited_pages_.end(); ++entry) {
+		if (entry->key != key || entry->source_revision != source_revision) continue;
+		metrics_.edited_page_cache_resident_bytes -= entry->resident_bytes;
+		edited_pages_.erase(entry);
+		break;
+	}
+	while (!edited_pages_.empty() &&
+		(edited_pages_.size() >= edited_page_capacity_ ||
+			metrics_.edited_page_cache_resident_bytes >
+				edited_page_byte_capacity_ - resident_bytes)) {
+		const auto oldest = std::min_element(
+			edited_pages_.begin(), edited_pages_.end(),
+			[](const EditedPageEntry &left, const EditedPageEntry &right) {
+				return left.last_touch < right.last_touch;
+			}
+		);
+		metrics_.edited_page_cache_resident_bytes -= oldest->resident_bytes;
+		edited_pages_.erase(oldest);
+		++metrics_.edited_page_cache_evictions;
+	}
+	edited_pages_.push_back({
+		key, source_revision, world_revision, ++edited_page_touch_,
+		resident_bytes, std::move(page),
+	});
+	metrics_.edited_page_cache_resident_bytes += resident_bytes;
+	metrics_.edited_page_cache_entries = edited_pages_.size();
+	++metrics_.edited_page_cache_updates;
 }
 
 WtPageMeshingRuntimeService::PreparedMeshCompletion

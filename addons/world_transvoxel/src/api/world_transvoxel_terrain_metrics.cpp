@@ -189,6 +189,22 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		"cumulative_dirty_mask_avoided",
 		runtime.cumulative_dirty_mask_avoided
 	);
+	set_metric(output, "page_edited_cache_hits", runtime.page_edited_cache_hits);
+	set_metric(output, "page_edited_cache_misses", runtime.page_edited_cache_misses);
+	set_metric(output, "page_edited_cache_updates", runtime.page_edited_cache_updates);
+	set_metric(output, "page_edited_cache_evictions", runtime.page_edited_cache_evictions);
+	set_metric(output, "page_edited_cache_entries", runtime.page_edited_cache_entries);
+	set_metric(output, "page_edited_cache_capacity", runtime.page_edited_cache_capacity);
+	set_metric(
+		output,
+		"page_edited_cache_byte_capacity",
+		runtime.page_edited_cache_byte_capacity
+	);
+	set_metric(
+		output,
+		"page_edited_cache_resident_bytes",
+		runtime.page_edited_cache_resident_bytes
+	);
 	set_metric(
 		output,
 		"mesh_completion_time_ns_last",

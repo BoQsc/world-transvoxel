@@ -2198,7 +2198,8 @@ void test_current_transaction_limits_incremental_blocks(
 	};
 	const wt::WtEditTransaction historical = make_transaction(1, 14.0);
 	const wt::WtEditTransaction current = make_transaction(2, 2.0);
-	wt::WtEditJournal journal(2, 2, 8192);
+	const wt::WtEditTransaction next = make_transaction(3, 3.0);
+	wt::WtEditJournal journal(3, 3, 12288);
 	journal.reset(descriptor.source_revision, 0);
 	std::vector<std::uint8_t> journal_segment;
 	check(journal.append(historical, journal_segment) == wt::WtEditJournalStatus::Ok &&
@@ -2214,7 +2215,9 @@ void test_current_transaction_limits_incremental_blocks(
 	wt::WtStoragePageCache cache({ 4, wt::kWtMaximumContainerSize,
 		4, wt::kWtMaximumContainerSize });
 	wt::WtStreamScheduler scheduler(4, 4, 4, 1);
-	wt::WtPageMeshingRuntimeService runtime(4);
+	wt::WtPageMeshingRuntimeService runtime(
+		4, 0, 4, wt::kWtMaximumContainerSize
+	);
 	check(scheduler.request_edited_chunk_version(
 		key, descriptor.source_revision, 2, 100, delta
 	) == wt::WtSchedulerStatus::Ok, "exact-delta scheduler request failed");
@@ -2252,9 +2255,42 @@ void test_current_transaction_limits_incremental_blocks(
 	check(captured_mask == 0x01 && collision_mask == 0x01 &&
 		metrics.cumulative_dirty_mask_avoided == 1,
 		"historical edits expanded current collision or GPU work");
+	check(scheduler.apply_completions(1) == 1,
+		"exact-delta first mesh completion failed");
+	wt::WtPageMeshCompletion completed_mesh;
+	check(runtime.pop_mesh_completion(completed_mesh),
+		"exact-delta first mesh result missing");
+	check(journal.append(next, journal_segment) == wt::WtEditJournalStatus::Ok,
+		"resident edited-page next journal append failed");
+	check(runtime.cancel_generation(key, mesh_job.generation) ==
+			wt::WtPageMeshingRuntimeStatus::Ok,
+		"resident edited-page prior generation release failed");
+	delta.dirty_minimum = next.commands[0].bounds.minimum;
+	delta.dirty_maximum = next.commands[0].bounds.maximum;
+	check(scheduler.request_edited_chunk_version(
+		key, descriptor.source_revision, 3, 100, delta
+	) == wt::WtSchedulerStatus::Ok && scheduler.pop_job(sample_job) &&
+		runtime.begin_sample_job(sample_job, 0, storage, cache, scheduler) ==
+			wt::WtPageMeshingRuntimeStatus::Ok &&
+		scheduler.apply_completions(1) == 1 && scheduler.pop_job(mesh_job),
+		"resident edited-page successor sampling failed");
+	check(runtime.execute_mesh_job(
+		mesh_job, mesher, scratch, scheduler, &journal, 0, &storage
+	) == wt::WtPageMeshingRuntimeStatus::Ok,
+		"resident edited-page range replay failed");
+	const wt::WtPageMeshingRuntimeMetrics cached_metrics = runtime.get_metrics();
+	check(cached_metrics.edited_page_cache_hits == 1 &&
+		cached_metrics.edited_page_cache_misses == 1 &&
+		cached_metrics.edited_page_cache_updates == 2 &&
+		cached_metrics.edited_page_cache_entries == 1 &&
+		cached_metrics.edited_page_cache_capacity == 4 &&
+		cached_metrics.edited_page_cache_resident_bytes > 0,
+		"resident edited-page cache did not bound revision replay");
 	append_u64(evidence, captured_mask);
 	append_u64(evidence, collision_mask);
 	append_u64(evidence, metrics.cumulative_dirty_mask_avoided);
+	append_u64(evidence, cached_metrics.edited_page_cache_hits);
+	append_u64(evidence, cached_metrics.edited_page_cache_resident_bytes);
 	storage.close();
 }
 

@@ -71,6 +71,11 @@ public:
 		std::uint64_t maximum_revision,
 		WtEditReplaySink &sink
 	) const;
+	WtEditJournalStatus replay_after_until(
+		std::uint64_t minimum_revision_exclusive,
+		std::uint64_t maximum_revision,
+		WtEditReplaySink &sink
+	) const;
 
 	bool initialized() const noexcept;
 	std::uint64_t source_revision() const noexcept;

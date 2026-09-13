@@ -266,6 +266,27 @@ WtEditJournalStatus WtEditJournal::replay_until(
 	return WtEditJournalStatus::Ok;
 }
 
+WtEditJournalStatus WtEditJournal::replay_after_until(
+	std::uint64_t minimum_revision_exclusive,
+	std::uint64_t maximum_revision,
+	WtEditReplaySink &sink
+) const {
+	if (!initialized_) return WtEditJournalStatus::NotInitialized;
+	if (minimum_revision_exclusive < initial_world_revision_ ||
+		minimum_revision_exclusive > maximum_revision ||
+		maximum_revision > current_world_revision_) {
+		return WtEditJournalStatus::WorldRevisionMismatch;
+	}
+	for (const WtEditTransaction &transaction : transactions_) {
+		if (transaction.committed_revision <= minimum_revision_exclusive) continue;
+		if (transaction.committed_revision > maximum_revision) break;
+		for (const WtEditCommand &command : transaction.commands) {
+			if (!sink.apply(command)) return WtEditJournalStatus::ReplayFailure;
+		}
+	}
+	return WtEditJournalStatus::Ok;
+}
+
 void WtEditJournal::swap_state(WtEditJournal &other) noexcept {
 	std::swap(initialized_, other.initialized_);
 	std::swap(source_revision_, other.source_revision_);

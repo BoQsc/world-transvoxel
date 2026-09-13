@@ -112,6 +112,14 @@ using WtMeshCellCaptureCallback =
 
 struct WtPageMeshingRuntimeMetrics {
 	std::uint64_t cumulative_dirty_mask_avoided = 0;
+	std::uint64_t edited_page_cache_hits = 0;
+	std::uint64_t edited_page_cache_misses = 0;
+	std::uint64_t edited_page_cache_updates = 0;
+	std::uint64_t edited_page_cache_evictions = 0;
+	std::uint64_t edited_page_cache_entries = 0;
+	std::uint64_t edited_page_cache_capacity = 0;
+	std::uint64_t edited_page_cache_byte_capacity = 0;
+	std::uint64_t edited_page_cache_resident_bytes = 0;
 	std::uint64_t sample_jobs = 0;
 	std::uint64_t mesh_jobs = 0;
 	std::uint64_t dependency_requests = 0;
@@ -186,7 +194,9 @@ class WtPageMeshingRuntimeService final : public WtPageMeshingRuntimeOwner {
 public:
 	explicit WtPageMeshingRuntimeService(
 		std::size_t record_capacity,
-		std::size_t meshing_worker_count = 0
+		std::size_t meshing_worker_count = 0,
+		std::size_t edited_page_capacity = 0,
+		std::size_t edited_page_byte_capacity = 0
 	);
 	~WtPageMeshingRuntimeService();
 
@@ -355,6 +365,14 @@ private:
 		WtChunkKey key;
 		std::int32_t priority = 0;
 	};
+	struct EditedPageEntry {
+		WtChunkKey key;
+		std::uint64_t source_revision = 0;
+		std::uint64_t world_revision = 0;
+		std::uint64_t last_touch = 0;
+		std::size_t resident_bytes = 0;
+		std::shared_ptr<const WtChunkPage> page;
+	};
 
 	std::vector<Record>::iterator find_record(
 		const WtChunkKey &key
@@ -421,6 +439,19 @@ private:
 		WtGenerationToken generation,
 		std::int32_t priority
 	) noexcept;
+	bool find_edited_page(
+		const WtChunkKey &key,
+		std::uint64_t source_revision,
+		std::uint64_t maximum_world_revision,
+		std::uint64_t &world_revision,
+		std::shared_ptr<const WtChunkPage> &page
+	) noexcept;
+	void store_edited_page(
+		const WtChunkKey &key,
+		std::uint64_t source_revision,
+		std::uint64_t world_revision,
+		std::shared_ptr<const WtChunkPage> page
+	);
 	void cancel_orphaned_dependency_requests(
 		const std::vector<Dependency> &removed_dependencies
 	) noexcept;
@@ -430,6 +461,10 @@ private:
 	bool valid_ = false;
 	std::vector<Record> records_;
 	std::vector<LoadingRetryCandidate> loading_retry_candidates_;
+	std::size_t edited_page_capacity_ = 0;
+	std::size_t edited_page_byte_capacity_ = 0;
+	std::uint64_t edited_page_touch_ = 0;
+	std::vector<EditedPageEntry> edited_pages_;
 	WtPageMeshingRuntimeMetrics metrics_;
 	WtChunkMeshingScratch preparation_scratch_;
 	std::unique_ptr<AsyncState> async_;

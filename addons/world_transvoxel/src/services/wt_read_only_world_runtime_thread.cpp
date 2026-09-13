@@ -770,6 +770,16 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 			page.mesh_completion_time_ns_maximum;
 		snapshot.cumulative_dirty_mask_avoided =
 			page.cumulative_dirty_mask_avoided;
+		snapshot.page_edited_cache_hits = page.edited_page_cache_hits;
+		snapshot.page_edited_cache_misses = page.edited_page_cache_misses;
+		snapshot.page_edited_cache_updates = page.edited_page_cache_updates;
+		snapshot.page_edited_cache_evictions = page.edited_page_cache_evictions;
+		snapshot.page_edited_cache_entries = page.edited_page_cache_entries;
+		snapshot.page_edited_cache_capacity = page.edited_page_cache_capacity;
+		snapshot.page_edited_cache_byte_capacity =
+			page.edited_page_cache_byte_capacity;
+		snapshot.page_edited_cache_resident_bytes =
+			page.edited_page_cache_resident_bytes;
 		snapshot.mesh_worker_count = page.mesh_worker_count;
 		snapshot.mesh_worker_accepted_jobs = page.mesh_worker_accepted_jobs;
 		snapshot.mesh_worker_started_jobs = page.mesh_worker_started_jobs;

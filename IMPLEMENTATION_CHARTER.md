@@ -1924,3 +1924,15 @@ zero-brick delta so their revision and transition data can advance without
 inventing owned collision work. Runtime metrics report exact-delta chunks,
 dirty-block totals and maxima, and cases where a cumulative historical mask was
 prevented from expanding current derived work.
+
+Loaded edited pages also form a bounded native derived cache. Each entry is
+identified by chunk key, source revision, and its latest world revision. A
+successor generation starts from the newest entry no newer than its requested
+revision and replays only the remaining journal range. The cached page includes
+the authoritative density, material, water, and surface-shift state, so
+unchanged surface-shift records are retained from that revision rather than
+from the original baked page. Cache entries use least-recently-used eviction,
+are capped by both configured decoded-page entry and byte capacities, and are
+discarded with the runtime. Journal and persisted pages remain authoritative; eviction
+changes latency only. Runtime metrics expose hits, misses, updates, evictions,
+entry capacity, and logical resident bytes.

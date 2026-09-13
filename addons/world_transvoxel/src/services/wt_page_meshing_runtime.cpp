@@ -434,14 +434,21 @@ struct WtPageMeshingRuntimeService::AsyncState {
 
 WtPageMeshingRuntimeService::WtPageMeshingRuntimeService(
 	std::size_t record_capacity,
-	std::size_t meshing_worker_count
+	std::size_t meshing_worker_count,
+	std::size_t edited_page_capacity,
+	std::size_t edited_page_byte_capacity
 ) :
 		record_capacity_(record_capacity),
+		edited_page_capacity_(std::min(record_capacity, edited_page_capacity)),
+		edited_page_byte_capacity_(edited_page_byte_capacity),
 		valid_(record_capacity > 0 &&
 			record_capacity <= kWtMaximumPageMeshingRuntimeRecords &&
 			meshing_worker_count <= 8) {
 	if (valid_) {
 		records_.reserve(record_capacity_);
+		edited_pages_.reserve(edited_page_capacity_);
+		metrics_.edited_page_cache_capacity = edited_page_capacity_;
+		metrics_.edited_page_cache_byte_capacity = edited_page_byte_capacity_;
 		loading_retry_candidates_.reserve(std::min(
 			record_capacity_,
 			std::size_t { 4 }
