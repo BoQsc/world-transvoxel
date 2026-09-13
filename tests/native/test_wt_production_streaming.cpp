@@ -685,10 +685,14 @@ void test_collision_only_with_full_gpu_queue(std::size_t mesh_workers) {
 	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
 	while (!collision_ready && std::chrono::steady_clock::now() < deadline) {
 		wt::WtReadOnlyPublication publication;
-		while (runtime.pop_publication(publication)) {
+		while (runtime.pop_non_collision_publication(publication)) {
 			hidden_render |= publication.kind == wt::WtReadOnlyPublicationKind::RenderPayload;
-			if (publication.kind == wt::WtReadOnlyPublicationKind::CollisionPayload &&
-				publication.key == wt::WtChunkKey{ 2, 0, 0, 0 } && publication.collision) {
+			check(publication.kind != wt::WtReadOnlyPublicationKind::CollisionPayload,
+				"render drain stole collision from the physics-boundary lane");
+		}
+		while (runtime.pop_interaction_collision_publication(publication)) {
+			if (publication.key == wt::WtChunkKey{ 2, 0, 0, 0 } &&
+					publication.collision) {
 				collision_ready = !publication.collision->faces.empty();
 			}
 		}

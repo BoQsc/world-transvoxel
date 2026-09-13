@@ -1936,3 +1936,13 @@ are capped by both configured decoded-page entry and byte capacities, and are
 discarded with the runtime. Journal and persisted pages remain authoritative; eviction
 changes latency only. Runtime metrics expose hits, misses, updates, evictions,
 entry capacity, and logical resident bytes.
+### Physics-boundary collision publication
+
+The Godot frontend must never consume a collision payload from `_process()`.
+The runtime exposes a non-collision publication pop for render and bookkeeping
+work, while `_physics_process()` drains every collision payload and prefers
+interaction-critical payloads. This keeps all physics shape mutation on one
+engine boundary. Visual publication remains independent and may complete first;
+the previous authoritative collision remains active until the matching
+generation is ready. Queue capacity, collision apply budgets, generation checks,
+and stale-payload rejection remain unchanged.

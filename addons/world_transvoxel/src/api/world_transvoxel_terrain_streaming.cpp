@@ -321,7 +321,7 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 				publication = std::move(deferred_publication_);
 				has_deferred_publication_ = false;
 			}
-		} else if (!lifecycle_->pop_publication(publication)) {
+		} else if (!lifecycle_->pop_non_collision_publication(publication)) {
 			break;
 		}
 		const std::uint64_t collision_apply_time_ns_used =
@@ -434,50 +434,8 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 				}
 				break;
 			case WtReadOnlyPublicationKind::CollisionPayload:
-				++collision_publication_count;
-				status = publication.collision ?
-					application_->submit_collision(
-						publication.collision,
-						publication.interaction_critical
-					) :
-					WtApplicationStatus::InvalidInput;
-				// Collision publications are already bounded by
-				// collision_apply_budget_. Apply each accepted payload before
-				// consuming a later same-key ExpectChunk publication so a
-				// transition remesh cannot make the safety collision stale before
-				// it reaches the physics server. The previous shape remains active
-				// there until the replacement generation is ready.
-				if (status == WtApplicationStatus::Ok) {
-					const std::uint64_t remaining_deadline_ns =
-						collision_apply_deadline_ns_ == 0U ? 0U :
-						collision_apply_time_ns_used <
-								collision_apply_deadline_ns_ ?
-							collision_apply_deadline_ns_ -
-								collision_apply_time_ns_used :
-							0U;
-					application_->apply_with_collision_deadline(
-						0U,
-						1U,
-						remaining_deadline_ns,
-						*render_sink_,
-						*collision_sink_
-					);
-					const std::uint64_t total_collision_apply_time_ns =
-						application_->get_metrics().
-							collision_apply_time_ns_total -
-						collision_apply_time_ns_start;
-					if (collision_apply_deadline_ns_ != 0U &&
-						total_collision_apply_time_ns >=
-							collision_apply_deadline_ns_) {
-						collision_deadline_exhausted = true;
-					}
-					if (lifecycle_) {
-						lifecycle_->record_frontend_collision_residency(
-							publication.key,
-							collision_sink_->applied_generation(publication.key)
-						);
-					}
-				}
+				// Collision payloads are removed only by _physics_process().
+				status = WtApplicationStatus::InvalidInput;
 				break;
 			case WtReadOnlyPublicationKind::ViewerPlanStarted:
 				if (open_viewer_plan_publications_ !=
