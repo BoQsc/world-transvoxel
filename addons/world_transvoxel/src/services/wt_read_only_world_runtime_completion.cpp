@@ -163,10 +163,10 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 			// the application service then correctly drops those stale entries, but a
 			// later patch must not assume their blocks reached the sink. Publish the
 			// complete merged generation whenever its predecessor is not applied.
-			if (!predecessor_is_physics_active &&
-					application_record.collision_generation != previous->generation) {
+			if (!predecessor_is_physics_active) {
 				merged->incremental_patch = true;
 				collision = merged;
+				++metrics_.collision_unpublished_base_full_rebases;
 			}
 			auto cached_merged = std::make_shared<WtCollisionPayload>(*merged);
 			cached_merged->incremental_patch = false;

@@ -1757,9 +1757,28 @@ must not run the full CPU render mesher merely to establish its first collision
 base. The GPU capture retains the edit's original dirty-brick mask; widening the
 CPU collision mask cannot widen visual regeneration.
 
+An application-accepted collision generation is not a physics base while it is
+still staged in the frontend. If a newer incremental edit can only find that
+unpublished generation, it merges the patch into a complete eight-block payload
+and applies the complete result. Partial blocks may be applied only over the
+exact generation recorded as resident in the physics frontend. This prevents
+rapid supersession from mixing collision blocks from different world revisions.
+
 Interactive collision admission is measured independently from background mesh
 traffic. Runtime metrics expose the last, total, and maximum queue wait for jobs
 accepted into the interaction lane, in addition to aggregate mesh-worker wait.
+The GPU capture interaction lane admits both incremental edit generations and
+focus-priority visual generations. A viewer or transition refresh that supersedes
+an edited chunk therefore cannot demote its final LOD0 generation behind cold
+regional captures.
+An exact-key replacement whose transition mask matches its active GPU predecessor
+is independently publishable even when a viewer refresh produced it. It uses the
+same bounded single-key activation path as an edit. Only replacements that change
+coverage or a boundary mask join the wider atomic LOD cohort.
+A same-revision edit cohort may also expose an internal surface in a chunk whose
+previous GPU entry was proven empty. When every such member has transition mask
+zero, the complete edit cohort publishes atomically without waiting for the cold
+viewer region; non-edit insertions retain the regional coverage requirement.
 Only incremental jobs that require collision contribute to these counters,
 including jobs executed by a background worker assisting the interaction queue.
 Road and burst-edit qualification must use the interaction counters when

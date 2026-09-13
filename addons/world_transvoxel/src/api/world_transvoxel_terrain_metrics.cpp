@@ -502,6 +502,10 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		runtime.collision_readiness_repair_timed_wakes
 	);
 	set_metric(
+		output, "collision_unpublished_base_full_rebases",
+		runtime.collision_unpublished_base_full_rebases
+	);
+	set_metric(
 		output, "viewer_plan_cancellations", runtime.viewer_plan_cancellations
 	);
 	set_metric(

@@ -140,6 +140,7 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t collision_readiness_repair_obsolete_clears = 0;
 	std::uint64_t collision_readiness_repair_duplicate_skips = 0;
 	std::uint64_t collision_readiness_repair_timed_wakes = 0;
+	std::uint64_t collision_unpublished_base_full_rebases = 0;
 	std::uint64_t scheduler_requested_records = 0;
 	std::uint64_t scheduler_sampling_records = 0;
 	std::uint64_t scheduler_meshing_records = 0;

@@ -184,22 +184,22 @@ SameLayoutEditCohortStatus build_same_layout_edit_cohort(
 ) {
 	if (rejection_key) *rejection_key = seed;
 	if (rejection_reason) *rejection_reason = "none";
-	if (!std::binary_search(
-			edit_replacements.begin(), edit_replacements.end(), seed
-		)) {
-		if (rejection_reason) *rejection_reason = "seed_not_incremental_edit";
-		return SameLayoutEditCohortStatus::NotApplicable;
-	}
+	const bool incremental_edit = std::binary_search(
+		edit_replacements.begin(), edit_replacements.end(), seed
+	);
 	WtChunkApplicationRecord seed_record;
 	if (!application.copy_record(seed, seed_record) ||
-		!seed_record.visual_required || seed_record.world_revision == 0) {
+		!seed_record.visual_required ||
+		(incremental_edit && seed_record.world_revision == 0)) {
 		if (rejection_reason) *rejection_reason = "seed_application_unavailable";
 		return SameLayoutEditCohortStatus::NotApplicable;
 	}
 
 	WtChunkPublicationRegion candidate;
 	std::vector<WtChunkKey> candidate_waiting_masks;
-	for (const WtChunkKey &key : edit_replacements) {
+	const std::vector<WtChunkKey> replacements = incremental_edit ?
+		edit_replacements : std::vector<WtChunkKey>{seed};
+	for (const WtChunkKey &key : replacements) {
 		WtChunkApplicationRecord record;
 		if (!application.copy_record(key, record) || !record.visual_required ||
 			record.world_revision != seed_record.world_revision) {
@@ -214,6 +214,17 @@ SameLayoutEditCohortStatus build_same_layout_edit_cohort(
 		}
 		std::uint8_t active_mask = 0;
 		if (!render_sink.get_gpu_resident_boundary_mask(key, active_mask)) {
+			// An edit can expose a surface inside a previously proven-solid/empty
+			// chunk. The complete same-revision edit cohort is already atomic, and
+			// a zero transition mask introduces no LOD boundary dependency.
+			if (incremental_edit &&
+				record.external_visual_transition_mask == 0) {
+				candidate.replacements.push_back(key);
+				if (record.visual_generation != record.generation) {
+					candidate_waiting_masks.push_back(key);
+				}
+				continue;
+			}
 			if (rejection_key) *rejection_key = key;
 			if (rejection_reason) *rejection_reason = "active_gpu_coverage_missing";
 			return SameLayoutEditCohortStatus::NotApplicable;

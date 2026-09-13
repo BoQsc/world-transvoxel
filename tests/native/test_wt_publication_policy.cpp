@@ -377,6 +377,22 @@ void cold_same_lod_cohort_regression() {
 	), "cold same-LOD cohort was rejected");
 	check(region.replacements == Keys {seed},
 		"cold same-LOD candidates formed an unbounded publication chain");
+	Keys cold_backlog;
+	for (int z = -16; z < 16; ++z) {
+		for (int x = -16; x < 16; ++x) cold_backlog.push_back({x, 0, z, 0});
+	}
+	normalize(cold_backlog);
+	const auto backlog_lookup = [&cold_backlog](
+			const wt::WtChunkKey &key, wt::WtGpuPublicationBoundary &boundary) {
+		if (!contains(cold_backlog, key)) return false;
+		boundary = {0, false, true};
+		return true;
+	};
+	check(wt::wt_build_gpu_chunk_publication_cohort(
+		seed, cold_backlog, {}, backlog_lookup, region, waiting, 8
+	), "hot seed was rejected by a large cold same-LOD backlog");
+	check(region.replacements == Keys {seed},
+		"large cold backlog entered the hot seed publication cohort");
 	const auto edit_lookup = [&candidates, &edited_neighbor](
 			const wt::WtChunkKey &key, wt::WtGpuPublicationBoundary &boundary) {
 		if (!contains(candidates, key)) return false;
@@ -388,7 +404,7 @@ void cold_same_lod_cohort_regression() {
 	), "same-LOD edit cohort was rejected");
 	check(region.replacements == Keys({seed, edited_neighbor}),
 		"same-LOD edited face neighbor was not retained atomically");
-	std::cout << "GPU_COLD_SAME_LOD_COHORT_PASS cold_members=1 edit_members=2\n";
+	std::cout << "GPU_COLD_SAME_LOD_COHORT_PASS cold_members=1 edit_members=2 backlog=1024 hot_members=1\n";
 }
 
 wt::WtChunkKey read_key() {
