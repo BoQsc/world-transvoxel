@@ -52,13 +52,14 @@ bool role_promotion_requires_remesh(
 	WtChunkLifecycle lifecycle,
 	const WtChunkKey &key,
 	WtGenerationToken generation,
-	const WtPageMeshingRuntimeOwner *page_meshing_runtime
+	const WtPageMeshingRuntimeOwner *page_meshing_runtime,
+	bool collision_promotion
 ) noexcept {
 	if (lifecycle != WtChunkLifecycle::Meshing &&
 		lifecycle != WtChunkLifecycle::Ready) return false;
 	return page_meshing_runtime == nullptr ||
 		!page_meshing_runtime->owned_generation_accepts_role_promotion(
-			key, generation
+			key, generation, collision_promotion
 		);
 }
 
@@ -190,8 +191,10 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 				record->lifecycle,
 				item.key,
 				record->generation,
-				page_meshing_runtime
-			)) {
+				page_meshing_runtime,
+				!application_record.collision_required && item.collision_required
+			) && !(!application_record.collision_required &&
+				item.collision_required && application_record.visual_required)) {
 			++role_promotions_requiring_remesh;
 		}
 	}
@@ -251,8 +254,45 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 				record->lifecycle,
 				item.key,
 				record->generation,
-				page_meshing_runtime
+				page_meshing_runtime,
+				promote_collision
 			)) {
+			const bool collision_only_refresh =
+				promote_collision && !promote_visual &&
+				application_record.visual_required;
+			if (collision_only_refresh) {
+				const std::shared_ptr<const WtCollisionPayload> cached_collision =
+					resource_cache.find_collision(
+						item.key, record->generation
+					);
+				if (cached_collision) {
+					const WtApplicationStatus required_status =
+						application.set_collision_required(item.key, true);
+					const WtApplicationStatus submit_status =
+						application.submit_collision(cached_collision);
+					if ((required_status != WtApplicationStatus::Ok &&
+						required_status != WtApplicationStatus::AlreadyCurrent) ||
+						submit_status != WtApplicationStatus::Ok) {
+						++metrics_.application_failures;
+						return WtDesiredSetRuntimeStatus::ApplicationFailure;
+					}
+					continue;
+				}
+			}
+			if (collision_only_refresh &&
+				(record->lifecycle != WtChunkLifecycle::Ready ||
+					scheduler.available_job_capacity() == 0)) {
+				const WtApplicationStatus deferred_status =
+					application.begin_collision_only_refresh(
+						item.key, record->generation
+					);
+				if (deferred_status != WtApplicationStatus::Ok &&
+					deferred_status != WtApplicationStatus::AlreadyCurrent) {
+					++metrics_.application_failures;
+					return WtDesiredSetRuntimeStatus::ApplicationFailure;
+				}
+				continue;
+			}
 			if (page_meshing_runtime != nullptr) {
 				const WtPageMeshingRuntimeOwnerStatus release_status =
 					page_meshing_runtime->release_owned_chunk(item.key);
@@ -263,6 +303,27 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 					++metrics_.page_meshing_runtime_failures;
 					return WtDesiredSetRuntimeStatus::PageMeshingRuntimeFailure;
 				}
+			}
+			if (collision_only_refresh) {
+				const WtSchedulerStatus refresh_status =
+					scheduler.request_same_generation_refresh(
+						item.key, record->source_revision,
+						record->world_revision,
+						effective_priority
+					);
+				if (refresh_status != WtSchedulerStatus::Ok) {
+					++metrics_.scheduler_failures;
+					return WtDesiredSetRuntimeStatus::SchedulerFailure;
+				}
+				const WtApplicationStatus refresh_application_status =
+					application.begin_collision_only_refresh(
+						item.key, record->generation
+					);
+				if (refresh_application_status != WtApplicationStatus::Ok) {
+					++metrics_.application_failures;
+					return WtDesiredSetRuntimeStatus::ApplicationFailure;
+				}
+				continue;
 			}
 			const WtSchedulerStatus remesh_status =
 				scheduler.request_chunk_version(

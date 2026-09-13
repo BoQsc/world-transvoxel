@@ -1960,3 +1960,35 @@ active `(chunk, generation)`. Queue and pipeline occupancy suppress duplicate
 repair while work is real, without opening a consume-to-residency race that can
 rebuild the same collision every runtime wake. An historical failed attempt
 cannot leave an idle collision-required chunk permanently unready.
+
+### Same-generation collision refresh
+
+Collision demand entering an already visual GPU chunk refreshes CPU collision
+topology inside the existing `(chunk, generation, world revision)` identity.
+The scheduler reopens that record for bounded sampling and CPU meshing without
+allocating a successor generation. The application marks the work as a
+collision-only refresh, so scheduler admission reserves no GPU capture slot and
+mesh completion emits no render payload. The active visual, its LOD ownership,
+and its transition state remain unchanged.
+
+Role promotion is absorbed by an existing mesh job only before that job captures
+its collision flag. A visual promotion may additionally reuse a retained,
+immutable pre-mesh GPU field capture. A later collision promotion uses the
+refresh path. A later edit or topology replacement still creates a new generation and
+therefore cancels stale refresh output through the normal generation and world
+revision checks. CPU collision remains authoritative and is published only at
+the physics boundary.
+
+If an immutable collision payload for the active generation remains cached after
+collision deactivation, promotion republishes that payload directly. It must not
+recompute and reinsert a different payload under the same identity. Runtime
+completion also reuses an existing generation-matched collision payload when a
+duplicate completion arrives. GPU resident placeholder publication is claimed
+once in the application record and enforced at the publication queue boundary,
+so dispatch, cached promotion, and CPU completion cannot publish the same visual
+generation more than once.
+
+Runtime
+metrics expose the terminal runtime status plus the exact terrain mesh completion
+failure substage and status so an automated route reports its native failure
+instead of only reporting rejected viewer calls.

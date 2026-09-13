@@ -60,6 +60,12 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 		application_record.generation != completion.generation) {
 		return true;
 	}
+	const std::shared_ptr<const WtCollisionPayload> completed_collision =
+		resource_cache_->find_collision(completion.key, completion.generation);
+	if (completed_collision) {
+		collision = std::make_shared<WtCollisionPayload>(*completed_collision);
+		return true;
+	}
 	if (completion.incremental_edit && edit_journal_store_ &&
 		!edit_journal_store_->journal().revision_affects_density(
 			record->world_revision
@@ -199,19 +205,43 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 			cached_collision = std::move(cached_complete);
 		}
 	}
-	if ((!completion.incremental_edit && resource_cache_->insert_mesh(
+	if (!completion.incremental_edit &&
+		!application_record.collision_only_refresh) {
+		const WtChunkResourceCacheStatus mesh_cache_status =
+			resource_cache_->insert_mesh(
 			completion.mesh,
 			completion.generation,
 			record->generation
-		) != WtChunkResourceCacheStatus::Ok) ||
-		collision_status != WtCollisionBuildStatus::Ok ||
-		(cached_collision && resource_cache_->insert_collision(
-			cached_collision, record->generation
-		) != WtChunkResourceCacheStatus::Ok)) {
+		);
+		if (mesh_cache_status != WtChunkResourceCacheStatus::Ok) {
+			metrics_.terrain_mesh_completion_failure_stage = 5;
+			metrics_.terrain_mesh_completion_failure_status =
+				static_cast<std::uint64_t>(mesh_cache_status);
+			set_failure(WtReadOnlyRuntimeStatus::PipelineTerrainMeshCompletionFailure);
+			return false;
+		}
+	}
+	if (collision_status != WtCollisionBuildStatus::Ok) {
+		metrics_.terrain_mesh_completion_failure_stage = 6;
+		metrics_.terrain_mesh_completion_failure_status =
+			static_cast<std::uint64_t>(collision_status);
 		set_failure(
 			WtReadOnlyRuntimeStatus::PipelineTerrainMeshCompletionFailure
 		);
 		return false;
+	}
+	if (cached_collision) {
+		const WtChunkResourceCacheStatus collision_cache_status =
+			resource_cache_->insert_collision(
+				cached_collision, record->generation
+			);
+		if (collision_cache_status != WtChunkResourceCacheStatus::Ok) {
+			metrics_.terrain_mesh_completion_failure_stage = 7;
+			metrics_.terrain_mesh_completion_failure_status =
+				static_cast<std::uint64_t>(collision_cache_status);
+			set_failure(WtReadOnlyRuntimeStatus::PipelineTerrainMeshCompletionFailure);
+			return false;
+		}
 	}
 	causal_trace_.record(
 		WtCausalTraceEventKind::CollisionPayloadPrepared,
@@ -289,6 +319,15 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 		WtChunkApplicationRecord application_record;
 		if (!application_->copy_record(completion.key, application_record) ||
 			application_record.generation != completion.generation) {
+			continue;
+		}
+		if (application_record.collision_only_refresh) {
+			application_->finish_collision_only_refresh(
+				completion.key,
+				completion.generation
+			);
+			std::lock_guard<std::mutex> lock(metrics_mutex_);
+			++metrics_.mesh_completions;
 			continue;
 		}
 		if (!application_record.visual_required) {
@@ -623,7 +662,8 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 		}
 		const WtChunkRecord *chunk_record = scheduler_->find_record(record.key);
 		if (chunk_record == nullptr ||
-			chunk_record->generation != record.generation) {
+			chunk_record->generation != record.generation ||
+			chunk_record->lifecycle != WtChunkLifecycle::Ready) {
 			continue;
 		}
 		std::shared_ptr<const WtCollisionPayload> collision;
@@ -641,12 +681,33 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 			return false;
 		}
 		if (!collision) {
-			// GPU-only visual generations intentionally omit CPU topology. When
-			// such a chunk enters the collision footprint, stage one collision-
-			// required generation through the normal remesh path.
+			// A role promoted while its visual generation was still in flight is
+			// recovered after that work settles through the normal replacement path.
+			// Completed Ready visuals take the same-generation refresh path directly
+			// from desired-set application and never arrive here.
 			if (status == WtChunkResourceCacheStatus::NotFound &&
 				desired != nullptr && desired->collision_required) {
-				queue_transition_remeshes({ *desired });
+				if (record.collision_only_refresh) {
+					const WtPageMeshingRuntimeOwnerStatus release_status =
+						page_runtime_->release_owned_chunk(record.key);
+					if (release_status != WtPageMeshingRuntimeOwnerStatus::Ok &&
+						release_status != WtPageMeshingRuntimeOwnerStatus::NotFound &&
+						release_status != WtPageMeshingRuntimeOwnerStatus::StaleGeneration) {
+						set_failure(WtReadOnlyRuntimeStatus::PipelineCollisionRepairFailure);
+						return false;
+					}
+					if (scheduler_->request_same_generation_refresh(
+							record.key,
+							chunk_record->source_revision,
+							chunk_record->world_revision,
+							desired->priority
+						) != WtSchedulerStatus::Ok) {
+						set_failure(WtReadOnlyRuntimeStatus::PipelineCollisionRepairFailure);
+						return false;
+					}
+				} else {
+					queue_transition_remeshes({ *desired });
+				}
 				{
 					std::lock_guard<std::mutex> lock(publication_mutex_);
 					collision_readiness_repair_attempts_.push_back({
@@ -659,6 +720,12 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 				if (repairs >= kMaxCollisionRepairsPerPass) break;
 			}
 			continue;
+		}
+		if (record.collision_only_refresh) {
+			application_->finish_collision_only_refresh(
+				record.key,
+				record.generation
+			);
 		}
 		WtReadOnlyPublication collision_publication;
 		collision_publication.kind =

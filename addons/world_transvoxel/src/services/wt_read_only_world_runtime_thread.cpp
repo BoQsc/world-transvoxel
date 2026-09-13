@@ -137,6 +137,19 @@ void WtReadOnlyWorldRuntime::request_stop() noexcept {
 bool WtReadOnlyWorldRuntime::push_publication(
 	WtReadOnlyPublication publication
 ) {
+	if (publication.kind == WtReadOnlyPublicationKind::RenderPayload &&
+		publication.render && publication.render->publication_source ==
+			WtRenderPublicationSource::GpuResidentPlaceholder) {
+		const WtApplicationStatus claim_status =
+			application_->claim_gpu_placeholder_publication(
+				publication.key, publication.generation
+			);
+		if (claim_status == WtApplicationStatus::AlreadyCurrent) return true;
+		if (claim_status == WtApplicationStatus::StaleGeneration ||
+			claim_status == WtApplicationStatus::NotFound ||
+			claim_status == WtApplicationStatus::InvalidInput) return true;
+		if (claim_status != WtApplicationStatus::Ok) return false;
+	}
 	std::unique_lock<std::mutex> lock(publication_mutex_);
 	const bool priority = is_priority_publication(publication);
 	std::vector<WtReadOnlyPublication> &slots = priority ?

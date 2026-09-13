@@ -79,6 +79,8 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t storage_completions = 0;
 	std::uint64_t mesh_completions = 0;
 	std::uint64_t transition_mesh_completions = 0;
+	std::uint64_t terrain_mesh_completion_failure_stage = 0;
+	std::uint64_t terrain_mesh_completion_failure_status = 0;
 	std::uint64_t edit_commits = 0;
 	std::uint64_t edit_rejections = 0;
 	std::uint64_t edit_replacements = 0;

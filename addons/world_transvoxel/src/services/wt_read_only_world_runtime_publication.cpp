@@ -612,7 +612,8 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			resident_input &&
 			application_->copy_record(next_job.key, admission_record) &&
 			admission_record.generation == next_job.generation &&
-			admission_record.visual_required) {
+			admission_record.visual_required &&
+			!admission_record.collision_only_refresh) {
 			const std::uint64_t reservation_id =
 				gpu_meshing_shadow_->reserve_capture_slots(next_job);
 			if (reservation_id == 0) {
@@ -743,6 +744,9 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 				continue;
 			}
 			WtTerrainMeshReadyCallback terrain_mesh_ready;
+			const bool job_visual_required =
+				application_record.visual_required &&
+				!application_record.collision_only_refresh;
 			if (application_record.collision_required || defer_gpu_capture ||
 				!application_record.visual_required ||
 				!application_record.staged_replacement) {
@@ -835,7 +839,7 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 					initial_world_revision_,
 					&storage_,
 					terrain_mesh_ready,
-					application_record.visual_required,
+					job_visual_required,
 					execution_callback,
 					cell_capture_callback,
 					pre_mesh_field_capture,
@@ -854,7 +858,7 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 					initial_world_revision_,
 					&storage_,
 					terrain_mesh_ready,
-					application_record.visual_required,
+					job_visual_required,
 					cell_capture_callback,
 					pre_mesh_field_capture,
 					application_record.collision_required,
@@ -863,7 +867,7 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 				);
 			}
 			if (status == WtPageMeshingRuntimeStatus::Ok &&
-				pre_mesh_reservation && application_record.visual_required &&
+				pre_mesh_reservation && job_visual_required &&
 				application_record.staged_replacement) {
 				// The reserved immutable field capture is independent of CPU
 				// collision extraction. Publish its geometry-free expectation as
@@ -876,6 +880,13 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 				render->transition_mask = trace_transition_mask;
 				render->publication_source =
 					WtRenderPublicationSource::GpuResidentPlaceholder;
+				if (resource_cache_->insert_render(render, job.generation) !=
+						WtChunkResourceCacheStatus::Ok) {
+					set_failure(
+						WtReadOnlyRuntimeStatus::PipelineRenderCompletionFailure
+					);
+					break;
+				}
 				WtReadOnlyPublication publication;
 				publication.kind = WtReadOnlyPublicationKind::RenderPayload;
 				publication.key = job.key;

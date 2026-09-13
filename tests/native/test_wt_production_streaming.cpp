@@ -721,11 +721,55 @@ void test_collision_only_with_full_gpu_queue(std::size_t mesh_workers) {
 		"visual promotion bypassed GPU capacity");
 	gpu->release_capture_slots(reservation);
 	PublicationCounts promoted;
-	std::vector<std::uint8_t> evidence;
-	const bool promotion_collected = collect_until(runtime, promoted, 1, 0, evidence);
-	std::printf("GPU_COLLISION_ADMISSION_RESUME workers=%zu collected=%d renders=%zu collisions=%zu vertices=%zu captures=%llu\n",
-		mesh_workers, promotion_collected, promoted.renders, promoted.collisions,
-		promoted.render_vertices,
+	const auto resume_deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(5);
+	bool promotion_collected = false;
+	bool duplicate_generation = false;
+	std::size_t quiet_passes = 0;
+	std::vector<std::uint64_t> published_generations;
+	while (std::chrono::steady_clock::now() < resume_deadline) {
+		wt::WtReadOnlyPublication publication;
+		bool consumed = false;
+		while (runtime.pop_publication(publication)) {
+			consumed = true;
+			if (publication.kind != wt::WtReadOnlyPublicationKind::RenderPayload ||
+				publication.key != wt::WtChunkKey{ 2, 0, 0, 0 }) {
+				continue;
+			}
+			duplicate_generation |= std::find(
+				published_generations.begin(), published_generations.end(),
+				publication.generation.value
+			) != published_generations.end();
+			published_generations.push_back(publication.generation.value);
+			++promoted.renders;
+			if (publication.render) {
+				promoted.render_vertices += publication.render->vertices.size();
+				promoted.render_indices += publication.render->indices.size();
+			}
+		}
+		const wt::WtReadOnlyRuntimeMetrics runtime_metrics = runtime.get_metrics();
+		if (!consumed && !published_generations.empty() &&
+			gpu->metrics().pre_mesh_field_captures > 0 &&
+			runtime_metrics.scheduler_sampling_records == 0 &&
+			runtime_metrics.scheduler_meshing_records == 0 &&
+			runtime_metrics.scheduler_queued_jobs == 0 &&
+			runtime_metrics.scheduler_queued_completions == 0 &&
+			runtime_metrics.mesh_worker_queued_jobs == 0 &&
+			runtime_metrics.mesh_worker_active_jobs == 0 &&
+			runtime_metrics.mesh_worker_queued_completions == 0 &&
+			runtime_metrics.pending_publication_events == 0) {
+			++quiet_passes;
+		} else {
+			quiet_passes = 0;
+		}
+		promotion_collected = quiet_passes >= 5 && !duplicate_generation;
+		if (promotion_collected) break;
+		if (!consumed) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	std::printf("GPU_COLLISION_ADMISSION_RESUME workers=%zu collected=%d renders=%zu unique=%zu duplicate=%d quiet=%zu collisions=%zu vertices=%zu captures=%llu\n",
+		mesh_workers, promotion_collected, promoted.renders,
+		published_generations.size(), duplicate_generation, quiet_passes,
+		promoted.collisions, promoted.render_vertices,
 		static_cast<unsigned long long>(gpu->metrics().pre_mesh_field_captures));
 	check(promotion_collected &&
 		promoted.render_vertices == 0 && promoted.render_indices == 0 &&
@@ -1352,9 +1396,125 @@ void test_gpu_native_visual_generation_lifecycle() {
 	}
 }
 
+void test_active_visual_collision_refresh_keeps_generation() {
+	const int failures_before = failure_count;
+	FixtureRoot fixture;
+	std::filesystem::path world_path;
+	check(wtt::wt_write_production_streaming_fixture(
+		fixture.path, 7006, 12, world_path
+	), "same-generation collision refresh fixture failed");
+	wt::WtAsyncStorageService storage({16, 16, wt::kWtMaximumContainerSize});
+	check(storage.open(world_path, fixture.path) == wt::WtAsyncStorageStatus::Ok,
+		"same-generation collision refresh storage failed");
+	auto gpu = std::make_shared<wt::WtGpuMeshingShadowQueue>();
+	check(gpu->begin(8, true, wt::WtGpuMeshingCaptureStage::PreMeshField),
+		"same-generation collision refresh GPU queue failed");
+	wt::WtRuntimeConfig config;
+	config.active_chunk_capacity = 8;
+	config.viewer_capacity = 2;
+	config.demand_capacity_per_viewer = 8;
+	config.visual_viewer_collision_enabled = false;
+	config.meshing_worker_count = 1;
+	wt::WtReadOnlyWorldRuntime runtime(config, storage, nullptr, gpu);
+	std::atomic<wt::WtReadOnlyRuntimeStatus> status {wt::WtReadOnlyRuntimeStatus::Ok};
+	std::thread worker([&]() { status.store(runtime.run()); });
+	const wt::WtChunkKey target {2, 0, 0, 0};
+	check(runtime.update_viewer(viewer(1, 1, 40.0, 8.0), 0) ==
+		wt::WtReadOnlyRuntimeStatus::Ok, "same-generation visual demand rejected");
+	wt::WtGenerationToken generation;
+	std::size_t visual_quiet_passes = 0;
+	const auto visual_deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(20);
+	while ((generation.value == 0 || visual_quiet_passes < 5) &&
+			std::chrono::steady_clock::now() < visual_deadline) {
+		bool activity = false;
+		wt::WtReadOnlyPublication publication;
+		while (runtime.pop_publication(publication)) {
+			activity = true;
+			if (publication.key == target && publication.kind ==
+					wt::WtReadOnlyPublicationKind::RenderPayload) {
+				generation = publication.generation;
+			}
+		}
+		wt::WtGpuMeshingShadowRequest request;
+		while (gpu->pop(request)) {
+			activity = true;
+			gpu->complete(request.request_id, {
+				request.job.key, request.job.generation,
+				request.job.source_revision, request.job.world_revision,
+				request.transition_mask, request.surface,
+			}, request.job.source_revision, request.job.world_revision, true, {});
+		}
+		const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
+		if (generation.value != 0 && !activity &&
+			gpu->metrics().reserved_capture_slots == 0 &&
+			metrics.scheduler_sampling_records == 0 &&
+			metrics.scheduler_meshing_records == 0 &&
+			metrics.scheduler_queued_jobs == 0 &&
+			metrics.scheduler_queued_completions == 0 &&
+			metrics.mesh_worker_queued_jobs == 0 &&
+			metrics.mesh_worker_active_jobs == 0 &&
+			metrics.mesh_worker_queued_completions == 0 &&
+			metrics.pending_publication_events == 0) {
+			++visual_quiet_passes;
+		} else {
+			visual_quiet_passes = 0;
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	check(generation.value != 0, "same-generation visual was not published");
+	check(visual_quiet_passes >= 5,
+		"same-generation visual workload did not settle before collision demand");
+	runtime.notify_visual_activation(target, generation);
+	check(runtime.update_collision_viewer(viewer(2, 1, 40.0, 8.0), 0) ==
+		wt::WtReadOnlyRuntimeStatus::Ok, "same-generation collision demand rejected");
+	bool collision = false, new_expectation = false, repeated_render = false;
+	bool repeated_capture = false;
+	const auto collision_deadline = std::chrono::steady_clock::now() +
+		std::chrono::seconds(5);
+	while (!collision && std::chrono::steady_clock::now() < collision_deadline) {
+		wt::WtReadOnlyPublication publication;
+		while (runtime.pop_publication(publication)) {
+			if (publication.key != target) continue;
+			new_expectation |= publication.kind == wt::WtReadOnlyPublicationKind::ExpectChunk &&
+				publication.generation != generation;
+			repeated_render |= publication.kind == wt::WtReadOnlyPublicationKind::RenderPayload;
+			collision |= publication.kind == wt::WtReadOnlyPublicationKind::CollisionPayload &&
+				publication.generation == generation && publication.collision &&
+				!publication.collision->faces.empty();
+		}
+		wt::WtGpuMeshingShadowRequest request;
+		while (gpu->pop(request)) repeated_capture |= request.job.key == target;
+		if (!collision) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	runtime.request_stop();
+	worker.join();
+	check(collision && !new_expectation && !repeated_render && !repeated_capture,
+		"collision refresh changed or repeated the active visual generation");
+	check(status.load() == wt::WtReadOnlyRuntimeStatus::Ok,
+		"same-generation collision refresh runtime did not stop cleanly");
+	std::printf("GPU_SAME_GENERATION_COLLISION_REFRESH generation=%llu render=%d capture=%d\n",
+		static_cast<unsigned long long>(generation.value), repeated_render,
+		repeated_capture);
+	gpu->end();
+	storage.close();
+	if (failure_count == failures_before) {
+		std::printf("GPU_SAME_GENERATION_COLLISION_REFRESH_PASS\n");
+	}
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
+	if (argc == 2 && std::string(argv[1]) == "--gpu-collision-admission") {
+		test_collision_only_with_full_gpu_queue(0);
+		test_collision_only_with_full_gpu_queue(1);
+		return failure_count == 0 ? 0 : 1;
+	}
+	if (argc == 2 && std::string(argv[1]) == "--same-generation-collision-refresh") {
+		test_active_visual_collision_refresh_keeps_generation();
+		return failure_count == 0 ? 0 : 1;
+	}
 	if (argc == 2 && std::string(argv[1]) == "--collision-locality") {
 		test_collision_retirement_locality_modes();
 		return failure_count == 0 ? 0 : 1;
@@ -1374,6 +1534,7 @@ int main(int argc, char **argv) {
 	test_collision_promotion_before_mesh(1, true);
 	test_collision_retirement_locality_modes();
 	test_gpu_native_visual_generation_lifecycle();
+	test_active_visual_collision_refresh_keeps_generation();
 	test_collision_only_with_full_gpu_queue(0);
 	test_collision_only_with_full_gpu_queue(1);
 	test_player_support_visual_promotion_reuses_collision_generation();

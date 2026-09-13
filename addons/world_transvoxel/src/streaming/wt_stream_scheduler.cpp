@@ -294,6 +294,37 @@ WtSchedulerStatus WtStreamScheduler::request_edited_chunk_version(
 	);
 }
 
+WtSchedulerStatus WtStreamScheduler::request_same_generation_refresh(
+	const WtChunkKey &key,
+	std::uint64_t source_revision,
+	std::uint64_t world_revision,
+	std::int32_t priority
+) {
+	WtChunkRecord *record = find_record_mutable(key);
+	if (record == nullptr) return WtSchedulerStatus::NotFound;
+	if (record->source_revision != source_revision ||
+		record->world_revision != world_revision ||
+		record->lifecycle != WtChunkLifecycle::Ready) {
+		return WtSchedulerStatus::AlreadyCurrent;
+	}
+	WtChunkRecord candidate = *record;
+	candidate.priority = priority;
+	candidate.lifecycle = WtChunkLifecycle::Sampling;
+	const WtChunkJob job = make_job(candidate, WtChunkJobStage::Sample);
+	const bool trace_enabled = queue_trace_enabled_.load(
+		std::memory_order_acquire
+	);
+	WtSchedulerQueueTraceEvent trace_event;
+	if (!jobs_.push(job, trace_enabled ? &trace_event : nullptr)) {
+		++metrics_.queue_rejections;
+		return WtSchedulerStatus::JobQueueFull;
+	}
+	if (trace_enabled) notify_queue_trace(trace_event);
+	*record = candidate;
+	++metrics_.requested_jobs;
+	return WtSchedulerStatus::Ok;
+}
+
 WtSchedulerStatus WtStreamScheduler::request_chunk_version_internal(
 	const WtChunkKey &key,
 	std::uint64_t source_revision,

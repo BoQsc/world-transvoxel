@@ -314,7 +314,8 @@ public:
 	) override;
 	bool owned_generation_accepts_role_promotion(
 		const WtChunkKey &key,
-		WtGenerationToken generation
+		WtGenerationToken generation,
+		bool collision_promotion
 	) const noexcept override;
 
 	std::vector<WtPageMeshingRuntimeRecordSnapshot>

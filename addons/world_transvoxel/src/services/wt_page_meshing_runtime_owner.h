@@ -28,13 +28,16 @@ public:
 		WtGenerationToken generation,
 		std::int32_t priority
 	) = 0;
-	// True only while the mesh job has not captured its visual/collision roles.
+	// Collision roles freeze when CPU mesh preparation starts. Visual roles may
+	// still reuse a retained immutable pre-mesh GPU field capture.
 	virtual bool owned_generation_accepts_role_promotion(
 		const WtChunkKey &key,
-		WtGenerationToken generation
+		WtGenerationToken generation,
+		bool collision_promotion
 	) const noexcept {
 		(void)key;
 		(void)generation;
+		(void)collision_promotion;
 		return false;
 	}
 };

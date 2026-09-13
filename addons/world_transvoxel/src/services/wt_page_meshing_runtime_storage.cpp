@@ -274,13 +274,16 @@ bool WtPageMeshingRuntimeService::pop_mesh_completion(
 
 bool WtPageMeshingRuntimeService::owned_generation_accepts_role_promotion(
 	const WtChunkKey &key,
-	WtGenerationToken generation
+	WtGenerationToken generation,
+	bool collision_promotion
 ) const noexcept {
 	const auto record = find_record(key);
 	if (record == records_.end() || record->generation != generation) {
 		return false;
 	}
 	if (record->phase == WtPageMeshingRuntimePhase::AwaitingMesh) return true;
+	if (collision_promotion &&
+		record->phase == WtPageMeshingRuntimePhase::Ready) return false;
 	return record->pre_mesh_field_capture &&
 		(record->phase == WtPageMeshingRuntimePhase::Meshing ||
 			record->phase == WtPageMeshingRuntimePhase::AwaitingGpuCapture ||

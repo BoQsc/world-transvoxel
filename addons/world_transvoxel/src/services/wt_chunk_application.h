@@ -30,6 +30,8 @@ struct WtChunkApplicationRecord {
 	std::uint8_t external_visual_transition_mask = 0;
 	bool visual_generation_superseded = false;
 	bool independently_publishable_replacement = false;
+	bool collision_only_refresh = false;
+	bool gpu_placeholder_published = false;
 
 	bool fully_ready() const noexcept;
 };
@@ -102,6 +104,18 @@ public:
 	WtApplicationStatus set_collision_required(
 		const WtChunkKey &key,
 		bool required
+	);
+	WtApplicationStatus begin_collision_only_refresh(
+		const WtChunkKey &key,
+		WtGenerationToken generation
+	);
+	WtApplicationStatus finish_collision_only_refresh(
+		const WtChunkKey &key,
+		WtGenerationToken generation
+	);
+	WtApplicationStatus claim_gpu_placeholder_publication(
+		const WtChunkKey &key,
+		WtGenerationToken generation
 	);
 	WtApplicationStatus forget_chunk(const WtChunkKey &key);
 	WtApplicationStatus submit_render(const WtRenderPayloadPtr &payload);

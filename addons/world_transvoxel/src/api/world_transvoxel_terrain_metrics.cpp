@@ -145,6 +145,9 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		) : 0U;
 	godot::Dictionary output;
 	output["world_running"] = is_world_running();
+	set_metric(output, "runtime_last_status", lifecycle_ ?
+		static_cast<std::uint64_t>(lifecycle_->last_runtime_status()) :
+		static_cast<std::uint64_t>(WtReadOnlyRuntimeStatus::NotRunning));
 	set_metric(output, "viewer_updates", runtime.viewer_updates);
 	set_metric(output, "viewer_removals", runtime.viewer_removals);
 	set_metric(output, "collision_viewer_updates", runtime.collision_viewer_updates);
@@ -175,6 +178,10 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	);
 	set_metric(output, "sample_jobs", runtime.sample_jobs);
 	set_metric(output, "mesh_jobs", runtime.mesh_jobs);
+	set_metric(output, "terrain_mesh_completion_failure_stage",
+		runtime.terrain_mesh_completion_failure_stage);
+	set_metric(output, "terrain_mesh_completion_failure_status",
+		runtime.terrain_mesh_completion_failure_status);
 	set_metric(output, "sample_job_time_ns_last", runtime.sample_job_time_ns_last);
 	set_metric(output, "sample_job_time_ns_total", runtime.sample_job_time_ns_total);
 	set_metric(output, "sample_job_time_ns_maximum", runtime.sample_job_time_ns_maximum);

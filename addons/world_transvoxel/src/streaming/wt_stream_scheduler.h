@@ -113,6 +113,12 @@ public:
 		std::int32_t priority,
 		const WtChunkEditDelta &edit_delta
 	);
+	WtSchedulerStatus request_same_generation_refresh(
+		const WtChunkKey &key,
+		std::uint64_t source_revision,
+		std::uint64_t world_revision,
+		std::int32_t priority
+	);
 	WtSchedulerStatus cancel_chunk(const WtChunkKey &key);
 	WtSchedulerStatus forget_chunk(const WtChunkKey &key);
 	WtSchedulerStatus reprioritize_chunk(

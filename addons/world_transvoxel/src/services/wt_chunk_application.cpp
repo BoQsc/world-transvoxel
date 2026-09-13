@@ -75,6 +75,7 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 			if (visual_required && !record->visual_required) {
 				record->visual_required = true;
 				record->visual_ready = false;
+				record->gpu_placeholder_published = false;
 				record->external_visual_activation_required = false;
 				record->external_visual_prepared = false;
 				record->external_visual_transition_mask = 0;
@@ -191,6 +192,54 @@ WtApplicationStatus WtChunkApplicationService::set_collision_required(
 		record->collision_ready = false;
 		record->collision_generation = {};
 	}
+	return WtApplicationStatus::Ok;
+}
+
+WtApplicationStatus WtChunkApplicationService::begin_collision_only_refresh(
+	const WtChunkKey &key,
+	WtGenerationToken generation
+) {
+	std::lock_guard<std::mutex> lock(records_mutex_);
+	WtChunkApplicationRecord *record = find_record_mutable(key);
+	if (record == nullptr) return WtApplicationStatus::NotFound;
+	if (record->generation != generation) {
+		return WtApplicationStatus::StaleGeneration;
+	}
+	if (!record->visual_required) return WtApplicationStatus::InvalidInput;
+	record->collision_required = true;
+	record->collision_ready = false;
+	record->collision_generation = {};
+	record->collision_only_refresh = true;
+	return WtApplicationStatus::Ok;
+}
+
+WtApplicationStatus WtChunkApplicationService::finish_collision_only_refresh(
+	const WtChunkKey &key,
+	WtGenerationToken generation
+) {
+	std::lock_guard<std::mutex> lock(records_mutex_);
+	WtChunkApplicationRecord *record = find_record_mutable(key);
+	if (record == nullptr) return WtApplicationStatus::NotFound;
+	if (record->generation != generation) {
+		return WtApplicationStatus::StaleGeneration;
+	}
+	record->collision_only_refresh = false;
+	return WtApplicationStatus::Ok;
+}
+
+WtApplicationStatus WtChunkApplicationService::claim_gpu_placeholder_publication(
+	const WtChunkKey &key,
+	WtGenerationToken generation
+) {
+	std::lock_guard<std::mutex> lock(records_mutex_);
+	WtChunkApplicationRecord *record = find_record_mutable(key);
+	if (record == nullptr) return WtApplicationStatus::NotFound;
+	if (record->generation != generation) return WtApplicationStatus::StaleGeneration;
+	if (!record->visual_required) return WtApplicationStatus::InvalidInput;
+	if (record->gpu_placeholder_published) {
+		return WtApplicationStatus::AlreadyCurrent;
+	}
+	record->gpu_placeholder_published = true;
 	return WtApplicationStatus::Ok;
 }
 
