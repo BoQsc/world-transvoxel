@@ -266,6 +266,42 @@ WtSchedulerStatus WtStreamScheduler::request_chunk_version(
 	std::int32_t priority,
 	bool force_remesh
 ) {
+	WtChunkEditDelta retained_delta;
+	const WtChunkRecord *existing = find_record(key);
+	if (force_remesh && existing != nullptr &&
+		existing->source_revision == source_revision &&
+		existing->world_revision == world_revision) {
+		retained_delta = existing->edit_delta;
+	}
+	return request_chunk_version_internal(
+		key, source_revision, world_revision, priority, force_remesh,
+		retained_delta
+	);
+}
+
+WtSchedulerStatus WtStreamScheduler::request_edited_chunk_version(
+	const WtChunkKey &key,
+	std::uint64_t source_revision,
+	std::uint64_t world_revision,
+	std::int32_t priority,
+	const WtChunkEditDelta &edit_delta
+) {
+	if (!edit_delta.valid) {
+		return WtSchedulerStatus::InvalidKey;
+	}
+	return request_chunk_version_internal(
+		key, source_revision, world_revision, priority, true, edit_delta
+	);
+}
+
+WtSchedulerStatus WtStreamScheduler::request_chunk_version_internal(
+	const WtChunkKey &key,
+	std::uint64_t source_revision,
+	std::uint64_t world_revision,
+	std::int32_t priority,
+	bool force_remesh,
+	const WtChunkEditDelta &edit_delta
+) {
 	if (!wt_is_valid_chunk_key(key)) {
 		return WtSchedulerStatus::InvalidKey;
 	}
@@ -288,6 +324,7 @@ WtSchedulerStatus WtStreamScheduler::request_chunk_version(
 	candidate.world_revision = world_revision;
 	candidate.priority = priority;
 	candidate.lifecycle = WtChunkLifecycle::Sampling;
+	candidate.edit_delta = edit_delta;
 	const WtChunkJob job = make_job(candidate, WtChunkJobStage::Sample);
 	const bool trace_enabled = queue_trace_enabled_.load(
 		std::memory_order_acquire
@@ -599,6 +636,7 @@ WtChunkJob WtStreamScheduler::make_job(
 		++sequence_counter_,
 		record.priority,
 		stage,
+		record.edit_delta,
 	};
 }
 

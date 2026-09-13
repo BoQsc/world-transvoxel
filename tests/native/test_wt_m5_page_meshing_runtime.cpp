@@ -2160,6 +2160,104 @@ void test_edited_coarse_procedural_rebuild(
 	storage.close();
 }
 
+void test_current_transaction_limits_incremental_blocks(
+	std::vector<std::uint8_t> &evidence
+) {
+	wt::WtProceduralWorldDescriptor descriptor;
+	descriptor.chunk_count_x = 2;
+	descriptor.chunk_count_y = 2;
+	descriptor.chunk_count_z = 2;
+	descriptor.source_revision = 7202;
+	descriptor.world_revision = 0;
+	descriptor.seed = 18;
+	descriptor.mode = wt::WtProceduralWorldMode::Flat;
+	wt::WtAsyncStorageService storage({ 4, 4, wt::kWtMaximumContainerSize });
+	check(storage.open_procedural(descriptor) == wt::WtAsyncStorageStatus::Ok,
+		"exact-delta procedural storage open failed");
+
+	auto make_transaction = [&](std::uint64_t revision, double center) {
+		wt::WtEditCommand command;
+		command.command_id = repro_id(1100 + revision);
+		command.sequence = 0;
+		command.world_revision = revision;
+		command.operation = wt::WtEditOperation::AddDensity;
+		command.shape = wt::WtEditShape::Sphere;
+		command.density_value = 20.0F;
+		command.sphere = {
+			q16(center), q16(center), q16(center), uq16(0.25)
+		};
+		check(wt::wt_edit_sphere_bounds(command.sphere, command.bounds),
+			"exact-delta bounds failed");
+		wt::WtEditTransaction transaction;
+		transaction.source_revision = descriptor.source_revision;
+		transaction.transaction_id = repro_id(1200 + revision);
+		transaction.base_revision = revision - 1;
+		transaction.committed_revision = revision;
+		transaction.commands = { command };
+		return transaction;
+	};
+	const wt::WtEditTransaction historical = make_transaction(1, 14.0);
+	const wt::WtEditTransaction current = make_transaction(2, 2.0);
+	wt::WtEditJournal journal(2, 2, 8192);
+	journal.reset(descriptor.source_revision, 0);
+	std::vector<std::uint8_t> journal_segment;
+	check(journal.append(historical, journal_segment) == wt::WtEditJournalStatus::Ok &&
+		journal.append(current, journal_segment) == wt::WtEditJournalStatus::Ok,
+		"exact-delta journal append failed");
+
+	const wt::WtChunkKey key = { 0, 0, 0, 0 };
+	wt::WtChunkEditDelta delta;
+	delta.valid = true;
+	delta.dirty_minimum = current.commands[0].bounds.minimum;
+	delta.dirty_maximum = current.commands[0].bounds.maximum;
+	delta.dirty_regular_brick_mask = 0x01;
+	wt::WtStoragePageCache cache({ 4, wt::kWtMaximumContainerSize,
+		4, wt::kWtMaximumContainerSize });
+	wt::WtStreamScheduler scheduler(4, 4, 4, 1);
+	wt::WtPageMeshingRuntimeService runtime(4);
+	check(scheduler.request_edited_chunk_version(
+		key, descriptor.source_revision, 2, 100, delta
+	) == wt::WtSchedulerStatus::Ok, "exact-delta scheduler request failed");
+	wt::WtChunkJob sample_job;
+	check(scheduler.pop_job(sample_job) && sample_job.edit_delta.valid &&
+		sample_job.edit_delta.dirty_regular_brick_mask == 0x01 &&
+		runtime.begin_sample_job(sample_job, 0, storage, cache, scheduler) ==
+			wt::WtPageMeshingRuntimeStatus::Ok,
+		"exact-delta sample start or propagation failed");
+	wt::WtPageLoadCompletion page_completion;
+	check(wait_completion(storage, page_completion) &&
+		runtime.accept_storage_completion(page_completion, cache, scheduler) ==
+			wt::WtPageMeshingRuntimeStatus::Ok &&
+		scheduler.apply_completions(1) == 1,
+		"exact-delta sample completion failed");
+	wt::WtChunkJob mesh_job;
+	check(scheduler.pop_job(mesh_job) && mesh_job.edit_delta.valid &&
+		mesh_job.edit_delta.dirty_regular_brick_mask == 0x01,
+		"exact-delta mesh job lost generation metadata");
+	std::uint8_t captured_mask = 0;
+	std::uint8_t collision_mask = 0;
+	const wt::WtChunkMesher mesher(wt::wt_get_transvoxel_mit_backend());
+	wt::WtChunkMeshingScratch scratch;
+	check(runtime.execute_mesh_job(
+		mesh_job, mesher, scratch, scheduler, &journal, 0, &storage,
+		[&](const wt::WtTerrainMeshCompletion &completion) {
+			collision_mask = completion.dirty_regular_brick_mask;
+			return true;
+		}, true, [&](wt::WtGpuMeshingShadowCapture capture) {
+			captured_mask = capture.dirty_regular_brick_mask;
+		}, true, true, false, true
+	) == wt::WtPageMeshingRuntimeStatus::Ok,
+		"exact-delta incremental execution failed");
+	const wt::WtPageMeshingRuntimeMetrics metrics = runtime.get_metrics();
+	check(captured_mask == 0x01 && collision_mask == 0x01 &&
+		metrics.cumulative_dirty_mask_avoided == 1,
+		"historical edits expanded current collision or GPU work");
+	append_u64(evidence, captured_mask);
+	append_u64(evidence, collision_mask);
+	append_u64(evidence, metrics.cumulative_dirty_mask_avoided);
+	storage.close();
+}
+
 void test_storage_backpressure_retry(const RuntimeFixture &fixture) {
 	wt::WtAsyncStorageService storage({ 2, 32, wt::kWtMaximumContainerSize });
 	check(
@@ -2641,6 +2739,7 @@ int main() {
 	test_runtime_lifecycle(fixture, evidence);
 	test_parallel_mesh_equivalence_and_stale_rejection(fixture, evidence);
 	test_edited_coarse_procedural_rebuild(evidence);
+	test_current_transaction_limits_incremental_blocks(evidence);
 	test_storage_backpressure_retry(fixture);
 	test_priority_ordered_loading_retry(fixture);
 	test_shared_page_completion_fanout(fixture);
@@ -2659,7 +2758,7 @@ int main() {
 		"priority_ordered_loading_retry=1 shared_page_fanout=1 "
 		"shared_page_cancellation_fanout=1 "
 		"large_rolling_hills_cave_lod2_mask_regression=1 "
-		"human_boundary_repro=1 edited_coarse_rebuild=1 "
+		"human_boundary_repro=1 edited_coarse_rebuild=1 exact_edit_delta=1 "
 		"sphere_difference_topology=1 smooth_sphere_difference=1 "
 		"material_volume_distance=1 procedural_water_volume=1 "
 		"authored_water_volume=1\n"

@@ -29,6 +29,7 @@ struct WtChunkJob {
 	std::uint64_t sequence = 0;
 	std::int32_t priority = 0;
 	WtChunkJobStage stage = WtChunkJobStage::Sample;
+	WtChunkEditDelta edit_delta;
 };
 
 struct WtChunkJobResult {
@@ -104,6 +105,13 @@ public:
 		std::uint64_t world_revision,
 		std::int32_t priority,
 		bool force_remesh = false
+	);
+	WtSchedulerStatus request_edited_chunk_version(
+		const WtChunkKey &key,
+		std::uint64_t source_revision,
+		std::uint64_t world_revision,
+		std::int32_t priority,
+		const WtChunkEditDelta &edit_delta
 	);
 	WtSchedulerStatus cancel_chunk(const WtChunkKey &key);
 	WtSchedulerStatus forget_chunk(const WtChunkKey &key);
@@ -184,6 +192,14 @@ private:
 	WtChunkRecord *find_record_mutable(const WtChunkKey &key) noexcept;
 	WtGenerationToken next_generation() noexcept;
 	WtChunkJob make_job(const WtChunkRecord &record, WtChunkJobStage stage) noexcept;
+	WtSchedulerStatus request_chunk_version_internal(
+		const WtChunkKey &key,
+		std::uint64_t source_revision,
+		std::uint64_t world_revision,
+		std::int32_t priority,
+		bool force_remesh,
+		const WtChunkEditDelta &edit_delta
+	);
 	void notify_queue_trace(const WtSchedulerQueueTraceEvent &event);
 
 	std::size_t record_capacity_ = 0;

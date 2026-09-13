@@ -111,6 +111,7 @@ using WtMeshCellCaptureCallback =
 	std::function<void(WtGpuMeshingShadowCapture)>;
 
 struct WtPageMeshingRuntimeMetrics {
+	std::uint64_t cumulative_dirty_mask_avoided = 0;
 	std::uint64_t sample_jobs = 0;
 	std::uint64_t mesh_jobs = 0;
 	std::uint64_t dependency_requests = 0;

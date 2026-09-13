@@ -33,7 +33,7 @@ std::uint64_t steady_time_ns() noexcept {
 	);
 }
 
-std::uint8_t dirty_regular_bricks(
+std::uint8_t cumulative_dirty_regular_bricks(
 	const WtChunkKey &key,
 	const WtEditBounds &dirty
 ) noexcept {
@@ -237,14 +237,24 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 			}
 			WtChunkPage edited_page = edit_state.page();
 			if (dependency.key == record->key) {
-				const WtEditBounds *dirty = edit_state.surface_shift_dirty_bounds();
-				incremental_edit = dirty != nullptr &&
+				const WtEditBounds *cumulative_dirty =
+					edit_state.surface_shift_dirty_bounds();
+				incremental_edit = job.edit_delta.valid &&
+					job.edit_delta.dirty_regular_brick_mask != 0 &&
 					record->world_revision > initial_world_revision;
-				dirty_regular_brick_mask = dirty != nullptr ?
-					dirty_regular_bricks(record->key, *dirty) : 0xff;
-				if (dirty != nullptr) {
-					dirty_edit_bounds = *dirty;
+				if (incremental_edit) {
+					dirty_regular_brick_mask =
+						job.edit_delta.dirty_regular_brick_mask;
+					dirty_edit_bounds = {
+						job.edit_delta.dirty_minimum,
+						job.edit_delta.dirty_maximum,
+					};
 					has_dirty_edit_bounds = true;
+					if (cumulative_dirty != nullptr &&
+						cumulative_dirty_regular_bricks(record->key, *cumulative_dirty) !=
+							dirty_regular_brick_mask) {
+						++metrics_.cumulative_dirty_mask_avoided;
+					}
 				}
 			}
 			if (!edited_page.surface_shift_valid) {

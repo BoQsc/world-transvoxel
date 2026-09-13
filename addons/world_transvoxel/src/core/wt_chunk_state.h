@@ -18,6 +18,16 @@ struct WtGenerationToken {
 	}
 };
 
+// Immutable edit work owned by one scheduler generation. Voxel values still
+// come from complete journal replay; this descriptor limits derived work to
+// the transaction that created the generation.
+struct WtChunkEditDelta {
+	WtGridPoint dirty_minimum;
+	WtGridPoint dirty_maximum;
+	std::uint8_t dirty_regular_brick_mask = 0;
+	bool valid = false;
+};
+
 enum class WtChunkLifecycle : std::uint8_t {
 	Requested,
 	Sampling,
@@ -35,6 +45,7 @@ struct WtChunkRecord {
 	std::int32_t priority = 0;
 	WtChunkLifecycle lifecycle = WtChunkLifecycle::Requested;
 	std::uint8_t transition_mask = 0;
+	WtChunkEditDelta edit_delta;
 };
 
 struct WtViewerSnapshot {

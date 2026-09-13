@@ -61,6 +61,9 @@ struct WtEditRuntimeReplacementMetrics {
 	std::uint64_t application_failures = 0;
 	std::uint64_t page_meshing_runtime_failures = 0;
 	std::uint64_t cancelled_page_meshing_generations = 0;
+	std::uint64_t exact_delta_chunks = 0;
+	std::uint64_t exact_delta_dirty_blocks = 0;
+	std::uint64_t maximum_dirty_blocks_per_chunk = 0;
 };
 
 class WtEditRuntimeReplacementService {
@@ -110,6 +113,7 @@ private:
 		bool visual_required = true;
 		bool foreground_interaction = false;
 		bool independently_publishable = false;
+		WtChunkEditDelta edit_delta;
 	};
 
 	std::size_t replacement_capacity_ = 0;

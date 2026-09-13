@@ -669,6 +669,11 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 			edit.page_meshing_runtime_failures;
 		snapshot.edit_cancelled_page_meshing_generations =
 			edit.cancelled_page_meshing_generations;
+		snapshot.edit_exact_delta_chunks = edit.exact_delta_chunks;
+		snapshot.edit_exact_delta_dirty_blocks =
+			edit.exact_delta_dirty_blocks;
+		snapshot.edit_maximum_dirty_blocks_per_chunk =
+			edit.maximum_dirty_blocks_per_chunk;
 	}
 	const WtAsyncStorageMetrics storage = storage_.get_metrics();
 	snapshot.storage_queued_requests = storage_.queued_request_count();
@@ -763,6 +768,8 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 			page.mesh_completion_time_ns_total;
 		snapshot.mesh_completion_time_ns_maximum =
 			page.mesh_completion_time_ns_maximum;
+		snapshot.cumulative_dirty_mask_avoided =
+			page.cumulative_dirty_mask_avoided;
 		snapshot.mesh_worker_count = page.mesh_worker_count;
 		snapshot.mesh_worker_accepted_jobs = page.mesh_worker_accepted_jobs;
 		snapshot.mesh_worker_started_jobs = page.mesh_worker_started_jobs;

@@ -186,6 +186,11 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	set_metric(output, "mesh_prepare_time_ns_maximum", runtime.mesh_prepare_time_ns_maximum);
 	set_metric(
 		output,
+		"cumulative_dirty_mask_avoided",
+		runtime.cumulative_dirty_mask_avoided
+	);
+	set_metric(
+		output,
 		"mesh_completion_time_ns_last",
 		runtime.mesh_completion_time_ns_last
 	);
@@ -335,6 +340,17 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		output,
 		"edit_cancelled_page_meshing_generations",
 		runtime.edit_cancelled_page_meshing_generations
+	);
+	set_metric(output, "edit_exact_delta_chunks", runtime.edit_exact_delta_chunks);
+	set_metric(
+		output,
+		"edit_exact_delta_dirty_blocks",
+		runtime.edit_exact_delta_dirty_blocks
+	);
+	set_metric(
+		output,
+		"edit_maximum_dirty_blocks_per_chunk",
+		runtime.edit_maximum_dirty_blocks_per_chunk
 	);
 	set_metric(
 		output,

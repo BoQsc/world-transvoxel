@@ -1907,3 +1907,20 @@ demand arrives.
 Superseding or removing the generation cancels its visual and collision outputs
 under the existing generation checks. Static-water capture follows the same
 immutable retained pages so later visual promotion cannot mix revisions.
+
+### Generation-owned edit deltas
+
+Every runtime edit replacement generation owns an immutable delta descriptor:
+the exact union bounds and 8-cubed regular-brick mask of commands from the
+transaction that created that generation. The descriptor travels unchanged
+through scheduler sampling and meshing jobs. Superseding a generation therefore
+supersedes its work description together with its outputs.
+
+Complete journal replay remains the authority for density, material, water, and
+surface-shift values. Historical dirty bounds may still drive a required
+surface-shift rebuild, but they may not select collision blocks or GPU regular
+bricks for the current edit. Halo-only dependency generations carry a valid
+zero-brick delta so their revision and transition data can advance without
+inventing owned collision work. Runtime metrics report exact-delta chunks,
+dirty-block totals and maxima, and cases where a cumulative historical mask was
+prevented from expanding current derived work.

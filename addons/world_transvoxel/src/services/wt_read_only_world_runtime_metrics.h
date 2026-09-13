@@ -44,6 +44,7 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t mesh_completion_time_ns_last = 0;
 	std::uint64_t mesh_completion_time_ns_total = 0;
 	std::uint64_t mesh_completion_time_ns_maximum = 0;
+	std::uint64_t cumulative_dirty_mask_avoided = 0;
 	std::uint64_t mesh_worker_count = 0;
 	std::uint64_t mesh_worker_accepted_jobs = 0;
 	std::uint64_t mesh_worker_started_jobs = 0;
@@ -87,6 +88,9 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t edit_application_failures = 0;
 	std::uint64_t edit_page_meshing_runtime_failures = 0;
 	std::uint64_t edit_cancelled_page_meshing_generations = 0;
+	std::uint64_t edit_exact_delta_chunks = 0;
+	std::uint64_t edit_exact_delta_dirty_blocks = 0;
+	std::uint64_t edit_maximum_dirty_blocks_per_chunk = 0;
 	std::uint64_t edit_lod_retention_zones = 0;
 	std::uint64_t edit_lod_retention_active_viewers = 0;
 	std::uint64_t edit_lod_retention_plans = 0;

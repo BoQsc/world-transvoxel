@@ -8,6 +8,7 @@
 #include "streaming/wt_stream_scheduler.h"
 
 #include <algorithm>
+#include <limits>
 
 namespace world_transvoxel {
 
@@ -88,6 +89,93 @@ bool intersects_owned_cells(
 		}
 	}
 	return false;
+}
+
+std::uint8_t command_dirty_regular_bricks(
+	const WtChunkKey &key,
+	const WtEditBounds &dirty
+) noexcept {
+	if (key.lod != 0) return 0xff;
+	const WtGridPoint chunk_minimum = wt_chunk_bounds(key).minimum;
+	std::uint8_t mask = 0;
+	for (std::int32_t z = 0; z < 2; ++z) {
+		for (std::int32_t y = 0; y < 2; ++y) {
+			for (std::int32_t x = 0; x < 2; ++x) {
+				const WtGridPoint minimum = {
+					chunk_minimum.x + x * 8,
+					chunk_minimum.y + y * 8,
+					chunk_minimum.z + z * 8,
+				};
+				const WtGridPoint maximum = {
+					minimum.x + 8, minimum.y + 8, minimum.z + 8,
+				};
+				if (dirty.maximum.x >= minimum.x && dirty.minimum.x <= maximum.x &&
+					dirty.maximum.y >= minimum.y && dirty.minimum.y <= maximum.y &&
+					dirty.maximum.z >= minimum.z && dirty.minimum.z <= maximum.z) {
+					mask |= static_cast<std::uint8_t>(
+						1U << static_cast<unsigned int>(x + y * 2 + z * 4)
+					);
+				}
+			}
+		}
+	}
+	return mask;
+}
+
+WtChunkEditDelta transaction_delta(
+	const WtChunkKey &key,
+	const WtEditTransaction &transaction
+) noexcept {
+	WtChunkEditDelta delta;
+	const WtChunkBounds chunk = wt_chunk_bounds(key);
+	const std::int64_t spacing = wt_lod_cell_size(key.lod);
+	const auto subtract_saturated = [](std::int64_t value, std::int64_t amount) {
+		return value < std::numeric_limits<std::int64_t>::min() + amount ?
+			std::numeric_limits<std::int64_t>::min() : value - amount;
+	};
+	const auto add_saturated = [](std::int64_t value, std::int64_t amount) {
+		return value > std::numeric_limits<std::int64_t>::max() - amount ?
+			std::numeric_limits<std::int64_t>::max() : value + amount;
+	};
+	for (const WtEditCommand &command : transaction.commands) {
+		const bool affects_dependency =
+			command.bounds.maximum.x >= subtract_saturated(chunk.minimum.x, spacing) &&
+			command.bounds.minimum.x <= add_saturated(chunk.maximum.x, spacing) &&
+			command.bounds.maximum.y >= subtract_saturated(chunk.minimum.y, spacing) &&
+			command.bounds.minimum.y <= add_saturated(chunk.maximum.y, spacing) &&
+			command.bounds.maximum.z >= subtract_saturated(chunk.minimum.z, spacing) &&
+			command.bounds.minimum.z <= add_saturated(chunk.maximum.z, spacing);
+		if (!affects_dependency) continue;
+		const std::uint8_t command_mask = command_dirty_regular_bricks(
+			key, command.bounds
+		);
+		if (!delta.valid) {
+			delta.dirty_minimum = command.bounds.minimum;
+			delta.dirty_maximum = command.bounds.maximum;
+			delta.valid = true;
+		} else {
+			delta.dirty_minimum.x = std::min(delta.dirty_minimum.x, command.bounds.minimum.x);
+			delta.dirty_minimum.y = std::min(delta.dirty_minimum.y, command.bounds.minimum.y);
+			delta.dirty_minimum.z = std::min(delta.dirty_minimum.z, command.bounds.minimum.z);
+			delta.dirty_maximum.x = std::max(delta.dirty_maximum.x, command.bounds.maximum.x);
+			delta.dirty_maximum.y = std::max(delta.dirty_maximum.y, command.bounds.maximum.y);
+			delta.dirty_maximum.z = std::max(delta.dirty_maximum.z, command.bounds.maximum.z);
+		}
+		delta.dirty_regular_brick_mask |= command_mask;
+	}
+	// The spatial index owns the conservative dependency set. A valid zero-mask
+	// delta means this chunk is present only to supply a halo or transition.
+	if (!delta.valid) delta.valid = true;
+	return delta;
+}
+
+std::uint64_t count_dirty_blocks(std::uint8_t mask) noexcept {
+	std::uint64_t count = 0;
+	while (mask != 0) {
+		count += mask & 1U;
+		mask = static_cast<std::uint8_t>(mask >> 1U);
+	}
+	return count;
 }
 
 } // namespace
@@ -189,6 +277,7 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 			visual_required,
 			key.lod == 0 && contains_command_center(key, transaction),
 			intersects_owned_cells(key, transaction),
+			transaction_delta(key, transaction),
 		});
 	}
 	std::sort(
@@ -255,13 +344,14 @@ WtEditRuntimeReplacementService::apply_prepared(
 			}
 		}
 		const WtSchedulerStatus scheduler_status =
-			scheduler.request_chunk_version(
+			scheduler.request_edited_chunk_version(
 				replacement.key,
 				replacement.source_revision,
 				transaction.committed_revision,
 				replacement.collision_required ||
 					replacement.foreground_interaction ?
-					kWtInteractiveEditPriority : replacement.priority
+					kWtInteractiveEditPriority : replacement.priority,
+				replacement.edit_delta
 			);
 		if (scheduler_status != WtSchedulerStatus::Ok) {
 			++metrics_.scheduler_failures;
@@ -310,6 +400,14 @@ WtEditRuntimeReplacementService::apply_prepared(
 		});
 		metrics_.evicted_page_entries += page_entries;
 		metrics_.evicted_resource_entries += resource_entries;
+		++metrics_.exact_delta_chunks;
+		const std::uint64_t dirty_blocks = count_dirty_blocks(
+			replacement.edit_delta.dirty_regular_brick_mask
+		);
+		metrics_.exact_delta_dirty_blocks += dirty_blocks;
+		metrics_.maximum_dirty_blocks_per_chunk = std::max(
+			metrics_.maximum_dirty_blocks_per_chunk, dirty_blocks
+		);
 	}
 
 	++metrics_.completed_transactions;
