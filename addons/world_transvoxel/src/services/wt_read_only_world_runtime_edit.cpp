@@ -24,6 +24,33 @@ WtReadOnlyEditStatus map_prepare_status(
 		WtReadOnlyEditStatus::ReplacementFailure;
 }
 
+void retain_coarsest_non_overlapping_visual_cover(
+	std::vector<WtChunkKey> &keys
+) {
+	if (keys.size() < 2) return;
+	std::sort(keys.begin(), keys.end());
+	keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
+	std::uint8_t maximum_lod = 0;
+	for (const WtChunkKey &key : keys) {
+		maximum_lod = std::max(maximum_lod, key.lod);
+	}
+	std::vector<WtChunkKey> cover;
+	cover.reserve(keys.size());
+	for (const WtChunkKey &key : keys) {
+		WtChunkKey ancestor = key;
+		bool covered_by_coarser_active_chunk = false;
+		while (ancestor.lod < maximum_lod) {
+			ancestor = wt_parent_chunk_key(ancestor);
+			if (std::binary_search(keys.begin(), keys.end(), ancestor)) {
+				covered_by_coarser_active_chunk = true;
+				break;
+			}
+		}
+		if (!covered_by_coarser_active_chunk) cover.push_back(key);
+	}
+	keys = std::move(cover);
+}
+
 } // namespace
 
 WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::submit_edit(
@@ -130,7 +157,7 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 			}
 		}
 	}
-	std::sort(active_visual_chunks.begin(), active_visual_chunks.end());
+	retain_coarsest_non_overlapping_visual_cover(active_visual_chunks);
 	const WtEditRuntimeReplacementStatus prepare =
 		edit_replacement_->prepare_loaded_chunks(
 			transaction,
