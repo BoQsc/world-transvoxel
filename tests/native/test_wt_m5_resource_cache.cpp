@@ -376,6 +376,24 @@ void test_collision_recovery_from_terrain_mesh(
 		cache.find_collision(mesh->key, generation) == collision,
 		"same-generation terrain mesh collision recovery failed"
 	);
+	const std::shared_ptr<const wt::WtCollisionPayload> full_collision = collision;
+	cache.set_active_collision_generation(mesh->key, generation);
+	check(
+		cache.find_or_rebuild_collision(
+			mesh->key, generation, {}, collision, true
+		) == wt::WtChunkResourceCacheStatus::Ok &&
+		collision == full_collision && !collision->regular_only,
+		"active full collision was mutated during regular-only promotion"
+	);
+	cache.set_active_collision_generation(mesh->key, {});
+	check(
+		cache.find_or_rebuild_collision(
+			mesh->key, generation, {}, collision, true
+		) == wt::WtChunkResourceCacheStatus::Ok &&
+		collision && collision->regular_only && collision != full_collision &&
+		cache.find_collision(mesh->key, generation) == collision,
+		"unpublished collision was not atomically canonicalized to regular-only"
+	);
 }
 
 } // namespace

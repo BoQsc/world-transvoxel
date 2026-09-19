@@ -444,6 +444,13 @@ WtChunkResourceCache::find_or_rebuild_collision(
 	if (collision && (!regular_only || collision->regular_only)) {
 		return WtChunkResourceCacheStatus::Ok;
 	}
+	const bool upgrade_to_regular = collision && regular_only;
+	if (upgrade_to_regular && active_collision_generation(key) == generation) {
+		// A shape already installed in physics is immutable for its generation.
+		// Keep it until a successor generation replaces it rather than failing a
+		// late role promotion or changing collision beneath the physics server.
+		return WtChunkResourceCacheStatus::Ok;
+	}
 	if (collision) collision.reset();
 
 	std::shared_ptr<const WtRenderPayload> collision_source = regular_only ?
@@ -462,11 +469,31 @@ WtChunkResourceCache::find_or_rebuild_collision(
 				) != WtCollisionBuildStatus::Ok) {
 				return WtChunkResourceCacheStatus::InvalidPayload;
 			}
-			const WtChunkResourceCacheStatus status = insert_collision(
-				rebuilt_collision,
-				generation
-			);
-			if (status != WtChunkResourceCacheStatus::Ok) return status;
+			if (upgrade_to_regular) {
+				auto entry = find_collision_entry(key, generation);
+				if (entry == collisions_.end()) {
+					return WtChunkResourceCacheStatus::NotFound;
+				}
+				const std::size_t resident_bytes =
+					wt_collision_payload_resident_bytes(*rebuilt_collision);
+				if (resident_bytes > limits_.collision_byte_capacity) {
+					++metrics_.collision.oversize_rejections;
+					return WtChunkResourceCacheStatus::CollisionItemTooLarge;
+				}
+				collision_resident_bytes_ -= entry->resident_bytes;
+				entry->payload = rebuilt_collision;
+				entry->resident_bytes = resident_bytes;
+				entry->last_access = next_access();
+				collision_resident_bytes_ += resident_bytes;
+				++metrics_.collision.refreshes;
+				evict_collision_to_limits();
+			} else {
+				const WtChunkResourceCacheStatus status = insert_collision(
+					rebuilt_collision,
+					generation
+				);
+				if (status != WtChunkResourceCacheStatus::Ok) return status;
+			}
 			collision = std::move(rebuilt_collision);
 			return WtChunkResourceCacheStatus::Ok;
 		}

@@ -84,11 +84,26 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 		if (!progressed) {
 			const std::vector<WtChunkApplicationRecord> application_records =
 				application_->get_records();
-			const bool collision_repair_pending = std::any_of(
+			std::vector<CollisionReadinessRepairAttempt> repair_attempts;
+			bool publication_backlog = false;
+			{
+				std::lock_guard<std::mutex> publication_lock(publication_mutex_);
+				repair_attempts = collision_readiness_repair_attempts_;
+				publication_backlog = publication_count_ != 0;
+			}
+			const bool collision_repair_pending = !publication_backlog &&
+				std::any_of(
 				application_records.begin(),
 				application_records.end(),
-				[](const WtChunkApplicationRecord &record) {
-					return !record.collision_current();
+				[&repair_attempts](const WtChunkApplicationRecord &record) {
+					if (!record.collision_work_required()) return false;
+					return std::none_of(
+						repair_attempts.begin(), repair_attempts.end(),
+						[&record](const CollisionReadinessRepairAttempt &attempt) {
+							return attempt.key == record.key &&
+								attempt.generation == record.generation;
+						}
+					);
 				}
 			);
 			std::unique_lock<std::mutex> lock(wake_mutex_);
