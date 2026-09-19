@@ -1390,11 +1390,12 @@ visual extraction continues from the immutable GPU field capture. Jobs without
 a matching live base build a complete authoritative regular CPU mesh and
 publish a complete collision base; a partial block payload cannot safely create
 a new physics body.
-The reserved interactive collision worker never accepts background work and
-general mesh workers never consume its queue. While an interactive collision
-patch is queued or executing, general workers do not admit another background
-mesh. This preserves CPU time for the runtime and physics-boundary consumer;
-allowing all mesh workers to assist the deadline lane can otherwise finish
+The reserved interactive collision worker never accepts background work. At
+most one general worker may assist its queue, and other general workers do not
+admit another background mesh while an interactive patch is queued or
+executing. The two-extractor bound preserves CPU time for the runtime and
+physics-boundary consumer while retaining parallelism for multi-chunk edits;
+allowing every mesh worker to assist the deadline lane can otherwise finish
 geometry while starving the threads required to publish it. Equal-priority
 interactive jobs are selected newest-first so sustained edits follow the
 player's current position. Older jobs remain bounded and drain when input
