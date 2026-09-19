@@ -124,9 +124,12 @@ struct WtPageMeshingRuntimeService::AsyncState {
 
 	bool submit(PreparedMeshJob prepared) {
 		std::lock_guard<std::mutex> lock(work_mutex);
-		const bool interactive_collision = prepared.collision_required &&
-			(prepared.incremental_edit ||
-				prepared.job.priority >= kWtPlayerSupportPriority);
+		// The reserved worker is the edit-to-physics deadline lane. Cold
+		// player-support streaming remains high priority on the background
+		// workers, but it must never occupy the only worker that can guarantee
+		// immediate admission for an incremental collision patch.
+		const bool interactive_collision =
+			prepared.collision_required && prepared.incremental_edit;
 		prepared.interaction_lane = interactive_collision;
 		std::vector<PreparedMeshJob> &queue = interactive_collision ?
 			interactive_work : work;
@@ -232,21 +235,11 @@ struct WtPageMeshingRuntimeService::AsyncState {
 				continue;
 			}
 			item->job.priority = priority;
-			bool promoted_to_interaction_lane = false;
-			if (reserved_lane_enabled && item->collision_required &&
-					priority >= kWtPlayerSupportPriority &&
-					interactive_work.size() < queue_capacity) {
-				item->interaction_lane = true;
-				interactive_work.push_back(std::move(*item));
-				work.erase(item);
-				promoted_to_interaction_lane = true;
-				work_available.notify_all();
-			}
+			// Priority changes cannot turn a whole-page streaming job into an
+			// incremental edit. Keep it on the background lane so the reserved
+			// edit worker cannot be captured after admission.
 			std::lock_guard<std::mutex> metrics_lock(metrics_mutex);
 			++metrics.mesh_worker_reprioritized_queued_jobs;
-			if (promoted_to_interaction_lane) {
-				++metrics.mesh_worker_interactive_accepted_jobs;
-			}
 			metrics.mesh_worker_queued_jobs =
 				work.size() + interactive_work.size();
 			metrics.mesh_worker_interactive_queued_jobs = interactive_work.size();

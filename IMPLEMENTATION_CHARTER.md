@@ -2007,3 +2007,13 @@ from global quiescence to per-key protection; it does not weaken connected
 Transvoxel region coverage, 2:1 balance, generation checks, or atomic visual
 publication. Metrics distinguish general coverage staging from the number of
 identities retained by an unfinished region.
+
+### Reserved collision-edit execution lane
+
+The reserved meshing worker admits only incremental edits that require
+collision. Cold streaming and predictive player-support collision jobs keep
+their numeric priority on the background workers and cannot enter or be
+promoted into this lane. Background workers may help drain queued edit work,
+but the reserved worker never starts whole-page streaming work. This makes the
+edit-to-physics start bound independent of cold streaming backlog while keeping
+the CPU collision mesh authoritative.
