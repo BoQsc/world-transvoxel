@@ -1541,6 +1541,13 @@ second page traversal or mesh job. This prewarm is confined to the bounded
 interaction-priority LOD0 set, remains derived and evictable, and does not enter
 the worker lane reserved for incremental edit collision patches.
 
+The reserved collision worker covers the full near-player physics deadline.
+Committed LOD0 edit patches retain maximum priority, while cold LOD0 collision
+in the player-support collision band may use the same lane behind them. Coarse
+collision and visual-only work remain on background workers. This prevents an
+approaching player-support shape from waiting behind the streaming mesh frontier
+without allowing distant work to consume the edit reservation.
+
 A regional visibility publication accelerates missing replacement members with
 a distinct coverage priority below player support and interaction focus. It
 never promotes those members into the committed-edit mesh lane, and promotion is

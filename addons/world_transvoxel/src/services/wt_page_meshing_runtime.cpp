@@ -130,12 +130,13 @@ struct WtPageMeshingRuntimeService::AsyncState {
 
 	bool submit(PreparedMeshJob prepared) {
 		std::lock_guard<std::mutex> lock(work_mutex);
-		// The reserved worker is the edit-to-physics deadline lane. Cold
-		// player-support streaming remains high priority on the background
-		// workers, but it must never occupy the only worker that can guarantee
-		// immediate admission for an incremental collision patch.
-		const bool interactive_collision =
-			prepared.collision_required && prepared.incremental_edit;
+		// The reserved worker owns the complete near-player physics deadline:
+		// committed edits rank first, followed by LOD0 collision demanded by the
+		// player-support planner. Distant/coarse collision and visual-only work
+		// remain on the background workers.
+		const bool interactive_collision = prepared.collision_required &&
+			prepared.job.key.lod == 0 &&
+			prepared.job.priority > kWtInteractionFocusPriority;
 		// Install the early completion path for every potential LOD0 prewarm.
 		// A foreground lease may reprioritize the queued job after admission.
 		const bool gpu_collision = prepared.pre_mesh_field_capture &&
@@ -280,9 +281,9 @@ struct WtPageMeshingRuntimeService::AsyncState {
 				item->pre_mesh_field_capture && item->visual_required &&
 				item->job.key.lod == 0 &&
 				priority >= kWtInteractionFocusPriority;
-			// Priority changes cannot turn a whole-page streaming job into an
-			// incremental edit. Keep it on the background lane so the reserved
-			// edit worker cannot be captured after admission.
+			// Jobs already admitted to the background queue remain there. The
+			// immutable work item may be reprioritized, but moving it between queues
+			// here would race a worker selection and defeat bounded admission.
 			std::lock_guard<std::mutex> metrics_lock(metrics_mutex);
 			++metrics.mesh_worker_reprioritized_queued_jobs;
 			metrics.mesh_worker_queued_jobs =
