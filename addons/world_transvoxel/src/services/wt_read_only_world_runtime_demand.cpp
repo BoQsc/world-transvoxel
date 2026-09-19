@@ -1141,6 +1141,15 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 				);
 			if (collision_status != WtChunkResourceCacheStatus::Ok &&
 				collision_status != WtChunkResourceCacheStatus::NotFound) {
+				{
+					std::lock_guard<std::mutex> lock(metrics_mutex_);
+					metrics_.collision_rebuild_failure_status =
+						static_cast<std::uint64_t>(collision_status);
+					metrics_.collision_rebuild_failure_site = 1;
+					metrics_.collision_rebuild_failure_key = key;
+					metrics_.collision_rebuild_failure_generation =
+						record->generation.value;
+				}
 				set_failure(
 					WtReadOnlyRuntimeStatus::PipelineCollisionRebuildFailure
 				);
@@ -1315,6 +1324,15 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 			);
 		if (collision_status != WtChunkResourceCacheStatus::Ok &&
 			collision_status != WtChunkResourceCacheStatus::NotFound) {
+			{
+				std::lock_guard<std::mutex> lock(metrics_mutex_);
+				metrics_.collision_rebuild_failure_status =
+					static_cast<std::uint64_t>(collision_status);
+				metrics_.collision_rebuild_failure_site = 2;
+				metrics_.collision_rebuild_failure_key = item.key;
+				metrics_.collision_rebuild_failure_generation =
+					record->generation.value;
+			}
 			set_failure(
 				WtReadOnlyRuntimeStatus::PipelineCollisionRebuildFailure
 			);

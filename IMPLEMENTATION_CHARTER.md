@@ -2031,6 +2031,16 @@ attempt exists, readiness repair sleeps until frontend or pipeline progress
 wakes it. Frontend publication completion and collision-residency acknowledgement
 are explicit wake events; readiness repair must never use a timer or let
 publication backlog drive a polling loop.
+Collision apply-queue completion is also an explicit wake event because queue
+drain unblocks readiness repair. Collision rebuild failure telemetry retains the cache status, call site,
+chunk key, and generation so a fatal invariant is actionable from an automated
+or human route report without a debugger.
+Readiness repair is bounded per pass and evaluates the target chunk's own
+generation and lifecycle. Unrelated scheduler, storage, or page-meshing work
+must never impose a global barrier on an interaction collision repair.
+Publication and collision-apply backlogs coalesce repair admission. A 16 ms
+fail-safe wake is allowed only while required collision has no generation-matched
+attempt; an idle or already attempted terrain pipeline remains event-driven.
 
 Collision demand entering an already visual GPU chunk refreshes CPU collision
 topology inside the existing `(chunk, generation, world revision)` identity.

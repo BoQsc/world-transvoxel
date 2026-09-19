@@ -561,6 +561,20 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		output, "collision_readiness_repair_timed_wakes",
 		runtime.collision_readiness_repair_timed_wakes
 	);
+	set_metric(output, "collision_rebuild_failure_status",
+		runtime.collision_rebuild_failure_status);
+	set_metric(output, "collision_rebuild_failure_site",
+		runtime.collision_rebuild_failure_site);
+	set_metric(output, "collision_rebuild_failure_key_x",
+		runtime.collision_rebuild_failure_key.x);
+	set_metric(output, "collision_rebuild_failure_key_y",
+		runtime.collision_rebuild_failure_key.y);
+	set_metric(output, "collision_rebuild_failure_key_z",
+		runtime.collision_rebuild_failure_key.z);
+	set_metric(output, "collision_rebuild_failure_key_lod",
+		runtime.collision_rebuild_failure_key.lod);
+	set_metric(output, "collision_rebuild_failure_generation",
+		runtime.collision_rebuild_failure_generation);
 	set_metric(
 		output, "collision_unpublished_base_full_rebases",
 		runtime.collision_unpublished_base_full_rebases

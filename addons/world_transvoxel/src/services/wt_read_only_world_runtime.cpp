@@ -335,6 +335,7 @@ void WtReadOnlyWorldRuntime::record_frontend_sink(
 		duration_ns,
 		applied ? 0 : 1
 	);
+	if (collision) notify_work();
 }
 
 void WtReadOnlyWorldRuntime::record_frontend_collision_residency(

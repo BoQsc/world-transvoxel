@@ -535,19 +535,6 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 		++metrics_.collision_readiness_repair_application_blocks;
 		return false;
 	}
-	const WtSchedulerMetrics scheduler_metrics = scheduler_->get_metrics();
-	const WtPageMeshingRuntimeMetrics page_metrics = page_runtime_->get_metrics();
-	if (scheduler_->queued_job_count() != 0 ||
-		scheduler_->queued_completion_count() != 0 ||
-		scheduler_metrics.sampling_records != 0 ||
-		scheduler_metrics.meshing_records != 0 ||
-		page_metrics.mesh_worker_queued_jobs != 0 ||
-		page_metrics.mesh_worker_active_jobs != 0 ||
-		page_metrics.mesh_worker_queued_completions != 0) {
-		std::lock_guard<std::mutex> lock(metrics_mutex_);
-		++metrics_.collision_readiness_repair_pipeline_blocks;
-		return false;
-	}
 	const WtCollisionPolicy collision_policy {
 		kWtDefaultCollisionThinRatioSquared,
 		config_.collision_activation_distance,
@@ -674,6 +661,15 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 			);
 		if (status != WtChunkResourceCacheStatus::Ok &&
 			status != WtChunkResourceCacheStatus::NotFound) {
+			{
+				std::lock_guard<std::mutex> lock(metrics_mutex_);
+				metrics_.collision_rebuild_failure_status =
+					static_cast<std::uint64_t>(status);
+				metrics_.collision_rebuild_failure_site = 3;
+				metrics_.collision_rebuild_failure_key = record.key;
+				metrics_.collision_rebuild_failure_generation =
+					record.generation.value;
+			}
 			set_failure(WtReadOnlyRuntimeStatus::PipelineCollisionRepairFailure);
 			return false;
 		}

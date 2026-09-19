@@ -60,7 +60,9 @@ struct WtRuntimeEventTestAccess {
 		}
 		publication.generation = { 2 };
 		runtime.record_frontend_publication(publication, -1);
-		return runtime.wake_sequence_ == 3 &&
+		if (runtime.wake_sequence_ != 3) return false;
+		runtime.record_frontend_sink(true, key, { 2 }, 1, false);
+		return runtime.wake_sequence_ == 4 &&
 			runtime.collision_readiness_repair_attempts_.size() == 1 &&
 			runtime.collision_readiness_repair_attempts_[0].key == other_key &&
 			runtime.collision_readiness_repair_attempts_[0].generation ==
