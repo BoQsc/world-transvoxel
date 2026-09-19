@@ -381,6 +381,15 @@ bool wt_build_gpu_chunk_publication_cohort(
 		if (selected.size() != before) ++counter;
 		return true;
 	};
+	const auto record_mask_conflict = [&](std::uint8_t reason,
+			const WtChunkKey &key, const WtChunkKey &neighbor,
+			std::uint8_t face) {
+		if (diagnostic.mask_conflict_reason != 0) return;
+		diagnostic.mask_conflict_reason = reason;
+		diagnostic.mask_conflict_face = face;
+		diagnostic.mask_conflict_key = key;
+		diagnostic.mask_conflict_neighbor = neighbor;
+	};
 	add(seed);
 	for (std::size_t cursor = 0; cursor < queue.size(); ++cursor) {
 		const WtChunkKey key = queue[cursor];
@@ -428,9 +437,14 @@ bool wt_build_gpu_chunk_publication_cohort(
 					(boundary.transition_mask & bit) != 0;
 				const bool neighbor_requires_transition =
 					(neighbor.transition_mask & opposite_bit) != 0;
-				if (key_requires_transition) insert_key(waiting_masks, key);
+				if (key_requires_transition) {
+					insert_key(waiting_masks, key);
+					record_mask_conflict(1, key, adjacent, face_index);
+				}
 				if (neighbor_requires_transition) {
 					insert_key(waiting_masks, adjacent);
+					record_mask_conflict(2, adjacent, key,
+						static_cast<std::uint8_t>(opposite));
 				}
 				// Equal-LOD, zero-transition chunks share deterministic boundary
 				// samples and do not form a publication dependency merely because a
@@ -452,9 +466,14 @@ bool wt_build_gpu_chunk_publication_cohort(
 					coordinate[axis] += sign;
 					if (key_at(coordinate[0], coordinate[1], coordinate[2], key.lod + 1, adjacent) &&
 						read(adjacent, neighbor)) {
-						if ((boundary.transition_mask & bit) != 0) insert_key(waiting_masks, key);
+						if ((boundary.transition_mask & bit) != 0) {
+							insert_key(waiting_masks, key);
+							record_mask_conflict(3, key, adjacent, face_index);
+						}
 						if ((neighbor.transition_mask & opposite_bit) == 0) {
 							insert_key(waiting_masks, adjacent);
+							record_mask_conflict(4, adjacent, key,
+								static_cast<std::uint8_t>(opposite));
 						}
 						if (!neighbor.compatible_active ||
 								(neighbor.transition_mask & opposite_bit) == 0) {
@@ -486,13 +505,19 @@ bool wt_build_gpu_chunk_publication_cohort(
 						++fine_present;
 						if ((neighbor.transition_mask & opposite_bit) != 0) {
 							insert_key(waiting_masks, fine);
+							record_mask_conflict(6, fine, key,
+								static_cast<std::uint8_t>(opposite));
 						}
 					}
 				}
 			}
 			if (fine_present != 0 || (boundary.transition_mask & bit) != 0) {
 				if (!fine_coordinates_valid) return blocked(6, key);
-				if ((boundary.transition_mask & bit) == 0) insert_key(waiting_masks, key);
+				if ((boundary.transition_mask & bit) == 0) {
+					insert_key(waiting_masks, key);
+					record_mask_conflict(5, key,
+						fine_keys.empty() ? key : fine_keys.front(), face_index);
+				}
 				for (const WtChunkKey &fine : fine_keys) {
 					WtGpuPublicationBoundary fine_boundary;
 					if (read(fine, fine_boundary) && (!fine_boundary.compatible_active ||

@@ -751,7 +751,10 @@ void WorldTransvoxelTerrain::flush_ready_chunk_retirements() {
 		)) {
 			continue;
 		}
-		if (record.visual_required && !record.visual_ready) return;
+		if (record.visual_required && !record.visual_ready &&
+			render_sink_->applied_generation(record.key) != record.generation) {
+			return;
+		}
 	}
 	while (!pending_chunk_retirements_.empty()) {
 		const WtChunkKey key = pending_chunk_retirements_.front();

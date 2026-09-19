@@ -35,6 +35,11 @@ struct WtGpuPublicationCohortDiagnostics {
 	// diagnostics consumed by the GPU publication bridge.
 	std::uint8_t blocker_reason = 0;
 	WtChunkKey blocker_key;
+	// First stable transition relationship that prevents publication.
+	std::uint8_t mask_conflict_reason = 0;
+	std::uint8_t mask_conflict_face = 0;
+	WtChunkKey mask_conflict_key;
+	WtChunkKey mask_conflict_neighbor;
 };
 
 WtGpuPublicationBoundary wt_gpu_publication_boundary(

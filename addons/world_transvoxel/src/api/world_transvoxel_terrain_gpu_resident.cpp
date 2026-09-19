@@ -62,6 +62,20 @@ const char *gpu_cohort_blocker_name(std::uint8_t reason) noexcept {
 	return "unknown";
 }
 
+bool gpu_chunk_bounds_overlap(
+	const WtChunkKey &left,
+	const WtChunkKey &right
+) noexcept {
+	const WtChunkBounds left_bounds = wt_chunk_bounds(left);
+	const WtChunkBounds right_bounds = wt_chunk_bounds(right);
+	return left_bounds.minimum.x < right_bounds.maximum.x &&
+		right_bounds.minimum.x < left_bounds.maximum.x &&
+		left_bounds.minimum.y < right_bounds.maximum.y &&
+		right_bounds.minimum.y < left_bounds.maximum.y &&
+		left_bounds.minimum.z < right_bounds.maximum.z &&
+		right_bounds.minimum.z < left_bounds.maximum.z;
+}
+
 void append_retained_gpu_coverage(
 	WtChunkApplicationService &application,
 	WtGodotRenderSink &render_sink,
@@ -371,7 +385,7 @@ bool build_gpu_publication_cohort(
 	}
 	const bool built = wt_build_gpu_chunk_publication_cohort(
 		seed, candidates, visual_retirements,
-		[&application, &render_sink, &visual_retirements, &edit_replacements, inspected_boundaries](const WtChunkKey &key, WtGpuPublicationBoundary &boundary) {
+		[&application, &render_sink, &candidates, &visual_retirements, &edit_replacements, inspected_boundaries](const WtChunkKey &key, WtGpuPublicationBoundary &boundary) {
 			// A shared pending retirement is no longer desired visual coverage,
 			// even when it has no active GPU surface and therefore is not part of
 			// the atomic visual retirement set above.
@@ -384,6 +398,16 @@ bool build_gpu_publication_cohort(
 			if (!application.copy_record(key, record) || !record.visual_required) return false;
 			std::uint8_t active_mask = 0;
 			const bool active_present = render_sink.get_gpu_resident_boundary_mask(key, active_mask);
+			// Application records outlive asynchronous frontend retirement. A record
+			// with neither active GPU coverage nor a pending/ready replacement is not
+			// a member of the current publication graph and must not masquerade as a
+			// same-LOD neighbor. Doing so can invalidate a legitimate transition mask
+			// forever after all producer queues have drained.
+			if (!active_present && !std::binary_search(
+					candidates.begin(), candidates.end(), key
+				)) {
+				return false;
+			}
 			const bool candidate_mask_known = record.visual_generation == record.generation;
 			const bool edit_pending = std::binary_search(
 				edit_replacements.begin(), edit_replacements.end(), key
@@ -927,6 +951,18 @@ get_gpu_resident_render_activation_cohort(
 	result["cohort_blocker_key"] = gpu_cohort_key(
 		cohort_diagnostics.blocker_key
 	);
+	result["mask_conflict_reason"] = static_cast<std::int64_t>(
+		cohort_diagnostics.mask_conflict_reason
+	);
+	result["mask_conflict_face"] = static_cast<std::int64_t>(
+		cohort_diagnostics.mask_conflict_face
+	);
+	result["mask_conflict_key"] = gpu_cohort_key(
+		cohort_diagnostics.mask_conflict_key
+	);
+	result["mask_conflict_neighbor"] = gpu_cohort_key(
+		cohort_diagnostics.mask_conflict_neighbor
+	);
 	if (!covered) {
 		result["selected_replacements"] = gpu_cohort_keys(region.replacements);
 		result["selected_retirements"] = gpu_cohort_keys(region.retirements);
@@ -955,6 +991,42 @@ get_gpu_resident_render_activation_cohort(
 		result["non_authoritative_retirement_count"] = non_authoritative_retirements;
 		result["first_non_authoritative_replacement"] = first_non_authoritative_replacement;
 		result["first_non_authoritative_retirement"] = first_non_authoritative_retirement;
+		// A complete desired visual partition can contain a retained application
+		// record whose active GPU generation no longer matches that record. It is
+		// therefore neither a candidate nor retained coverage, and the geometric
+		// validation above correctly finds a hole. Polling cannot fill that hole.
+		// Materialize every missing desired record overlapping this transaction as
+		// a normal successor generation; the bounded request deduplication makes
+		// repeated cohort probes harmless.
+		std::vector<WtChunkApplicationRecord> coverage_repairs;
+		if (built && !region.retirements.empty()) {
+			for (const WtChunkApplicationRecord &record : application_->get_records()) {
+				if (!record.visual_required || std::binary_search(
+						region.replacements.begin(), region.replacements.end(),
+						record.key
+					)) {
+					continue;
+				}
+				const bool overlaps_retirement = std::any_of(
+					region.retirements.begin(), region.retirements.end(),
+					[&record](const WtChunkKey &retirement) {
+						return gpu_chunk_bounds_overlap(record.key, retirement);
+					}
+				);
+				if (overlaps_retirement) coverage_repairs.push_back(record);
+			}
+		}
+		if (!coverage_repairs.empty()) {
+			request_visibility_coverage_priority_batch(
+				coverage_repairs, region.replacements.size(),
+				region.retirements.size(), true
+			);
+			result["coverage_remesh_repair_count"] =
+				static_cast<std::int64_t>(coverage_repairs.size());
+			result["coverage_remesh_repair_key"] = gpu_cohort_key(
+				coverage_repairs.front().key
+			);
+		}
 		if (cohort_diagnostics.blocker_reason == 4) {
 			WtChunkApplicationRecord blocker_record;
 			if (application_->copy_record(
@@ -1004,6 +1076,7 @@ get_gpu_resident_render_activation_cohort(
 	std::int64_t activation_required_count = 0;
 	std::int64_t retained_active_count = 0;
 	std::vector<WtChunkApplicationRecord> missing_records;
+	std::vector<WtChunkApplicationRecord> transition_remesh_records;
 	WtChunkKey first_waiting_key;
 	WtChunkApplicationRecord first_waiting_record;
 	bool has_waiting_member = false;
@@ -1050,7 +1123,11 @@ get_gpu_resident_render_activation_cohort(
 			}
 			if (record_present && record.generation.value != 0 &&
 				record.visual_required) {
-				missing_records.push_back(record);
+				if (!boundary_mask_matches) {
+					transition_remesh_records.push_back(record);
+				} else {
+					missing_records.push_back(record);
+				}
 			}
 			continue;
 		}
@@ -1064,6 +1141,12 @@ get_gpu_resident_render_activation_cohort(
 			missing_records,
 			replacements.size(),
 			retirement_count
+		);
+		request_visibility_coverage_priority_batch(
+			transition_remesh_records,
+			replacements.size(),
+			retirement_count,
+			true
 		);
 		record_phase("priority");
 		result["status"] = "WAITING_COHORT";
@@ -1099,7 +1182,11 @@ get_gpu_resident_render_activation_cohort(
 				first_waiting_record.external_visual_transition_mask
 			);
 		result["priority_requested_member_count"] =
-			static_cast<std::int64_t>(missing_records.size());
+			static_cast<std::int64_t>(
+				missing_records.size() + transition_remesh_records.size()
+			);
+		result["transition_remesh_member_count"] =
+			static_cast<std::int64_t>(transition_remesh_records.size());
 		record_phase("response");
 		return result;
 	}

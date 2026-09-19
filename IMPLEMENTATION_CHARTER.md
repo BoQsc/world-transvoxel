@@ -2207,3 +2207,26 @@ for that publication region. Collision-only and unrelated global retirements
 cannot pull retained chunks into a visual cohort. This keeps the replacement
 set non-overlapping and prevents an otherwise complete regional transaction
 from waiting forever after all producer queues become idle.
+
+If authoritative coverage validation still finds a hole, cohort selection
+enumerates the current desired visual records overlapping the selected
+retirements and submits deduplicated transition-remesh repairs for records not
+already in the replacement set. A retained stale generation cannot leave a
+stationary visual cohort waiting with every producer queue idle.
+
+A prepared member whose desired transition mask is still incompatible receives
+the same forced transition-remesh repair. Ordinary priority promotion cannot
+change an already prepared generation, so treating this case as a priority wait
+would otherwise leave a one-member cohort permanently idle.
+
+Cohort boundary lookup is the union of active GPU coverage and pending or ready
+visual replacements. An asynchronous application record with neither cannot
+act as a same-LOD neighbor: it has no geometry in the publication graph and
+would otherwise turn a valid coarse-to-fine transition into a permanent mask
+conflict.
+
+Retirement flushing recognizes an exact applied render generation as ready
+visual coverage, whether the sink currently owns CPU or GPU geometry. External
+activation can make the sink authoritative before the generic application-ready
+flag catches up; that ordering cannot retain collision-only retirements or their
+resource records indefinitely.
