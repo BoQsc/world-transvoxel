@@ -444,6 +444,8 @@ private:
 
 	std::unique_ptr<WtMultiViewerDesiredSet> desired_;
 	WtForegroundPriorityLeaseSet foreground_priority_leases_;
+	// LRU order, oldest first. Demand planning canonicalizes a copy before use.
+	std::vector<WtChunkKey> interaction_hot_keys_;
 	std::vector<WtViewerChunkDemand> base_demands_;
 	std::unique_ptr<WtBalancedLodPlanner> lod_planner_;
 	std::vector<WtLodPlannerViewer> planner_viewers_;

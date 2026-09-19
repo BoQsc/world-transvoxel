@@ -461,6 +461,12 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		runtime.interaction_warm_completions);
 	set_metric(output, "interaction_warm_rejections",
 		runtime.interaction_warm_rejections);
+	set_metric(output, "interaction_hot_keys",
+		runtime.interaction_hot_keys);
+	set_metric(output, "interaction_hot_key_peak",
+		runtime.interaction_hot_key_peak);
+	set_metric(output, "interaction_hot_key_evictions",
+		runtime.interaction_hot_key_evictions);
 	set_metric(
 		output,
 		"edit_lod_retention_zones",

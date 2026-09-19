@@ -102,6 +102,13 @@ feedback. The legacy staged mode retains its content-first behavior. GPU
 integration must measure movement and edit latency before qualifying this
 opt-in policy.
 
+The runtime may retain a bounded 16-key LRU hot set of previously focused LOD0 keys to
+prevent immediate coarsen/refine churn. Retention controls topology only. Hot
+keys outside the current interaction-focus lease use normal background
+scheduling and may not consume reserved interaction meshing, collision, GPU,
+or publication capacity. A foreground topology refresh projects only the
+current focus; broad planning preserves the retained hot topology.
+
 The first production backend uses Eric Lengyel's official MIT-licensed
 Transvoxel implementation and lookup data.
 
@@ -2242,3 +2249,12 @@ as one desired-set transaction instead of restaging it through the broad viewer
 target. The projection begins with the accepted cut, and regional publication
 retains every replaced ancestor until the descendant cohort is complete. This
 keeps unrelated streaming roots out of the interaction LOD0 critical path.
+
+The native runtime retains the 16 most recently focused LOD0 keys as an LRU
+interaction hot set. Active focus keys refresh their recency; releasing the
+focus lease clears the cache. Every visual replan treats the hot set as forced
+LOD0 leaves, so ordinary viewer updates cannot immediately coarsen terrain the
+player just traversed. Retained keys outside the current focus remain background
+work and cannot consume reserved interaction lanes. The fixed key bound and
+normal active-chunk capacity keep this derived cache finite; eviction
+reconstructs it through the existing page and journal path.

@@ -528,28 +528,32 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	std::vector<WtLodPlannerViewer> candidate_viewers = planner_viewers_;
 	std::vector<CollisionViewer> candidate_collision_viewers =
 		collision_viewers_;
-	std::vector<WtChunkKey> interaction_topology_keys;
+	std::vector<WtChunkKey> active_interaction_focus_keys;
 	foreground_priority_leases_.append_active_keys(
 		WtForegroundPriorityClass::InteractionFocus,
-		interaction_topology_keys
+		active_interaction_focus_keys
 	);
-	interaction_topology_keys.erase(
-		std::remove_if(
-			interaction_topology_keys.begin(),
-			interaction_topology_keys.end(),
-			[this](const WtChunkKey &key) {
-				return key.lod != 0 || !storage_.has_page(key);
-			}
-		),
-		interaction_topology_keys.end()
+	std::vector<WtChunkKey> interaction_topology_keys =
+		active_interaction_focus_keys;
+	interaction_topology_keys.insert(
+		interaction_topology_keys.end(),
+		interaction_hot_keys_.begin(), interaction_hot_keys_.end()
 	);
-	std::sort(interaction_topology_keys.begin(), interaction_topology_keys.end());
-	interaction_topology_keys.erase(
-		std::unique(
-			interaction_topology_keys.begin(), interaction_topology_keys.end()
-		),
-		interaction_topology_keys.end()
-	);
+	const auto normalize_interaction_keys = [this](std::vector<WtChunkKey> &keys) {
+		keys.erase(
+			std::remove_if(
+				keys.begin(), keys.end(),
+				[this](const WtChunkKey &key) {
+					return key.lod != 0 || !storage_.has_page(key);
+				}
+			),
+			keys.end()
+		);
+		std::sort(keys.begin(), keys.end());
+		keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
+	};
+	normalize_interaction_keys(active_interaction_focus_keys);
+	normalize_interaction_keys(interaction_topology_keys);
 	const bool collision_event =
 		event.kind == ViewerEventKind::UpdateCollision ||
 		event.kind == ViewerEventKind::RemoveCollision;
@@ -683,7 +687,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		planning_viewers = candidate_viewers;
 		candidate_plan = staging_target_plan_;
 	} else if (foreground_topology_refresh_event &&
-			!interaction_topology_keys.empty()) {
+			!active_interaction_focus_keys.empty()) {
 		// Interaction focus is a small, exact working set. Project it from the
 		// accepted visual cut instead of rebuilding the broad moving-viewer target.
 		// The normal staging block below still retains the active coarse cover until
@@ -691,7 +695,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		planning_viewers = candidate_viewers;
 		const std::uint64_t local_plan_started_ns = wt_causal_trace_now_ns();
 		plan_status = lod_planner_->project_foreground_target(
-			current_plan_, interaction_topology_keys,
+			current_plan_, active_interaction_focus_keys,
 			kWtInteractionFocusPriority, candidate_plan,
 			cancel_for_pending_edit
 		);

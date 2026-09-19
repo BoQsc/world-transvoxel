@@ -143,6 +143,9 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t interaction_warm_cache_hits = 0;
 	std::uint64_t interaction_warm_completions = 0;
 	std::uint64_t interaction_warm_rejections = 0;
+	std::uint64_t interaction_hot_keys = 0;
+	std::uint64_t interaction_hot_key_peak = 0;
+	std::uint64_t interaction_hot_key_evictions = 0;
 	std::uint64_t sample_queries = 0;
 	std::uint64_t sample_query_rejections = 0;
 	std::uint64_t world_snapshots = 0;

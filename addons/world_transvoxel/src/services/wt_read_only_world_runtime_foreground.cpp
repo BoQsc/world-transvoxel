@@ -13,6 +13,11 @@
 namespace world_transvoxel {
 namespace {
 
+// This is an intentionally small topology checkpoint. Qualification showed
+// that increasing it makes root-boundary replacement latency worse; the final
+// architecture must retain inactive resources instead of expanding this set.
+constexpr std::size_t kWtInteractionHotKeyCapacity = 16;
+
 std::vector<WtChunkKey> interaction_warm_shell(
 	const std::vector<WtChunkKey> &focus,
 	const WtAsyncStorageService &storage
@@ -75,6 +80,8 @@ bool WtReadOnlyWorldRuntime::process_foreground_priority_event() {
 
 	WtForegroundPriorityLeaseSet candidate_leases =
 		foreground_priority_leases_;
+	std::vector<WtChunkKey> candidate_hot_keys = interaction_hot_keys_;
+	std::uint64_t hot_key_evictions = 0;
 	const WtForegroundPriorityStatus lease_status =
 		candidate_leases.update(event.request);
 	if (lease_status == WtForegroundPriorityStatus::StaleRevision) {
@@ -95,6 +102,23 @@ bool WtReadOnlyWorldRuntime::process_foreground_priority_event() {
 	if (lease_status != WtForegroundPriorityStatus::Ok) {
 		set_failure(WtReadOnlyRuntimeStatus::InvalidForegroundPriority);
 		return true;
+	}
+	if (event.request.priority_class ==
+			WtForegroundPriorityClass::InteractionFocus) {
+		if (event.request.keys.empty()) {
+			candidate_hot_keys.clear();
+		} else {
+			for (const WtChunkKey &key : event.request.keys) {
+				candidate_hot_keys.erase(std::remove(
+					candidate_hot_keys.begin(), candidate_hot_keys.end(), key
+				), candidate_hot_keys.end());
+				candidate_hot_keys.push_back(key);
+			}
+			while (candidate_hot_keys.size() > kWtInteractionHotKeyCapacity) {
+				candidate_hot_keys.erase(candidate_hot_keys.begin());
+				++hot_key_evictions;
+			}
+		}
 	}
 
 	std::vector<WtViewerChunkDemand> effective_demands;
@@ -208,6 +232,7 @@ bool WtReadOnlyWorldRuntime::process_foreground_priority_event() {
 	}
 
 	foreground_priority_leases_ = std::move(candidate_leases);
+	interaction_hot_keys_ = std::move(candidate_hot_keys);
 	if (event.request.priority_class ==
 			WtForegroundPriorityClass::InteractionFocus) {
 		std::lock_guard<std::mutex> lock(input_mutex_);
@@ -258,6 +283,12 @@ bool WtReadOnlyWorldRuntime::process_foreground_priority_event() {
 		metrics_.interaction_warm_coalesced += warm_coalesced;
 		metrics_.interaction_warm_cache_hits += warm_cache_hits;
 		metrics_.interaction_warm_rejections += warm_rejections;
+		metrics_.interaction_hot_keys = interaction_hot_keys_.size();
+		metrics_.interaction_hot_key_peak = std::max(
+			metrics_.interaction_hot_key_peak,
+			static_cast<std::uint64_t>(interaction_hot_keys_.size())
+		);
+		metrics_.interaction_hot_key_evictions += hot_key_evictions;
 		if (!event.request.keys.empty()) {
 			const WtChunkKey &key = event.request.keys.front();
 			metrics_.foreground_priority_last_key_x = key.x;
