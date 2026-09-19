@@ -377,6 +377,16 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	);
 	set_metric(
 		output,
+		"edit_active_visual_cohort_chunks",
+		runtime.edit_active_visual_cohort_chunks
+	);
+	set_metric(
+		output,
+		"edit_deferred_inactive_visual_chunks",
+		runtime.edit_deferred_inactive_visual_chunks
+	);
+	set_metric(
+		output,
 		"visibility_coverage_priority_requests",
 		runtime.visibility_coverage_priority_requests
 	);

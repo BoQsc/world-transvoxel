@@ -203,7 +203,8 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 	const WtEditSpatialIndex &spatial_index,
 	const WtStreamScheduler &scheduler,
 	const WtChunkApplicationService &application,
-	const std::vector<WtDesiredChunk> *desired_chunks
+	const std::vector<WtDesiredChunk> *desired_chunks,
+	const std::vector<WtChunkKey> *active_visual_chunks
 ) {
 	++metrics_.transaction_attempts;
 	affected_.clear();
@@ -267,6 +268,11 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 			collision_required = desired->collision_required;
 			visual_required = desired->visual_required;
 		}
+		const bool owned_cells_intersect = intersects_owned_cells(key, transaction);
+		const bool active_visual = active_visual_chunks == nullptr ||
+			std::binary_search(
+				active_visual_chunks->begin(), active_visual_chunks->end(), key
+			);
 		prepared_.push_back({
 			key,
 			record->generation,
@@ -276,7 +282,8 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 			collision_required,
 			visual_required,
 			key.lod == 0 && contains_command_center(key, transaction),
-			intersects_owned_cells(key, transaction),
+			active_visual && owned_cells_intersect,
+			visual_required && owned_cells_intersect && !active_visual,
 			transaction_delta(key, transaction),
 		});
 	}
@@ -408,6 +415,12 @@ WtEditRuntimeReplacementService::apply_prepared(
 		metrics_.maximum_dirty_blocks_per_chunk = std::max(
 			metrics_.maximum_dirty_blocks_per_chunk, dirty_blocks
 		);
+		if (replacement.independently_publishable) {
+			++metrics_.active_visual_cohort_chunks;
+		}
+		if (replacement.deferred_inactive_visual) {
+			++metrics_.deferred_inactive_visual_chunks;
+		}
 	}
 
 	++metrics_.completed_transactions;
@@ -424,10 +437,12 @@ WtEditRuntimeReplacementService::replace_loaded_chunks(
 	WtChunkResourceCache &resource_cache,
 	WtChunkApplicationService &application,
 	WtPageMeshingRuntimeOwner *page_meshing_runtime,
-	const std::vector<WtDesiredChunk> *desired_chunks
+	const std::vector<WtDesiredChunk> *desired_chunks,
+	const std::vector<WtChunkKey> *active_visual_chunks
 ) {
 	const WtEditRuntimeReplacementStatus prepare = prepare_loaded_chunks(
-		transaction, spatial_index, scheduler, application, desired_chunks
+		transaction, spatial_index, scheduler, application, desired_chunks,
+		active_visual_chunks
 	);
 	if (prepare != WtEditRuntimeReplacementStatus::Ok) return prepare;
 	return apply_prepared(

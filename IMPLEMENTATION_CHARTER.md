@@ -1871,9 +1871,14 @@ when neither shared face carries a transition. Their deterministic boundary
 samples permit independent publication; parent/child replacement coverage and
 all transition-bearing faces remain atomic. An edit additionally distinguishes
 chunks whose owned cells intersect the command from chunks reached only through
-the required sampling halo. Owned-cell replacements form the atomic edit cohort
-and remain independently publishable. Halo-only chunks still regenerate at the
-same journal revision, but cannot delay publication of unchanged owned topology.
+the required sampling halo. Among owned-cell replacements, only chunks belonging
+to the currently activated visual topology form the atomic interaction cohort.
+Loaded candidate LOD variants still regenerate at the same journal revision, but
+remain background replacements until their own topology is activated. They cannot
+join or delay the visible edit cohort. This prevents an in-progress LOD transition
+from coupling a visible LOD0 edit to an inactive overlapping LOD generation while
+preserving atomic publication across every active chunk touched by the command.
+Halo-only chunks likewise cannot delay publication of unchanged owned topology.
 Internal cohort inspection reports the bounded reason and first key whenever
 the same-layout edit path is unavailable.
 

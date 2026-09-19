@@ -101,6 +101,8 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t edit_exact_delta_chunks = 0;
 	std::uint64_t edit_exact_delta_dirty_blocks = 0;
 	std::uint64_t edit_maximum_dirty_blocks_per_chunk = 0;
+	std::uint64_t edit_active_visual_cohort_chunks = 0;
+	std::uint64_t edit_deferred_inactive_visual_chunks = 0;
 	std::uint64_t edit_lod_retention_zones = 0;
 	std::uint64_t edit_lod_retention_active_viewers = 0;
 	std::uint64_t edit_lod_retention_plans = 0;

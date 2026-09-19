@@ -773,6 +773,10 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 			edit.exact_delta_dirty_blocks;
 		snapshot.edit_maximum_dirty_blocks_per_chunk =
 			edit.maximum_dirty_blocks_per_chunk;
+		snapshot.edit_active_visual_cohort_chunks =
+			edit.active_visual_cohort_chunks;
+		snapshot.edit_deferred_inactive_visual_chunks =
+			edit.deferred_inactive_visual_chunks;
 	}
 	const WtAsyncStorageMetrics storage = storage_.get_metrics();
 	snapshot.storage_queued_requests = storage_.queued_request_count();

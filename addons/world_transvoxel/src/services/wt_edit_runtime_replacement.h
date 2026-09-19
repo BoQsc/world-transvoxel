@@ -64,6 +64,8 @@ struct WtEditRuntimeReplacementMetrics {
 	std::uint64_t exact_delta_chunks = 0;
 	std::uint64_t exact_delta_dirty_blocks = 0;
 	std::uint64_t maximum_dirty_blocks_per_chunk = 0;
+	std::uint64_t active_visual_cohort_chunks = 0;
+	std::uint64_t deferred_inactive_visual_chunks = 0;
 };
 
 class WtEditRuntimeReplacementService {
@@ -76,7 +78,8 @@ public:
 		const WtEditSpatialIndex &spatial_index,
 		const WtStreamScheduler &scheduler,
 		const WtChunkApplicationService &application,
-		const std::vector<WtDesiredChunk> *desired_chunks = nullptr
+		const std::vector<WtDesiredChunk> *desired_chunks = nullptr,
+		const std::vector<WtChunkKey> *active_visual_chunks = nullptr
 	);
 	WtEditRuntimeReplacementStatus apply_prepared(
 		const WtEditTransaction &transaction,
@@ -94,7 +97,8 @@ public:
 		WtChunkResourceCache &resource_cache,
 		WtChunkApplicationService &application,
 		WtPageMeshingRuntimeOwner *page_meshing_runtime,
-		const std::vector<WtDesiredChunk> *desired_chunks = nullptr
+		const std::vector<WtDesiredChunk> *desired_chunks = nullptr,
+		const std::vector<WtChunkKey> *active_visual_chunks = nullptr
 	);
 
 	std::size_t replacement_capacity() const noexcept;
@@ -113,6 +117,7 @@ private:
 		bool visual_required = true;
 		bool foreground_interaction = false;
 		bool independently_publishable = false;
+		bool deferred_inactive_visual = false;
 		WtChunkEditDelta edit_delta;
 	};
 

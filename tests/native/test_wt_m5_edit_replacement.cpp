@@ -635,6 +635,9 @@ void test_foreground_interaction_ordering() {
 		wt::kWtMaximumResourceCacheBytes,
 	});
 	wt::WtEditRuntimeReplacementService service(keys.size());
+	const std::vector<wt::WtChunkKey> active_visual_chunks = {
+		foreground_key,
+	};
 	check(service.replace_loaded_chunks(
 		transaction_at(source_revision, 7, 16, 8, 14, 50),
 		spatial,
@@ -642,7 +645,9 @@ void test_foreground_interaction_ordering() {
 		page_cache,
 		resource_cache,
 		application,
-		nullptr
+		nullptr,
+		nullptr,
+		&active_visual_chunks
 	) == wt::WtEditRuntimeReplacementStatus::Ok,
 		"foreground ordering replacement failed");
 	const auto &replacements = service.get_last_replacements();
@@ -654,8 +659,13 @@ void test_foreground_interaction_ordering() {
 			return entry.independently_publishable;
 		})
 	);
-	check(independently_publishable == 3,
-		"sampling-halo-only replacements entered the atomic edit cohort");
+	check(independently_publishable == 1 &&
+		replacements.front().independently_publishable,
+		"inactive LOD replacements entered the active edit cohort");
+	const auto edit_metrics = service.get_metrics();
+	check(edit_metrics.active_visual_cohort_chunks == 1 &&
+		edit_metrics.deferred_inactive_visual_chunks == 2,
+		"active/deferred edit cohort metrics mismatch");
 	wt::WtChunkJob job;
 	check(scheduler.pop_job(job) &&
 		job.key == foreground_key &&
