@@ -423,7 +423,7 @@ bool build_gpu_publication_cohort(
 		// are part of the authoritative atomic cohort even though they require no
 		// new capture or activation.
 		append_retained_gpu_coverage(
-			application, render_sink, retirements, region
+			application, render_sink, visual_retirements, region
 		);
 	}
 	return built;

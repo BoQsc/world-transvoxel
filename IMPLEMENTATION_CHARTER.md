@@ -2201,3 +2201,9 @@ selector reports that exact key and submits a deduplicated transition-remesh
 repair to the runtime thread. The repair uses the current desired demand and
 creates a normal authoritative generation; cohort polling cannot substitute for
 or synthesize the missing geometry.
+
+Retained active coverage is appended only for the visual retirements selected
+for that publication region. Collision-only and unrelated global retirements
+cannot pull retained chunks into a visual cohort. This keeps the replacement
+set non-overlapping and prevents an otherwise complete regional transaction
+from waiting forever after all producer queues become idle.
