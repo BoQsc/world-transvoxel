@@ -168,6 +168,8 @@ bool wt_parse_gpu_meshing_shadow_identity(
 	identity.surface = surface == "static_water" ?
 		WtGpuMeshingShadowSurface::StaticWater :
 		WtGpuMeshingShadowSurface::Terrain;
+	identity.incremental_edit = dictionary.get("incremental_edit", false);
+	identity.interaction_priority = dictionary.get("interaction_priority", false);
 	return wt_is_valid_chunk_key(identity.key);
 }
 

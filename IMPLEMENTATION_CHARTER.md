@@ -2050,3 +2050,20 @@ callback. The final mixed completion records that its collision branch already
 completed and cannot repeat it. If the early queue is full, the worker retains
 the collision for the normal completion path, preserving bounded memory and
 eventual progress.
+
+### Bounded interaction visual replacement regions
+
+An interaction-priority incremental edit may not inherit the complete global
+GPU replacement graph. When its exact chunk is covered by an active ancestor
+that is already scheduled for visual retirement, cohort selection uses that
+ancestor as an immutable spatial boundary. Only replacement and active
+retirement keys contained by the ancestor participate in the atomic swap.
+
+The active ancestor remains visible until every selected descendant and
+transition boundary is prepared. Missing active coverage, a missing matching
+retirement, an incomplete authoritative partition, or stale generation state
+falls back to the general publication graph. This isolation changes scheduling
+scope only; it does not permit overlapping publication, partial coverage, mixed
+world revisions, or early retirement. GPU request identities carry the internal
+incremental-edit and interaction-priority classification through preflight and
+activation so both phases select the same region.

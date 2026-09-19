@@ -62,6 +62,8 @@ struct WtGpuMeshingShadowIdentity {
 	std::uint64_t world_revision = 0;
 	std::uint8_t transition_mask = 0;
 	WtGpuMeshingShadowSurface surface = WtGpuMeshingShadowSurface::Terrain;
+	bool incremental_edit = false;
+	bool interaction_priority = false;
 };
 
 enum class WtGpuMeshingShadowCompletionStatus : std::uint8_t {

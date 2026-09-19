@@ -267,8 +267,11 @@ bool build_gpu_publication_cohort(
 	bool *same_layout_edit = nullptr,
 	const char **same_layout_edit_rejection_reason = nullptr,
 	WtChunkKey *same_layout_edit_rejection_key = nullptr,
-	WtGpuPublicationCohortDiagnostics *cohort_diagnostics = nullptr
+	WtGpuPublicationCohortDiagnostics *cohort_diagnostics = nullptr,
+	bool isolate_interaction_region = false,
+	bool *interaction_region_isolated = nullptr
 ) {
+	if (interaction_region_isolated) *interaction_region_isolated = false;
 	if (same_layout_edit) *same_layout_edit = false;
 	const SameLayoutEditCohortStatus edit_status = build_same_layout_edit_cohort(
 		application, render_sink, seed, retirements, edit_replacements,
@@ -310,17 +313,58 @@ bool build_gpu_publication_cohort(
 			visual_retirements.push_back(key);
 		}
 	}
+	if (isolate_interaction_region) {
+		WtChunkKey active_ancestor = seed;
+		bool found_active_ancestor = false;
+		while (true) {
+			std::uint8_t active_mask = 0;
+			if (render_sink.get_gpu_resident_boundary_mask(
+					active_ancestor, active_mask
+			) && std::binary_search(
+					visual_retirements.begin(), visual_retirements.end(),
+					active_ancestor
+			)) {
+				found_active_ancestor = true;
+				break;
+			}
+			if (active_ancestor.lod >= kWtMaximumLod) break;
+			active_ancestor = wt_parent_chunk_key(active_ancestor);
+		}
+		if (found_active_ancestor) {
+			const WtChunkBounds region_bounds = wt_chunk_bounds(active_ancestor);
+			const auto contained = [&region_bounds](const WtChunkKey &key) {
+				const WtChunkBounds bounds = wt_chunk_bounds(key);
+				return bounds.minimum.x >= region_bounds.minimum.x &&
+					bounds.minimum.y >= region_bounds.minimum.y &&
+					bounds.minimum.z >= region_bounds.minimum.z &&
+					bounds.maximum.x <= region_bounds.maximum.x &&
+					bounds.maximum.y <= region_bounds.maximum.y &&
+					bounds.maximum.z <= region_bounds.maximum.z;
+			};
+			candidates.erase(std::remove_if(
+				candidates.begin(), candidates.end(),
+				[&contained](const WtChunkKey &key) { return !contained(key); }
+			), candidates.end());
+			visual_retirements.erase(std::remove_if(
+				visual_retirements.begin(), visual_retirements.end(),
+				[&contained](const WtChunkKey &key) { return !contained(key); }
+			), visual_retirements.end());
+			if (interaction_region_isolated) *interaction_region_isolated = true;
+		}
+	}
 	if (inspected_candidates) *inspected_candidates = candidates;
 	if (inspected_visual_retirements) {
 		*inspected_visual_retirements = visual_retirements;
 	}
 	const bool built = wt_build_gpu_chunk_publication_cohort(
 		seed, candidates, visual_retirements,
-		[&application, &render_sink, &retirements, &edit_replacements, inspected_boundaries](const WtChunkKey &key, WtGpuPublicationBoundary &boundary) {
+		[&application, &render_sink, &visual_retirements, &edit_replacements, inspected_boundaries](const WtChunkKey &key, WtGpuPublicationBoundary &boundary) {
 			// A shared pending retirement is no longer desired visual coverage,
 			// even when it has no active GPU surface and therefore is not part of
 			// the atomic visual retirement set above.
-			if (std::binary_search(retirements.begin(), retirements.end(), key)) {
+			if (std::binary_search(
+					visual_retirements.begin(), visual_retirements.end(), key
+			)) {
 				return false;
 			}
 			WtChunkApplicationRecord record;
@@ -830,6 +874,7 @@ get_gpu_resident_render_activation_cohort(
 	const char *same_layout_edit_rejection_reason = "none";
 	WtChunkKey same_layout_edit_rejection_key = identity.key;
 	WtGpuPublicationCohortDiagnostics cohort_diagnostics;
+	bool interaction_region_isolated = false;
 	record_phase("seed_validation");
 	const bool built = build_gpu_publication_cohort(
 			*application_, *render_sink_, identity.key,
@@ -840,7 +885,9 @@ get_gpu_resident_render_activation_cohort(
 			gpu_publication_dependencies_.get(), &same_layout_edit,
 			&same_layout_edit_rejection_reason,
 			&same_layout_edit_rejection_key,
-			&cohort_diagnostics
+			&cohort_diagnostics,
+			identity.incremental_edit && identity.interaction_priority,
+			&interaction_region_isolated
 		);
 	record_phase("selection");
 	const bool covered = built && (region.retirements.empty() ||
@@ -852,6 +899,7 @@ get_gpu_resident_render_activation_cohort(
 	result["cohort_built"] = built;
 	result["authoritative_coverage_complete"] = covered;
 	result["same_layout_edit"] = same_layout_edit;
+	result["interaction_region_isolated"] = interaction_region_isolated;
 	result["same_layout_edit_rejection_reason"] = same_layout_edit_rejection_reason;
 	result["same_layout_edit_rejection_key"] = gpu_cohort_key(
 		same_layout_edit_rejection_key
@@ -1081,6 +1129,7 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 	}
 	WtChunkKey seed_key = inventory_pool.front().identity.key;
 	bool seed_independently_publishable = false;
+	bool isolate_interaction_region = false;
 	if (!authoritative_seed_dictionary.is_empty()) {
 		WtGpuMeshingShadowIdentity seed;
 		if (!wt_parse_gpu_meshing_shadow_identity(authoritative_seed_dictionary, seed) ||
@@ -1100,6 +1149,8 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 			return result;
 		}
 		seed_key = seed.key;
+		isolate_interaction_region =
+			seed.incremental_edit && seed.interaction_priority;
 		seed_independently_publishable = std::binary_search(
 			independently_publishable_chunk_replacements_.begin(),
 			independently_publishable_chunk_replacements_.end(),
@@ -1115,12 +1166,16 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 	WtChunkPublicationRegion region;
 	std::vector<WtChunkKey> waiting_masks;
 	bool same_layout_edit = false;
+	bool interaction_region_isolated = false;
 	if (!build_gpu_publication_cohort(
 			*application_, *render_sink_, seed_key,
 			pending_chunk_replacements_, ready_staged_chunk_replacements_,
 			pending_chunk_retirements_, independently_publishable_chunk_replacements_,
 			region, waiting_masks, nullptr, nullptr, nullptr,
-			gpu_publication_dependencies_.get(), &same_layout_edit
+			gpu_publication_dependencies_.get(), &same_layout_edit,
+			nullptr, nullptr, nullptr,
+			isolate_interaction_region,
+			&interaction_region_isolated
 		) || (!region.retirements.empty() &&
 			!publication_region_has_complete_authoritative_coverage(region))) {
 		result["status"] = "WAITING_COHORT";
@@ -1275,6 +1330,7 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 		inventories.size() - sink_activated
 	);
 	result["same_layout_edit"] = same_layout_edit;
+	result["interaction_region_isolated"] = interaction_region_isolated;
 	result["error"] = "";
 	return result;
 }
