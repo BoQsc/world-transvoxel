@@ -1006,19 +1006,25 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_foreground(
 	std::vector<WtChunkKey> ready = visually_ready;
 	std::sort(ready.begin(), ready.end());
 	ready.erase(std::unique(ready.begin(), ready.end()), ready.end());
-	std::vector<WtChunkKey> target_roots;
+	std::vector<WtChunkKey> foreground_roots;
 	for (const auto &entry : target.entries) {
 		WtChunkKey root = entry.key;
 		while (root.lod < staging_root_lod) root = wt_parent_chunk_key(root);
-		target_roots.push_back(root);
+		const bool covers_foreground = std::any_of(
+			foreground_keys.begin(), foreground_keys.end(),
+			[&](const WtChunkKey &focus) {
+				return bounds_contain(root, focus);
+			}
+		);
+		if (covers_foreground) foreground_roots.push_back(root);
 	}
-	std::sort(target_roots.begin(), target_roots.end());
-	target_roots.erase(
-		std::unique(target_roots.begin(), target_roots.end()),
-		target_roots.end()
+	std::sort(foreground_roots.begin(), foreground_roots.end());
+	foreground_roots.erase(
+		std::unique(foreground_roots.begin(), foreground_roots.end()),
+		foreground_roots.end()
 	);
 	const bool coarse_coverage_ready = std::all_of(
-		target_roots.begin(), target_roots.end(),
+		foreground_roots.begin(), foreground_roots.end(),
 		[&](const WtChunkKey &root) {
 			return std::any_of(
 				base.entries.begin(), base.entries.end(),

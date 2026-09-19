@@ -2230,3 +2230,15 @@ visual coverage, whether the sink currently owns CPU or GPU geometry. External
 activation can make the sink authoritative before the generic application-ready
 flag catches up; that ordering cannot retain collision-only retirements or their
 resource records indefinitely.
+
+Foreground LOD staging gates refinement only on coarse roots that spatially
+cover the requested interaction keys. Cold roots elsewhere in the broad viewer
+target remain asynchronous and cannot suppress already-covered player-local
+LOD0 refinement. Publication still retains each replaced ancestor until its
+balanced descendant cohort is complete.
+
+An explicit foreground-topology refresh publishes the balanced local projection
+as one desired-set transaction instead of restaging it through the broad viewer
+target. The projection begins with the accepted cut, and regional publication
+retains every replaced ancestor until the descendant cohort is complete. This
+keeps unrelated streaming roots out of the interaction LOD0 critical path.

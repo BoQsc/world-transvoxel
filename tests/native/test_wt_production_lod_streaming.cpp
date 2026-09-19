@@ -2694,6 +2694,16 @@ int main(int argc, char **argv) {
 			"foreground projection failed after coarse coverage activation");
 		for (const auto &key : focus) check(find_entry(projected, key) != nullptr, "foreground projection omitted LOD0 interaction coverage");
 		check(!complete && find_entry(projected, {2,0,0,3}) != nullptr, "foreground projection refined distant target unnecessarily");
+		wt::WtBalancedLodPlan locally_ready_projection;
+		check(planner.stage_foreground(
+			target, coarse, {{0,0,0,3}}, 3, focus,
+			locally_ready_projection, complete
+		) == wt::WtBalancedLodPlannerStatus::Ok,
+			"foreground projection waited for unrelated cold roots");
+		for (const auto &key : focus) check(
+			find_entry(locally_ready_projection, key) != nullptr,
+			"locally covered foreground omitted LOD0 while an unrelated root was cold"
+		);
 		wt::WtBalancedLodPlanner bounded(32, catalog);
 		wt::WtBalancedLodPlan rejected;
 		check(bounded.stage_foreground(target, empty, roots, 3, focus, rejected, complete) == wt::WtBalancedLodPlannerStatus::CapacityExceeded,
