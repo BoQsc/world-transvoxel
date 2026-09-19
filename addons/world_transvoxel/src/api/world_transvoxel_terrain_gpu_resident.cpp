@@ -49,6 +49,19 @@ bool WorldTransvoxelTerrain::reconcile_interaction_gpu_placeholder(
 
 namespace {
 
+const char *gpu_cohort_blocker_name(std::uint8_t reason) noexcept {
+	switch (reason) {
+		case 0: return "none";
+		case 1: return "invalid_input";
+		case 2: return "seed_boundary_unavailable";
+		case 3: return "member_capacity_exceeded";
+		case 4: return "incompatible_active_member_not_replacement";
+		case 5: return "retirement_capacity_exceeded";
+		case 6: return "fine_face_coordinate_overflow";
+	}
+	return "unknown";
+}
+
 void append_retained_gpu_coverage(
 	WtChunkApplicationService &application,
 	WtGodotRenderSink &render_sink,
@@ -886,7 +899,11 @@ get_gpu_resident_render_activation_cohort(
 			&same_layout_edit_rejection_reason,
 			&same_layout_edit_rejection_key,
 			&cohort_diagnostics,
-			identity.incremental_edit && identity.interaction_priority,
+			// Interaction-focus topology is already a bounded LOD0 corridor. Keep
+			// its replacement transaction inside the active ancestor it refines;
+			// otherwise a moving foreground seed joins the entire outstanding
+			// viewer-retirement frontier and repeatedly supersedes useful work.
+			identity.interaction_priority,
 			&interaction_region_isolated
 		);
 	record_phase("selection");
@@ -903,6 +920,12 @@ get_gpu_resident_render_activation_cohort(
 	result["same_layout_edit_rejection_reason"] = same_layout_edit_rejection_reason;
 	result["same_layout_edit_rejection_key"] = gpu_cohort_key(
 		same_layout_edit_rejection_key
+	);
+	result["cohort_blocker_reason"] = gpu_cohort_blocker_name(
+		cohort_diagnostics.blocker_reason
+	);
+	result["cohort_blocker_key"] = gpu_cohort_key(
+		cohort_diagnostics.blocker_key
 	);
 	if (!covered) {
 		result["selected_replacements"] = gpu_cohort_keys(region.replacements);
@@ -932,6 +955,18 @@ get_gpu_resident_render_activation_cohort(
 		result["non_authoritative_retirement_count"] = non_authoritative_retirements;
 		result["first_non_authoritative_replacement"] = first_non_authoritative_replacement;
 		result["first_non_authoritative_retirement"] = first_non_authoritative_retirement;
+		if (cohort_diagnostics.blocker_reason == 4) {
+			WtChunkApplicationRecord blocker_record;
+			if (application_->copy_record(
+					cohort_diagnostics.blocker_key, blocker_record
+				) && blocker_record.visual_required) {
+				request_visibility_coverage_priority_batch(
+					{ blocker_record }, region.replacements.size(),
+					region.retirements.size(), true
+				);
+				result["transition_remesh_repair_requested"] = true;
+			}
+		}
 		result["status"] = "WAITING_COHORT";
 		result["error"] = "GPU resident boundary cohort is incomplete or exceeds capacity";
 		return result;
@@ -1160,8 +1195,10 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 			return result;
 		}
 		seed_key = seed.key;
-		isolate_interaction_region =
-			seed.incremental_edit && seed.interaction_priority;
+		// Selection and commit must derive the same local transaction. This also
+		// covers predictive LOD topology replacements, which are interaction work
+		// even before a journal edit exists.
+		isolate_interaction_region = seed.interaction_priority;
 		seed_independently_publishable = std::binary_search(
 			independently_publishable_chunk_replacements_.begin(),
 			independently_publishable_chunk_replacements_.end(),

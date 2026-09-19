@@ -244,6 +244,15 @@ bool WtReadOnlyWorldRuntime::process_visibility_coverage_priority_operation(
 			);
 			continue;
 		}
+		if (request.force_transition_remesh &&
+				record->lifecycle == WtChunkLifecycle::Ready) {
+			const WtDesiredChunk *desired = desired_->find_desired(request.key);
+			if (desired != nullptr && desired->visual_required) {
+				queue_transition_remeshes({ *desired });
+				record_outcome(WtVisibilityCoveragePriorityOutcome::Applied);
+				continue;
+			}
+		}
 		const std::int32_t coverage_priority = std::max(
 			record->priority,
 			kWtVisibilityCoveragePriority

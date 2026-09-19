@@ -139,7 +139,8 @@ void WorldTransvoxelTerrain::clear_visibility_coverage_priority_request(
 void WorldTransvoxelTerrain::request_visibility_coverage_priority_batch(
 	const std::vector<WtChunkApplicationRecord> &records,
 	std::size_t replacement_count,
-	std::size_t retirement_count
+	std::size_t retirement_count,
+	bool force_transition_remesh
 ) {
 	std::vector<WtVisibilityCoveragePriorityRequest> requests;
 	requests.reserve(records.size());
@@ -152,9 +153,12 @@ void WorldTransvoxelTerrain::request_visibility_coverage_priority_batch(
 					request.generation == record.generation;
 			}
 		);
-		if (existing != visibility_coverage_priority_requests_.end()) continue;
+		if (existing != visibility_coverage_priority_requests_.end() &&
+			(!force_transition_remesh || existing->force_transition_remesh)) continue;
 		clear_visibility_coverage_priority_request(record.key);
-		requests.push_back({ record.key, record.generation });
+		requests.push_back({
+			record.key, record.generation, force_transition_remesh
+		});
 	}
 	if (requests.empty() || !lifecycle_ ||
 		lifecycle_->request_visibility_coverage_priority_batch(requests) !=
@@ -165,6 +169,7 @@ void WorldTransvoxelTerrain::request_visibility_coverage_priority_batch(
 		visibility_coverage_priority_requests_.push_back({
 			request.key,
 			request.generation,
+			request.force_transition_remesh,
 		});
 		if (cpu_causal_trace_active_) {
 			lifecycle_->record_frontend_visibility(

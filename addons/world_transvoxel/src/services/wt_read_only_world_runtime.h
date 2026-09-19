@@ -137,6 +137,7 @@ struct WtReadOnlyPublication {
 struct WtVisibilityCoveragePriorityRequest {
 	WtChunkKey key;
 	WtGenerationToken generation;
+	bool force_transition_remesh = false;
 };
 
 class WtReadOnlyWorldRuntime {

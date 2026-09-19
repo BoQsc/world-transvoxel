@@ -264,6 +264,11 @@ void test_visibility_coverage_priority_generation_contract() {
 				counts.first_expect_key,
 				{ counts.first_expect_generation.value + 1U },
 			},
+			{
+				counts.first_expect_key,
+				counts.first_expect_generation,
+				true,
+			},
 		}) == wt::WtReadOnlyRuntimeStatus::Ok &&
 		runtime.request_visibility_coverage_priority_batch({}) ==
 			wt::WtReadOnlyRuntimeStatus::InvalidEdit,
@@ -273,7 +278,7 @@ void test_visibility_coverage_priority_generation_contract() {
 		std::chrono::seconds(2);
 	while (std::chrono::steady_clock::now() < deadline) {
 		const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
-		if (metrics.visibility_coverage_priority_requests >= 2 &&
+		if (metrics.visibility_coverage_priority_requests >= 3 &&
 			metrics.visibility_coverage_priority_applied >= 1 &&
 			metrics.visibility_coverage_priority_stale >= 1) {
 			break;
@@ -282,7 +287,7 @@ void test_visibility_coverage_priority_generation_contract() {
 	}
 	const wt::WtReadOnlyRuntimeMetrics metrics = runtime.get_metrics();
 	check(
-		metrics.visibility_coverage_priority_requests == 2 &&
+		metrics.visibility_coverage_priority_requests == 3 &&
 		metrics.visibility_coverage_priority_applied == 1 &&
 		metrics.visibility_coverage_priority_stale == 1,
 		"visibility coverage priority generation contract failed"
@@ -292,7 +297,14 @@ void test_visibility_coverage_priority_generation_contract() {
 	std::size_t applied_outcomes = 0;
 	std::size_t stale_outcomes = 0;
 	std::size_t noninteractive_coverage_promotions = 0;
+	std::size_t forced_transition_remeshes = 0;
 	for (const wt::WtCausalTraceEvent &event : trace.events) {
+		if (event.kind ==
+				wt::WtCausalTraceEventKind::TransitionRemeshGenerationCreated &&
+				event.key == counts.first_expect_key &&
+				event.generation != counts.first_expect_generation) {
+			++forced_transition_remeshes;
+		}
 		if (event.kind ==
 				wt::WtCausalTraceEventKind::VisibilityCoveragePriorityApplied &&
 				event.status == 0 &&
@@ -321,8 +333,9 @@ void test_visibility_coverage_priority_generation_contract() {
 		}
 	}
 	check(
-		applied_outcomes == 1 && stale_outcomes == 1 &&
+		applied_outcomes == 2 && stale_outcomes == 1 &&
 			noninteractive_coverage_promotions == 1 &&
+			forced_transition_remeshes == 1 &&
 			wt::kWtVisibilityCoveragePriority <
 				wt::kWtInteractionFocusPriority &&
 			wt::kWtVisibilityCoveragePriority !=

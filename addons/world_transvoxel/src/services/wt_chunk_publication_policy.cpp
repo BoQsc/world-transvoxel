@@ -317,7 +317,15 @@ bool wt_build_gpu_chunk_publication_cohort(
 	WtGpuPublicationCohortDiagnostics diagnostic;
 	diagnostic.candidate_count = pending_replacements.size();
 	if (diagnostics != nullptr) *diagnostics = diagnostic;
-	if (!lookup || !wt_is_valid_chunk_key(seed) || maximum_members == 0) return false;
+	const auto blocked = [&](std::uint8_t reason, const WtChunkKey &key) {
+		diagnostic.blocker_reason = reason;
+		diagnostic.blocker_key = key;
+		if (diagnostics != nullptr) *diagnostics = diagnostic;
+		return false;
+	};
+	if (!lookup || !wt_is_valid_chunk_key(seed) || maximum_members == 0) {
+		return blocked(1, seed);
+	}
 	std::map<WtChunkKey, WtGpuPublicationBoundary> boundaries;
 	std::set<WtChunkKey> absent;
 	const auto read = [&](const WtChunkKey &key, WtGpuPublicationBoundary &value) {
@@ -337,7 +345,7 @@ bool wt_build_gpu_chunk_publication_cohort(
 		return true;
 	};
 	WtGpuPublicationBoundary seed_boundary;
-	if (!read(seed, seed_boundary)) return false;
+	if (!read(seed, seed_boundary)) return blocked(2, seed);
 	const auto key_at = [](std::int64_t x, std::int64_t y, std::int64_t z,
 			std::uint8_t lod, WtChunkKey &key) {
 		const auto minimum = std::numeric_limits<std::int32_t>::min();
@@ -356,7 +364,12 @@ bool wt_build_gpu_chunk_publication_cohort(
 	std::vector<WtChunkKey> queue;
 	const auto add = [&](const WtChunkKey &key) {
 		if (selected.count(key) != 0) return true;
-		if (selected.size() >= maximum_members) return false;
+		if (selected.size() >= maximum_members) {
+			diagnostic.blocker_reason = 3;
+			diagnostic.blocker_key = key;
+			if (diagnostics != nullptr) *diagnostics = diagnostic;
+			return false;
+		}
 		selected.insert(key);
 		queue.push_back(key);
 		diagnostic.selected_member_count = selected.size();
@@ -380,7 +393,9 @@ bool wt_build_gpu_chunk_publication_cohort(
 		// Include that overlap component and its retirements in the same swap.
 		if (expanded_regions.count(key) == 0 &&
 			graph.retirements().overlaps(key)) {
-			if (!std::binary_search(pending_replacements.begin(), pending_replacements.end(), key)) return false;
+			if (!std::binary_search(pending_replacements.begin(), pending_replacements.end(), key)) {
+				return blocked(4, key);
+			}
 			WtChunkPublicationRegion region;
 			build_indexed_publication_region(
 				key, graph.replacements(), graph.retirements(), region
@@ -392,7 +407,9 @@ bool wt_build_gpu_chunk_publication_cohort(
 			for (const WtChunkKey &retirement : region.retirements) {
 				insert_key(output.retirements, retirement);
 			}
-			if (output.retirements.size() > maximum_members) return false;
+			if (output.retirements.size() > maximum_members) {
+				return blocked(5, key);
+			}
 		}
 		for (std::uint8_t face_index = 0; face_index < 6; ++face_index) {
 			const auto face = static_cast<WtChunkFace>(face_index);
@@ -474,7 +491,7 @@ bool wt_build_gpu_chunk_publication_cohort(
 				}
 			}
 			if (fine_present != 0 || (boundary.transition_mask & bit) != 0) {
-				if (!fine_coordinates_valid) return false;
+				if (!fine_coordinates_valid) return blocked(6, key);
 				if ((boundary.transition_mask & bit) == 0) insert_key(waiting_masks, key);
 				for (const WtChunkKey &fine : fine_keys) {
 					WtGpuPublicationBoundary fine_boundary;

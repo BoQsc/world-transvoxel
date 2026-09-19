@@ -31,6 +31,10 @@ struct WtGpuPublicationCohortDiagnostics {
 	std::size_t same_lod_face_members = 0;
 	std::size_t coarse_face_members = 0;
 	std::size_t fine_face_members = 0;
+	// Zero means no structural blocker. Nonzero values are stable internal
+	// diagnostics consumed by the GPU publication bridge.
+	std::uint8_t blocker_reason = 0;
+	WtChunkKey blocker_key;
 };
 
 WtGpuPublicationBoundary wt_gpu_publication_boundary(

@@ -303,6 +303,7 @@ private:
 	struct CoveragePriorityRequest {
 		WtChunkKey key;
 		WtGenerationToken generation;
+		bool force_transition_remesh = false;
 	};
 
 	void emit_lifecycle_state(WtWorldLifecycleState state);
@@ -333,7 +334,8 @@ private:
 	void request_visibility_coverage_priority_batch(
 		const std::vector<WtChunkApplicationRecord> &records,
 		std::size_t replacement_count,
-		std::size_t retirement_count
+		std::size_t retirement_count,
+		bool force_transition_remesh = false
 	);
 	void flush_ready_chunk_retirements();
 	void flush_ready_collision_retirements();

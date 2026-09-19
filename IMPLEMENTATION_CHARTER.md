@@ -2177,11 +2177,13 @@ the eight independently replaceable physics shapes, or atomic publication.
 
 ### Bounded interaction visual replacement regions
 
-An interaction-priority incremental edit may not inherit the complete global
-GPU replacement graph. When its exact chunk is covered by an active ancestor
-that is already scheduled for visual retirement, cohort selection uses that
-ancestor as an immutable spatial boundary. Only replacement and active
-retirement keys contained by the ancestor participate in the atomic swap.
+An interaction-priority replacement may not inherit the complete global GPU
+replacement graph. This includes incremental edits and predictive LOD0
+topology admitted by an `InteractionFocus` lease. When its exact chunk is
+covered by an active ancestor that is already scheduled for visual retirement,
+cohort selection uses that ancestor as an immutable spatial boundary. Only
+replacement and active retirement keys contained by the ancestor participate
+in the atomic swap.
 
 The active ancestor remains visible until every selected descendant and
 transition boundary is prepared. Missing active coverage, a missing matching
@@ -2189,5 +2191,13 @@ retirement, an incomplete authoritative partition, or stale generation state
 falls back to the general publication graph. This isolation changes scheduling
 scope only; it does not permit overlapping publication, partial coverage, mixed
 world revisions, or early retirement. GPU request identities carry the internal
-incremental-edit and interaction-priority classification through preflight and
-activation so both phases select the same region.
+interaction-priority classification through preflight and activation so both
+phases select the same region. Moving foreground topology therefore cannot join
+an unrelated distant retirement frontier merely because both are pending.
+
+If cohort closure encounters an active desired boundary whose candidate
+transition mask is incompatible but which has no replacement generation, the
+selector reports that exact key and submits a deduplicated transition-remesh
+repair to the runtime thread. The repair uses the current desired demand and
+creates a normal authoritative generation; cohort polling cannot substitute for
+or synthesize the missing geometry.
