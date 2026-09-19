@@ -1498,8 +1498,12 @@ Interaction-focus leases warm missing LOD0 source pages and request those exact
 keys as leaves of the next balanced visual plan. Forced leaves refine only their
 ancestor paths; the planner adds required siblings and 2:1 neighbors, and
 hierarchical publication retains old coverage until the balanced replacement is
-ready. Each unique active focus key uses the reserved interaction storage lane
-and is decoded into the bounded page cache when its immutable load completes.
+ready. Every leaf inside an ancestor split specifically for an interaction key
+inherits interaction priority, because those leaves form the bounded atomic
+replacement closure that retires the old ancestor. Leaves outside those split
+ancestors retain their planned background priority. Each unique active focus key
+uses the reserved interaction storage lane and is decoded into the bounded page
+cache when its immutable load completes.
 Focus movement does not cancel an already executing immutable load, and ordinary
 cache eviction reconstructs it from storage plus the authoritative journal.
 Admissions, coalescing, cache hits, completions, topology refreshes, and

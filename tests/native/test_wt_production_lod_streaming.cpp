@@ -2716,6 +2716,26 @@ int main(int argc, char **argv) {
 				demand->visual_required,
 				"bounded interaction target omitted exact priority LOD0 demand");
 		}
+		const wt::WtChunkKey closure_sibling{0, 0, 0, 1};
+		const auto closure_demand = std::find_if(
+			local_target.demands.begin(), local_target.demands.end(),
+			[&](const wt::WtViewerChunkDemand &item) {
+				return item.key == closure_sibling;
+			}
+		);
+		check(closure_demand != local_target.demands.end() &&
+			closure_demand->priority == wt::kWtInteractionFocusPriority,
+			"interaction publication closure left a required sibling at background priority");
+		const wt::WtChunkKey unrelated_root{2, 0, 0, 3};
+		const auto unrelated_demand = std::find_if(
+			local_target.demands.begin(), local_target.demands.end(),
+			[&](const wt::WtViewerChunkDemand &item) {
+				return item.key == unrelated_root;
+			}
+		);
+		check(unrelated_demand != local_target.demands.end() &&
+			unrelated_demand->priority != wt::kWtInteractionFocusPriority,
+			"interaction publication closure promoted unrelated terrain");
 		check(find_entry(local_target, {2,0,0,3}) != nullptr,
 			"bounded interaction target changed unrelated coarse coverage");
 		check(planner.stage_foreground(

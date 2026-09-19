@@ -1120,6 +1120,7 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::project_foreground_target(
 	leaves.reserve(std::min(active_capacity_, current.entries.size() + focus.size()));
 	for (const WtLodMapEntry &entry : current.entries) leaves.push_back(entry.key);
 	std::sort(leaves.begin(), leaves.end());
+	std::vector<WtChunkKey> publication_closure_roots;
 	std::uint8_t coverage_lod = 0;
 	for (const WtLodMapEntry &entry : current.entries) {
 		coverage_lod = std::max(coverage_lod, entry.key.lod);
@@ -1153,6 +1154,7 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::project_foreground_target(
 				}
 			);
 			if (leaf == leaves.end() || leaf->lod == 0) break;
+			publication_closure_roots.push_back(*leaf);
 			const std::size_t leaf_index = static_cast<std::size_t>(
 				std::distance(leaves.begin(), leaf)
 			);
@@ -1160,6 +1162,10 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::project_foreground_target(
 			if (status != WtBalancedLodPlannerStatus::Ok) return status;
 		}
 	}
+	std::sort(publication_closure_roots.begin(), publication_closure_roots.end());
+	publication_closure_roots.erase(std::unique(
+		publication_closure_roots.begin(), publication_closure_roots.end()
+	), publication_closure_roots.end());
 	WtLodMap map(active_capacity_);
 	const WtBalancedLodPlannerStatus balance_status =
 		balance(leaves, map, cancel_requested);
@@ -1176,7 +1182,12 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::project_foreground_target(
 				entry.key, foreground_priority, false, true
 			});
 		}
-		if (std::binary_search(focus.begin(), focus.end(), entry.key)) {
+		const bool in_publication_closure = std::any_of(
+			publication_closure_roots.begin(), publication_closure_roots.end(),
+			[&](const WtChunkKey &root) { return bounds_contain(root, entry.key); }
+		);
+		if (std::binary_search(focus.begin(), focus.end(), entry.key) ||
+				in_publication_closure) {
 			WtViewerChunkDemand &demand = output.demands.back();
 			demand.priority = std::max(demand.priority, foreground_priority);
 			demand.visual_required = true;
