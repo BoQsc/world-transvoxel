@@ -553,34 +553,23 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		mesh.cached_transition_mask =
 			completion.prepared.cached_transition_mask;
 	};
-	const auto build_incremental_collision_patch = [&]() {
-		if (!completion.prepared.incremental_edit ||
-			!completion.prepared.collision_required) {
+	const auto build_gpu_collision_mesh = [&]() {
+		if (!completion.prepared.collision_required) {
 			return WtChunkMeshingStatus::Ok;
 		}
 		completion.collision_patch_mesh =
 			std::make_shared<WtChunkMeshResult>();
-		if (completion.prepared.live_collision_patch_base) {
+		if (completion.prepared.incremental_edit &&
+				completion.prepared.live_collision_patch_base) {
 			completion.collision_dirty_regular_brick_mask =
 				completion.prepared.dirty_regular_brick_mask;
-			return mesher.mesh_regular_collision_blocks(
-				{
-					completion.prepared.job.key,
-					0,
-					0,
-					0.0F,
-					0.25F,
-				},
-				*source,
-				completion.collision_dirty_regular_brick_mask,
-				*completion.collision_patch_mesh,
-				scratch
-			);
+		} else {
+			// Cold collision and an edit without a verified live block set need a
+			// complete authoritative base. Regular collision blocks contain exactly
+			// the physics geometry; transition and render payloads stay on the GPU.
+			completion.collision_dirty_regular_brick_mask = 0xff;
 		}
-		// Without a verified live block set, publish a complete authoritative
-		// collision base. A partial payload cannot safely create a new body.
-		completion.collision_dirty_regular_brick_mask = 0xff;
-		return mesher.mesh(
+		return mesher.mesh_regular_collision_blocks(
 			{
 				completion.prepared.job.key,
 				0,
@@ -589,6 +578,7 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 				0.25F,
 			},
 			*source,
+			completion.collision_dirty_regular_brick_mask,
 			*completion.collision_patch_mesh,
 			scratch
 		);
@@ -601,9 +591,8 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		if (!capture_pre_mesh_field(WtGpuMeshingShadowSurface::Terrain)) {
 			terrain_status = WtChunkMeshingStatus::CellBackendFailure;
 		} else if (completion.prepared.gpu_resident_skip_cpu_meshing ||
-			(completion.prepared.incremental_edit &&
-				completion.prepared.collision_required)) {
-			terrain_status = build_incremental_collision_patch();
+				completion.prepared.collision_required) {
+			terrain_status = build_gpu_collision_mesh();
 			initialize_gpu_placeholder_mesh(*completion.mesh);
 		} else {
 			terrain_status = mesher.mesh(
@@ -869,6 +858,16 @@ WtPageMeshingRuntimeService::accept_prepared_mesh_completion(
 	record->water_mesh = std::move(completion.water_mesh);
 	record->gpu_resident_visual_only = completion.gpu_resident_visual_only;
 	record->collision_completed_early = collision_completed_early;
+	if (collision_completed_early && completion.prepared.pre_mesh_field_capture &&
+			completion.prepared.collision_required) {
+		++metrics_.gpu_collision_block_completions;
+		if (completion.prepared.incremental_edit &&
+				completion.prepared.live_collision_patch_base) {
+			++metrics_.gpu_collision_incremental_block_completions;
+		} else {
+			++metrics_.gpu_collision_full_block_completions;
+		}
+	}
 	record->incremental_edit = completion.prepared.incremental_edit;
 	record->dirty_regular_brick_mask =
 		completion.prepared.dirty_regular_brick_mask;

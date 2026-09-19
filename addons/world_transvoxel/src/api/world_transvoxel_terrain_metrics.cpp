@@ -794,6 +794,12 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		"page_gpu_resident_visual_only_completions",
 		runtime.page_gpu_resident_visual_only_completions
 	);
+	set_metric(output, "page_gpu_collision_block_completions",
+		runtime.page_gpu_collision_block_completions);
+	set_metric(output, "page_gpu_collision_full_block_completions",
+		runtime.page_gpu_collision_full_block_completions);
+	set_metric(output, "page_gpu_collision_incremental_block_completions",
+		runtime.page_gpu_collision_incremental_block_completions);
 	set_metric(output, "page_storage_failures", runtime.page_storage_failures);
 	set_metric(output, "page_cache_failures", runtime.page_cache_failures);
 	set_metric(

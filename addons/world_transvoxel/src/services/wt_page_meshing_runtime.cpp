@@ -135,8 +135,10 @@ struct WtPageMeshingRuntimeService::AsyncState {
 		// immediate admission for an incremental collision patch.
 		const bool interactive_collision =
 			prepared.collision_required && prepared.incremental_edit;
+		const bool gpu_collision = prepared.collision_required &&
+			prepared.pre_mesh_field_capture;
 		prepared.interaction_lane = interactive_collision;
-		if (interactive_collision && prepared.terrain_mesh_ready) {
+		if (gpu_collision && prepared.terrain_mesh_ready) {
 			prepared.early_collision_ready = [this, callback =
 				prepared.terrain_mesh_ready](WtTerrainMeshCompletion completion) {
 				{

@@ -212,6 +212,9 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t page_sample_failures = 0;
 	std::uint64_t page_mesh_failures = 0;
 	std::uint64_t page_gpu_resident_visual_only_completions = 0;
+	std::uint64_t page_gpu_collision_block_completions = 0;
+	std::uint64_t page_gpu_collision_full_block_completions = 0;
+	std::uint64_t page_gpu_collision_incremental_block_completions = 0;
 	std::uint64_t page_storage_failures = 0;
 	std::uint64_t page_cache_failures = 0;
 	std::uint64_t page_scheduler_backpressure = 0;

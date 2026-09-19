@@ -1527,6 +1527,12 @@ must not leave that dependency waiting behind the background mesh frontier.
 Already executing work remains non-preemptible, and a full interaction queue
 retains the reprioritized job in the priority-ordered background queue.
 
+GPU-resident chunks that require cold collision generate the eight authoritative
+regular collision blocks directly and publish that complete block set as soon as
+it is ready. They do not build CPU render or transition geometry already owned by
+the GPU path. Incremental edits retain the same dirty-block subset and reserved
+worker contract; a missing live base expands the subset to all eight blocks.
+
 A regional visibility publication accelerates missing replacement members with
 a distinct coverage priority below player support and interaction focus. It
 never promotes those members into the committed-edit mesh lane, and promotion is

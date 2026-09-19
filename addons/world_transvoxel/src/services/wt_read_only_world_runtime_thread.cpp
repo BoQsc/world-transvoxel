@@ -878,6 +878,12 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 		snapshot.page_mesh_failures = page.mesh_failures;
 		snapshot.page_gpu_resident_visual_only_completions =
 			page.gpu_resident_visual_only_completions;
+		snapshot.page_gpu_collision_block_completions =
+			page.gpu_collision_block_completions;
+		snapshot.page_gpu_collision_full_block_completions =
+			page.gpu_collision_full_block_completions;
+		snapshot.page_gpu_collision_incremental_block_completions =
+			page.gpu_collision_incremental_block_completions;
 		snapshot.page_storage_failures = page.storage_failures;
 		snapshot.page_cache_failures = page.cache_failures;
 		snapshot.page_scheduler_backpressure = page.scheduler_backpressure;

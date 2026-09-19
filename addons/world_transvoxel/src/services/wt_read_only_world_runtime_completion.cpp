@@ -205,7 +205,7 @@ bool WtReadOnlyWorldRuntime::prepare_terrain_collision_payload(
 			cached_collision = std::move(cached_complete);
 		}
 	}
-	if (!completion.incremental_edit &&
+	if (!completion.incremental_edit && !completion.collision_patch_mesh_only &&
 		!application_record.collision_only_refresh) {
 		const WtChunkResourceCacheStatus mesh_cache_status =
 			resource_cache_->insert_mesh(
