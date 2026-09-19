@@ -22,6 +22,7 @@ constexpr std::size_t kWtMaximumStorageQueueCapacity = 65536;
 constexpr std::size_t kWtMaximumProceduralGenerationWorkerCount = 8;
 
 struct WtScalarSample;
+struct WtChunkPage;
 
 struct WtAsyncStorageLimits {
 	std::size_t request_capacity = 256;
@@ -76,6 +77,10 @@ struct WtPageLoadCompletion {
 	WtGenerationToken generation;
 	WtPageLoadStatus status = WtPageLoadStatus::IoFailure;
 	std::shared_ptr<const std::vector<std::uint8_t>> page_bytes;
+	// Async storage workers decode immutable pages before publishing a
+	// completion. Runtime admission can then pin the ready page without doing
+	// whole-page decode work on the latency-sensitive world thread.
+	std::shared_ptr<const WtChunkPage> decoded_page;
 };
 
 struct WtAsyncStorageMetrics {

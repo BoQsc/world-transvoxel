@@ -1,5 +1,7 @@
 #include "storage/wt_async_storage_service.h"
 
+#include "storage/wt_chunk_page.h"
+
 #include <algorithm>
 
 namespace world_transvoxel {
@@ -66,6 +68,23 @@ void WtAsyncStorageService::worker_main(
 		const auto traced_load_started = std::chrono::steady_clock::now();
 		std::uint64_t bytes_read = 0;
 		WtPageLoadCompletion completion = load_page(request, bytes_read);
+		if (completion.status == WtPageLoadStatus::Ok &&
+			completion.page_bytes) {
+			WtChunkPageView view;
+			auto decoded_page = std::make_shared<WtChunkPage>();
+			if (wt_open_chunk_page(
+					{ completion.page_bytes->data(), completion.page_bytes->size() },
+					view
+				) != WtChunkPageStatus::Ok ||
+				view.metadata.key != completion.key ||
+				wt_decode_chunk_page(view, *decoded_page) !=
+					WtChunkPageStatus::Ok) {
+				completion.status = WtPageLoadStatus::PageFailure;
+				completion.page_bytes.reset();
+			} else {
+				completion.decoded_page = std::move(decoded_page);
+			}
+		}
 		const auto load_finished = std::chrono::steady_clock::now();
 		const auto elapsed_ns = [](auto duration) {
 			return static_cast<std::uint64_t>(

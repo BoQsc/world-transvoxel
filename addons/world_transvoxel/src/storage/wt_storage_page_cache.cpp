@@ -118,6 +118,19 @@ WtStoragePageCacheStatus WtStoragePageCache::accept_completion(
 		++metrics_.encoded_oversize_rejections;
 		return WtStoragePageCacheStatus::EncodedItemTooLarge;
 	}
+	const std::shared_ptr<const WtChunkPage> &worker_decoded =
+		completion.decoded_page;
+	const std::size_t decoded_bytes = decoded_resident_size(worker_decoded);
+	if (worker_decoded &&
+		(worker_decoded->metadata.key != completion.key ||
+		 worker_decoded->metadata.source_revision != view.metadata.source_revision)) {
+		++metrics_.invalid_pages;
+		return WtStoragePageCacheStatus::InvalidPage;
+	}
+	if (worker_decoded && decoded_bytes > limits_.decoded_byte_capacity) {
+		++metrics_.decoded_oversize_rejections;
+		return WtStoragePageCacheStatus::DecodedItemTooLarge;
+	}
 
 	auto decoded_identity = find_decoded_entry(
 		completion.key,
@@ -144,26 +157,53 @@ WtStoragePageCacheStatus WtStoragePageCache::accept_completion(
 		encoded_resident_bytes_ += resident_bytes;
 		++metrics_.encoded_refreshes;
 		evict_encoded_to_limits();
-		++metrics_.accepted_completions;
-		return WtStoragePageCacheStatus::Ok;
+	} else {
+		EncodedEntry entry;
+		entry.key = completion.key;
+		entry.source_revision = view.metadata.source_revision;
+		entry.content_hash = content_hash;
+		entry.bytes = bytes;
+		entry.resident_bytes = resident_bytes;
+		entry.last_access = next_access();
+		const auto position = std::lower_bound(
+			encoded_.begin(),
+			encoded_.end(),
+			std::make_pair(entry.key, entry.source_revision),
+			entry_identity_less<EncodedEntry>
+		);
+		encoded_resident_bytes_ += resident_bytes;
+		encoded_.insert(position, std::move(entry));
+		++metrics_.encoded_insertions;
 	}
-
-	EncodedEntry entry;
-	entry.key = completion.key;
-	entry.source_revision = view.metadata.source_revision;
-	entry.content_hash = content_hash;
-	entry.bytes = bytes;
-	entry.resident_bytes = resident_bytes;
-	entry.last_access = next_access();
-	const auto position = std::lower_bound(
-		encoded_.begin(),
-		encoded_.end(),
-		std::make_pair(entry.key, entry.source_revision),
-		entry_identity_less<EncodedEntry>
-	);
-	encoded_resident_bytes_ += resident_bytes;
-	encoded_.insert(position, std::move(entry));
-	++metrics_.encoded_insertions;
+	if (worker_decoded) {
+		auto decoded = find_decoded_entry(
+			completion.key, view.metadata.source_revision
+		);
+		if (decoded == decoded_.end()) {
+			DecodedEntry entry;
+			entry.key = completion.key;
+			entry.source_revision = view.metadata.source_revision;
+			entry.content_hash = content_hash;
+			entry.page = worker_decoded;
+			entry.resident_bytes = decoded_bytes;
+			entry.last_access = next_access();
+			const auto position = std::lower_bound(
+				decoded_.begin(), decoded_.end(),
+				std::make_pair(entry.key, entry.source_revision),
+				entry_identity_less<DecodedEntry>
+			);
+			decoded_resident_bytes_ += decoded_bytes;
+			decoded_.insert(position, std::move(entry));
+			++metrics_.decoded_insertions;
+		} else {
+			decoded_resident_bytes_ -= decoded->resident_bytes;
+			decoded->page = worker_decoded;
+			decoded->resident_bytes = decoded_bytes;
+			decoded->last_access = next_access();
+			decoded_resident_bytes_ += decoded_bytes;
+		}
+		evict_decoded_to_limits();
+	}
 	++metrics_.accepted_completions;
 	evict_encoded_to_limits();
 	return WtStoragePageCacheStatus::Ok;

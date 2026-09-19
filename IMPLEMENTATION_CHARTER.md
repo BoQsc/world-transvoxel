@@ -1835,7 +1835,11 @@ burst of completed background meshes from monopolizing edit admission while
 still allowing twelve completions across the three normal completion points in
 one dispatcher iteration.
 
-Storage completions are likewise decoded and admitted in fixed two-item slices.
+Storage workers validate and decode immutable pages before publishing bounded
+completions. Runtime completion admission only installs the encoded and decoded
+objects into the bounded cache and pins waiting dependencies; cold whole-page
+decode cannot occupy the world-runtime thread or delay a newly submitted edit.
+Storage completions are admitted in fixed two-item slices.
 If an edit arrives during that slice, the dispatcher commits it before resuming
 background loading records. Remaining storage completions stay in the existing
 bounded completion ring and retain their original ownership and validation;
