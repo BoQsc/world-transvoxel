@@ -1453,8 +1453,8 @@ godot::Dictionary WorldTransvoxelTerrain::reconcile_gpu_resident_render_chunks(
 	result["status"] = "PASS";
 	result["cpu_collision_publication_unchanged"] = true;
 	godot::Array retire;
-	const bool coverage_staging_blocked =
-		open_viewer_plan_publications_ != 0U ||
+	const bool viewer_plan_open = open_viewer_plan_publications_ != 0U;
+	const bool coverage_staging_blocked = viewer_plan_open ||
 		!pending_chunk_replacements_.empty() ||
 		!pending_chunk_retirements_.empty() ||
 		!pending_render_retirements_.empty();
@@ -1471,19 +1471,44 @@ godot::Dictionary WorldTransvoxelTerrain::reconcile_gpu_resident_render_chunks(
 	result["open_viewer_plan_publications"] = static_cast<std::int64_t>(
 		open_viewer_plan_publications_
 	);
-	if (coverage_staging_blocked) {
+	result["coverage_protected_count"] = 0;
+	// A viewer plan is one desired-state snapshot. Before its final publication,
+	// the retirement inventory is incomplete, so retain all coverage. Once it
+	// closes, pin only members of unfinished atomic regions and reclaim unrelated
+	// stale chunks during continuous movement.
+	if (viewer_plan_open) {
 		result["retire"] = retire;
 		result["retire_count"] = 0;
 		result["checked_count"] = terrain_identity_dictionaries.size();
 		return result;
 	}
+	std::int64_t coverage_protected_count = 0;
 	for (std::int64_t index = 0;
 			index < terrain_identity_dictionaries.size(); ++index) {
 		const godot::Dictionary dictionary =
 			terrain_identity_dictionaries[index];
 		WtGpuMeshingShadowIdentity identity;
-		bool valid = gpu_resident_render_publication_enabled_ &&
-			wt_parse_gpu_meshing_shadow_identity(dictionary, identity) &&
+		const bool parsed = wt_parse_gpu_meshing_shadow_identity(
+			dictionary, identity
+		);
+		if (parsed && (
+				std::binary_search(
+					pending_chunk_replacements_.begin(),
+					pending_chunk_replacements_.end(), identity.key
+				) || std::binary_search(
+					ready_staged_chunk_replacements_.begin(),
+					ready_staged_chunk_replacements_.end(), identity.key
+				) || std::binary_search(
+					pending_chunk_retirements_.begin(),
+					pending_chunk_retirements_.end(), identity.key
+				) || std::binary_search(
+					pending_render_retirements_.begin(),
+					pending_render_retirements_.end(), identity.key
+				))) {
+			++coverage_protected_count;
+			continue;
+		}
+		bool valid = gpu_resident_render_publication_enabled_ && parsed &&
 			identity.surface == WtGpuMeshingShadowSurface::Terrain &&
 			identity.source_revision == static_cast<std::uint64_t>(
 				std::max<std::int64_t>(0, get_world_source_revision())
@@ -1529,6 +1554,7 @@ godot::Dictionary WorldTransvoxelTerrain::reconcile_gpu_resident_render_chunks(
 	result["retire"] = retire;
 	result["retire_count"] = retire.size();
 	result["checked_count"] = terrain_identity_dictionaries.size();
+	result["coverage_protected_count"] = coverage_protected_count;
 	return result;
 }
 

@@ -1992,3 +1992,18 @@ Runtime
 metrics expose the terminal runtime status plus the exact terrain mesh completion
 failure substage and status so an automated route reports its native failure
 instead of only reporting rejected viewer calls.
+
+### Continuous GPU residency reconciliation
+
+GPU residency reclamation is incremental after a viewer plan has published its
+complete desired-state snapshot. An active GPU chunk is protected while its key
+belongs to a pending or ready replacement, chunk retirement, or render
+retirement. Other active chunks are reconciled against their exact application
+generation and may retire while unrelated streaming work remains in flight.
+
+An open viewer plan retains all existing GPU coverage because its replacement
+and retirement inventory is not complete yet. Closing the plan changes the gate
+from global quiescence to per-key protection; it does not weaken connected
+Transvoxel region coverage, 2:1 balance, generation checks, or atomic visual
+publication. Metrics distinguish general coverage staging from the number of
+identities retained by an unfinished region.
