@@ -546,8 +546,12 @@ bool WtReadOnlyWorldRuntime::process_storage_completions() {
 				// finished decoding. That pass deliberately omitted unavailable pages.
 				// Rearm it now while the key is still leased so visual LOD0 admission
 				// cannot depend on a later viewer or collision update.
-				std::lock_guard<std::mutex> lock(input_mutex_);
-				foreground_topology_refresh_pending_ = true;
+				const WtDesiredChunk *focused =
+					desired_->find_desired(completion.key);
+				if (focused == nullptr || !focused->visual_required) {
+					std::lock_guard<std::mutex> lock(input_mutex_);
+					foreground_topology_refresh_pending_ = true;
+				}
 			}
 		}
 		if (status != WtPageMeshingRuntimeStatus::Ok &&

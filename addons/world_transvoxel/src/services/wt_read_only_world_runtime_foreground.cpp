@@ -11,6 +11,46 @@
 #include <utility>
 
 namespace world_transvoxel {
+namespace {
+
+std::vector<WtChunkKey> interaction_warm_shell(
+	const std::vector<WtChunkKey> &focus,
+	const WtAsyncStorageService &storage
+) {
+	std::vector<WtChunkKey> warm = focus;
+	for (const WtChunkKey &center : focus) {
+		for (std::int64_t z = -1; z <= 1; ++z) {
+			for (std::int64_t y = -1; y <= 1; ++y) {
+				for (std::int64_t x = -1; x <= 1; ++x) {
+					if (warm.size() >= kWtForegroundPriorityKeysPerSource) break;
+					const std::int64_t px = static_cast<std::int64_t>(center.x) + x;
+					const std::int64_t py = static_cast<std::int64_t>(center.y) + y;
+					const std::int64_t pz = static_cast<std::int64_t>(center.z) + z;
+					if (px < std::numeric_limits<std::int32_t>::min() ||
+						px > std::numeric_limits<std::int32_t>::max() ||
+						py < std::numeric_limits<std::int32_t>::min() ||
+						py > std::numeric_limits<std::int32_t>::max() ||
+						pz < std::numeric_limits<std::int32_t>::min() ||
+						pz > std::numeric_limits<std::int32_t>::max()) continue;
+					const WtChunkKey key {
+						static_cast<std::int32_t>(px),
+						static_cast<std::int32_t>(py),
+						static_cast<std::int32_t>(pz), 0
+					};
+					if (storage.has_page(key)) warm.push_back(key);
+				}
+			}
+		}
+	}
+	std::sort(warm.begin(), warm.end());
+	warm.erase(std::unique(warm.begin(), warm.end()), warm.end());
+	if (warm.size() > kWtForegroundPriorityKeysPerSource) {
+		warm.resize(kWtForegroundPriorityKeysPerSource);
+	}
+	return warm;
+}
+
+} // namespace
 
 bool WtReadOnlyWorldRuntime::is_interaction_critical_key(
 	const WtChunkKey &key
@@ -71,6 +111,9 @@ bool WtReadOnlyWorldRuntime::process_foreground_priority_event() {
 	candidate_leases.append_active_keys(
 		WtForegroundPriorityClass::InteractionFocus,
 		interaction_warm_keys
+	);
+	interaction_warm_keys = interaction_warm_shell(
+		interaction_warm_keys, storage_
 	);
 	for (const WtChunkKey &key : interaction_warm_keys) {
 		++warm_requests;

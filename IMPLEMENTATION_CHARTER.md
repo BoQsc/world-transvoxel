@@ -1866,7 +1866,7 @@ completion must rearm foreground topology refresh while that exact key remains
 leased. Visual admission therefore cannot wait for an unrelated later viewer,
 collision, or edit event. Superseded or released lease keys do not rearm it.
 
-An active focus refresh projects its exact LOD0 leaves from the currently
+An active focus refresh projects its exact ray/tool LOD0 leaves from the currently
 accepted visual cut. It splits only containing ancestors and the neighbors
 required for 2:1 balance, so admission cost and replacement scope follow the
 bounded interaction shell instead of the full moving-viewer target. The result
@@ -1874,6 +1874,10 @@ still passes through coverage-first staging: active coarse leaves remain visible
 until the complete local descendant cut is ready for atomic publication. A
 released shell returns to ordinary viewer planning. Capacity failure retains the
 accepted cut and is reported; it cannot partially publish or drop coverage.
+The native storage lane independently expands those exact keys to a bounded
+one-chunk sampling/warm halo. Halo pages never become visual topology demands
+merely because they were prefetched, so prewarming cannot inflate the atomic GPU
+replacement cohort.
 
 GPU publication does not connect equal-LOD cold candidates into one cohort
 when neither shared face carries a transition. Their deterministic boundary
