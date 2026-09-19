@@ -276,6 +276,7 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 						placeholder->generation = record->generation;
 						placeholder->world_origin = wt_chunk_bounds(item.key).minimum;
 						placeholder->transition_mask = mesh_record.transition_mask;
+						placeholder->cached_transition_mask = mesh_record.cached_transition_mask;
 						placeholder->publication_source =
 							WtRenderPublicationSource::GpuResidentPlaceholder;
 						promoted_render = std::move(placeholder);
@@ -348,8 +349,32 @@ bool WtReadOnlyWorldRuntime::publish_transition_mask_update(
 	if (cached_render && cached_render->publication_source ==
 			WtRenderPublicationSource::GpuResidentPlaceholder) {
 		if (cached_render->transition_mask != entry.transition_mask) {
-			queue_transition_remeshes({ desired });
-			return true;
+			if ((entry.transition_mask &
+					static_cast<std::uint8_t>(~cached_render->cached_transition_mask)) != 0) {
+				// This capture predates GPU-resident full-face admission and does not
+				// retain the halo pages needed by the newly required face. It cannot
+				// be remasked safely; rebuild once under the current capture contract.
+				queue_transition_remeshes({ desired });
+				return true;
+			}
+			// GPU-resident LOD chunks cache transition meshlets independently from
+			// their active boundary mask. A viewer-plan boundary change therefore
+			// changes visibility only: keep the immutable field/geometry generation
+			// and let the render callback atomically rewrite indirect instance counts.
+			auto updated = std::make_shared<WtRenderPayload>(*cached_render);
+			updated->transition_mask = entry.transition_mask;
+			if (resource_cache_->insert_render(updated, record->generation) !=
+					WtChunkResourceCacheStatus::Ok) {
+				return false;
+			}
+			WtReadOnlyPublication publication;
+			publication.kind = WtReadOnlyPublicationKind::RenderPayload;
+			publication.key = updated->key;
+			publication.generation = updated->generation;
+			publication.render = std::move(updated);
+			publication.staged_replacement =
+				application_record.staged_replacement;
+			return push_publication(std::move(publication));
 		}
 		WtReadOnlyPublication publication;
 		publication.kind = WtReadOnlyPublicationKind::RenderPayload;
@@ -419,9 +444,6 @@ bool WtReadOnlyWorldRuntime::publish_transition_mask_update(
 bool WtReadOnlyWorldRuntime::process_pending_transition_remeshes() {
 	bool progressed = false;
 	for (std::size_t index = 0; index < pending_transition_remeshes_.size();) {
-		if (scheduler_->available_job_capacity() == 0) {
-			break;
-		}
 		const WtDesiredChunk item = pending_transition_remeshes_[index];
 		const WtDesiredChunk *desired = desired_->find_desired(item.key);
 		// This queue also repairs missing local collision topology. Collision-only
@@ -442,7 +464,9 @@ bool WtReadOnlyWorldRuntime::process_pending_transition_remeshes() {
 			progressed = true;
 			continue;
 		}
-		if (record->lifecycle != WtChunkLifecycle::Ready) {
+		if (record->lifecycle == WtChunkLifecycle::Requested ||
+			record->lifecycle == WtChunkLifecycle::Sampling ||
+			record->lifecycle == WtChunkLifecycle::Meshing) {
 			++index;
 			continue;
 		}
@@ -720,7 +744,8 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			status = page_runtime_->begin_sample_job(
 				job,
 				transition_mask,
-				transition_mask,
+				gpu_meshing_shadow_ != nullptr && job.key.lod > 0 ?
+					static_cast<std::uint8_t>(0x3fU) : transition_mask,
 				storage_,
 				*page_cache_,
 				*scheduler_
@@ -894,6 +919,8 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 				render->generation = job.generation;
 				render->world_origin = wt_chunk_bounds(job.key).minimum;
 				render->transition_mask = trace_transition_mask;
+				render->cached_transition_mask = trace_mesh_record_found ?
+					trace_mesh_record.cached_transition_mask : trace_transition_mask;
 				render->publication_source =
 					WtRenderPublicationSource::GpuResidentPlaceholder;
 				if (resource_cache_->insert_render(render, job.generation) !=

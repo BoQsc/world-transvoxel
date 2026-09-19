@@ -329,9 +329,18 @@ bool wt_build_gpu_chunk_publication_cohort(
 	std::map<WtChunkKey, WtGpuPublicationBoundary> boundaries;
 	std::set<WtChunkKey> absent;
 	const auto read = [&](const WtChunkKey &key, WtGpuPublicationBoundary &value) {
-		if (!wt_is_valid_chunk_key(key) || std::binary_search(
-				pending_retirements.begin(), pending_retirements.end(), key
-			) || absent.count(key) != 0) return false;
+		const bool replacement = std::binary_search(
+			pending_replacements.begin(), pending_replacements.end(), key
+		);
+		const bool retirement = std::binary_search(
+			pending_retirements.begin(), pending_retirements.end(), key
+		);
+		// A same-location generation swap legitimately appears in both sets. Its
+		// candidate supplies the new boundary while the old active generation is
+		// retired by the atomic cohort. Only a retirement without a replacement is
+		// unavailable as future coverage.
+		if (!wt_is_valid_chunk_key(key) || (retirement && !replacement) ||
+			absent.count(key) != 0) return false;
 		const auto existing = boundaries.find(key);
 		if (existing != boundaries.end()) {
 			value = existing->second;

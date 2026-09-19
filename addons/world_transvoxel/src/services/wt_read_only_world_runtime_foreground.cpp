@@ -73,6 +73,11 @@ bool WtReadOnlyWorldRuntime::process_foreground_priority_event() {
 		);
 	}
 
+	std::vector<WtChunkKey> previous_interaction_keys;
+	foreground_priority_leases_.append_active_keys(
+		WtForegroundPriorityClass::InteractionFocus,
+		previous_interaction_keys
+	);
 	WtForegroundPriorityLeaseSet candidate_leases =
 		foreground_priority_leases_;
 	const WtForegroundPriorityStatus lease_status =
@@ -115,13 +120,31 @@ bool WtReadOnlyWorldRuntime::process_foreground_priority_event() {
 	interaction_warm_keys = interaction_warm_shell(
 		interaction_warm_keys, storage_
 	);
+	for (const WtChunkKey &previous : interaction_warm_keys_) {
+		if (!std::binary_search(
+				interaction_warm_keys.begin(), interaction_warm_keys.end(), previous
+			)) {
+			storage_.cancel_queued_page(
+				previous, WtStorageRequestSource::InteractionWarm
+			);
+		}
+	}
+	std::vector<WtChunkKey> retained_warm_keys;
+	retained_warm_keys.reserve(interaction_warm_keys.size());
 	for (const WtChunkKey &key : interaction_warm_keys) {
+		if (std::binary_search(
+				interaction_warm_keys_.begin(), interaction_warm_keys_.end(), key
+			)) {
+			retained_warm_keys.push_back(key);
+			continue;
+		}
 		++warm_requests;
 		std::shared_ptr<const WtChunkPage> page;
 		if (page_cache_->find_or_decode(
 				key, storage_.source_revision(), page
 			) == WtStoragePageCacheStatus::Ok && page) {
 			++warm_cache_hits;
+			retained_warm_keys.push_back(key);
 			continue;
 		}
 		if (next_interaction_warm_generation_ ==
@@ -137,12 +160,15 @@ bool WtReadOnlyWorldRuntime::process_foreground_priority_event() {
 		);
 		if (warm_status == WtAsyncStorageStatus::Ok) {
 			++warm_admissions;
+			retained_warm_keys.push_back(key);
 		} else if (warm_status == WtAsyncStorageStatus::AlreadyPending) {
 			++warm_coalesced;
+			retained_warm_keys.push_back(key);
 		} else {
 			++warm_rejections;
 		}
 	}
+	interaction_warm_keys_ = std::move(retained_warm_keys);
 	WtDesiredSetDelta delta;
 	WtMultiViewerDesiredSet candidate_desired = *desired_;
 	if (!base_demands_.empty()) {
@@ -207,9 +233,15 @@ bool WtReadOnlyWorldRuntime::process_foreground_priority_event() {
 		}
 	}
 
+	std::vector<WtChunkKey> next_interaction_keys;
+	candidate_leases.append_active_keys(
+		WtForegroundPriorityClass::InteractionFocus,
+		next_interaction_keys
+	);
+	const bool interaction_topology_changed =
+		previous_interaction_keys != next_interaction_keys;
 	foreground_priority_leases_ = std::move(candidate_leases);
-	if (event.request.priority_class ==
-			WtForegroundPriorityClass::InteractionFocus) {
+	if (interaction_topology_changed) {
 		std::lock_guard<std::mutex> lock(input_mutex_);
 		foreground_topology_refresh_pending_ = true;
 	}

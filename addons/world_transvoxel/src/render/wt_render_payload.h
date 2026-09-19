@@ -32,6 +32,7 @@ struct WtRenderPayload {
 	WtGenerationToken generation;
 	WtGridPoint world_origin;
 	std::uint8_t transition_mask = 0;
+	std::uint8_t cached_transition_mask = 0;
 	WtRenderPublicationSource publication_source =
 		WtRenderPublicationSource::CpuAuthority;
 	std::vector<WtRenderVertex> vertices;

@@ -1,6 +1,8 @@
 #include "services/wt_read_only_world_runtime.h"
 
 #include "services/wt_page_meshing_runtime.h"
+#include "services/wt_chunk_application.h"
+#include "services/wt_chunk_resource_cache.h"
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_edit_journal_store.h"
 #include "streaming/wt_stream_scheduler.h"
@@ -248,9 +250,62 @@ bool WtReadOnlyWorldRuntime::process_visibility_coverage_priority_operation(
 				record->lifecycle == WtChunkLifecycle::Ready) {
 			const WtDesiredChunk *desired = desired_->find_desired(request.key);
 			if (desired != nullptr && desired->visual_required) {
+				const auto cached_render = resource_cache_->find_render(
+					request.key, request.generation
+				);
+				if (cached_render && cached_render->publication_source ==
+						WtRenderPublicationSource::GpuResidentPlaceholder) {
+					const auto plan_entry = std::find_if(
+						current_plan_.entries.begin(), current_plan_.entries.end(),
+						[&request](const WtLodMapEntry &entry) {
+							return entry.key == request.key;
+						}
+					);
+					if (plan_entry != current_plan_.entries.end()) {
+						if (cached_render->transition_mask !=
+								plan_entry->transition_mask) {
+							if (!publish_transition_mask_update(
+									*plan_entry, *desired
+								)) return false;
+						} else {
+							// A cached placeholder proves CPU/application topology, but it
+							// cannot prove that the bounded GPU residency cache still owns
+							// its buffers. Reissue the same page-backed GPU capture through a
+							// fresh generation. Preserved collision readiness prevents this
+							// visual repair from repeating authoritative physics work.
+							queue_transition_remeshes({ *desired });
+						}
+						record_outcome(WtVisibilityCoveragePriorityOutcome::Applied);
+						continue;
+					}
+				}
 				queue_transition_remeshes({ *desired });
 				record_outcome(WtVisibilityCoveragePriorityOutcome::Applied);
 				continue;
+			}
+		}
+		// A GPU request can disappear after the native application record has
+		// accepted its placeholder (for example, controller capacity churn or a
+		// superseded regional route). Reprioritizing a Ready scheduler record
+		// cannot recreate that request. Republish the immutable cached placeholder
+		// so the controller can rebuild its route without sampling or meshing.
+		if (record->lifecycle == WtChunkLifecycle::Ready) {
+			WtChunkApplicationRecord application_record;
+			const auto cached_render = resource_cache_->find_render(
+				request.key, request.generation
+			);
+			if (cached_render && cached_render->publication_source ==
+					WtRenderPublicationSource::GpuResidentPlaceholder &&
+				application_->copy_record(request.key, application_record) &&
+				application_record.generation == request.generation &&
+				application_record.visual_required &&
+				application_record.external_visual_activation_required) {
+				const WtDesiredChunk *desired = desired_->find_desired(request.key);
+				if (desired != nullptr) {
+					queue_transition_remeshes({ *desired });
+					record_outcome(WtVisibilityCoveragePriorityOutcome::Applied);
+					continue;
+				}
 			}
 		}
 		const std::int32_t coverage_priority = std::max(

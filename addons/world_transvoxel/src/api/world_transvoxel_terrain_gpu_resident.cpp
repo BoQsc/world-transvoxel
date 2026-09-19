@@ -76,25 +76,39 @@ bool gpu_chunk_bounds_overlap(
 		right_bounds.minimum.z < left_bounds.maximum.z;
 }
 
+const WtLodMapEntry *find_topology_entry(
+	const std::vector<WtLodMapEntry> &topology,
+	const WtChunkKey &key
+) {
+	const auto iterator = std::lower_bound(
+		topology.begin(), topology.end(), key,
+		[](const WtLodMapEntry &entry, const WtChunkKey &value) {
+			return entry.key < value;
+		}
+	);
+	return iterator != topology.end() && iterator->key == key ?
+		&*iterator : nullptr;
+}
+
 void append_retained_gpu_coverage(
-	WtChunkApplicationService &application,
 	WtGodotRenderSink &render_sink,
+	const std::vector<WtLodMapEntry> &target_topology,
 	const std::vector<WtChunkKey> &pending_retirements,
 	WtChunkPublicationRegion &region
 ) {
 	if (region.retirements.empty()) return;
 	std::vector<WtChunkKey> retained_coverage;
-	for (const WtChunkApplicationRecord &record : application.get_records()) {
-		if (!record.visual_required || !record.visual_ready ||
-			std::binary_search(
-				pending_retirements.begin(), pending_retirements.end(), record.key
-			) || !render_sink.gpu_resident_replacement_matches(
-				record.key, record.generation,
-				record.external_visual_transition_mask
-			)) {
+	retained_coverage.reserve(target_topology.size());
+	for (const WtLodMapEntry &entry : target_topology) {
+		std::uint8_t active_mask = 0;
+		if (std::binary_search(
+				pending_retirements.begin(), pending_retirements.end(), entry.key
+			) || !render_sink.get_gpu_resident_boundary_mask(
+				entry.key, active_mask
+			) || active_mask != entry.transition_mask) {
 			continue;
 		}
-		retained_coverage.push_back(record.key);
+		retained_coverage.push_back(entry.key);
 	}
 	wt_chunk_publication_region_append_retained_coverage(
 		region, retained_coverage
@@ -285,6 +299,7 @@ bool build_gpu_publication_cohort(
 	const std::vector<WtChunkKey> &ready,
 	const std::vector<WtChunkKey> &retirements,
 	const std::vector<WtChunkKey> &edit_replacements,
+	const std::vector<WtLodMapEntry> &target_topology,
 	WtChunkPublicationRegion &region,
 	std::vector<WtChunkKey> &waiting_masks,
 	godot::Array *inspected_boundaries = nullptr,
@@ -313,6 +328,24 @@ bool build_gpu_publication_cohort(
 	}
 	std::vector<WtChunkKey> candidates = pending;
 	candidates.insert(candidates.end(), ready.begin(), ready.end());
+	// A retained chunk can change only its transition mask within the same
+	// geometry generation. That update has no ExpectChunk publication, so it is
+	// absent from the replacement queues. Materialize it from the immutable plan
+	// snapshot whenever the active GPU mask differs and the matching placeholder
+	// has reached the application record.
+	for (const WtLodMapEntry &entry : target_topology) {
+		std::uint8_t active_mask = 0;
+		if (!render_sink.get_gpu_resident_boundary_mask(entry.key, active_mask) ||
+				active_mask == entry.transition_mask) {
+			continue;
+		}
+		WtChunkApplicationRecord record;
+		if (application.copy_record(entry.key, record) && record.visual_required &&
+				record.visual_generation == record.generation &&
+				record.external_visual_transition_mask == entry.transition_mask) {
+			candidates.push_back(entry.key);
+		}
+	}
 	std::sort(candidates.begin(), candidates.end());
 	candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
 	// The shared staging queues also contain collision-only LOD0 records. They
@@ -321,10 +354,14 @@ bool build_gpu_publication_cohort(
 	// staging queue. It has no generation that can ever become prepared, so it
 	// must not remain a permanent member of a later visual cohort. An incomplete
 	// live publication still has a record and continues to wait below.
+	const auto target_entry = [&target_topology](const WtChunkKey &key) {
+		return find_topology_entry(target_topology, key);
+	};
 	candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
-		[&application](const WtChunkKey &key) {
+		[&application, &target_entry](const WtChunkKey &key) {
 			WtChunkApplicationRecord record;
-			return !application.copy_record(key, record) || !record.visual_required;
+			return target_entry(key) == nullptr ||
+				!application.copy_record(key, record) || !record.visual_required;
 		}), candidates.end());
 	// Chunk retirement is shared by visual and collision-only records. Only a
 	// replacement currently active in the GPU render sink contributes visible
@@ -385,17 +422,22 @@ bool build_gpu_publication_cohort(
 	}
 	const bool built = wt_build_gpu_chunk_publication_cohort(
 		seed, candidates, visual_retirements,
-		[&application, &render_sink, &candidates, &visual_retirements, &edit_replacements, inspected_boundaries](const WtChunkKey &key, WtGpuPublicationBoundary &boundary) {
+		[&application, &render_sink, &candidates, &visual_retirements,
+			&edit_replacements, &target_entry, inspected_boundaries](
+			const WtChunkKey &key, WtGpuPublicationBoundary &boundary
+		) {
 			// A shared pending retirement is no longer desired visual coverage,
 			// even when it has no active GPU surface and therefore is not part of
 			// the atomic visual retirement set above.
 			if (std::binary_search(
 					visual_retirements.begin(), visual_retirements.end(), key
-			)) {
+				) && !std::binary_search(candidates.begin(), candidates.end(), key)) {
 				return false;
 			}
 			WtChunkApplicationRecord record;
-			if (!application.copy_record(key, record) || !record.visual_required) return false;
+			const WtLodMapEntry *target = target_entry(key);
+			if (target == nullptr || !application.copy_record(key, record) ||
+					!record.visual_required) return false;
 			std::uint8_t active_mask = 0;
 			const bool active_present = render_sink.get_gpu_resident_boundary_mask(key, active_mask);
 			// Application records outlive asynchronous frontend retirement. A record
@@ -408,7 +450,9 @@ bool build_gpu_publication_cohort(
 				)) {
 				return false;
 			}
-			const bool candidate_mask_known = record.visual_generation == record.generation;
+			const bool candidate_mask_prepared =
+				record.visual_generation == record.generation &&
+				record.external_visual_transition_mask == target->transition_mask;
 			const bool edit_pending = std::binary_search(
 				edit_replacements.begin(), edit_replacements.end(), key
 			);
@@ -417,14 +461,17 @@ bool build_gpu_publication_cohort(
 					key, record.generation, active_mask
 				);
 			boundary = wt_gpu_publication_boundary(
-				record.external_visual_transition_mask, candidate_mask_known,
+				target->transition_mask, true,
 				active_mask, active_present, active_content_current
 			);
 			if (inspected_boundaries) {
 				godot::Dictionary member = gpu_cohort_member(record);
 				member["compatible_active"] = boundary.compatible_active;
 				member["boundary_mask"] = boundary.transition_mask;
-				member["candidate_mask_known"] = candidate_mask_known;
+				member["candidate_mask_known"] = candidate_mask_prepared;
+				member["target_transition_mask"] = static_cast<std::int64_t>(
+					target->transition_mask
+				);
 				member["active_present"] = active_present;
 				member["active_mask"] = active_mask;
 				member["edit_pending"] = edit_pending;
@@ -447,7 +494,7 @@ bool build_gpu_publication_cohort(
 		// are part of the authoritative atomic cohort even though they require no
 		// new capture or activation.
 		append_retained_gpu_coverage(
-			application, render_sink, visual_retirements, region
+			render_sink, target_topology, visual_retirements, region
 		);
 	}
 	return built;
@@ -476,7 +523,8 @@ godot::Dictionary WorldTransvoxelTerrain::inspect_gpu_resident_publication(
 	const bool built = build_gpu_publication_cohort(
 		*application_, *render_sink_, seed, pending_chunk_replacements_,
 		ready_staged_chunk_replacements_, pending_chunk_retirements_,
-		independently_publishable_chunk_replacements_, region, waiting_masks, &boundaries, &visual_candidates,
+		independently_publishable_chunk_replacements_,
+		latest_completed_visual_plan_, region, waiting_masks, &boundaries, &visual_candidates,
 		&visual_retirements, nullptr, &same_layout_edit,
 		&same_layout_edit_rejection_reason, &same_layout_edit_rejection_key
 	);
@@ -525,6 +573,7 @@ bool WorldTransvoxelTerrain::begin_gpu_resident_render_publication(
 	gpu_resident_same_layout_edit_activation_chunks_ = 0;
 	gpu_resident_render_activated_chunks_ = 0;
 	gpu_resident_render_retired_chunks_ = 0;
+	gpu_resident_render_readiness_reconciliations_ = 0;
 	gpu_resident_render_reconciled_retires_ = 0;
 	gpu_resident_render_restored_cpu_chunks_ = 0;
 	if (render_sink_) {
@@ -901,6 +950,35 @@ get_gpu_resident_render_activation_cohort(
 		identity.key
 	);
 	result["seed_independently_publishable"] = seed_independently_publishable;
+	const bool seed_pending_replacement = std::binary_search(
+		pending_chunk_replacements_.begin(), pending_chunk_replacements_.end(),
+		identity.key
+	) || std::binary_search(
+		ready_staged_chunk_replacements_.begin(),
+		ready_staged_chunk_replacements_.end(), identity.key
+	);
+	std::uint8_t seed_active_mask = 0;
+	const bool seed_mask_replacement =
+		render_sink_->get_gpu_resident_boundary_mask(
+			identity.key, seed_active_mask
+		) && seed_active_mask != identity.transition_mask;
+	if (!seed_pending_replacement && !seed_independently_publishable &&
+			!seed_mask_replacement) {
+		// The frontend may still own prepared buffers after a viewer plan removed
+		// their publication request. Such a group cannot seed a future transaction
+		// and must leave the bounded retry lane instead of polling forever as an
+		// unavailable boundary.
+		result["status"] = "STALE_APPLICATION";
+		result["error"] = "GPU resident cohort seed is no longer pending publication";
+		return result;
+	}
+	if (!seed_independently_publishable &&
+		latest_completed_viewer_plan_revision_ != 0 &&
+		find_topology_entry(latest_completed_visual_plan_, identity.key) == nullptr) {
+		result["status"] = "STALE_APPLICATION";
+		result["error"] = "GPU resident cohort seed is absent from completed topology";
+		return result;
+	}
 	if (open_viewer_plan_publications_ != 0 &&
 			!seed_independently_publishable) {
 		result["status"] = "WAITING_COHORT";
@@ -920,6 +998,7 @@ get_gpu_resident_render_activation_cohort(
 			*application_, *render_sink_, identity.key,
 			pending_chunk_replacements_, ready_staged_chunk_replacements_,
 			pending_chunk_retirements_, independently_publishable_chunk_replacements_,
+			latest_completed_visual_plan_,
 			region, waiting_masks,
 			nullptr, nullptr, &visual_retirements,
 			gpu_publication_dependencies_.get(), &same_layout_edit,
@@ -1010,6 +1089,14 @@ get_gpu_resident_render_activation_cohort(
 					)) {
 					continue;
 				}
+				const bool retained_active_coverage = record.visual_ready &&
+					record.visual_generation == record.generation &&
+					!record.external_visual_activation_required &&
+					render_sink_->gpu_resident_replacement_matches(
+						record.key, record.generation,
+						record.external_visual_transition_mask
+					);
+				if (retained_active_coverage) continue;
 				const bool overlaps_retirement = std::any_of(
 					region.retirements.begin(), region.retirements.end(),
 					[&record](const WtChunkKey &retirement) {
@@ -1289,11 +1376,18 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 		// covers predictive LOD topology replacements, which are interaction work
 		// even before a journal edit exists.
 		isolate_interaction_region = seed.interaction_priority;
-		seed_independently_publishable = std::binary_search(
-			independently_publishable_chunk_replacements_.begin(),
-			independently_publishable_chunk_replacements_.end(),
-			seed_key
-		);
+	}
+	seed_independently_publishable = std::binary_search(
+		independently_publishable_chunk_replacements_.begin(),
+		independently_publishable_chunk_replacements_.end(),
+		seed_key
+	);
+	if (!seed_independently_publishable &&
+		latest_completed_viewer_plan_revision_ != 0 &&
+		find_topology_entry(latest_completed_visual_plan_, seed_key) == nullptr) {
+		result["status"] = "STALE_APPLICATION";
+		result["error"] = "GPU resident activation seed is absent from completed topology";
+		return result;
 	}
 	if (open_viewer_plan_publications_ != 0 &&
 			!seed_independently_publishable) {
@@ -1309,6 +1403,7 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 			*application_, *render_sink_, seed_key,
 			pending_chunk_replacements_, ready_staged_chunk_replacements_,
 			pending_chunk_retirements_, independently_publishable_chunk_replacements_,
+			latest_completed_visual_plan_,
 			region, waiting_masks, nullptr, nullptr, nullptr,
 			gpu_publication_dependencies_.get(), &same_layout_edit,
 			nullptr, nullptr, nullptr,
@@ -1363,6 +1458,33 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 		inventories.push_back(*inventory);
 	}
 	std::vector<WtChunkKey> authoritative_retirements = std::move(region.retirements);
+	struct NativeGpuRetirement {
+		WtChunkKey key;
+		WtGenerationToken generation;
+		std::uint8_t transition_mask = 0;
+	};
+	std::vector<NativeGpuRetirement> native_retirements;
+	native_retirements.reserve(authoritative_retirements.size());
+	for (const WtChunkKey &key : authoritative_retirements) {
+		if (std::find(
+				region.replacements.begin(), region.replacements.end(), key
+			) != region.replacements.end()) {
+			continue;
+		}
+		std::uint8_t transition_mask = 0;
+		if (!render_sink_->get_gpu_resident_boundary_mask(key, transition_mask)) {
+			continue;
+		}
+		const WtGenerationToken generation = render_sink_->applied_generation(key);
+		if (generation.value == 0 || !render_sink_->can_set_gpu_resident_replacement(
+				key, generation, transition_mask
+			)) {
+			result["status"] = "STALE_APPLICATION";
+			result["error"] = "GPU resident retirement became stale";
+			return result;
+		}
+		native_retirements.push_back({ key, generation, transition_mask });
+	}
 	std::vector<bool> activation_required;
 	activation_required.reserve(inventories.size());
 	godot::Array activated_chunks;
@@ -1450,6 +1572,26 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 			);
 		}
 	}
+	// Retire native coverage in the same main-thread commit as its replacement.
+	// The render-thread callback may arrive after this generation is demanded
+	// again, so it cannot be allowed to mutate application readiness later.
+	for (const NativeGpuRetirement &retirement : native_retirements) {
+		if (!render_sink_->set_gpu_resident_replacement(
+				retirement.key,
+				retirement.generation,
+				retirement.transition_mask,
+				false
+			)) {
+			result["status"] = "STALE_APPLICATION";
+			result["error"] = "GPU resident cohort retirement failed";
+			return result;
+		}
+		application_->request_external_visual_reactivation(
+			retirement.key,
+			retirement.generation,
+			retirement.transition_mask
+		);
+	}
 	++gpu_resident_render_activation_cohorts_;
 	gpu_resident_render_activation_cohort_chunks_ += inventories.size();
 	if (same_layout_edit) {
@@ -1457,6 +1599,7 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 		gpu_resident_same_layout_edit_activation_chunks_ += inventories.size();
 	}
 	gpu_resident_render_activated_chunks_ += sink_activated;
+	gpu_resident_render_retired_chunks_ += native_retirements.size();
 	flush_ready_independent_publication_regions();
 	result["status"] = "ACTIVE";
 	result["active"] = true;
@@ -1570,16 +1713,27 @@ godot::Dictionary WorldTransvoxelTerrain::set_gpu_resident_render_chunk_active(
 		return result;
 	}
 	if (!active) {
-		const bool restored = render_sink_->set_gpu_resident_replacement(
+		const bool deactivated = render_sink_->set_gpu_resident_replacement(
 			chunk_identity.key,
 			chunk_identity.generation,
 			chunk_identity.transition_mask,
 			false
 		);
-		if (restored) ++gpu_resident_render_restored_cpu_chunks_;
+		WtApplicationStatus readiness_status = WtApplicationStatus::NotFound;
+		if (deactivated && application_) {
+			readiness_status = application_->request_external_visual_reactivation(
+				chunk_identity.key,
+				chunk_identity.generation,
+				chunk_identity.transition_mask
+			);
+		}
+		if (deactivated) ++gpu_resident_render_restored_cpu_chunks_;
 		++gpu_resident_render_retired_chunks_;
 		result["status"] = "RETIRED";
-		result["cpu_visual_restored"] = restored;
+		result["cpu_visual_restored"] = deactivated;
+		result["application_readiness_revoked"] =
+			readiness_status == WtApplicationStatus::Ok ||
+			readiness_status == WtApplicationStatus::AlreadyCurrent;
 		return result;
 	}
 	if (!gpu_resident_render_publication_enabled_ ||
@@ -1892,6 +2046,9 @@ godot::Dictionary WorldTransvoxelTerrain::get_gpu_resident_render_metrics() cons
 	);
 	result["retired_chunks"] = static_cast<std::int64_t>(
 		gpu_resident_render_retired_chunks_
+	);
+	result["readiness_reconciliations"] = static_cast<std::int64_t>(
+		gpu_resident_render_readiness_reconciliations_
 	);
 	result["reconciled_retires"] = static_cast<std::int64_t>(
 		gpu_resident_render_reconciled_retires_

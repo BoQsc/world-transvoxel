@@ -170,6 +170,7 @@ public:
 		const WtGpuMeshingShadowIdentity &identity,
 		std::string error
 	);
+	bool has_job_version(const WtChunkJob &job) const noexcept;
 	WtGpuMeshingShadowMetrics metrics() const noexcept;
 
 private:

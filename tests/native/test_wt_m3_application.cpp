@@ -777,6 +777,35 @@ void test_gpu_placeholder_waits_for_external_activation(
 			placeholder->key, { 41 }
 		) == wt::WtApplicationStatus::AlreadyCurrent,
 		"repeated GPU activation was not idempotent");
+	check(service.request_external_visual_reactivation(
+			placeholder->key, { 40 }, placeholder->transition_mask
+		) == wt::WtApplicationStatus::StaleGeneration,
+		"stale GPU deactivation revoked current visual readiness");
+	check(service.request_external_visual_reactivation(
+			placeholder->key, { 41 }, placeholder->transition_mask ^ 1U
+		) == wt::WtApplicationStatus::InvalidInput,
+		"GPU deactivation accepted the wrong transition mask");
+	check(service.request_external_visual_reactivation(
+			placeholder->key, { 41 }, placeholder->transition_mask
+		) == wt::WtApplicationStatus::Ok,
+		"current GPU deactivation did not revoke visual readiness");
+	record = service.find_record(placeholder->key);
+	check(record != nullptr && !record->visual_ready &&
+		record->external_visual_activation_required &&
+		!record->external_visual_prepared && record->staged_replacement &&
+		!record->fully_ready(),
+		"dormant GPU visual remained application-ready");
+	check(service.request_external_visual_reactivation(
+			placeholder->key, { 41 }, placeholder->transition_mask
+		) == wt::WtApplicationStatus::AlreadyCurrent,
+		"repeated GPU deactivation was not idempotent");
+	check(service.confirm_external_visual_prepared(
+			placeholder->key, { 41 }, placeholder->transition_mask
+		) == wt::WtApplicationStatus::Ok &&
+		service.confirm_external_visual_activation(
+			placeholder->key, { 41 }
+		) == wt::WtApplicationStatus::Ok,
+		"dormant GPU visual did not reactivate through prepare and commit");
 	check(service.submit_render(placeholder) == wt::WtApplicationStatus::Ok,
 		"duplicate current GPU placeholder submission failed");
 	service.apply(1, 0, render_sink, collision_sink);

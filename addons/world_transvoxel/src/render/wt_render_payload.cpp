@@ -249,6 +249,7 @@ void WtRenderPayload::clear() noexcept {
 	generation = {};
 	world_origin = {};
 	transition_mask = 0;
+	cached_transition_mask = 0;
 	publication_source = WtRenderPublicationSource::CpuAuthority;
 	vertices.clear();
 	indices.clear();
@@ -298,6 +299,7 @@ WtRenderBuildStatus wt_build_render_payload(
 	output.generation = generation;
 	output.world_origin = mesh.world_origin;
 	output.transition_mask = transition_mask;
+	output.cached_transition_mask = cached_transition_mask;
 	std::size_t expected_vertices = mesh.regular.vertices.size();
 	std::size_t expected_indices = mesh.regular.indices.size();
 	for (unsigned int face_index = 0; face_index < 6; ++face_index) {

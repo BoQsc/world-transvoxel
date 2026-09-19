@@ -146,6 +146,11 @@ public:
 		WtGenerationToken generation,
 		std::uint8_t transition_mask
 	);
+	WtApplicationStatus request_external_visual_reactivation(
+		const WtChunkKey &key,
+		WtGenerationToken generation,
+		std::uint8_t transition_mask
+	);
 	WtApplicationStatus supersede_visual_generation(
 		const WtChunkKey &key,
 		WtGenerationToken generation

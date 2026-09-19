@@ -109,12 +109,19 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 					return record.collision_work_required();
 				}
 			);
+			const bool visual_work_pending = std::any_of(
+				application_records.begin(), application_records.end(),
+				[](const WtChunkApplicationRecord &record) {
+					return record.visual_required && !record.visual_ready;
+				}
+			);
 			std::unique_lock<std::mutex> lock(wake_mutex_);
 			const auto wake_predicate = [&]() {
 				return stop_requested_.load() ||
 					wake_sequence_ != observed_wake;
 			};
-			if (unattempted_collision || collision_work_pending) {
+			if (unattempted_collision || collision_work_pending ||
+				visual_work_pending) {
 				const bool signaled = wake_condition_.wait_for(
 					lock, std::chrono::milliseconds(16), wake_predicate
 				);
@@ -344,6 +351,10 @@ bool WtReadOnlyWorldRuntime::pop_publication(
 		}
 	}
 	publication_space_available_.notify_one();
+	// Publication backlog is a gate for the visual-readiness repair pass. Wake
+	// the runtime when the frontend drains an item so an otherwise idle world
+	// cannot sleep forever with a lost GPU capture route.
+	notify_work();
 	if (causal_trace_.enabled()) {
 		const std::uint64_t kind = static_cast<std::uint64_t>(publication.kind);
 		causal_trace_.record(

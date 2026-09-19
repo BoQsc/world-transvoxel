@@ -170,6 +170,36 @@ void WorldTransvoxelTerrain::_process(double delta) {
 		);
 	const WtApplicationMetrics application_after =
 		application_->get_metrics();
+	if (gpu_resident_render_publication_enabled_ && render_sink_) {
+		// visual_ready is a claim about current render-sink coverage, not merely
+		// a remembered activation callback. Repair any split state before staging
+		// decisions so a late GPU retirement cannot strand a future demand.
+		for (const WtChunkApplicationRecord &record : application_->get_records()) {
+			if (!record.visual_required || !record.visual_ready ||
+				!record.gpu_placeholder_published ||
+				record.visual_generation != record.generation ||
+				render_sink_->gpu_resident_replacement_matches(
+					record.key,
+					record.generation,
+					record.external_visual_transition_mask
+				)) {
+				continue;
+			}
+			const WtApplicationStatus status =
+				application_->request_external_visual_reactivation(
+					record.key,
+					record.generation,
+					record.external_visual_transition_mask
+				);
+			if (status == WtApplicationStatus::Ok) {
+				stage_chunk_replacement(
+					record.key,
+					record.independently_publishable_replacement
+				);
+				++gpu_resident_render_readiness_reconciliations_;
+			}
+		}
+	}
 	collision_apply_frame_time_ns_last_ =
 		application_after.collision_apply_time_ns_total -
 		application_before.collision_apply_time_ns_total;
@@ -472,6 +502,17 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 				break;
 			case WtReadOnlyPublicationKind::RenderPayload:
 				if (gpu_resident_placeholder) {
+					if (publication.force_external_visual_reactivation) {
+						status = application_->request_external_visual_reactivation(
+							publication.key,
+							publication.generation,
+							publication.render->transition_mask
+						);
+						if (status != WtApplicationStatus::Ok &&
+								status != WtApplicationStatus::AlreadyCurrent) {
+							break;
+						}
+					}
 					status = application_->apply_gpu_resident_placeholder(
 						publication.render, *render_sink_
 					);
@@ -496,10 +537,13 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 				if (open_viewer_plan_publications_ != 0) {
 					--open_viewer_plan_publications_;
 				}
-				latest_completed_viewer_plan_revision_ = std::max(
-					latest_completed_viewer_plan_revision_,
-					publication.world_revision
-				);
+				if (publication.world_revision >=
+						latest_completed_viewer_plan_revision_) {
+					latest_completed_viewer_plan_revision_ =
+						publication.world_revision;
+					latest_completed_visual_plan_ =
+						std::move(publication.visual_plan_entries);
+				}
 				break;
 			case WtReadOnlyPublicationKind::EditCommitted:
 				synchronous_world_error_ = "ok";
@@ -1051,6 +1095,7 @@ void WorldTransvoxelTerrain::reset_world_application(std::size_t capacity) {
 	pending_render_retirements_.reserve(staging_capacity);
 	open_viewer_plan_publications_ = 0;
 	latest_completed_viewer_plan_revision_ = 0;
+	latest_completed_visual_plan_.clear();
 	regional_visibility_publications_ = 0;
 	regional_visibility_replacements_ = 0;
 	regional_visibility_retirements_ = 0;

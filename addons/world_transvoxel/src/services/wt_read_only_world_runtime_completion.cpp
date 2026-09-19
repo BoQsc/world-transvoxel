@@ -358,6 +358,7 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 				render->generation = completion.generation;
 				render->world_origin = completion.mesh->world_origin;
 				render->transition_mask = completion.mesh->transition_mask;
+				render->cached_transition_mask = completion.mesh->cached_transition_mask;
 				render->publication_source =
 					WtRenderPublicationSource::GpuResidentPlaceholder;
 				if (resource_cache_->insert_render(render, record->generation) !=
@@ -422,6 +423,7 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			render->generation = completion.generation;
 			render->world_origin = completion.mesh->world_origin;
 			render->transition_mask = completion.mesh->transition_mask;
+			render->cached_transition_mask = completion.mesh->cached_transition_mask;
 			render->publication_source =
 				WtRenderPublicationSource::GpuResidentPlaceholder;
 			if (resource_cache_->insert_render(render, record->generation) !=
@@ -808,7 +810,15 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 			readiness_repair_remesh_attempts_.end(),
 			[this](const ReadinessRepairRemeshAttempt &attempt) {
 				WtChunkApplicationRecord record;
-				return !application_->copy_record(attempt.key, record) ||
+				const bool remesh_still_queued = std::any_of(
+					pending_transition_remeshes_.begin(),
+					pending_transition_remeshes_.end(),
+					[&attempt](const WtDesiredChunk &item) {
+						return item.key == attempt.key;
+					}
+				);
+				return !remesh_still_queued ||
+					!application_->copy_record(attempt.key, record) ||
 					!record.staged_replacement ||
 					record.generation != attempt.generation;
 			}
@@ -857,7 +867,7 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 		Failed,
 	};
 	const auto process_item = [&](const WtDesiredChunk &item) -> RepairResult {
-		if (repairs >= 64U || scheduler_->available_job_capacity() == 0) {
+		if (repairs >= 64U) {
 			return RepairResult::CapacityBlocked;
 		}
 		if (!item.visual_required) return RepairResult::Skipped;
@@ -937,6 +947,35 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 					}
 					return RepairResult::Failed;
 				}
+				readiness_repair_remesh_attempts_.push_back({
+					item.key,
+					record->generation,
+				});
+				++repairs;
+				progressed = true;
+				return RepairResult::Repaired;
+			}
+			if (render->publication_source ==
+					WtRenderPublicationSource::GpuResidentPlaceholder &&
+				application_record.external_visual_activation_required &&
+				!application_record.external_visual_prepared) {
+				WtChunkJob capture_job;
+				capture_job.key = item.key;
+				capture_job.generation = record->generation;
+				capture_job.source_revision = record->source_revision;
+				capture_job.world_revision = record->world_revision;
+				if (gpu_meshing_shadow_ &&
+					gpu_meshing_shadow_->has_job_version(capture_job)) {
+					return RepairResult::Waiting;
+				}
+				if (remesh_already_requested(item.key, record->generation)) {
+					return RepairResult::Skipped;
+				}
+				// The cached placeholder contains no GPU input. If its exact capture
+				// token is absent from every bounded queue state, only a successor
+				// generation can recreate the route. Collision readiness is preserved by
+				// transition-remesh publication.
+				queue_transition_remeshes({ item });
 				readiness_repair_remesh_attempts_.push_back({
 					item.key,
 					record->generation,
@@ -1036,7 +1075,7 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 	};
 	for (std::size_t index = 0;
 			index < readiness_repair_candidate_keys_.size();) {
-		if (repairs >= 64U || scheduler_->available_job_capacity() == 0) {
+		if (repairs >= 64U) {
 			break;
 		}
 		const WtDesiredChunk *desired =
@@ -1063,7 +1102,7 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 		);
 	}
 	for (const WtDesiredChunk &item : desired_->get_desired_chunks()) {
-		if (repairs >= 64U || scheduler_->available_job_capacity() == 0) {
+		if (repairs >= 64U) {
 			break;
 		}
 		const RepairResult result = process_item(item);

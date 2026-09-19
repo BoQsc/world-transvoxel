@@ -2205,11 +2205,15 @@ phases select the same region. Moving foreground topology therefore cannot join
 an unrelated distant retirement frontier merely because both are pending.
 
 If cohort closure encounters an active desired boundary whose candidate
-transition mask is incompatible but which has no replacement generation, the
-selector reports that exact key and submits a deduplicated transition-remesh
-repair to the runtime thread. The repair uses the current desired demand and
-creates a normal authoritative generation; cohort polling cannot substitute for
-or synthesize the missing geometry.
+transition mask is incompatible, CPU topology submits a deduplicated
+transition-remesh repair to the runtime thread. A GPU-resident placeholder whose
+immutable generation cached every required transition face instead republishes
+that same generation with the desired six-bit visibility mask. The render
+callback validates the generation, revisions, surface, and cached-face superset,
+then changes all matching indirect instance counts as one lifecycle command.
+Only after that callback completes may application and render-sink authority be
+reconfirmed. This visibility-only path performs no page sampling, mesh job, GPU
+capture, allocation, readback, or collision work.
 
 Retained active coverage is appended only for the visual retirements selected
 for that publication region. Collision-only and unrelated global retirements
@@ -2223,10 +2227,11 @@ retirements and submits deduplicated transition-remesh repairs for records not
 already in the replacement set. A retained stale generation cannot leave a
 stationary visual cohort waiting with every producer queue idle.
 
-A prepared member whose desired transition mask is still incompatible receives
-the same forced transition-remesh repair. Ordinary priority promotion cannot
-change an already prepared generation, so treating this case as a priority wait
-would otherwise leave a one-member cohort permanently idle.
+A prepared CPU member whose desired transition mask is still incompatible
+receives the same forced transition-remesh repair. A prepared GPU-resident member
+uses the validated visibility-only operation above and retains its geometry
+generation and resource ownership. A mask update that requests an uncached face
+is rejected and returns to normal authoritative remeshing.
 
 Cohort boundary lookup is the union of active GPU coverage and pending or ready
 visual replacements. An asynchronous application record with neither cannot

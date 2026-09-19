@@ -373,17 +373,17 @@ bool WtGpuMeshingShadowQueue::pop(
 			queued_.begin(), queued_.end(),
 			[this, &selected_job](const WtGpuMeshingShadowRequest &candidate) {
 				if (job_version_in_flight_locked(candidate.job)) return false;
-				if (candidate.job.source_revision <
-					selected_job.source_revision) {
-					return true;
+				// A newer source revision does not replace a different chunk. Dropping
+				// that request here leaves its application generation waiting forever,
+				// because no successor capture exists for the unrelated key.
+				if (candidate.job.key != selected_job.key) return false;
+				if (candidate.job.source_revision != selected_job.source_revision) {
+					return candidate.job.source_revision < selected_job.source_revision;
 				}
-				return candidate.job.key == selected_job.key &&
-					candidate.job.source_revision ==
-						selected_job.source_revision &&
-					(candidate.job.world_revision < selected_job.world_revision ||
+				return candidate.job.world_revision < selected_job.world_revision ||
 					(candidate.job.world_revision == selected_job.world_revision &&
 						candidate.job.generation.value <
-							selected_job.generation.value));
+							selected_job.generation.value);
 			}
 		),
 		queued_.end()
@@ -419,6 +419,25 @@ bool WtGpuMeshingShadowQueue::job_version_in_flight_locked(
 		in_flight_.begin(), in_flight_.end(),
 		[&job](const WtGpuMeshingShadowRequest &request) {
 			return same_job_version(request.job, job);
+		}
+	);
+}
+
+bool WtGpuMeshingShadowQueue::has_job_version(
+	const WtChunkJob &job
+) const noexcept {
+	std::lock_guard<std::mutex> lock(mutex_);
+	if (std::any_of(
+			queued_.begin(), queued_.end(),
+			[&job](const WtGpuMeshingShadowRequest &request) {
+				return same_job_version(request.job, job);
+			}
+		)) return true;
+	if (job_version_in_flight_locked(job)) return true;
+	return std::any_of(
+		capture_reservations_.begin(), capture_reservations_.end(),
+		[&job](const CaptureReservation &reservation) {
+			return same_job_version(reservation.job, job);
 		}
 	);
 }
@@ -626,9 +645,9 @@ bool WtGpuMeshingShadowQueue::supersedes_queued(
 	const WtGpuMeshingShadowCapture &capture,
 	const WtGpuMeshingShadowRequest &queued
 ) noexcept {
+	if (capture.job.key != queued.job.key) return false;
 	if (capture.job.source_revision > queued.job.source_revision) return true;
 	if (capture.job.source_revision < queued.job.source_revision) return false;
-	if (capture.job.key != queued.job.key) return false;
 	if (capture.job.world_revision > queued.job.world_revision) return true;
 	if (capture.job.world_revision < queued.job.world_revision) return false;
 	return capture.job.generation.value > queued.job.generation.value;

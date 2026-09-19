@@ -446,15 +446,21 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	bool foreground_topology_refresh_event = false;
 	{
 		std::lock_guard<std::mutex> lock(input_mutex_);
-		if (viewer_events_.empty()) {
-			if (foreground_topology_refresh_pending_) {
-				foreground_topology_refresh_pending_ = false;
-				foreground_topology_refresh_event = true;
-				event.kind = ViewerEventKind::RefreshForegroundTopology;
-				event.snapshot = planner_viewers_.empty() ?
-					WtViewerSnapshot { 1, 0.0, 0.0, 0.0, plan_revision_ + 1 } :
-					planner_viewers_.front().snapshot;
-			} else if (edit_lod_retention_refresh_pending_) {
+		// Interaction topology has its own coalesced lane. It must run before
+		// ordinary visual viewer events: a continuously moving viewer can keep the
+		// general queue non-empty indefinitely, while the interaction shell is the
+		// bounded exact-LOD0 contract needed at the player's current/predicted
+		// position. Repeated lease revisions with identical keys are filtered when
+		// the lease is applied, so this priority cannot starve broad replanning.
+		if (foreground_topology_refresh_pending_) {
+			foreground_topology_refresh_pending_ = false;
+			foreground_topology_refresh_event = true;
+			event.kind = ViewerEventKind::RefreshForegroundTopology;
+			event.snapshot = planner_viewers_.empty() ?
+				WtViewerSnapshot { 1, 0.0, 0.0, 0.0, plan_revision_ + 1 } :
+				planner_viewers_.front().snapshot;
+		} else if (viewer_events_.empty()) {
+			if (edit_lod_retention_refresh_pending_) {
 				if (edit_content_waiting) return false;
 				edit_lod_retention_refresh_pending_ = false;
 				retention_refresh_event = true;
@@ -1286,6 +1292,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	WtReadOnlyPublication plan_completed;
 	plan_completed.kind = WtReadOnlyPublicationKind::ViewerPlanCompleted;
 	plan_completed.world_revision = plan_snapshot.revision;
+	plan_completed.visual_plan_entries = current_plan_.entries;
 	if (!push_publication(std::move(plan_completed))) {
 		if (!stop_requested_.load()) {
 			set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);

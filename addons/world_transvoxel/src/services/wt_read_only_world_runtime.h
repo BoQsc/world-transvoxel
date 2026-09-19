@@ -132,6 +132,10 @@ struct WtReadOnlyPublication {
 	bool independently_publishable_replacement = false;
 	bool interaction_critical = false;
 	bool committed_edit = false;
+	bool force_external_visual_reactivation = false;
+	// Immutable visual topology for ViewerPlanCompleted. The frontend keeps only
+	// the newest snapshot and uses its masks as the sole GPU cohort authority.
+	std::vector<WtLodMapEntry> visual_plan_entries;
 };
 
 struct WtVisibilityCoveragePriorityRequest {
@@ -470,6 +474,9 @@ private:
 	std::uint64_t staging_observed_visual_activation_sequence_ = 0;
 	std::uint64_t plan_revision_ = 0;
 	std::uint64_t next_interaction_warm_generation_ = 1;
+	// Canonical pages currently owned by the predictive interaction warmer.
+	// Updates request only additions and cancel obsolete queued ownership.
+	std::vector<WtChunkKey> interaction_warm_keys_;
 	std::unique_ptr<WtStreamScheduler> scheduler_;
 	std::unique_ptr<WtChunkApplicationService> application_;
 	std::unique_ptr<WtStoragePageCache> page_cache_;

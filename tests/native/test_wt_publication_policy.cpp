@@ -407,6 +407,26 @@ void cold_same_lod_cohort_regression() {
 	std::cout << "GPU_COLD_SAME_LOD_COHORT_PASS cold_members=1 edit_members=2 backlog=1024 hot_members=1\n";
 }
 
+void same_key_replacement_retirement_regression() {
+	const wt::WtChunkKey seed {3, 0, 1, 2};
+	const Keys replacements {seed};
+	const Keys retirements {seed};
+	wt::WtChunkPublicationRegion region;
+	Keys waiting;
+	const auto lookup = [&seed](
+			const wt::WtChunkKey &key, wt::WtGpuPublicationBoundary &boundary) {
+		if (key != seed) return false;
+		boundary = {0, false, false};
+		return true;
+	};
+	check(wt::wt_build_gpu_chunk_publication_cohort(
+		seed, replacements, retirements, lookup, region, waiting, 64
+	), "same-key GPU generation replacement was rejected as retirement-only");
+	check(region.replacements == replacements && region.retirements == retirements &&
+		waiting.empty(), "same-key GPU generation swap changed its atomic cohort");
+	std::cout << "GPU_SAME_KEY_GENERATION_SWAP_PASS replacements=1 retirements=1\n";
+}
+
 wt::WtChunkKey read_key() {
 	wt::WtChunkKey key; int lod;
 	check(bool(std::cin >> key.x >> key.y >> key.z >> lod) && lod >= 0 && lod <= wt::kWtMaximumLod,
@@ -504,6 +524,7 @@ int main(int argc, char **argv) {
 		dependency_snapshot_regression();
 		sparse_fine_face_cohort_regression();
 		cold_same_lod_cohort_regression();
+		same_key_replacement_retirement_regression();
 		coverage_regression();
 	}
 }

@@ -377,6 +377,7 @@ private:
 	std::uint64_t gpu_resident_same_layout_edit_activation_chunks_ = 0;
 	std::uint64_t gpu_resident_render_activated_chunks_ = 0;
 	std::uint64_t gpu_resident_render_retired_chunks_ = 0;
+	std::uint64_t gpu_resident_render_readiness_reconciliations_ = 0;
 	std::uint64_t gpu_resident_render_reconciled_retires_ = 0;
 	std::uint64_t gpu_resident_render_restored_cpu_chunks_ = 0;
 	WtWorldLifecycleState last_notified_state_ =
@@ -393,6 +394,7 @@ private:
 	std::vector<WtChunkKey> pending_render_retirements_;
 	std::uint32_t open_viewer_plan_publications_ = 0;
 	std::uint64_t latest_completed_viewer_plan_revision_ = 0;
+	std::vector<WtLodMapEntry> latest_completed_visual_plan_;
 	std::uint64_t regional_visibility_publications_ = 0;
 	std::uint64_t regional_visibility_replacements_ = 0;
 	std::uint64_t regional_visibility_retirements_ = 0;

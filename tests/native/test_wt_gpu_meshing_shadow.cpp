@@ -617,6 +617,50 @@ int main() {
 		"unaffected dequeue request did not release"
 	);
 
+	WtGpuMeshingShadowQueue cross_chunk_revision_queue;
+	require(
+		cross_chunk_revision_queue.begin(
+			2, true, WtGpuMeshingCaptureStage::PreMeshField
+		),
+		"cross-chunk revision queue did not start"
+	);
+	WtGpuMeshingShadowCapture older_source = capture_for(40);
+	older_source.capture_stage = WtGpuMeshingCaptureStage::PreMeshField;
+	older_source.job.key.x = 10;
+	older_source.job.source_revision = 7;
+	WtGpuMeshingShadowCapture newer_unrelated_source = capture_for(41);
+	newer_unrelated_source.capture_stage = WtGpuMeshingCaptureStage::PreMeshField;
+	newer_unrelated_source.job.key.x = 11;
+	newer_unrelated_source.job.source_revision = 8;
+	require(
+		cross_chunk_revision_queue.capture(older_source) &&
+		cross_chunk_revision_queue.capture(newer_unrelated_source),
+		"distinct source revisions did not enter the bounded queue"
+	);
+	require(
+		cross_chunk_revision_queue.has_job_version(older_source.job) &&
+		cross_chunk_revision_queue.has_job_version(newer_unrelated_source.job),
+		"queued GPU capture identity was not observable by readiness repair"
+	);
+	WtGpuMeshingShadowRequest newer_unrelated_request;
+	require(
+		cross_chunk_revision_queue.pop(newer_unrelated_request) &&
+			newer_unrelated_request.job.key.x == 11 &&
+			cross_chunk_revision_queue.metrics().queued_requests == 1 &&
+			cross_chunk_revision_queue.metrics().dequeue_superseded_requests == 0,
+		"dequeue discarded an unrelated chunk from an older source revision"
+	);
+	require(
+		cross_chunk_revision_queue.has_job_version(newer_unrelated_source.job),
+		"in-flight GPU capture identity was not observable by readiness repair"
+	);
+	WtGpuMeshingShadowRequest older_source_request;
+	require(
+		cross_chunk_revision_queue.pop(older_source_request) &&
+			older_source_request.job.key.x == 10,
+		"older source revision for an unrelated chunk was lost"
+	);
+
 	WtGpuMeshingShadowQueue interaction_lane_queue;
 	require(interaction_lane_queue.begin(16),
 		"interaction lane queue did not start");

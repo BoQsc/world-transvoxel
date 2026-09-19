@@ -353,6 +353,33 @@ WtApplicationStatus WtChunkApplicationService::confirm_external_visual_prepared(
 	return WtApplicationStatus::Ok;
 }
 
+WtApplicationStatus WtChunkApplicationService::request_external_visual_reactivation(
+	const WtChunkKey &key,
+	WtGenerationToken generation,
+	std::uint8_t transition_mask
+) {
+	std::lock_guard<std::mutex> lock(records_mutex_);
+	WtChunkApplicationRecord *record = find_record_mutable(key);
+	if (record == nullptr) return WtApplicationStatus::NotFound;
+	if (record->generation != generation ||
+		record->visual_generation != generation ||
+		record->visual_generation_superseded) {
+		return WtApplicationStatus::StaleGeneration;
+	}
+	if (!record->visual_required ||
+		record->external_visual_transition_mask != transition_mask) {
+		return WtApplicationStatus::InvalidInput;
+	}
+	if (record->external_visual_activation_required) {
+		return WtApplicationStatus::AlreadyCurrent;
+	}
+	record->external_visual_activation_required = true;
+	record->external_visual_prepared = false;
+	record->visual_ready = false;
+	record->staged_replacement = true;
+	return WtApplicationStatus::Ok;
+}
+
 WtApplicationStatus WtChunkApplicationService::supersede_visual_generation(
 	const WtChunkKey &key,
 	WtGenerationToken generation
