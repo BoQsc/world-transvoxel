@@ -682,6 +682,35 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	} else if (staging_event) {
 		planning_viewers = candidate_viewers;
 		candidate_plan = staging_target_plan_;
+	} else if (foreground_topology_refresh_event &&
+			!interaction_topology_keys.empty()) {
+		// Interaction focus is a small, exact working set. Project it from the
+		// accepted visual cut instead of rebuilding the broad moving-viewer target.
+		// The normal staging block below still retains the active coarse cover until
+		// the complete balanced descendant replacement is ready.
+		planning_viewers = candidate_viewers;
+		const std::uint64_t local_plan_started_ns = wt_causal_trace_now_ns();
+		plan_status = lod_planner_->project_foreground_target(
+			current_plan_, interaction_topology_keys,
+			kWtInteractionFocusPriority, candidate_plan,
+			cancel_for_pending_edit
+		);
+		const std::uint64_t local_plan_elapsed_ns =
+			wt_causal_trace_now_ns() - local_plan_started_ns;
+		std::lock_guard<std::mutex> lock(metrics_mutex_);
+		if (plan_status == WtBalancedLodPlannerStatus::Ok) {
+			++metrics_.interaction_local_plan_refreshes;
+			if (candidate_plan.entries.size() > current_plan_.entries.size()) {
+				metrics_.interaction_local_plan_added_chunks +=
+					candidate_plan.entries.size() - current_plan_.entries.size();
+			}
+			metrics_.interaction_local_plan_ns_maximum = std::max(
+				metrics_.interaction_local_plan_ns_maximum,
+				local_plan_elapsed_ns
+			);
+		} else if (plan_status != WtBalancedLodPlannerStatus::Cancelled) {
+			++metrics_.interaction_local_plan_rejections;
+		}
 	} else {
 		const std::size_t retention_viewer_capacity =
 			kWtEditLodRetentionCapacity;
@@ -716,7 +745,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 					status = lod_planner_->plan(
 						planning_viewers, {}, collision_policy, candidate_plan,
 						config_.visual_viewer_collision_enabled,
-						cancel_for_pending_edit, {});
+						cancel_for_pending_edit, interaction_topology_keys);
 					if (status == WtBalancedLodPlannerStatus::Ok) {
 						std::lock_guard<std::mutex> lock(metrics_mutex_);
 						++metrics_.viewer_hysteresis_fallbacks;
@@ -782,7 +811,7 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 					plan_status = lod_planner_->plan(
 						planning_viewers, {}, collision_policy, candidate_plan,
 						config_.visual_viewer_collision_enabled,
-						cancel_for_pending_edit, {});
+						cancel_for_pending_edit, interaction_topology_keys);
 					if (plan_status == WtBalancedLodPlannerStatus::Ok) {
 						std::lock_guard<std::mutex> lock(metrics_mutex_);
 						++metrics_.viewer_hysteresis_fallbacks;

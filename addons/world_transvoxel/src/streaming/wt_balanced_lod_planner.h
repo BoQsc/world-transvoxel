@@ -87,6 +87,13 @@ public:
 		WtBalancedLodPlan &output, bool &complete,
 		const std::function<bool()> &cancel_requested = {}
 	) const;
+	WtBalancedLodPlannerStatus project_foreground_target(
+		const WtBalancedLodPlan &current,
+		const std::vector<WtChunkKey> &foreground_keys,
+		std::int32_t foreground_priority,
+		WtBalancedLodPlan &output,
+		const std::function<bool()> &cancel_requested = {}
+	) const;
 	std::size_t catalog_size() const noexcept;
 	WtPageHierarchyMetrics hierarchy_metrics() const noexcept;
 

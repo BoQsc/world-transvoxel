@@ -125,6 +125,10 @@ struct WtReadOnlyRuntimeMetrics {
 	std::uint64_t foreground_priority_matched_keys = 0;
 	std::uint64_t foreground_priority_missing_keys = 0;
 	std::uint64_t foreground_priority_changed_priorities = 0;
+	std::uint64_t interaction_local_plan_refreshes = 0;
+	std::uint64_t interaction_local_plan_added_chunks = 0;
+	std::uint64_t interaction_local_plan_rejections = 0;
+	std::uint64_t interaction_local_plan_ns_maximum = 0;
 	std::uint64_t foreground_priority_last_source_id = 0;
 	std::uint64_t foreground_priority_last_revision = 0;
 	std::uint64_t foreground_priority_last_class = 0;

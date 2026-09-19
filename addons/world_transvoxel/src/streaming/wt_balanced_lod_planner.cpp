@@ -1091,6 +1091,100 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_foreground(
 	return WtBalancedLodPlannerStatus::Ok;
 }
 
+WtBalancedLodPlannerStatus WtBalancedLodPlanner::project_foreground_target(
+	const WtBalancedLodPlan &current,
+	const std::vector<WtChunkKey> &foreground_keys,
+	std::int32_t foreground_priority,
+	WtBalancedLodPlan &output,
+	const std::function<bool()> &cancel_requested
+) const {
+	output.clear();
+	if (!valid_) return WtBalancedLodPlannerStatus::InvalidConfiguration;
+	if (current.entries.empty() || foreground_keys.empty()) {
+		output = current;
+		return WtBalancedLodPlannerStatus::Ok;
+	}
+	std::vector<WtChunkKey> focus = foreground_keys;
+	std::sort(focus.begin(), focus.end());
+	focus.erase(std::unique(focus.begin(), focus.end()), focus.end());
+	for (const WtChunkKey &key : focus) {
+		if (!wt_is_valid_chunk_key(key) || key.lod != 0) {
+			return WtBalancedLodPlannerStatus::InvalidLodMap;
+		}
+	}
+	focus.erase(std::remove_if(
+		focus.begin(), focus.end(),
+		[&](const WtChunkKey &key) { return !catalog_contains(key); }
+	), focus.end());
+	std::vector<WtChunkKey> leaves;
+	leaves.reserve(std::min(active_capacity_, current.entries.size() + focus.size()));
+	for (const WtLodMapEntry &entry : current.entries) leaves.push_back(entry.key);
+	std::sort(leaves.begin(), leaves.end());
+	std::uint8_t coverage_lod = 0;
+	for (const WtLodMapEntry &entry : current.entries) {
+		coverage_lod = std::max(coverage_lod, entry.key.lod);
+	}
+	for (const WtChunkKey &key : focus) {
+		if (cancel_requested && cancel_requested()) {
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
+		const bool already_covered = std::any_of(
+			leaves.begin(), leaves.end(),
+			[&](const WtChunkKey &candidate) {
+				return bounds_contain(candidate, key);
+			}
+		);
+		if (!already_covered) {
+			WtChunkKey root = key;
+			while (root.lod < coverage_lod) root = wt_parent_chunk_key(root);
+			if (!catalog_contains(root)) root = key;
+			if (leaves.size() >= active_capacity_) {
+				return WtBalancedLodPlannerStatus::CapacityExceeded;
+			}
+			leaves.push_back(root);
+			std::sort(leaves.begin(), leaves.end());
+			leaves.erase(std::unique(leaves.begin(), leaves.end()), leaves.end());
+		}
+		for (;;) {
+			const auto leaf = std::find_if(
+				leaves.begin(), leaves.end(),
+				[&](const WtChunkKey &candidate) {
+					return bounds_contain(candidate, key);
+				}
+			);
+			if (leaf == leaves.end() || leaf->lod == 0) break;
+			const std::size_t leaf_index = static_cast<std::size_t>(
+				std::distance(leaves.begin(), leaf)
+			);
+			const WtBalancedLodPlannerStatus status = refine_leaf(leaves, leaf_index);
+			if (status != WtBalancedLodPlannerStatus::Ok) return status;
+		}
+	}
+	WtLodMap map(active_capacity_);
+	const WtBalancedLodPlannerStatus balance_status =
+		balance(leaves, map, cancel_requested);
+	if (balance_status != WtBalancedLodPlannerStatus::Ok) return balance_status;
+	output.entries = map.get_entries();
+	output.demands.reserve(output.entries.size());
+	for (const WtLodMapEntry &entry : output.entries) {
+		if (cancel_requested && cancel_requested()) {
+			output.clear();
+			return WtBalancedLodPlannerStatus::Cancelled;
+		}
+		if (!append_staged_demand(entry.key, current, current, output.demands)) {
+			output.demands.push_back({
+				entry.key, foreground_priority, false, true
+			});
+		}
+		if (std::binary_search(focus.begin(), focus.end(), entry.key)) {
+			WtViewerChunkDemand &demand = output.demands.back();
+			demand.priority = std::max(demand.priority, foreground_priority);
+			demand.visual_required = true;
+		}
+	}
+	return WtBalancedLodPlannerStatus::Ok;
+}
+
 std::size_t WtBalancedLodPlanner::catalog_size() const noexcept {
 	return page_hierarchy_.page_count();
 }

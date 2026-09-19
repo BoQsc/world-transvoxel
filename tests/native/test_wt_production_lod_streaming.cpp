@@ -2693,6 +2693,38 @@ int main(int argc, char **argv) {
 		wt::WtBalancedLodPlan rejected;
 		check(bounded.stage_foreground(target, empty, roots, 3, focus, rejected, complete) == wt::WtBalancedLodPlannerStatus::CapacityExceeded,
 			"foreground projection exceeded configured capacity");
+		wt::WtBalancedLodPlan local_target, local_staged;
+		check(planner.project_foreground_target(
+			coarse, focus, wt::kWtInteractionFocusPriority, local_target
+		) == wt::WtBalancedLodPlannerStatus::Ok,
+			"bounded interaction target projection failed");
+		for (const auto &key : focus) {
+			const auto demand = std::find_if(
+				local_target.demands.begin(), local_target.demands.end(),
+				[&](const wt::WtViewerChunkDemand &item) {
+					return item.key == key;
+				}
+			);
+			check(find_entry(local_target, key) != nullptr &&
+				demand != local_target.demands.end() &&
+				demand->priority == wt::kWtInteractionFocusPriority &&
+				demand->visual_required,
+				"bounded interaction target omitted exact priority LOD0 demand");
+		}
+		check(find_entry(local_target, {2,0,0,3}) != nullptr,
+			"bounded interaction target changed unrelated coarse coverage");
+		check(planner.stage_foreground(
+			local_target, coarse, roots, 3, focus, local_staged, complete
+		) == wt::WtBalancedLodPlannerStatus::Ok,
+			"bounded interaction target did not pass coverage-first staging");
+		for (const auto &key : focus) check(
+			find_entry(local_staged, key) != nullptr,
+			"coverage-first local staging omitted a focus leaf"
+		);
+		check(bounded.project_foreground_target(
+			coarse, focus, wt::kWtInteractionFocusPriority, rejected
+		) == wt::WtBalancedLodPlannerStatus::CapacityExceeded,
+			"bounded interaction target exceeded active capacity");
 		std::printf("FOREGROUND_PROJECTION_PASS full_resolution_keys=%zu requested_leaves=%zu coarse_publication_phases=1\n", focus.size(), projected.entries.size());
 	}
 	const bool hierarchical_staging_ok =
