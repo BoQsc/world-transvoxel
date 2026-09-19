@@ -2029,3 +2029,12 @@ promoted into this lane. Background workers may help drain queued edit work,
 but the reserved worker never starts whole-page streaming work. This makes the
 edit-to-physics start bound independent of cold streaming backlog while keeping
 the CPU collision mesh authoritative.
+
+An incremental collision mesh enters a separate bounded completion queue as
+soon as its dirty blocks finish, before the mixed worker job continues
+static-water or visual completion. The runtime drains this queue before normal
+mesh completions and generation-checks it through the existing collision
+callback. The final mixed completion records that its collision branch already
+completed and cannot repeat it. If the early queue is full, the worker retains
+the collision for the normal completion path, preserving bounded memory and
+eventual progress.

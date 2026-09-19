@@ -87,6 +87,11 @@ std::uint64_t steady_time_ns() noexcept {
 } // namespace
 
 struct WtPageMeshingRuntimeService::AsyncState {
+	struct EarlyCollisionCompletion {
+		WtTerrainMeshReadyCallback callback;
+		WtTerrainMeshCompletion completion;
+	};
+
 	explicit AsyncState(
 		std::size_t requested_worker_count,
 		std::size_t requested_queue_capacity
@@ -131,6 +136,28 @@ struct WtPageMeshingRuntimeService::AsyncState {
 		const bool interactive_collision =
 			prepared.collision_required && prepared.incremental_edit;
 		prepared.interaction_lane = interactive_collision;
+		if (interactive_collision && prepared.terrain_mesh_ready) {
+			prepared.early_collision_ready = [this, callback =
+				prepared.terrain_mesh_ready](WtTerrainMeshCompletion completion) {
+				{
+					std::lock_guard<std::mutex> early_lock(early_collision_mutex);
+					if (stopping.load(std::memory_order_acquire) ||
+						early_collision_completions.size() >= completion_capacity) {
+						return false;
+					}
+					early_collision_completions.push_back({
+						callback, std::move(completion),
+					});
+				}
+				std::function<void()> notify;
+				{
+					std::lock_guard<std::mutex> notifier_lock(notifier_mutex);
+					notify = notifier;
+				}
+				if (notify) notify();
+				return true;
+			};
+		}
 		std::vector<PreparedMeshJob> &queue = interactive_collision ?
 			interactive_work : work;
 		if (stopping.load(std::memory_order_acquire) ||
@@ -180,6 +207,14 @@ struct WtPageMeshingRuntimeService::AsyncState {
 			metrics.mesh_worker_queued_completions = completions.size();
 		}
 		completion_space.notify_one();
+		return true;
+	}
+
+	bool pop_early_collision_completion(EarlyCollisionCompletion &completion) {
+		std::lock_guard<std::mutex> lock(early_collision_mutex);
+		if (early_collision_completions.empty()) return false;
+		completion = std::move(early_collision_completions.front());
+		early_collision_completions.erase(early_collision_completions.begin());
 		return true;
 	}
 
@@ -418,6 +453,8 @@ struct WtPageMeshingRuntimeService::AsyncState {
 	mutable std::mutex completion_mutex;
 	std::condition_variable completion_space;
 	std::vector<PreparedMeshCompletion> completions;
+	mutable std::mutex early_collision_mutex;
+	std::vector<EarlyCollisionCompletion> early_collision_completions;
 	mutable std::mutex notifier_mutex;
 	std::function<void()> notifier;
 	mutable std::mutex metrics_mutex;
@@ -728,6 +765,14 @@ WtPageMeshingRuntimeService::process_async_mesh_completions(
 ) {
 	processed = 0;
 	if (!async_) return WtPageMeshingRuntimeStatus::InvalidConfiguration;
+	AsyncState::EarlyCollisionCompletion early;
+	while (processed < maximum_count &&
+		async_->pop_early_collision_completion(early)) {
+		++processed;
+		if (!early.callback(early.completion)) {
+			return WtPageMeshingRuntimeStatus::TerrainMeshReadyCallbackFailure;
+		}
+	}
 	PreparedMeshCompletion completion;
 	while (processed < maximum_count && async_->pop_completion(completion)) {
 		++processed;

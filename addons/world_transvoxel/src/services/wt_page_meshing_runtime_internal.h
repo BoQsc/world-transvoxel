@@ -21,6 +21,7 @@ struct WtPageMeshingRuntimeService::PreparedMeshJob {
 	bool defer_gpu_capture = false;
 	std::vector<PreparedDependency> dependencies;
 	WtTerrainMeshReadyCallback terrain_mesh_ready;
+	std::function<bool(WtTerrainMeshCompletion)> early_collision_ready;
 	WtMeshExecutionCallback execution_callback;
 	WtMeshCellCaptureCallback cell_capture_callback;
 	bool pre_mesh_field_capture = false;
@@ -36,6 +37,7 @@ struct WtPageMeshingRuntimeService::PreparedMeshCompletion {
 	PreparedMeshJob prepared;
 	std::shared_ptr<WtChunkMeshResult> mesh;
 	std::shared_ptr<WtChunkMeshResult> collision_patch_mesh;
+	bool collision_emitted_early = false;
 	std::uint8_t collision_dirty_regular_brick_mask = 0xff;
 	std::shared_ptr<WtChunkMeshResult> water_mesh;
 	std::vector<WtRecordedMeshingCell> terrain_records;

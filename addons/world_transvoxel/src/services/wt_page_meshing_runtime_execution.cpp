@@ -654,6 +654,18 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		);
 	}
 	const bool mesh_ok = terrain_status == WtChunkMeshingStatus::Ok;
+	if (mesh_ok && completion.collision_patch_mesh &&
+		completion.prepared.early_collision_ready) {
+		completion.collision_emitted_early =
+			completion.prepared.early_collision_ready({
+				completion.prepared.job.key,
+				completion.prepared.job.generation,
+				completion.collision_patch_mesh,
+				completion.prepared.incremental_edit,
+				completion.collision_dirty_regular_brick_mask,
+				true,
+			});
+	}
 	completion.water_mesh = std::make_shared<WtChunkMeshResult>();
 	bool water_mesh_ok = mesh_ok;
 	if (mesh_ok && (completion.prepared.visual_required ||
@@ -778,11 +790,11 @@ WtPageMeshingRuntimeService::accept_prepared_mesh_completion(
 	const std::size_t record_index = static_cast<std::size_t>(
 		record - records_.begin()
 	);
-	bool collision_completed_early = false;
+	bool collision_completed_early = completion.collision_emitted_early;
 	if (completion.status == WtPageMeshingRuntimeStatus::Ok &&
 		(!completion.gpu_resident_skip_cpu_meshing ||
 			completion.collision_patch_mesh) &&
-		completion.prepared.terrain_mesh_ready) {
+		completion.prepared.terrain_mesh_ready && !collision_completed_early) {
 		const std::shared_ptr<WtChunkMeshResult> &collision_mesh =
 			completion.collision_patch_mesh ?
 				completion.collision_patch_mesh : completion.mesh;
