@@ -139,6 +139,7 @@ struct WtPageMeshingRuntimeMetrics {
 	std::uint64_t gpu_collision_block_completions = 0;
 	std::uint64_t gpu_collision_full_block_completions = 0;
 	std::uint64_t gpu_collision_incremental_block_completions = 0;
+	std::uint64_t gpu_collision_prewarm_completions = 0;
 	std::uint64_t surface_shift_rebuilds = 0;
 	std::uint64_t surface_shift_failures = 0;
 	std::uint64_t scheduler_backpressure = 0;

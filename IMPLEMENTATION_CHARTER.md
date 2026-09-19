@@ -1533,6 +1533,14 @@ it is ready. They do not build CPU render or transition geometry already owned b
 the GPU path. Incremental edits retain the same dirty-block subset and reserved
 worker contract; a missing live base expands the subset to all eight blocks.
 
+An interaction-priority LOD0 GPU visual job also derives and caches those eight
+collision blocks during its existing immutable-page traversal, even when the
+independently submitted collision viewer has not yet merged its demand. Later
+same-generation collision promotion publishes the cached payload without a
+second page traversal or mesh job. This prewarm is confined to the bounded
+interaction-priority LOD0 set, remains derived and evictable, and does not enter
+the worker lane reserved for incremental edit collision patches.
+
 A regional visibility publication accelerates missing replacement members with
 a distinct coverage priority below player support and interaction focus. It
 never promotes those members into the committed-edit mesh lane, and promotion is

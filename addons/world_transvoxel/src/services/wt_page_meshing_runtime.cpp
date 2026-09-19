@@ -7,6 +7,7 @@
 #include "backend/wt_transvoxel_mit_backend.h"
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_storage_page_cache.h"
+#include "streaming/wt_foreground_priority.h"
 
 #include <algorithm>
 #include <array>
@@ -135,8 +136,11 @@ struct WtPageMeshingRuntimeService::AsyncState {
 		// immediate admission for an incremental collision patch.
 		const bool interactive_collision =
 			prepared.collision_required && prepared.incremental_edit;
-		const bool gpu_collision = prepared.collision_required &&
-			prepared.pre_mesh_field_capture;
+		// Install the early completion path for every potential LOD0 prewarm.
+		// A foreground lease may reprioritize the queued job after admission.
+		const bool gpu_collision = prepared.pre_mesh_field_capture &&
+			(prepared.collision_required ||
+				(prepared.visual_required && prepared.job.key.lod == 0));
 		prepared.interaction_lane = interactive_collision;
 		if (gpu_collision && prepared.terrain_mesh_ready) {
 			prepared.early_collision_ready = [this, callback =
@@ -272,6 +276,10 @@ struct WtPageMeshingRuntimeService::AsyncState {
 				continue;
 			}
 			item->job.priority = priority;
+			item->gpu_lod0_collision_prewarm =
+				item->pre_mesh_field_capture && item->visual_required &&
+				item->job.key.lod == 0 &&
+				priority >= kWtInteractionFocusPriority;
 			// Priority changes cannot turn a whole-page streaming job into an
 			// incremental edit. Keep it on the background lane so the reserved
 			// edit worker cannot be captured after admission.

@@ -880,6 +880,8 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 			page.gpu_resident_visual_only_completions;
 		snapshot.page_gpu_collision_block_completions =
 			page.gpu_collision_block_completions;
+		snapshot.page_gpu_collision_prewarm_completions =
+			page.gpu_collision_prewarm_completions;
 		snapshot.page_gpu_collision_full_block_completions =
 			page.gpu_collision_full_block_completions;
 		snapshot.page_gpu_collision_incremental_block_completions =

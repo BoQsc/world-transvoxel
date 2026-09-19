@@ -6,6 +6,7 @@
 #include "meshing/wt_material_volume_sample_source.h"
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_chunk_page_sample_source.h"
+#include "streaming/wt_foreground_priority.h"
 
 #include <algorithm>
 #include <chrono>
@@ -327,6 +328,14 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 	prepared.cached_transition_mask = record->cached_transition_mask;
 	prepared.visual_required = visual_required;
 	prepared.collision_required = collision_required;
+	// Visual and collision viewers are submitted independently. A LOD0 GPU
+	// visual job can otherwise leave the worker before the matching collision
+	// demand is merged, forcing a second full page traversal several frames
+	// later. LOD0 is the bounded near-player working set, so derive and cache its
+	// eight collision blocks during the existing immutable-page traversal.
+	prepared.gpu_lod0_collision_prewarm = pre_mesh_field_capture &&
+		visual_required && job.key.lod == 0 &&
+		job.priority >= kWtInteractionFocusPriority;
 	prepared.terrain_mesh_ready = terrain_mesh_ready;
 	prepared.execution_callback = execution_callback;
 	prepared.cell_capture_callback = cell_capture_callback;
@@ -554,8 +563,12 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 			completion.prepared.cached_transition_mask;
 	};
 	const auto build_gpu_collision_mesh = [&]() {
-		if (!completion.prepared.collision_required) {
+		if (!completion.prepared.collision_required &&
+			!completion.prepared.gpu_lod0_collision_prewarm) {
 			return WtChunkMeshingStatus::Ok;
+		}
+		if (completion.prepared.job.key.lod != 0) {
+			return WtChunkMeshingStatus::InvalidInput;
 		}
 		completion.collision_patch_mesh =
 			std::make_shared<WtChunkMeshResult>();
@@ -591,7 +604,9 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		if (!capture_pre_mesh_field(WtGpuMeshingShadowSurface::Terrain)) {
 			terrain_status = WtChunkMeshingStatus::CellBackendFailure;
 		} else if (completion.prepared.gpu_resident_skip_cpu_meshing ||
-				completion.prepared.collision_required) {
+				(completion.prepared.collision_required &&
+					completion.prepared.job.key.lod == 0) ||
+				completion.prepared.gpu_lod0_collision_prewarm) {
 			terrain_status = build_gpu_collision_mesh();
 			initialize_gpu_placeholder_mesh(*completion.mesh);
 		} else {
@@ -859,13 +874,18 @@ WtPageMeshingRuntimeService::accept_prepared_mesh_completion(
 	record->gpu_resident_visual_only = completion.gpu_resident_visual_only;
 	record->collision_completed_early = collision_completed_early;
 	if (collision_completed_early && completion.prepared.pre_mesh_field_capture &&
-			completion.prepared.collision_required) {
+			(completion.prepared.collision_required ||
+				completion.prepared.gpu_lod0_collision_prewarm)) {
 		++metrics_.gpu_collision_block_completions;
 		if (completion.prepared.incremental_edit &&
 				completion.prepared.live_collision_patch_base) {
 			++metrics_.gpu_collision_incremental_block_completions;
 		} else {
 			++metrics_.gpu_collision_full_block_completions;
+		}
+		if (!completion.prepared.collision_required &&
+			completion.prepared.gpu_lod0_collision_prewarm) {
+			++metrics_.gpu_collision_prewarm_completions;
 		}
 	}
 	record->incremental_edit = completion.prepared.incremental_edit;

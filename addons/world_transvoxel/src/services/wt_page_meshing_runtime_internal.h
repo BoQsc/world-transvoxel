@@ -15,6 +15,7 @@ struct WtPageMeshingRuntimeService::PreparedMeshJob {
 	std::uint8_t cached_transition_mask = 0;
 	bool visual_required = true;
 	bool collision_required = false;
+	bool gpu_lod0_collision_prewarm = false;
 	bool gpu_resident_visual_only = false;
 	bool gpu_resident_skip_cpu_meshing = false;
 	bool live_collision_patch_base = false;
