@@ -28,6 +28,7 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	std::uint64_t visual_ready_records = 0;
 	std::uint64_t visual_required_records = 0;
 	std::uint64_t collision_ready_records = 0;
+	std::uint64_t collision_current_records = 0;
 	std::uint64_t collision_required_records = 0;
 	std::uint64_t collision_required_not_ready_records = 0;
 	WtChunkKey first_collision_not_ready_key{};
@@ -65,8 +66,10 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		visual_ready_records += record.visual_ready ? 1U : 0U;
 		visual_required_records += record.visual_required ? 1U : 0U;
 		collision_ready_records += record.collision_ready ? 1U : 0U;
+		collision_current_records +=
+			(record.collision_required && record.collision_current()) ? 1U : 0U;
 		collision_required_records += record.collision_required ? 1U : 0U;
-		if (record.collision_required && !record.collision_ready) {
+		if (record.collision_required && !record.collision_current()) {
 			if (collision_required_not_ready_records == 0) {
 				first_collision_not_ready_key = record.key;
 				first_collision_not_ready_generation = record.generation.value;
@@ -1074,6 +1077,7 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 	set_metric(output, "visual_ready_chunk_records", visual_ready_records);
 	set_metric(output, "visual_required_chunk_records", visual_required_records);
 	set_metric(output, "collision_ready_chunk_records", collision_ready_records);
+	set_metric(output, "collision_current_chunk_records", collision_current_records);
 	set_metric(
 		output,
 		"collision_required_chunk_records",

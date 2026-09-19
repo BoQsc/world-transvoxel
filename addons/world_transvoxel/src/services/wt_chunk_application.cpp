@@ -26,12 +26,16 @@ bool collision_deadline_reached(
 
 } // namespace
 
+bool WtChunkApplicationRecord::collision_current() const noexcept {
+	return !collision_required ||
+		(collision_ready && collision_world_revision == world_revision);
+}
+
 bool WtChunkApplicationRecord::fully_ready() const noexcept {
 	return (!visual_required ||
 			(visual_ready && visual_generation == generation &&
 				!visual_generation_superseded)) &&
-		(!collision_required ||
-			(collision_ready && collision_generation == generation));
+		collision_current();
 }
 
 WtChunkApplicationService::WtChunkApplicationService(
@@ -85,6 +89,8 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 				record->collision_required = true;
 				if (!(preserve_collision_ready && record->collision_ready)) {
 					record->collision_ready = false;
+					record->collision_generation = {};
+					record->collision_world_revision = 0;
 				}
 				changed = true;
 			}
@@ -106,12 +112,15 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 		const WtGenerationToken carried_collision_generation =
 			carried_collision_ready ? record->collision_generation :
 				WtGenerationToken{};
+		const std::uint64_t carried_collision_world_revision =
+			carried_collision_ready ? record->collision_world_revision : 0;
 		*record = {
 			key,
 			generation,
 			world_revision,
 			{},
 			carried_collision_generation,
+			carried_collision_world_revision,
 			collision_required,
 			visual_required,
 			false,
@@ -131,6 +140,7 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 		world_revision,
 		{},
 		{},
+		0,
 		collision_required,
 		visual_required,
 		false,
@@ -191,6 +201,7 @@ WtApplicationStatus WtChunkApplicationService::set_collision_required(
 	if (required) {
 		record->collision_ready = false;
 		record->collision_generation = {};
+		record->collision_world_revision = 0;
 	}
 	return WtApplicationStatus::Ok;
 }
@@ -209,6 +220,7 @@ WtApplicationStatus WtChunkApplicationService::begin_collision_only_refresh(
 	record->collision_required = true;
 	record->collision_ready = false;
 	record->collision_generation = {};
+	record->collision_world_revision = 0;
 	record->collision_only_refresh = true;
 	return WtApplicationStatus::Ok;
 }
@@ -645,6 +657,7 @@ std::size_t WtChunkApplicationService::apply_deferred_collisions(
 		}
 		record->collision_ready = true;
 		record->collision_generation = payload->generation;
+		record->collision_world_revision = record->world_revision;
 		if (record->fully_ready()) {
 			record->staged_replacement = false;
 		}
@@ -733,6 +746,7 @@ std::size_t WtChunkApplicationService::apply_collision(
 		}
 		record->collision_ready = true;
 		record->collision_generation = payload->generation;
+		record->collision_world_revision = record->world_revision;
 		if (record->fully_ready()) {
 			record->staged_replacement = false;
 		}

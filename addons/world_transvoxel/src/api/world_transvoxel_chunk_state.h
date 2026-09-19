@@ -27,11 +27,13 @@ public:
 	std::int64_t get_render_generation() const noexcept;
 	std::int64_t get_staged_render_generation() const noexcept;
 	std::int64_t get_collision_generation() const noexcept;
+	std::int64_t get_collision_world_revision() const noexcept;
 	std::int64_t get_staged_collision_generation() const noexcept;
 	bool is_visual_ready() const noexcept;
 	bool is_visual_required() const noexcept;
 	bool is_collision_required() const noexcept;
 	bool is_collision_ready() const noexcept;
+	bool is_collision_current() const noexcept;
 	bool is_fully_ready() const noexcept;
 
 private:
@@ -52,12 +54,14 @@ private:
 	WtGenerationToken render_generation_;
 	WtGenerationToken staged_render_generation_;
 	WtGenerationToken collision_generation_;
+	std::uint64_t collision_world_revision_ = 0;
 	WtGenerationToken staged_collision_generation_;
 	bool present_ = false;
 	bool visual_ready_ = false;
 	bool visual_required_ = false;
 	bool collision_required_ = false;
 	bool collision_ready_ = false;
+	bool collision_current_ = false;
 };
 
 } // namespace world_transvoxel

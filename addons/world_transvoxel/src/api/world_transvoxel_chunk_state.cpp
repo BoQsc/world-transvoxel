@@ -40,6 +40,10 @@ void WorldTransvoxelChunkState::_bind_methods() {
 		&WorldTransvoxelChunkState::get_collision_generation
 	);
 	godot::ClassDB::bind_method(
+		godot::D_METHOD("get_collision_world_revision"),
+		&WorldTransvoxelChunkState::get_collision_world_revision
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD("get_staged_collision_generation"),
 		&WorldTransvoxelChunkState::get_staged_collision_generation
 	);
@@ -58,6 +62,10 @@ void WorldTransvoxelChunkState::_bind_methods() {
 	godot::ClassDB::bind_method(
 		godot::D_METHOD("is_collision_ready"),
 		&WorldTransvoxelChunkState::is_collision_ready
+	);
+	godot::ClassDB::bind_method(
+		godot::D_METHOD("is_collision_current"),
+		&WorldTransvoxelChunkState::is_collision_current
 	);
 	godot::ClassDB::bind_method(
 		godot::D_METHOD("is_fully_ready"),
@@ -102,6 +110,11 @@ WorldTransvoxelChunkState::get_collision_generation() const noexcept {
 }
 
 std::int64_t
+WorldTransvoxelChunkState::get_collision_world_revision() const noexcept {
+	return static_cast<std::int64_t>(collision_world_revision_);
+}
+
+std::int64_t
 WorldTransvoxelChunkState::get_staged_collision_generation() const noexcept {
 	return static_cast<std::int64_t>(staged_collision_generation_.value);
 }
@@ -122,9 +135,13 @@ bool WorldTransvoxelChunkState::is_collision_ready() const noexcept {
 	return collision_ready_;
 }
 
+bool WorldTransvoxelChunkState::is_collision_current() const noexcept {
+	return collision_current_;
+}
+
 bool WorldTransvoxelChunkState::is_fully_ready() const noexcept {
 	return (!visual_required_ || visual_ready_) &&
-		(!collision_required_ || collision_ready_);
+		(!collision_required_ || collision_current_);
 }
 
 void WorldTransvoxelChunkState::set_snapshot(
@@ -142,11 +159,14 @@ void WorldTransvoxelChunkState::set_snapshot(
 	render_generation_ = render_generation;
 	staged_render_generation_ = staged_render_generation;
 	collision_generation_ = collision_generation;
+	collision_world_revision_ =
+		record != nullptr ? record->collision_world_revision : 0;
 	staged_collision_generation_ = staged_collision_generation;
 	visual_ready_ = record != nullptr && record->visual_ready;
 	visual_required_ = record != nullptr && record->visual_required;
 	collision_required_ = record != nullptr && record->collision_required;
 	collision_ready_ = record != nullptr && record->collision_ready;
+	collision_current_ = record != nullptr && record->collision_current();
 }
 
 } // namespace world_transvoxel

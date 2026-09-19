@@ -20,6 +20,7 @@ struct WtChunkApplicationRecord {
 	std::uint64_t world_revision = 0;
 	WtGenerationToken visual_generation;
 	WtGenerationToken collision_generation;
+	std::uint64_t collision_world_revision = 0;
 	bool collision_required = false;
 	bool visual_required = true;
 	bool visual_ready = false;
@@ -33,6 +34,7 @@ struct WtChunkApplicationRecord {
 	bool collision_only_refresh = false;
 	bool gpu_placeholder_published = false;
 
+	bool collision_current() const noexcept;
 	bool fully_ready() const noexcept;
 };
 

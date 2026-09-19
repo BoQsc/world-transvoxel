@@ -557,7 +557,7 @@ void test_staged_replacement_collision_waits_for_render(
 	check(wt::wt_build_collision_payload(*render3, {}, *collision3) ==
 		wt::WtCollisionBuildStatus::Ok,
 		"preserved replacement collision payload failed");
-	check(service.expect_chunk(key, { 3 }, true, true, true, true) ==
+	check(service.expect_chunk(key, { 3 }, true, true, true, true, 1) ==
 		wt::WtApplicationStatus::Ok,
 		"preserved replacement expectation failed");
 	record = service.find_record(key);
@@ -586,7 +586,7 @@ void test_staged_replacement_collision_waits_for_render(
 
 	auto collision4 = std::make_shared<wt::WtCollisionPayload>(*collision3);
 	collision4->generation = { 4 };
-	check(service.expect_chunk(key, { 4 }, true, true, true, true) ==
+	check(service.expect_chunk(key, { 4 }, true, true, true, true, 2) ==
 			wt::WtApplicationStatus::Ok &&
 		service.submit_collision(collision4, true) ==
 			wt::WtApplicationStatus::Ok,
@@ -598,6 +598,67 @@ void test_staged_replacement_collision_waits_for_render(
 		!record->visual_ready && record->staged_replacement &&
 		collision_sink.calls == 4 && service.deferred_collision_count() == 0,
 		"interaction-critical collision waited for visual readiness");
+}
+
+void test_collision_revision_is_independent_from_visual_generation(
+	const wt::WtRenderPayload &render_source
+) {
+	wt::WtChunkApplicationService service(1, 1, 2);
+	RenderSink render_sink;
+	CollisionSink collision_sink;
+	const wt::WtChunkKey key = render_source.key;
+	auto collision1 = std::make_shared<wt::WtCollisionPayload>();
+	wt::WtRenderPayload generation1 = render_source;
+	generation1.generation = { 1 };
+	check(wt::wt_build_collision_payload(generation1, {}, *collision1) ==
+		wt::WtCollisionBuildStatus::Ok,
+		"collision revision fixture build failed");
+	check(service.expect_chunk(key, { 1 }, true, false, false, false, 41) ==
+			wt::WtApplicationStatus::Ok &&
+		service.submit_collision(collision1) == wt::WtApplicationStatus::Ok,
+		"collision revision fixture setup failed");
+	service.apply(0, 1, render_sink, collision_sink);
+	const wt::WtChunkApplicationRecord *record = service.find_record(key);
+	check(record != nullptr && record->collision_current() &&
+		record->collision_world_revision == 41,
+		"applied collision did not retain its authoritative world revision");
+
+	check(service.expect_chunk(key, { 2 }, true, false, false, true, 41) ==
+		wt::WtApplicationStatus::Ok,
+		"same-revision visual generation supersession failed");
+	record = service.find_record(key);
+	check(record != nullptr && record->collision_generation.value == 1 &&
+		record->generation.value == 2 && record->collision_current() &&
+		record->fully_ready(),
+		"same world revision incorrectly invalidated authoritative collision");
+
+	check(service.expect_chunk(key, { 3 }, true, false, false, true, 42) ==
+		wt::WtApplicationStatus::Ok,
+		"edited world revision supersession failed");
+	record = service.find_record(key);
+	check(record != nullptr && record->collision_ready &&
+		!record->collision_current() && !record->fully_ready(),
+		"new world revision accepted stale physical collision as current");
+	check(service.submit_collision(collision1) == wt::WtApplicationStatus::Ok,
+		"stale collision revision submission failed");
+	service.apply(0, 1, render_sink, collision_sink);
+	record = service.find_record(key);
+	check(record != nullptr && !record->collision_current() &&
+		collision_sink.calls == 1,
+		"stale collision payload restored current collision state");
+
+	wt::WtRenderPayload generation3 = render_source;
+	generation3.generation = { 3 };
+	auto collision3 = std::make_shared<wt::WtCollisionPayload>();
+	check(wt::wt_build_collision_payload(generation3, {}, *collision3) ==
+			wt::WtCollisionBuildStatus::Ok &&
+		service.submit_collision(collision3) == wt::WtApplicationStatus::Ok,
+		"current collision revision submission failed");
+	service.apply(0, 1, render_sink, collision_sink);
+	record = service.find_record(key);
+	check(record != nullptr && record->collision_current() &&
+		record->collision_world_revision == 42 && record->fully_ready(),
+		"matching edited collision did not become authoritative");
 }
 
 void test_gpu_placeholder_waits_for_external_activation(
@@ -1363,6 +1424,7 @@ int main() {
 	test_interaction_collision_apply_priority();
 	constexpr std::size_t stale_cycles = 1000;
 	test_application_service(render, stale_cycles);
+	test_collision_revision_is_independent_from_visual_generation(render);
 	test_staged_replacement_collision_waits_for_render(render);
 	test_gpu_placeholder_waits_for_external_activation(render);
 	test_superseded_gpu_visual_generation(render);

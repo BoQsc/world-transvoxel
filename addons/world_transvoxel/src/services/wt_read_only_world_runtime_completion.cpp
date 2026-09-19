@@ -565,8 +565,7 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 			if (!application_->copy_record(attempt.key, record) ||
 				record.generation != attempt.generation ||
 				!record.collision_required ||
-				(record.collision_ready &&
-					record.collision_generation == record.generation)) {
+				record.collision_current()) {
 				completed_attempts.push_back(attempt);
 			}
 		}
@@ -612,9 +611,7 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 	std::size_t repairs = 0;
 	constexpr std::size_t kMaxCollisionRepairsPerPass = 8;
 	for (const WtChunkApplicationRecord &record : application_->get_records()) {
-		if (!record.collision_required ||
-			(record.collision_ready &&
-				record.collision_generation == record.generation)) {
+		if (!record.collision_required || record.collision_current()) {
 			continue;
 		}
 		const WtDesiredChunk *desired = desired_->find_desired(record.key);

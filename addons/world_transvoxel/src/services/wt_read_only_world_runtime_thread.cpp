@@ -88,9 +88,7 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 				application_records.begin(),
 				application_records.end(),
 				[](const WtChunkApplicationRecord &record) {
-					return record.collision_required &&
-						(!record.collision_ready ||
-							record.collision_generation != record.generation);
+					return !record.collision_current();
 				}
 			);
 			std::unique_lock<std::mutex> lock(wake_mutex_);

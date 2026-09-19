@@ -2000,6 +2000,16 @@ cannot leave an idle collision-required chunk permanently unready.
 
 ### Same-generation collision refresh
 
+Collision content validity is owned by the authoritative world revision rather
+than by the visual topology generation. Each application record retains both
+the physical collision payload generation and the world revision represented by
+that payload. A visual-only successor may preserve and publish the existing
+collision when its world revision is unchanged. A journal edit advances the
+world revision immediately, making the retained physical shape non-current until
+the matching collision branch publishes at the physics boundary. Runtime repair,
+readiness, and diagnostics use this content-revision test, so LOD/viewer churn
+cannot cause redundant collision extraction or movement waits.
+
 Collision demand entering an already visual GPU chunk refreshes CPU collision
 topology inside the existing `(chunk, generation, world revision)` identity.
 The scheduler reopens that record for bounded sampling and CPU meshing without
