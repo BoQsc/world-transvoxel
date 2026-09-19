@@ -82,48 +82,12 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 		refresh_metrics_snapshot();
 		if (last_status_.load() != WtReadOnlyRuntimeStatus::Ok) break;
 		if (!progressed) {
-			const std::vector<WtChunkApplicationRecord> application_records =
-				application_->get_records();
-			std::vector<CollisionReadinessRepairAttempt> repair_attempts;
-			bool publication_backlog = false;
-			{
-				std::lock_guard<std::mutex> publication_lock(publication_mutex_);
-				repair_attempts = collision_readiness_repair_attempts_;
-				publication_backlog = publication_count_ != 0;
-			}
-			const bool collision_repair_pending = !publication_backlog &&
-				std::any_of(
-				application_records.begin(),
-				application_records.end(),
-				[&repair_attempts](const WtChunkApplicationRecord &record) {
-					if (!record.collision_work_required()) return false;
-					return std::none_of(
-						repair_attempts.begin(), repair_attempts.end(),
-						[&record](const CollisionReadinessRepairAttempt &attempt) {
-							return attempt.key == record.key &&
-								attempt.generation == record.generation;
-						}
-					);
-				}
-			);
 			std::unique_lock<std::mutex> lock(wake_mutex_);
 			const auto wake_predicate = [&]() {
 				return stop_requested_.load() ||
 					wake_sequence_ != observed_wake;
 			};
-			if (collision_repair_pending) {
-				const bool signaled = wake_condition_.wait_for(
-					lock,
-					std::chrono::milliseconds(4),
-					wake_predicate
-				);
-				if (!signaled) {
-					std::lock_guard<std::mutex> metrics_lock(metrics_mutex_);
-					++metrics_.collision_readiness_repair_timed_wakes;
-				}
-			} else {
-				wake_condition_.wait(lock, wake_predicate);
-			}
+			wake_condition_.wait(lock, wake_predicate);
 			observed_wake = wake_sequence_;
 		}
 	}

@@ -2028,7 +2028,9 @@ in physics remains immutable and valid until a successor generation replaces
 it. A late collision-role promotion therefore cannot fail with an identity
 conflict or mutate the installed shape. Once a collision publication or remesh
 attempt exists, readiness repair sleeps until frontend or pipeline progress
-wakes it; publication backlog must not drive a 4 ms polling loop.
+wakes it. Frontend publication completion and collision-residency acknowledgement
+are explicit wake events; readiness repair must never use a timer or let
+publication backlog drive a polling loop.
 
 Collision demand entering an already visual GPU chunk refreshes CPU collision
 topology inside the existing `(chunk, generation, world revision)` identity.
