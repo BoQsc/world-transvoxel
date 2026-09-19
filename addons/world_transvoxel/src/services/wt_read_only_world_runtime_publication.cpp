@@ -131,6 +131,8 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 		publication.collision_required = item.collision_required;
 		publication.visual_required = item.visual_required;
 		publication.staged_replacement = addition_staged_replacement;
+		publication.independently_publishable_replacement =
+			item.collision_required;
 		if (!push_publication(std::move(publication))) return false;
 		if (addition_staged_replacement) {
 			const WtApplicationStatus application_status =
@@ -141,7 +143,8 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 					item.visual_required,
 					true,
 					item.collision_required,
-					record->world_revision
+					record->world_revision,
+					item.collision_required
 				);
 			if (application_status != WtApplicationStatus::Ok &&
 				application_status != WtApplicationStatus::AlreadyCurrent) {
@@ -216,6 +219,7 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 				expectation.collision_required = true;
 				expectation.visual_required = item.visual_required;
 				expectation.staged_replacement = true;
+				expectation.independently_publishable_replacement = true;
 				if (!push_publication(std::move(expectation))) return false;
 				queue_readiness_repair_candidate(item.key);
 			} else if (!push_publication({
@@ -239,6 +243,8 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 				expectation.collision_required = item.collision_required;
 				expectation.visual_required = true;
 				expectation.staged_replacement = true;
+				expectation.independently_publishable_replacement =
+					item.collision_required;
 				const WtApplicationStatus application_status =
 					application_->expect_chunk(
 						item.key,
@@ -247,7 +253,8 @@ bool WtReadOnlyWorldRuntime::publish_delta(
 						true,
 						true,
 						item.collision_required,
-						record->world_revision
+						record->world_revision,
+						item.collision_required
 					);
 				if (application_status != WtApplicationStatus::Ok &&
 					application_status != WtApplicationStatus::AlreadyCurrent) {
@@ -473,7 +480,8 @@ bool WtReadOnlyWorldRuntime::process_pending_transition_remeshes() {
 				desired->visual_required,
 				true,
 				desired->collision_required,
-				record->world_revision
+				record->world_revision,
+				desired->collision_required
 			);
 		if (application_status != WtApplicationStatus::Ok &&
 			application_status != WtApplicationStatus::AlreadyCurrent) {
@@ -489,6 +497,8 @@ bool WtReadOnlyWorldRuntime::process_pending_transition_remeshes() {
 		expectation.visual_required = desired->visual_required;
 		expectation.staged_replacement = true;
 		expectation.preserve_collision_ready = desired->collision_required;
+		expectation.independently_publishable_replacement =
+			desired->collision_required;
 		if (!push_publication(std::move(expectation))) {
 			if (!stop_requested_.load()) {
 				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);

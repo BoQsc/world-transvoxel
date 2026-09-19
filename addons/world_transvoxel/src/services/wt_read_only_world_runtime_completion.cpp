@@ -321,6 +321,26 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			application_record.generation != completion.generation) {
 			continue;
 		}
+		{
+			// Release only the token created while a readiness repair remesh was
+			// in flight. A token converted to collision-publication ownership must
+			// remain until the frontend acknowledges the physics shape.
+			std::lock_guard<std::mutex> lock(publication_mutex_);
+			collision_readiness_repair_attempts_.erase(
+				std::remove_if(
+					collision_readiness_repair_attempts_.begin(),
+					collision_readiness_repair_attempts_.end(),
+					[&completion](
+						const CollisionReadinessRepairAttempt &attempt
+					) {
+						return attempt.awaiting_remesh_completion &&
+							attempt.key == completion.key &&
+							attempt.generation == completion.generation;
+					}
+				),
+				collision_readiness_repair_attempts_.end()
+			);
+		}
 		if (application_record.collision_only_refresh) {
 			application_->finish_collision_only_refresh(
 				completion.key,
@@ -541,6 +561,7 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 		config_.collision_deactivation_distance,
 	};
 	std::vector<CollisionReadinessRepairAttempt> completed_attempts;
+	const auto repair_now = std::chrono::steady_clock::now();
 	{
 		std::vector<CollisionReadinessRepairAttempt> attempts;
 		{
@@ -552,7 +573,8 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 			if (!application_->copy_record(attempt.key, record) ||
 				record.generation != attempt.generation ||
 				!record.collision_required ||
-				record.collision_current()) {
+				record.collision_current() ||
+				attempt.retry_after <= repair_now) {
 				completed_attempts.push_back(attempt);
 			}
 		}
@@ -629,6 +651,8 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 				collision_readiness_repair_attempts_.push_back({
 					record.key,
 					record.generation,
+					false,
+					repair_now + std::chrono::milliseconds(100),
 				});
 			}
 			{
@@ -706,6 +730,8 @@ bool WtReadOnlyWorldRuntime::process_collision_readiness_repairs() {
 					collision_readiness_repair_attempts_.push_back({
 						record.key,
 						record.generation,
+						true,
+						repair_now + std::chrono::milliseconds(100),
 					});
 				}
 				progressed = true;
@@ -883,7 +909,8 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 						item.visual_required,
 						true,
 						item.collision_required,
-						record->world_revision
+						record->world_revision,
+						item.collision_required
 					);
 				if (application_status != WtApplicationStatus::Ok &&
 					application_status != WtApplicationStatus::AlreadyCurrent) {
@@ -899,6 +926,8 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 				publication.visual_required = item.visual_required;
 				publication.staged_replacement = true;
 				publication.preserve_collision_ready = item.collision_required;
+				publication.independently_publishable_replacement =
+					item.collision_required;
 				if (!push_publication(std::move(publication))) {
 					if (!stop_requested_.load()) {
 						set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);
@@ -973,7 +1002,8 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 				item.visual_required,
 				false,
 				false,
-				record->world_revision
+				record->world_revision,
+				item.collision_required
 			);
 		if (application_status != WtApplicationStatus::Ok &&
 			application_status != WtApplicationStatus::AlreadyCurrent) {
@@ -989,6 +1019,8 @@ bool WtReadOnlyWorldRuntime::process_visual_readiness_repairs() {
 		publication.visual_required = item.visual_required;
 		publication.staged_replacement = false;
 		publication.preserve_collision_ready = false;
+		publication.independently_publishable_replacement =
+			item.collision_required;
 		if (!push_publication(std::move(publication))) {
 			if (!stop_requested_.load()) {
 				set_failure(WtReadOnlyRuntimeStatus::PublicationFailure);

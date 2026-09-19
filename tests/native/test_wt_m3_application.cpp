@@ -662,6 +662,12 @@ void test_collision_revision_is_independent_from_visual_generation(
 	check(record != nullptr && record->collision_current() &&
 		record->collision_world_revision == 42 && record->fully_ready(),
 		"matching edited collision did not become authoritative");
+	check(service.submit_collision(collision3) == wt::WtApplicationStatus::Ok &&
+		service.submit_collision(collision3, true) == wt::WtApplicationStatus::Ok,
+		"duplicate current collision submission was rejected");
+	service.apply(0, 2, render_sink, collision_sink);
+	check(collision_sink.calls == 2 && service.queued_collision_count() == 0,
+		"duplicate current collision mutated the physics sink");
 
 	wt::WtChunkApplicationService acknowledgement_service(4, 4, 4);
 	check(acknowledgement_service.expect_chunk(
@@ -679,6 +685,14 @@ void test_collision_revision_is_independent_from_visual_generation(
 		record->collision_generation.value == 1 &&
 		!record->collision_work_required(),
 		"matching predecessor collision residency did not satisfy successor");
+	check(acknowledgement_service.acknowledge_collision_residency(
+			key, {}, 0
+		) == wt::WtApplicationStatus::AlreadyCurrent,
+		"required staged collision was cleared by zero active residency");
+	record = acknowledgement_service.find_record(key);
+	check(record != nullptr && record->collision_current() &&
+		record->collision_generation.value == 1,
+		"zero active residency reopened completed required collision work");
 	check(acknowledgement_service.acknowledge_collision_residency(
 			key, {1}, 50
 		) == wt::WtApplicationStatus::StaleGeneration,
@@ -985,28 +999,34 @@ void test_cross_lod_replacement_publication_policy() {
 	);
 	check(
 		wt::wt_required_collision_can_publish_independently(
-			{ 21 }, { 21 }, {}, { 21 }, true, true, true
+			{ 21 }, { 21 }, {}, { 21 }, true, true, true, false
 		),
 		"new required collision did not join its live visual independently"
 	);
 	check(
 		wt::wt_required_collision_can_publish_independently(
-			{ 21 }, {}, {}, { 21 }, true, true, false
+			{ 21 }, {}, {}, { 21 }, true, true, false, false
 		),
 		"collision-only support was tied to visual publication"
 	);
 	check(
 		!wt::wt_required_collision_can_publish_independently(
-			{ 21 }, { 21 }, { 20 }, { 21 }, true, true, true
+			{ 21 }, { 21 }, { 20 }, { 21 }, true, true, true, false
 		) && !wt::wt_required_collision_can_publish_independently(
-			{ 21 }, {}, {}, { 21 }, true, true, true
+			{ 21 }, {}, {}, { 21 }, true, true, true, false
 		) && !wt::wt_required_collision_can_publish_independently(
-			{ 21 }, { 21 }, {}, { 20 }, true, true, true
+			{ 21 }, { 21 }, {}, { 20 }, true, true, true, false
 		) && !wt::wt_required_collision_can_publish_independently(
-			{ 21 }, { 21 }, {}, { 21 }, false, true, true
+			{ 21 }, { 21 }, {}, { 21 }, false, true, true, false
 		),
 		"independent collision publication accepted a replacement, hidden "
 		"visual, stale generation, or unrequired shape"
+	);
+	check(
+		wt::wt_required_collision_can_publish_independently(
+			{ 21 }, {}, {}, { 21 }, true, true, true, true
+		),
+		"interaction collision remained coupled to visual cohort publication"
 	);
 	region.replacements.pop_back();
 	check(

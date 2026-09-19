@@ -95,7 +95,8 @@ bool wt_required_collision_can_publish_independently(
 	WtGenerationToken staged_collision_generation,
 	bool collision_required,
 	bool collision_ready,
-	bool visual_required
+	bool visual_required,
+	bool independently_publishable_replacement
 ) noexcept;
 
 } // namespace world_transvoxel

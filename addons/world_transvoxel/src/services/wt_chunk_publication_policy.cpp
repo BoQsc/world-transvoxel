@@ -581,7 +581,8 @@ bool wt_required_collision_can_publish_independently(
 	WtGenerationToken staged_collision_generation,
 	bool collision_required,
 	bool collision_ready,
-	bool visual_required
+	bool visual_required,
+	bool independently_publishable_replacement
 ) noexcept {
 	if (!collision_required || !collision_ready ||
 			record_generation.value == 0 || collision_generation.value != 0 ||
@@ -591,7 +592,8 @@ bool wt_required_collision_can_publish_independently(
 	// A new physical support shape may join retained coarse collision once its
 	// matching visual is live. Existing same-key shapes remain synchronized with
 	// their staged render replacement.
-	return !visual_required || render_generation == record_generation;
+	return independently_publishable_replacement || !visual_required ||
+		render_generation == record_generation;
 }
 
 } // namespace world_transvoxel

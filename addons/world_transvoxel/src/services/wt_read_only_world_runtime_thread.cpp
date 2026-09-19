@@ -102,12 +102,18 @@ WtReadOnlyRuntimeStatus WtReadOnlyWorldRuntime::run() {
 					);
 				}
 			);
+			const bool collision_work_pending = std::any_of(
+				application_records.begin(), application_records.end(),
+				[](const WtChunkApplicationRecord &record) {
+					return record.collision_work_required();
+				}
+			);
 			std::unique_lock<std::mutex> lock(wake_mutex_);
 			const auto wake_predicate = [&]() {
 				return stop_requested_.load() ||
 					wake_sequence_ != observed_wake;
 			};
-			if (unattempted_collision) {
+			if (unattempted_collision || collision_work_pending) {
 				const bool signaled = wake_condition_.wait_for(
 					lock, std::chrono::milliseconds(16), wake_predicate
 				);
@@ -158,6 +164,29 @@ bool WtReadOnlyWorldRuntime::push_publication(
 		if (claim_status != WtApplicationStatus::Ok) return false;
 	}
 	std::unique_lock<std::mutex> lock(publication_mutex_);
+	if (publication.kind == WtReadOnlyPublicationKind::CollisionPayload) {
+		const auto contains_same_collision = [&](const auto &slots,
+			std::size_t head, std::size_t count) {
+			for (std::size_t offset = 0; offset < count; ++offset) {
+				const WtReadOnlyPublication &queued =
+					slots[(head + offset) % slots.size()];
+				if (queued.kind == WtReadOnlyPublicationKind::CollisionPayload &&
+					queued.key == publication.key &&
+					queued.generation == publication.generation) {
+					return true;
+				}
+			}
+			return false;
+		};
+		if (contains_same_collision(
+				priority_publication_slots_, priority_publication_head_,
+				priority_publication_count_
+			) || contains_same_collision(
+				publication_slots_, publication_head_, publication_count_
+			)) {
+			return true;
+		}
+	}
 	const bool priority = is_priority_publication(publication);
 	std::vector<WtReadOnlyPublication> &slots = priority ?
 		priority_publication_slots_ : publication_slots_;
@@ -202,19 +231,29 @@ bool WtReadOnlyWorldRuntime::push_publication(
 	if (trace_kind == static_cast<std::uint64_t>(
 			WtReadOnlyPublicationKind::CollisionPayload
 		)) {
-		const bool already_pending = std::find_if(
+		auto pending = std::find_if(
 			collision_readiness_repair_attempts_.begin(),
 			collision_readiness_repair_attempts_.end(),
 			[&](const CollisionReadinessRepairAttempt &attempt) {
 				return attempt.key == trace_key &&
 					attempt.generation == trace_generation;
 			}
-		) != collision_readiness_repair_attempts_.end();
-		if (!already_pending) {
+		);
+		if (pending == collision_readiness_repair_attempts_.end()) {
 			collision_readiness_repair_attempts_.push_back({
 				trace_key,
 				trace_generation,
+				false,
+				std::chrono::steady_clock::now() +
+					std::chrono::milliseconds(100),
 			});
+		} else {
+			// The collision payload now owns suppression until the frontend
+			// acknowledges residency; a later visual remesh completion must not
+			// release it.
+			pending->awaiting_remesh_completion = false;
+			pending->retry_after = std::chrono::steady_clock::now() +
+				std::chrono::milliseconds(100);
 		}
 	}
 	return true;

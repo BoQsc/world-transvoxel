@@ -219,6 +219,13 @@ WtApplicationStatus WtChunkApplicationService::acknowledge_collision_residency(
 	WtChunkApplicationRecord *record = find_record_mutable(key);
 	if (record == nullptr) return WtApplicationStatus::NotFound;
 	if (generation.value == 0) {
+		// A required replacement can be accepted into the physics sink's staged
+		// set while the previously published shape remains active. A zero active
+		// generation must not erase that accepted replacement. Collision removal
+		// is valid only after demand withdrawal or explicit retirement.
+		if (record->collision_required) {
+			return WtApplicationStatus::AlreadyCurrent;
+		}
 		record->collision_ready = false;
 		record->collision_generation = {};
 		record->collision_world_revision = 0;
@@ -659,6 +666,17 @@ std::size_t WtChunkApplicationService::apply_deferred_collisions(
 				metrics_.collision_latency_frames_maximum, latency
 			);
 			++metrics_.unrequired_collision;
+			iterator = deferred_collisions_.erase(iterator);
+			continue;
+		}
+		if (record->collision_ready &&
+			record->collision_generation == payload->generation &&
+			record->collision_world_revision == record->world_revision) {
+			// Multiple producers may discover the same immutable collision while
+			// its first publication is crossing the bounded frontend queue. Once
+			// that generation is accepted, discard queued duplicates without
+			// mutating the physics server again.
+			++processed;
 			iterator = deferred_collisions_.erase(iterator);
 			continue;
 		}

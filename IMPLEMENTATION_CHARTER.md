@@ -2038,9 +2038,26 @@ or human route report without a debugger.
 Readiness repair is bounded per pass and evaluates the target chunk's own
 generation and lifecycle. Unrelated scheduler, storage, or page-meshing work
 must never impose a global barrier on an interaction collision repair.
-Publication and collision-apply backlogs coalesce repair admission. A 16 ms
-fail-safe wake is allowed only while required collision has no generation-matched
-attempt; an idle or already attempted terrain pipeline remains event-driven.
+Publication and collision-apply backlogs coalesce repair admission. Required
+collision uses a 16 ms fail-safe wake while work remains incomplete. Each
+generation-matched attempt records whether a remesh or a frontend publication
+owns suppression and expires after 100 ms. Completion, demand withdrawal, and
+frontend residency release the matching owner. This prevents a lost completion
+or rapid demand remove/re-add from suppressing collision repair indefinitely.
+
+Collision application readiness includes a replacement accepted into the
+physics sink's staged set. Observing no active generation while collision is
+still required must not erase that staged readiness; zero residency is accepted
+only after demand withdrawal or explicit retirement. Collision-viewer and edit
+replacements are independently publishable at the physics boundary once their
+matching generation is staged. They do not wait for regional visual-cohort
+completion; background visual-only replacements retain atomic regional
+publication.
+Collision payloads are immutable within `(chunk, generation, world revision)`.
+The runtime publication queue and application collision queue coalesce that
+identity, and the sink discards a duplicate after the generation is current.
+Concurrent cache repair and mesh completion therefore publish one physics
+mutation rather than replaying identical shapes.
 
 Collision demand entering an already visual GPU chunk refreshes CPU collision
 topology inside the existing `(chunk, generation, world revision)` identity.

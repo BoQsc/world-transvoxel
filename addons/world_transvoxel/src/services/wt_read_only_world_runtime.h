@@ -13,6 +13,7 @@
 #include "telemetry/wt_causal_trace.h"
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -318,6 +319,8 @@ private:
 	struct CollisionReadinessRepairAttempt {
 		WtChunkKey key;
 		WtGenerationToken generation;
+		bool awaiting_remesh_completion = false;
+		std::chrono::steady_clock::time_point retry_after;
 	};
 
 	bool enqueue_viewer_event(const ViewerEvent &event);

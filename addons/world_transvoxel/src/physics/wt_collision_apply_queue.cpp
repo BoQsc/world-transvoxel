@@ -16,6 +16,19 @@ WtApplicationStatus WtCollisionApplyQueue::submit(
 	if (!payload || !wt_is_valid_chunk_key(payload->key) || payload->generation.value == 0) {
 		return WtApplicationStatus::InvalidInput;
 	}
+	const auto duplicate = std::find_if(
+		queue_.begin(), queue_.end(),
+		[&payload](const WtCollisionApplyEntry &entry) {
+			return entry.payload && entry.payload->key == payload->key &&
+				entry.payload->generation == payload->generation;
+		}
+	);
+	if (duplicate != queue_.end()) {
+		duplicate->payload = payload;
+		duplicate->interaction_critical =
+			duplicate->interaction_critical || interaction_critical;
+		return WtApplicationStatus::Ok;
+	}
 	if (queue_.size() >= capacity_) return WtApplicationStatus::QueueFull;
 	queue_.push_back({ payload, submission_tick, interaction_critical });
 	return WtApplicationStatus::Ok;

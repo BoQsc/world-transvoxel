@@ -72,9 +72,12 @@ drain_interaction_collision_publications_at_physics_boundary() {
 	if (applied_items != 0) {
 		for (const WtChunkApplicationRecord &record :
 				application_->get_records()) {
+			const WtGenerationToken applied_generation =
+				collision_sink_->applied_generation(record.key);
+			if (applied_generation.value == 0) continue;
 			lifecycle_->record_frontend_collision_residency(
 				record.key,
-				collision_sink_->applied_generation(record.key),
+				applied_generation,
 				record.collision_world_revision
 			);
 		}

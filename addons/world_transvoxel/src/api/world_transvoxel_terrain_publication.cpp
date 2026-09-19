@@ -31,7 +31,8 @@ void WorldTransvoxelTerrain::publish_ready_independent_collision_coverage() {
 				collision_sink_->staged_generation(record.key),
 				record.collision_required,
 				record.collision_ready,
-				record.visual_required
+				record.visual_required,
+				record.independently_publishable_replacement
 			)) {
 			continue;
 		}
