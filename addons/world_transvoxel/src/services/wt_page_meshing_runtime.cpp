@@ -280,16 +280,12 @@ struct WtPageMeshingRuntimeService::AsyncState {
 			{
 				std::unique_lock<std::mutex> lock(work_mutex);
 				work_available.wait(lock, [this, interactive_only]() {
-					if (stopping.load(std::memory_order_acquire)) return true;
-					if (interactive_only) return !interactive_work.empty();
-					// A deadline collision job needs both the runtime and Godot's
-					// physics thread to run after extraction. Letting every general
-					// worker assist the reserved queue can occupy the whole machine
-					// and delay publication longer than the mesh itself.
-					return !interactive_executing && interactive_work.empty() &&
-						!work.empty();
+					return stopping.load(std::memory_order_acquire) ||
+						(interactive_only ? !interactive_work.empty() :
+							(!interactive_work.empty() || !work.empty()));
 				});
-				std::vector<PreparedMeshJob> &queue = interactive_only ?
+				std::vector<PreparedMeshJob> &queue =
+					interactive_only || !interactive_work.empty() ?
 					interactive_work : work;
 				if (stopping.load(std::memory_order_acquire) && queue.empty()) {
 					return;
@@ -297,23 +293,15 @@ struct WtPageMeshingRuntimeService::AsyncState {
 				const auto selected = std::max_element(
 					queue.begin(),
 					queue.end(),
-					[interactive_only](const PreparedMeshJob &left,
-						const PreparedMeshJob &right) {
+					[](const PreparedMeshJob &left, const PreparedMeshJob &right) {
 						if (left.job.priority != right.job.priority) {
 							return left.job.priority < right.job.priority;
 						}
-						// Interactive edits are a recency deadline stream. A newer
-						// generation may be at the player's current position while an
-						// older multi-chunk burst drains behind them. Background work
-						// remains stable FIFO.
-						return interactive_only ?
-							left.job.sequence < right.job.sequence :
-							left.job.sequence > right.job.sequence;
+						return left.job.sequence > right.job.sequence;
 					}
 				);
 				prepared = std::move(*selected);
 				queue.erase(selected);
-				if (interactive_only) interactive_executing = true;
 				queued_after_pop = work.size() + interactive_work.size();
 				interactive_queued_after_pop = interactive_work.size();
 			}
@@ -413,11 +401,6 @@ struct WtPageMeshingRuntimeService::AsyncState {
 				callback = notifier;
 			}
 			if (callback) callback();
-			if (interactive_only) {
-				std::lock_guard<std::mutex> lock(work_mutex);
-				interactive_executing = false;
-				work_available.notify_all();
-			}
 		}
 	}
 
@@ -432,7 +415,6 @@ struct WtPageMeshingRuntimeService::AsyncState {
 	std::condition_variable work_available;
 	std::vector<PreparedMeshJob> work;
 	std::vector<PreparedMeshJob> interactive_work;
-	bool interactive_executing = false;
 	mutable std::mutex completion_mutex;
 	std::condition_variable completion_space;
 	std::vector<PreparedMeshCompletion> completions;
