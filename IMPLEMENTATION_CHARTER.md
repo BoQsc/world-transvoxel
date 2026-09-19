@@ -2074,6 +2074,13 @@ completed and cannot repeat it. If the early queue is full, the worker retains
 the collision for the normal completion path, preserving bounded memory and
 eventual progress.
 
+LOD0 collision extraction samples the selected 8-cubed block union into a
+fixed 17-cubed dense lattice owned by worker scratch. Adjacent dirty blocks
+share their boundary samples, and cell extraction uses direct indexing while
+retaining canonical chunk traversal order. This removes per-corner hash-table
+work without changing scalar authority, regular-cell topology, face ordering,
+the eight independently replaceable physics shapes, or atomic publication.
+
 ### Bounded interaction visual replacement regions
 
 An interaction-priority incremental edit may not inherit the complete global

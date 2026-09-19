@@ -27,6 +27,9 @@ constexpr std::size_t kWtInitialRegularChunkVertices = 2048;
 constexpr std::size_t kWtInitialRegularChunkIndices = 6144;
 constexpr std::size_t kWtInitialTransitionFaceVertices = 512;
 constexpr std::size_t kWtInitialTransitionFaceIndices = 1536;
+constexpr std::size_t kWtCollisionLatticeAxis = kWtChunkCellsPerAxis + 1;
+constexpr std::size_t kWtCollisionLatticeSampleCount =
+	kWtCollisionLatticeAxis * kWtCollisionLatticeAxis * kWtCollisionLatticeAxis;
 
 struct WtScalarSample {
 	float density = 0.0F;
@@ -128,6 +131,8 @@ struct WtChunkMeshingScratch {
 	std::unordered_map<WtGridPoint, WtScalarSample, WtGridPointHash> scalar_samples;
 	std::unordered_map<WtGridPoint, WtCellSample, WtGridPointHash> cell_samples;
 	std::unordered_map<WtChunkVertexKey, std::uint32_t, WtChunkVertexKeyHash> vertices;
+	std::vector<WtScalarSample> collision_scalar_samples;
+	std::vector<std::uint8_t> collision_scalar_valid;
 
 	WtChunkMeshingScratch();
 	void reset_samples();

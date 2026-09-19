@@ -12,6 +12,8 @@
 namespace world_transvoxel {
 namespace {
 
+constexpr unsigned int kWtCollisionMeshingBlockCount = 8;
+
 struct WtIntegerVector {
 	int x;
 	int y;
@@ -544,6 +546,132 @@ WtChunkMeshingStatus mesh_regular_cells(
 	return WtChunkMeshingStatus::Ok;
 }
 
+std::size_t collision_lattice_index(int x, int y, int z) noexcept {
+	return static_cast<std::size_t>(x) +
+		kWtCollisionLatticeAxis * (
+			static_cast<std::size_t>(y) +
+			kWtCollisionLatticeAxis * static_cast<std::size_t>(z)
+		);
+}
+
+WtChunkMeshingStatus mesh_regular_collision_cells(
+	const WtChunkMeshingInput &input,
+	const WtChunkSampleSource &source,
+	const WtMeshingBackend &backend,
+	WtChunkMeshResult &output,
+	WtChunkMeshingScratch &scratch,
+	std::uint8_t block_mask
+) {
+	const WtChunkBounds bounds = wt_chunk_bounds(input.key);
+	const std::int64_t spacing_integer = wt_lod_cell_size(input.key.lod);
+	const float spacing = static_cast<float>(spacing_integer);
+	std::fill(
+		scratch.collision_scalar_valid.begin(),
+		scratch.collision_scalar_valid.end(),
+		0
+	);
+
+	// Sample the union of selected 8-cubed blocks once. Adjacent blocks share
+	// their boundary plane in this dense lattice instead of repeating virtual
+	// source calls or unordered-map probes for every cell corner.
+	for (unsigned int block = 0; block < kWtCollisionMeshingBlockCount; ++block) {
+		if ((block_mask & (1U << block)) == 0) continue;
+		const int begin_x = static_cast<int>(block & 1U) * 8;
+		const int begin_y = static_cast<int>((block >> 1U) & 1U) * 8;
+		const int begin_z = static_cast<int>((block >> 2U) & 1U) * 8;
+		for (int z = begin_z; z <= begin_z + 8; ++z) {
+			for (int y = begin_y; y <= begin_y + 8; ++y) {
+				for (int x = begin_x; x <= begin_x + 8; ++x) {
+					const std::size_t index = collision_lattice_index(x, y, z);
+					if (scratch.collision_scalar_valid[index] != 0) continue;
+					WtScalarSample &sample =
+						scratch.collision_scalar_samples[index];
+					const WtGridPoint point {
+						bounds.minimum.x + static_cast<std::int64_t>(x) * spacing_integer,
+						bounds.minimum.y + static_cast<std::int64_t>(y) * spacing_integer,
+						bounds.minimum.z + static_cast<std::int64_t>(z) * spacing_integer,
+					};
+					if (!source.sample(point, sample) ||
+							!std::isfinite(sample.density)) {
+						return WtChunkMeshingStatus::SampleSourceFailure;
+					}
+					scratch.collision_scalar_valid[index] = 1;
+				}
+			}
+		}
+	}
+
+	// Retain canonical chunk traversal order so face ordering and winding are
+	// byte-for-byte identical to the regular mesher and existing payloads.
+	for (int z = 0; z < kWtChunkCellsPerAxis; ++z) {
+		for (int y = 0; y < kWtChunkCellsPerAxis; ++y) {
+			for (int x = 0; x < kWtChunkCellsPerAxis; ++x) {
+				const unsigned int block = static_cast<unsigned int>(
+					(x / 8) + (y / 8) * 2 + (z / 8) * 4
+				);
+				if ((block_mask & (1U << block)) == 0) continue;
+					WtRegularCellInput cell_input;
+					std::array<WtVec3, kWtTransitionTopologySampleCount>
+						endpoint_positions{};
+					cell_input.isovalue = input.isovalue;
+					cell_input.cell_size = spacing;
+					cell_input.origin = {
+						static_cast<float>(x) * spacing,
+						static_cast<float>(y) * spacing,
+						static_cast<float>(z) * spacing,
+					};
+					for (unsigned int corner = 0; corner < 8; ++corner) {
+						const int sample_x = x + ((corner & 1U) != 0U);
+						const int sample_y = y + ((corner & 2U) != 0U);
+						const int sample_z = z + ((corner & 4U) != 0U);
+						const WtScalarSample &scalar = scratch.collision_scalar_samples[
+							collision_lattice_index(sample_x, sample_y, sample_z)
+						];
+						cell_input.samples[corner] = {
+							scalar.density, {}, scalar.material,
+							scalar.material_authored,
+						};
+						endpoint_positions[corner] = {
+							cell_input.origin.x + ((corner & 1U) != 0U ? spacing : 0.0F),
+							cell_input.origin.y + ((corner & 2U) != 0U ? spacing : 0.0F),
+							cell_input.origin.z + ((corner & 4U) != 0U ? spacing : 0.0F),
+						};
+					}
+					WtVec3 gradient;
+					for (unsigned int corner = 0; corner < 8; ++corner) {
+						const float density = cell_input.samples[corner].density;
+						gradient.x += (corner & 1U) != 0U ? density : -density;
+						gradient.y += (corner & 2U) != 0U ? density : -density;
+						gradient.z += (corner & 4U) != 0U ? density : -density;
+					}
+					for (WtCellSample &sample : cell_input.samples) {
+						sample.gradient = gradient;
+					}
+					WtCellMesh cell_mesh;
+					const WtCellStatus cell_status = backend.mesh_regular_cell(
+						cell_input, cell_mesh, scratch.cell
+					);
+					if (cell_status == WtCellStatus::Empty) continue;
+					if (cell_status != WtCellStatus::Ok) {
+						return WtChunkMeshingStatus::CellBackendFailure;
+					}
+					const WtChunkMeshingStatus append_status =
+						append_collision_cell_mesh(
+							cell_mesh,
+							output.regular,
+							endpoint_positions,
+							cell_input.samples.data(),
+							input.isovalue
+						);
+					if (append_status != WtChunkMeshingStatus::Ok) {
+						return append_status;
+					}
+			}
+		}
+	}
+	return WtChunkMeshingStatus::Ok;
+}
+
 WtChunkMeshingStatus mesh_transition_face(
 	WtChunkFace face,
 	const WtChunkMeshingInput &input,
@@ -723,6 +851,8 @@ WtChunkMeshingScratch::WtChunkMeshingScratch() {
 	scalar_samples.reserve(kWtMaximumCachedScalarSamples);
 	cell_samples.reserve(kWtMaximumCachedCellSamples);
 	vertices.reserve(kWtMaximumRegularChunkVertices);
+	collision_scalar_samples.resize(kWtCollisionLatticeSampleCount);
+	collision_scalar_valid.resize(kWtCollisionLatticeSampleCount);
 }
 
 void WtChunkMeshingScratch::reset_samples() {
@@ -883,8 +1013,8 @@ WtChunkMeshingStatus WtChunkMesher::mesh_regular_collision_blocks(
 			kWtMaximumTransitionFaceIndices, 0, 0);
 	}
 	scratch.reset_samples();
-	WtChunkMeshingStatus status = mesh_regular_cells(
-		input, source, backend_, output, scratch, block_mask, true
+	WtChunkMeshingStatus status = mesh_regular_collision_cells(
+		input, source, backend_, output, scratch, block_mask
 	);
 	if (status == WtChunkMeshingStatus::Ok) {
 		wt_finalize_deformed_triangles(output.regular);
