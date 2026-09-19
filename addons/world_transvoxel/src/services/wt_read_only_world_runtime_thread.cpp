@@ -375,7 +375,7 @@ bool WtReadOnlyWorldRuntime::pop_interaction_collision_publication(
 					candidate.kind != WtReadOnlyPublicationKind::CollisionPayload) {
 				continue;
 			}
-			bool prerequisite_pending = false;
+			std::size_t selected_offset = offset;
 			for (std::size_t prior = 0; prior < offset; ++prior) {
 				const WtReadOnlyPublication &predecessor =
 					slots[(head + prior) % slots.size()];
@@ -383,16 +383,20 @@ bool WtReadOnlyWorldRuntime::pop_interaction_collision_publication(
 					predecessor.generation != candidate.generation) {
 					continue;
 				}
-				prerequisite_pending =
+				const bool prerequisite =
 					predecessor.kind == WtReadOnlyPublicationKind::ExpectChunk ||
 					(predecessor.kind ==
 						WtReadOnlyPublicationKind::SetCollisionRequired &&
 					 predecessor.collision_required);
-				if (prerequisite_pending) break;
+				if (prerequisite) {
+					selected_offset = prior;
+					break;
+				}
 			}
-			if (prerequisite_pending) continue;
-			publication = std::move(slots[index]);
-			for (std::size_t shift = offset; shift + 1U < count; ++shift) {
+			const std::size_t selected_index =
+				(head + selected_offset) % slots.size();
+			publication = std::move(slots[selected_index]);
+			for (std::size_t shift = selected_offset; shift + 1U < count; ++shift) {
 				const std::size_t destination = (head + shift) % slots.size();
 				const std::size_t source = (head + shift + 1U) % slots.size();
 				slots[destination] = std::move(slots[source]);
@@ -421,8 +425,25 @@ bool WtReadOnlyWorldRuntime::pop_interaction_collision_publication(
 			if (slots[index].kind != WtReadOnlyPublicationKind::CollisionPayload) {
 				continue;
 			}
-			publication = std::move(slots[index]);
-			for (std::size_t shift = offset; shift + 1U < count; ++shift) {
+			std::size_t selected_offset = offset;
+			const WtReadOnlyPublication &candidate = slots[index];
+			for (std::size_t prior = 0; prior < offset; ++prior) {
+				const WtReadOnlyPublication &predecessor =
+					slots[(head + prior) % slots.size()];
+				if (predecessor.key != candidate.key ||
+					predecessor.generation != candidate.generation) continue;
+				if (predecessor.kind == WtReadOnlyPublicationKind::ExpectChunk ||
+					(predecessor.kind ==
+						WtReadOnlyPublicationKind::SetCollisionRequired &&
+					 predecessor.collision_required)) {
+					selected_offset = prior;
+					break;
+				}
+			}
+			const std::size_t selected_index =
+				(head + selected_offset) % slots.size();
+			publication = std::move(slots[selected_index]);
+			for (std::size_t shift = selected_offset; shift + 1U < count; ++shift) {
 				const std::size_t destination = (head + shift) % slots.size();
 				const std::size_t source = (head + shift + 1U) % slots.size();
 				slots[destination] = std::move(slots[source]);

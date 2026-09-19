@@ -1555,6 +1555,14 @@ matching current collision generation makes the prepared GPU member eligible
 for cohort commit. This forbids visible holes, constructed surfaces, or tunnels
 from getting ahead of their authoritative physics shape during rapid edits.
 
+At a physics boundary, an interaction collision payload may consume its own
+same-key, same-generation `ExpectChunk` and collision-role prerequisite from the
+bounded publication queue before submission. Those prerequisites count against
+the existing publication-attempt bound, while actual shape applications retain
+the collision item and time budgets. A payload that became ready before the
+physics tick therefore does not lose an entire tick merely because render-frame
+publication processing has not yet installed its expectation.
+
 A regional visibility publication accelerates missing replacement members with
 a distinct coverage priority below player support and interaction focus. It
 never promotes those members into the committed-edit mesh lane, and promotion is

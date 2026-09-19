@@ -18,14 +18,17 @@ void WorldTransvoxelTerrain::_physics_process(double delta) {
 
 void WorldTransvoxelTerrain::
 drain_interaction_collision_publications_at_physics_boundary() {
-	if (!lifecycle_ || !application_ || !collision_sink_) return;
+	if (!lifecycle_ || !application_ || !render_sink_ || !collision_sink_) return;
 	const auto started = std::chrono::steady_clock::now();
 	const std::uint64_t apply_time_start =
 		application_->get_metrics().collision_apply_time_ns_total;
 	std::size_t applied_items = 0;
 	bool consumed_publication = false;
+	const std::size_t publication_attempt_capacity =
+		collision_apply_budget_ > std::numeric_limits<std::size_t>::max() / 3U ?
+			collision_apply_budget_ : collision_apply_budget_ * 3U;
 	for (std::size_t attempts = 0;
-			attempts < collision_apply_budget_ &&
+			attempts < publication_attempt_capacity &&
 			applied_items < collision_apply_budget_; ++attempts) {
 		const std::uint64_t used_ns =
 			application_->get_metrics().collision_apply_time_ns_total -
@@ -48,13 +51,63 @@ drain_interaction_collision_publications_at_physics_boundary() {
 				break;
 			}
 			consumed_publication = true;
-			const WtApplicationStatus submit_status = publication.collision ?
-				application_->submit_collision(publication.collision, true) :
-				WtApplicationStatus::InvalidInput;
+			WtApplicationStatus submit_status = WtApplicationStatus::InvalidInput;
+			if (publication.kind == WtReadOnlyPublicationKind::ExpectChunk) {
+				submit_status = application_->expect_chunk(
+					publication.key, publication.generation,
+					publication.collision_required, publication.visual_required,
+					publication.staged_replacement,
+					publication.preserve_collision_ready,
+					publication.world_revision,
+					publication.independently_publishable_replacement
+				);
+				if (submit_status == WtApplicationStatus::Ok ||
+					submit_status == WtApplicationStatus::AlreadyCurrent) {
+					cancel_chunk_retirement(publication.key);
+					if (publication.collision_required) {
+						cancel_collision_retirement(publication.key);
+					}
+					if (publication.visual_required) {
+						cancel_render_retirement(publication.key);
+					}
+					if (publication.staged_replacement) {
+						stage_chunk_replacement(
+							publication.key,
+							publication.independently_publishable_replacement
+						);
+					}
+				}
+			} else if (publication.kind ==
+					WtReadOnlyPublicationKind::SetCollisionRequired) {
+				WtChunkApplicationRecord record;
+				if (!application_->copy_record(publication.key, record) ||
+					record.generation != publication.generation) {
+					submit_status = WtApplicationStatus::StaleGeneration;
+				} else {
+					submit_status = application_->set_collision_required(
+						publication.key, publication.collision_required
+					);
+					if (publication.collision_required &&
+						(submit_status == WtApplicationStatus::Ok ||
+						 submit_status == WtApplicationStatus::AlreadyCurrent)) {
+						cancel_collision_retirement(publication.key);
+					}
+				}
+			} else if (publication.kind ==
+					WtReadOnlyPublicationKind::CollisionPayload &&
+					publication.collision) {
+				submit_status = application_->submit_collision(
+					publication.collision, true
+				);
+			}
 			lifecycle_->record_frontend_publication(
 				publication, static_cast<std::int64_t>(submit_status)
 			);
-			if (submit_status != WtApplicationStatus::Ok) continue;
+			if (submit_status != WtApplicationStatus::Ok &&
+				submit_status != WtApplicationStatus::AlreadyCurrent) continue;
+			if (publication.kind != WtReadOnlyPublicationKind::CollisionPayload) {
+				continue;
+			}
 			const std::uint64_t submit_used_ns =
 				application_->get_metrics().collision_apply_time_ns_total -
 				apply_time_start;

@@ -691,21 +691,21 @@ void test_collision_only_with_full_gpu_queue(std::size_t mesh_workers) {
 	bool hidden_render = false;
 	wt::WtGenerationToken collision_generation;
 	std::uint64_t collision_world_revision = 0;
+	bool target_prerequisite_popped_at_collision_boundary = false;
+	bool collision_preceded_its_prerequisite = false;
 	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
 	while (!collision_ready && std::chrono::steady_clock::now() < deadline) {
 		wt::WtReadOnlyPublication publication;
-		while (runtime.pop_non_collision_publication(publication)) {
-			hidden_render |= publication.kind == wt::WtReadOnlyPublicationKind::RenderPayload;
+		while (runtime.pop_interaction_collision_publication(publication)) {
 			if (publication.key == wt::WtChunkKey{ 2, 0, 0, 0 } &&
 					publication.kind == wt::WtReadOnlyPublicationKind::ExpectChunk) {
 				collision_world_revision = publication.world_revision;
+				target_prerequisite_popped_at_collision_boundary = true;
 			}
-			check(publication.kind != wt::WtReadOnlyPublicationKind::CollisionPayload,
-				"render drain stole collision from the physics-boundary lane");
-		}
-		while (runtime.pop_interaction_collision_publication(publication)) {
 			if (publication.key == wt::WtChunkKey{ 2, 0, 0, 0 } &&
 					publication.collision) {
+				collision_preceded_its_prerequisite |=
+					!target_prerequisite_popped_at_collision_boundary;
 				collision_ready = !publication.collision->faces.empty();
 				collision_generation = publication.generation;
 			}
@@ -714,8 +714,18 @@ void test_collision_only_with_full_gpu_queue(std::size_t mesh_workers) {
 	}
 	const auto metrics = gpu->metrics();
 	check(collision_ready && collision_generation.value != 0 &&
-		collision_world_revision != 0,
+		collision_world_revision != 0 &&
+		target_prerequisite_popped_at_collision_boundary &&
+		!collision_preceded_its_prerequisite,
 		"collision-only work blocked or lost its authoritative identity");
+	wt::WtReadOnlyPublication remaining_publication;
+	while (runtime.pop_non_collision_publication(remaining_publication)) {
+		hidden_render |= remaining_publication.kind ==
+			wt::WtReadOnlyPublicationKind::RenderPayload;
+		check(remaining_publication.kind !=
+			wt::WtReadOnlyPublicationKind::CollisionPayload,
+			"render drain stole collision from the physics-boundary lane");
+	}
 	runtime.record_frontend_collision_residency(
 		{ 2, 0, 0, 0 }, collision_generation, collision_world_revision
 	);
