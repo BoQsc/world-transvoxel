@@ -39,6 +39,12 @@ struct WtChunkJobResult {
 	bool success = false;
 };
 
+struct WtChunkPriorityUpdate {
+	WtChunkKey key;
+	WtGenerationToken generation;
+	std::int32_t priority = 0;
+};
+
 enum class WtSchedulerQueueTraceEventKind : std::uint8_t {
 	Queued,
 	PriorityObserved,
@@ -125,6 +131,9 @@ public:
 		const WtChunkKey &key,
 		std::int32_t priority
 	);
+	WtSchedulerStatus reprioritize_chunks(
+		const std::vector<WtChunkPriorityUpdate> &updates
+	);
 	// Filters must not call back into the scheduler. Rejected jobs stay queued.
 	bool peek_job(WtChunkJob &job, const std::function<bool(const WtChunkJob &)> &admit = {}) const;
 	bool pop_job(WtChunkJob &job, const std::function<bool(const WtChunkJob &)> &admit = {});
@@ -162,6 +171,10 @@ private:
 			WtGenerationToken generation,
 			std::int32_t priority,
 			WtSchedulerQueueTraceEvent *trace_event = nullptr
+		);
+		std::size_t reprioritize_batch(
+			const std::vector<WtChunkPriorityUpdate> &updates,
+			std::vector<WtSchedulerQueueTraceEvent> *trace_events = nullptr
 		);
 		bool observe(
 			const WtChunkKey &key,

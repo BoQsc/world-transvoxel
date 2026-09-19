@@ -1,6 +1,7 @@
 #include "storage/wt_async_storage_service.h"
 
 #include "storage/wt_chunk_page.h"
+#include "storage/wt_hash256.h"
 
 #include <algorithm>
 
@@ -83,6 +84,9 @@ void WtAsyncStorageService::worker_main(
 				completion.page_bytes.reset();
 			} else {
 				completion.decoded_page = std::move(decoded_page);
+				completion.content_hash = wt_sha256(
+					completion.page_bytes->data(), completion.page_bytes->size()
+				);
 			}
 		}
 		const auto load_finished = std::chrono::steady_clock::now();

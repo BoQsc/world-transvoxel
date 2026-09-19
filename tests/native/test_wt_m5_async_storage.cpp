@@ -427,7 +427,10 @@ void test_async_service(
 	);
 	check(
 		valid.decoded_page &&
-			valid.decoded_page->metadata.key == fixture.pages[0].key,
+			valid.decoded_page->metadata.key == fixture.pages[0].key &&
+			valid.content_hash == wt::wt_sha256(
+				fixture.pages[0].bytes.data(), fixture.pages[0].bytes.size()
+			),
 		"asynchronous load did not decode the immutable page off-thread"
 	);
 	const wt::WtPageLoadCompletion short_page = wait_completion(

@@ -103,16 +103,26 @@ WtStoragePageCacheStatus WtStoragePageCache::accept_completion(
 	const std::shared_ptr<const std::vector<std::uint8_t>> &bytes =
 		completion.page_bytes;
 	WtChunkPageView view;
-	if (wt_open_chunk_page(
-			{ bytes->data(), bytes->size() },
-			view
-		) != WtChunkPageStatus::Ok ||
-		view.metadata.key != completion.key) {
+	WtChunkPageMetadata metadata;
+	WtHash256 content_hash{};
+	if (completion.decoded_page) {
+		metadata = completion.decoded_page->metadata;
+		content_hash = completion.content_hash;
+	} else {
+		if (wt_open_chunk_page(
+				{ bytes->data(), bytes->size() },
+				view
+			) != WtChunkPageStatus::Ok) {
+			++metrics_.invalid_pages;
+			return WtStoragePageCacheStatus::InvalidPage;
+		}
+		metadata = view.metadata;
+		content_hash = wt_sha256(bytes->data(), bytes->size());
+	}
+	if (metadata.key != completion.key) {
 		++metrics_.invalid_pages;
 		return WtStoragePageCacheStatus::InvalidPage;
 	}
-	const WtHash256 content_hash =
-		wt_sha256(bytes->data(), bytes->size());
 	const std::size_t resident_bytes = encoded_resident_size(bytes);
 	if (resident_bytes > limits_.encoded_byte_capacity) {
 		++metrics_.encoded_oversize_rejections;
@@ -123,7 +133,7 @@ WtStoragePageCacheStatus WtStoragePageCache::accept_completion(
 	const std::size_t decoded_bytes = decoded_resident_size(worker_decoded);
 	if (worker_decoded &&
 		(worker_decoded->metadata.key != completion.key ||
-		 worker_decoded->metadata.source_revision != view.metadata.source_revision)) {
+		 worker_decoded->metadata.source_revision != metadata.source_revision)) {
 		++metrics_.invalid_pages;
 		return WtStoragePageCacheStatus::InvalidPage;
 	}
@@ -134,7 +144,7 @@ WtStoragePageCacheStatus WtStoragePageCache::accept_completion(
 
 	auto decoded_identity = find_decoded_entry(
 		completion.key,
-		view.metadata.source_revision
+		metadata.source_revision
 	);
 	if (decoded_identity != decoded_.end() &&
 		decoded_identity->content_hash != content_hash) {
@@ -143,7 +153,7 @@ WtStoragePageCacheStatus WtStoragePageCache::accept_completion(
 	}
 	auto existing = find_encoded_entry(
 		completion.key,
-		view.metadata.source_revision
+		metadata.source_revision
 	);
 	if (existing != encoded_.end()) {
 		if (existing->content_hash != content_hash) {
@@ -160,7 +170,7 @@ WtStoragePageCacheStatus WtStoragePageCache::accept_completion(
 	} else {
 		EncodedEntry entry;
 		entry.key = completion.key;
-		entry.source_revision = view.metadata.source_revision;
+		entry.source_revision = metadata.source_revision;
 		entry.content_hash = content_hash;
 		entry.bytes = bytes;
 		entry.resident_bytes = resident_bytes;
@@ -177,12 +187,12 @@ WtStoragePageCacheStatus WtStoragePageCache::accept_completion(
 	}
 	if (worker_decoded) {
 		auto decoded = find_decoded_entry(
-			completion.key, view.metadata.source_revision
+			completion.key, metadata.source_revision
 		);
 		if (decoded == decoded_.end()) {
 			DecodedEntry entry;
 			entry.key = completion.key;
-			entry.source_revision = view.metadata.source_revision;
+			entry.source_revision = metadata.source_revision;
 			entry.content_hash = content_hash;
 			entry.page = worker_decoded;
 			entry.resident_bytes = decoded_bytes;

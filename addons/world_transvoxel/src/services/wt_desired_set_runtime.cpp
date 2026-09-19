@@ -203,6 +203,8 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 		++metrics_.capacity_rejections;
 		return WtDesiredSetRuntimeStatus::JobQueueCapacityExceeded;
 	}
+	std::vector<WtChunkPriorityUpdate> scheduler_priority_updates;
+	scheduler_priority_updates.reserve(delta.updated.size());
 
 	for (const WtChunkKey &key : delta.removed) {
 		if (page_meshing_runtime != nullptr) {
@@ -372,13 +374,9 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 				return WtDesiredSetRuntimeStatus::PageMeshingRuntimeFailure;
 			}
 		}
-		const WtSchedulerStatus scheduler_status =
-			scheduler.reprioritize_chunk(item.key, effective_priority);
-		if (scheduler_status != WtSchedulerStatus::Ok &&
-			scheduler_status != WtSchedulerStatus::AlreadyCurrent) {
-			++metrics_.scheduler_failures;
-			return WtDesiredSetRuntimeStatus::SchedulerFailure;
-		}
+		scheduler_priority_updates.push_back({
+			item.key, record->generation, effective_priority,
+		});
 		// Enable a newly required role before disabling the old one so a chunk
 		// never passes through an invalid no-visual/no-collision state.
 		WtApplicationStatus application_status = WtApplicationStatus::Ok;
@@ -425,6 +423,15 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 		if (withdraw_collision) {
 			metrics_.evicted_resource_entries +=
 				resource_cache.erase_collision_key(item.key);
+		}
+	}
+	if (!scheduler_priority_updates.empty()) {
+		const WtSchedulerStatus scheduler_status =
+			scheduler.reprioritize_chunks(scheduler_priority_updates);
+		if (scheduler_status != WtSchedulerStatus::Ok &&
+			scheduler_status != WtSchedulerStatus::AlreadyCurrent) {
+			++metrics_.scheduler_failures;
+			return WtDesiredSetRuntimeStatus::SchedulerFailure;
 		}
 	}
 	for (const WtDesiredChunk &item : delta.added) {

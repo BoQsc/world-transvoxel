@@ -211,6 +211,43 @@ void test_scheduler_queue_trace_observer() {
 		"disabled queue trace observer retained an event");
 }
 
+void test_scheduler_batch_reprioritization() {
+	wt::WtStreamScheduler scheduler(4, 8, 8, 1);
+	const wt::WtChunkKey first = { 0, 0, 0, 0 };
+	const wt::WtChunkKey second = { 1, 0, 0, 0 };
+	const wt::WtChunkKey third = { 2, 0, 0, 0 };
+	check(
+		scheduler.request_chunk(first, 1, 1) == wt::WtSchedulerStatus::Ok &&
+		scheduler.request_chunk(second, 1, 2) == wt::WtSchedulerStatus::Ok &&
+		scheduler.request_chunk(third, 1, 3) == wt::WtSchedulerStatus::Ok,
+		"batch reprioritization fixture setup failed"
+	);
+	const wt::WtChunkRecord *first_record = scheduler.find_record(first);
+	const wt::WtChunkRecord *third_record = scheduler.find_record(third);
+	check(first_record != nullptr && third_record != nullptr,
+		"batch reprioritization fixture records missing");
+	check(
+		scheduler.reprioritize_chunks({
+			{ first, first_record->generation, 20 },
+			{ third, third_record->generation, 10 },
+		}) == wt::WtSchedulerStatus::Ok,
+		"batch reprioritization was rejected"
+	);
+	wt::WtChunkJob job;
+	check(scheduler.pop_job(job) && job.key == first,
+		"batch reprioritization lost highest priority");
+	check(scheduler.pop_job(job) && job.key == third,
+		"batch reprioritization lost second priority");
+	check(scheduler.pop_job(job) && job.key == second,
+		"batch reprioritization lost remaining priority");
+	check(
+		scheduler.reprioritize_chunks({
+			{ first, { first_record->generation.value + 1U }, 30 },
+		}) == wt::WtSchedulerStatus::NotFound,
+		"batch reprioritization accepted a stale generation"
+	);
+}
+
 void test_scheduler_stale_and_bounds() {
 	const wt::WtChunkKey key = { -1, 0, 0, 0 };
 	wt::WtStreamScheduler scheduler(1, 4, 1, 1);
@@ -305,6 +342,7 @@ int main() {
 	test_lod_map();
 	test_scheduler_priority_and_lifecycle();
 	test_scheduler_queue_trace_observer();
+	test_scheduler_batch_reprioritization();
 	test_scheduler_stale_and_bounds();
 	test_scheduler_forget_wrapped_completions();
 	if (failure_count != 0) {

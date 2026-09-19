@@ -81,6 +81,7 @@ struct WtPageLoadCompletion {
 	// completion. Runtime admission can then pin the ready page without doing
 	// whole-page decode work on the latency-sensitive world thread.
 	std::shared_ptr<const WtChunkPage> decoded_page;
+	WtHash256 content_hash{};
 };
 
 struct WtAsyncStorageMetrics {

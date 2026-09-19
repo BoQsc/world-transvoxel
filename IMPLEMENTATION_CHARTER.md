@@ -1839,11 +1839,19 @@ Storage workers validate and decode immutable pages before publishing bounded
 completions. Runtime completion admission only installs the encoded and decoded
 objects into the bounded cache and pins waiting dependencies; cold whole-page
 decode cannot occupy the world-runtime thread or delay a newly submitted edit.
+The worker also carries the verified content hash and decoded metadata, so the
+runtime does not reopen or rehash the same immutable page during admission.
 Storage completions are admitted in fixed two-item slices.
 If an edit arrives during that slice, the dispatcher commits it before resuming
 background loading records. Remaining storage completions stay in the existing
-bounded completion ring and retain their original ownership and validation;
-this changes dispatcher residency rather than storage capacity or page order.
+	bounded completion ring and retain their original ownership and validation;
+	this changes dispatcher residency rather than storage capacity or page order.
+
+Foreground priority overlays batch generation-checked scheduler priority
+changes. The bounded job queue is scanned once and sorted once per overlay,
+instead of scanning and sorting the whole queue once per changed chunk. This
+keeps fast viewer/interaction lease updates from creating quadratic runtime
+thread stalls while preserving the existing priority order and trace records.
 
 An active `InteractionFocus` lease is also a bounded visual LOD0 topology
 request. A cold focus page is omitted while unavailable, but successful storage
