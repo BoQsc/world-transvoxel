@@ -634,6 +634,7 @@ godot::Dictionary WorldTransvoxelTerrain::validate_gpu_resident_render_request(
 	result["request_id"] = request_id;
 	result["status"] = "UNKNOWN_REQUEST";
 	result["ready"] = false;
+	result["external_activation_required"] = false;
 	result["request_accepted"] = false;
 	result["cpu_render_publication_unchanged"] = true;
 	result["cpu_collision_publication_unchanged"] = true;
@@ -721,7 +722,7 @@ get_gpu_resident_render_chunk_readiness(
 		record.generation != identity.generation || !record.visual_required) {
 		// Captures can arrive before the front-end expectation, or outlive its
 		// removal. Only the native generation can distinguish those two cases.
-		if (!lifecycle_ || !lifecycle_->has_visual_generation(
+		if (!lifecycle_ || !lifecycle_->has_retained_visual_generation(
 				identity.key, identity.generation
 			)) {
 			++gpu_resident_render_readiness_stale_;
@@ -737,6 +738,8 @@ get_gpu_resident_render_chunk_readiness(
 	}
 	result["collision_required"] = record.collision_required;
 	result["collision_ready"] = record.collision_ready;
+	result["external_activation_required"] =
+		record.external_visual_activation_required;
 	if (record.visual_generation_superseded) {
 		++gpu_resident_render_readiness_stale_;
 		++gpu_resident_render_stale_skips_;

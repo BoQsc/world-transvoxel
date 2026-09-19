@@ -11,6 +11,8 @@
 namespace world_transvoxel {
 namespace {
 
+constexpr std::size_t kWtDormantChunkCapacity = 64;
+
 template <typename Item, typename KeyFunction>
 bool canonical_keys(
 	const std::vector<Item> &items,
@@ -69,12 +71,66 @@ WtDesiredSetRuntimeService::WtDesiredSetRuntimeService(
 	std::size_t change_capacity
 ) :
 		change_capacity_(change_capacity),
+		dormant_capacity_(std::min(change_capacity, kWtDormantChunkCapacity)),
 		valid_(change_capacity > 0 &&
 			change_capacity <= kWtMaximumDesiredChunkCount) {
+	if (valid_) dormant_chunks_.reserve(dormant_capacity_);
 }
 
 bool WtDesiredSetRuntimeService::valid() const noexcept {
 	return valid_;
+}
+
+bool WtDesiredSetRuntimeService::copy_dormant(
+	const WtChunkKey &key,
+	DormantChunk &output
+) const noexcept {
+	std::lock_guard<std::mutex> lock(dormant_mutex_);
+	const auto found = std::find_if(
+		dormant_chunks_.begin(), dormant_chunks_.end(),
+		[&key](const DormantChunk &item) { return item.key == key; }
+	);
+	if (found == dormant_chunks_.end()) return false;
+	output = *found;
+	return true;
+}
+
+void WtDesiredSetRuntimeService::erase_dormant(
+	const WtChunkKey &key
+) noexcept {
+	std::lock_guard<std::mutex> lock(dormant_mutex_);
+	dormant_chunks_.erase(std::remove_if(
+		dormant_chunks_.begin(), dormant_chunks_.end(),
+		[&key](const DormantChunk &item) { return item.key == key; }
+	), dormant_chunks_.end());
+	metrics_.dormant_entries = dormant_chunks_.size();
+}
+
+void WtDesiredSetRuntimeService::retain_dormant(
+	const WtChunkRecord &record
+) noexcept {
+	std::lock_guard<std::mutex> lock(dormant_mutex_);
+	dormant_chunks_.erase(std::remove_if(
+		dormant_chunks_.begin(), dormant_chunks_.end(),
+		[&record](const DormantChunk &item) { return item.key == record.key; }
+	), dormant_chunks_.end());
+	dormant_chunks_.push_back({
+		record.key, record.generation, record.source_revision, record.world_revision,
+	});
+	++metrics_.dormant_insertions;
+	metrics_.dormant_entries = dormant_chunks_.size();
+	metrics_.dormant_entry_peak = std::max(
+		metrics_.dormant_entry_peak,
+		static_cast<std::uint64_t>(dormant_chunks_.size())
+	);
+}
+
+bool WtDesiredSetRuntimeService::has_dormant_generation(
+	const WtChunkKey &key,
+	WtGenerationToken generation
+) const noexcept {
+	DormantChunk dormant;
+	return copy_dormant(key, dormant) && dormant.generation == generation;
 }
 
 bool WtDesiredSetRuntimeService::validate_delta(
@@ -147,9 +203,13 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 	for (const WtChunkKey &key : delta.removed) {
 		const WtChunkRecord *record = scheduler.find_record(key);
 		WtChunkApplicationRecord application_record;
+		const bool application_present =
+			application.copy_record(key, application_record);
 		if (record == nullptr ||
-			!application.copy_record(key, application_record) ||
-			record->generation != application_record.generation) {
+			(application_present &&
+				record->generation != application_record.generation) ||
+			(!application_present &&
+				record->lifecycle != WtChunkLifecycle::Ready)) {
 			++metrics_.state_rejections;
 			return WtDesiredSetRuntimeStatus::RuntimeStateMismatch;
 		}
@@ -166,18 +226,92 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 	}
 	for (const WtDesiredChunk &item : delta.added) {
 		WtChunkApplicationRecord application_record;
-		if (scheduler.find_record(item.key) != nullptr ||
+		const WtChunkRecord *record = scheduler.find_record(item.key);
+		DormantChunk dormant;
+		const bool dormant_match = copy_dormant(item.key, dormant) &&
+			record != nullptr && record->generation == dormant.generation;
+		if ((record != nullptr && !dormant_match) ||
 			application.copy_record(item.key, application_record)) {
 			++metrics_.state_rejections;
 			return WtDesiredSetRuntimeStatus::RuntimeStateMismatch;
 		}
 	}
-	if (delta.added.size() >
-			scheduler.available_record_capacity() + delta.removed.size() ||
+
+	std::vector<WtChunkKey> reusable_additions;
+	std::vector<WtChunkKey> dormant_evictions;
+	for (const WtDesiredChunk &item : delta.added) {
+		DormantChunk dormant;
+		const WtChunkRecord *record = scheduler.find_record(item.key);
+		if (!copy_dormant(item.key, dormant)) continue;
+		const bool visual_cached = !item.visual_required || static_cast<bool>(
+			resource_cache.find_render(item.key, dormant.generation)
+		);
+		const bool collision_cached = !item.collision_required || static_cast<bool>(
+			resource_cache.find_collision(item.key, dormant.generation)
+		);
+		if (record != nullptr && record->generation == dormant.generation &&
+				record->source_revision == source_revision &&
+				record->world_revision == world_revision &&
+				record->lifecycle == WtChunkLifecycle::Ready &&
+				visual_cached && collision_cached) {
+			reusable_additions.push_back(item.key);
+		} else {
+			dormant_evictions.push_back(item.key);
+		}
+	}
+	const std::size_t stale_dormant_eviction_count = dormant_evictions.size();
+	const std::size_t new_addition_count =
+		delta.added.size() - reusable_additions.size();
+	std::size_t record_shortfall = new_addition_count >
+			scheduler.available_record_capacity() +
+			dormant_evictions.size() + delta.removed.size() ?
+		new_addition_count - (
+			scheduler.available_record_capacity() +
+			dormant_evictions.size() + delta.removed.size()
+		) : 0;
+	if (record_shortfall != 0) {
+		std::lock_guard<std::mutex> lock(dormant_mutex_);
+		for (const DormantChunk &dormant : dormant_chunks_) {
+			if (record_shortfall == 0) break;
+			if (std::find(
+					reusable_additions.begin(), reusable_additions.end(), dormant.key
+				) != reusable_additions.end() || std::find(
+					dormant_evictions.begin(), dormant_evictions.end(), dormant.key
+				) != dormant_evictions.end()) {
+				continue;
+			}
+			dormant_evictions.push_back(dormant.key);
+			--record_shortfall;
+		}
+	}
+	std::size_t effective_record_capacity =
+		scheduler.available_record_capacity() + dormant_evictions.size();
+	if (new_addition_count > effective_record_capacity + delta.removed.size() ||
 		delta.added.size() >
 			application.available_record_capacity() + delta.removed.size()) {
 		++metrics_.capacity_rejections;
 		return WtDesiredSetRuntimeStatus::RecordCapacityExceeded;
+	}
+
+	std::vector<WtChunkKey> retain_removals;
+	std::size_t dormant_count = 0;
+	{
+		std::lock_guard<std::mutex> lock(dormant_mutex_);
+		dormant_count = dormant_chunks_.size();
+	}
+	const std::size_t dormant_after_additions =
+		dormant_count - reusable_additions.size() - dormant_evictions.size();
+	const std::size_t dormant_slots = dormant_capacity_ > dormant_after_additions ?
+		dormant_capacity_ - dormant_after_additions : 0;
+	const std::size_t record_slots =
+		effective_record_capacity + delta.removed.size() - new_addition_count;
+	const std::size_t retain_capacity = std::min(dormant_slots, record_slots);
+	for (const WtChunkKey &key : delta.removed) {
+		if (retain_removals.size() >= retain_capacity) break;
+		const WtChunkRecord *record = scheduler.find_record(key);
+		if (record != nullptr && record->lifecycle == WtChunkLifecycle::Ready) {
+			retain_removals.push_back(key);
+		}
 	}
 	std::size_t role_promotions_requiring_remesh = 0;
 	for (const WtDesiredChunk &item : delta.updated) {
@@ -199,12 +333,27 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 		}
 	}
 	if (scheduler.available_job_capacity() <
-			delta.added.size() + role_promotions_requiring_remesh) {
+			new_addition_count + role_promotions_requiring_remesh) {
 		++metrics_.capacity_rejections;
 		return WtDesiredSetRuntimeStatus::JobQueueCapacityExceeded;
 	}
 	std::vector<WtChunkPriorityUpdate> scheduler_priority_updates;
 	scheduler_priority_updates.reserve(delta.updated.size());
+	for (std::size_t eviction_index = 0;
+			eviction_index < dormant_evictions.size(); ++eviction_index) {
+		const WtChunkKey &key = dormant_evictions[eviction_index];
+		if (scheduler.forget_chunk(key) != WtSchedulerStatus::Ok) {
+			++metrics_.scheduler_failures;
+			return WtDesiredSetRuntimeStatus::SchedulerFailure;
+		}
+		erase_dormant(key);
+		metrics_.evicted_page_entries += page_cache.erase_key(key);
+		metrics_.evicted_resource_entries += resource_cache.erase_key(key);
+		++metrics_.dormant_evictions;
+		if (eviction_index < stale_dormant_eviction_count) {
+			++metrics_.dormant_stale_evictions;
+		}
+	}
 
 	for (const WtChunkKey &key : delta.removed) {
 		if (page_meshing_runtime != nullptr) {
@@ -218,16 +367,26 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 				return WtDesiredSetRuntimeStatus::PageMeshingRuntimeFailure;
 			}
 		}
-		if (scheduler.forget_chunk(key) != WtSchedulerStatus::Ok) {
+		const bool retain = std::binary_search(
+			retain_removals.begin(), retain_removals.end(), key
+		);
+		const WtChunkRecord retained_record = *scheduler.find_record(key);
+		if (!retain && scheduler.forget_chunk(key) != WtSchedulerStatus::Ok) {
 			++metrics_.scheduler_failures;
 			return WtDesiredSetRuntimeStatus::SchedulerFailure;
 		}
-		if (application.forget_chunk(key) != WtApplicationStatus::Ok) {
+		const WtApplicationStatus forget_status = application.forget_chunk(key);
+		if (forget_status != WtApplicationStatus::Ok &&
+			forget_status != WtApplicationStatus::NotFound) {
 			++metrics_.application_failures;
 			return WtDesiredSetRuntimeStatus::ApplicationFailure;
 		}
-		metrics_.evicted_page_entries += page_cache.erase_key(key);
-		metrics_.evicted_resource_entries += resource_cache.erase_key(key);
+		if (retain) {
+			retain_dormant(retained_record);
+		} else {
+			metrics_.evicted_page_entries += page_cache.erase_key(key);
+			metrics_.evicted_resource_entries += resource_cache.erase_key(key);
+		}
 	}
 	for (const WtDesiredChunk &item : delta.updated) {
 		WtChunkApplicationRecord application_record;
@@ -435,6 +594,49 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 		}
 	}
 	for (const WtDesiredChunk &item : delta.added) {
+		if (std::binary_search(
+				reusable_additions.begin(), reusable_additions.end(), item.key)) {
+			const WtChunkRecord *record = scheduler.find_record(item.key);
+			if (record == nullptr || scheduler.reprioritize_chunk(
+					item.key, item.priority
+				) == WtSchedulerStatus::NotFound ||
+					application.expect_chunk(
+						item.key,
+						record->generation,
+						item.collision_required,
+						item.visual_required,
+						false,
+						false,
+						record->world_revision
+					) != WtApplicationStatus::Ok) {
+				++metrics_.application_failures;
+				return WtDesiredSetRuntimeStatus::ApplicationFailure;
+			}
+			if (item.visual_required) {
+				const auto cached_render = resource_cache.find_render(
+					item.key, record->generation
+				);
+				if (!cached_render || application.submit_render(cached_render) !=
+						WtApplicationStatus::Ok) {
+					++metrics_.application_failures;
+					return WtDesiredSetRuntimeStatus::ApplicationFailure;
+				}
+			}
+			if (item.collision_required) {
+				const auto cached_collision = resource_cache.find_collision(
+					item.key, record->generation
+				);
+				if (!cached_collision || application.submit_collision(
+						cached_collision
+					) != WtApplicationStatus::Ok) {
+					++metrics_.application_failures;
+					return WtDesiredSetRuntimeStatus::ApplicationFailure;
+				}
+			}
+			erase_dormant(item.key);
+			++metrics_.dormant_reactivations;
+			continue;
+		}
 		if (scheduler.request_chunk_version(
 				item.key,
 				source_revision,

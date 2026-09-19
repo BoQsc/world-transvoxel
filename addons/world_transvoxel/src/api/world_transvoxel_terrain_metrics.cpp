@@ -461,12 +461,16 @@ godot::Dictionary WorldTransvoxelTerrain::get_runtime_metrics() const {
 		runtime.interaction_warm_completions);
 	set_metric(output, "interaction_warm_rejections",
 		runtime.interaction_warm_rejections);
-	set_metric(output, "interaction_hot_keys",
-		runtime.interaction_hot_keys);
-	set_metric(output, "interaction_hot_key_peak",
-		runtime.interaction_hot_key_peak);
-	set_metric(output, "interaction_hot_key_evictions",
-		runtime.interaction_hot_key_evictions);
+	set_metric(output, "dormant_chunk_entries", runtime.dormant_chunk_entries);
+	set_metric(output, "dormant_chunk_peak", runtime.dormant_chunk_peak);
+	set_metric(output, "dormant_chunk_insertions",
+		runtime.dormant_chunk_insertions);
+	set_metric(output, "dormant_chunk_reactivations",
+		runtime.dormant_chunk_reactivations);
+	set_metric(output, "dormant_chunk_evictions",
+		runtime.dormant_chunk_evictions);
+	set_metric(output, "dormant_chunk_stale_evictions",
+		runtime.dormant_chunk_stale_evictions);
 	set_metric(
 		output,
 		"edit_lod_retention_zones",

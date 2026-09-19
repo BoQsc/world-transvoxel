@@ -78,6 +78,10 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 		config_.active_chunk_capacity
 	);
 	const std::size_t viewers = static_cast<std::size_t>(config_.viewer_capacity);
+	const std::size_t scheduler_record_capacity = std::min<std::size_t>(
+		kWtMaximumDesiredChunkCount,
+		active + std::min<std::size_t>(64U, kWtMaximumDesiredChunkCount - active)
+	);
 	initial_world_revision_ = storage_.world_revision();
 	world_revision_.store(
 		edit_journal_store_ != nullptr && edit_journal_store_->is_open() ?
@@ -101,7 +105,7 @@ WtReadOnlyWorldRuntime::WtReadOnlyWorldRuntime(
 	planner_viewers_.reserve(viewers);
 	collision_viewers_.reserve(viewers);
 	scheduler_ = std::make_unique<WtStreamScheduler>(
-		active, active, active, viewers
+		scheduler_record_capacity, active, active, viewers
 	);
 	application_ = std::make_unique<WtChunkApplicationService>(
 		active, active, active
@@ -183,9 +187,19 @@ bool WtReadOnlyWorldRuntime::has_visual_generation(
 	const WtChunkKey &key, WtGenerationToken generation
 ) const {
 	WtChunkApplicationRecord record;
-	return application_ && application_->copy_record(key, record) &&
-		record.generation == generation && record.visual_required &&
-		!record.visual_generation_superseded;
+	if (application_ && application_->copy_record(key, record) &&
+			record.generation == generation && record.visual_required &&
+			!record.visual_generation_superseded) {
+		return true;
+	}
+	return false;
+}
+
+bool WtReadOnlyWorldRuntime::has_retained_visual_generation(
+	const WtChunkKey &key, WtGenerationToken generation
+) const {
+	return has_visual_generation(key, generation) || (desired_runtime_ &&
+		desired_runtime_->has_dormant_generation(key, generation));
 }
 
 bool WtReadOnlyWorldRuntime::valid() const noexcept {

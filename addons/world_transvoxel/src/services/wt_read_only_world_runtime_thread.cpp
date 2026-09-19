@@ -2,6 +2,7 @@
 
 #include "services/wt_chunk_resource_cache.h"
 #include "services/wt_chunk_application.h"
+#include "services/wt_desired_set_runtime.h"
 #include "services/wt_edit_runtime_replacement.h"
 #include "services/wt_page_meshing_runtime.h"
 #include "storage/wt_async_storage_service.h"
@@ -823,6 +824,18 @@ void WtReadOnlyWorldRuntime::refresh_metrics_snapshot() noexcept {
 		snapshot.scheduler_queued_completions =
 			scheduler_->queued_completion_count();
 		snapshot.scheduler_queue_rejections = scheduler.queue_rejections;
+	}
+	if (desired_runtime_) {
+		const WtDesiredSetRuntimeMetrics desired_runtime =
+			desired_runtime_->get_metrics();
+		snapshot.dormant_chunk_entries = desired_runtime.dormant_entries;
+		snapshot.dormant_chunk_peak = desired_runtime.dormant_entry_peak;
+		snapshot.dormant_chunk_insertions = desired_runtime.dormant_insertions;
+		snapshot.dormant_chunk_reactivations =
+			desired_runtime.dormant_reactivations;
+		snapshot.dormant_chunk_evictions = desired_runtime.dormant_evictions;
+		snapshot.dormant_chunk_stale_evictions =
+			desired_runtime.dormant_stale_evictions;
 	}
 	if (edit_replacement_) {
 		const WtEditRuntimeReplacementMetrics edit =

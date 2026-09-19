@@ -535,10 +535,6 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 	);
 	std::vector<WtChunkKey> interaction_topology_keys =
 		active_interaction_focus_keys;
-	interaction_topology_keys.insert(
-		interaction_topology_keys.end(),
-		interaction_hot_keys_.begin(), interaction_hot_keys_.end()
-	);
 	const auto normalize_interaction_keys = [this](std::vector<WtChunkKey> &keys) {
 		keys.erase(
 			std::remove_if(

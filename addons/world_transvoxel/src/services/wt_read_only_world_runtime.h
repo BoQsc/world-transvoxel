@@ -219,6 +219,9 @@ public:
 	bool has_visual_generation(
 		const WtChunkKey &key, WtGenerationToken generation
 	) const;
+	bool has_retained_visual_generation(
+		const WtChunkKey &key, WtGenerationToken generation
+	) const;
 
 	WtReadOnlyRuntimeStatus last_status() const noexcept;
 	WtReadOnlyRuntimeMetrics get_metrics() const noexcept;
@@ -445,7 +448,6 @@ private:
 	std::unique_ptr<WtMultiViewerDesiredSet> desired_;
 	WtForegroundPriorityLeaseSet foreground_priority_leases_;
 	// LRU order, oldest first. Demand planning canonicalizes a copy before use.
-	std::vector<WtChunkKey> interaction_hot_keys_;
 	std::vector<WtViewerChunkDemand> base_demands_;
 	std::unique_ptr<WtBalancedLodPlanner> lod_planner_;
 	std::vector<WtLodPlannerViewer> planner_viewers_;

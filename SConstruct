@@ -561,6 +561,19 @@ m5_workload_test = native_test_env.Program(
     source=["tests/native/test_wt_m5_workload.cpp"] + m5_workload_runtime_sources,
 )
 
+dormant_residency_test = native_test_env.Program(
+    os.path.join(
+        "build",
+        "native-tests",
+        "test_wt_dormant_residency.{}.{}{}".format(
+            env["target"],
+            env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=["tests/native/test_wt_dormant_residency.cpp"] + m5_workload_runtime_sources,
+)
+
 m5_runtime_trace_test = native_test_env.Program(
     os.path.join(
         "build",

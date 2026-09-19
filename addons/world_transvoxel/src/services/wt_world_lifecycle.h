@@ -108,6 +108,9 @@ public:
 	bool has_visual_generation(
 		const WtChunkKey &key, WtGenerationToken generation
 	) const;
+	bool has_retained_visual_generation(
+		const WtChunkKey &key, WtGenerationToken generation
+	) const;
 	bool pop_publication(WtReadOnlyPublication &publication);
 	bool pop_non_collision_publication(WtReadOnlyPublication &publication);
 	bool pop_interaction_collision_publication(

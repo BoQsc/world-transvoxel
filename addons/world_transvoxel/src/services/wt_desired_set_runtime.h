@@ -4,6 +4,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
+#include <vector>
 
 namespace world_transvoxel {
 
@@ -12,6 +14,7 @@ class WtChunkResourceCache;
 class WtPageMeshingRuntimeOwner;
 class WtStoragePageCache;
 class WtStreamScheduler;
+struct WtChunkRecord;
 
 enum class WtDesiredSetRuntimeStatus : std::uint8_t {
 	Ok,
@@ -43,6 +46,12 @@ struct WtDesiredSetRuntimeMetrics {
 	std::uint64_t page_meshing_runtime_failures = 0;
 	std::uint64_t released_page_meshing_records = 0;
 	std::uint64_t reprioritized_page_meshing_records = 0;
+	std::uint64_t dormant_insertions = 0;
+	std::uint64_t dormant_reactivations = 0;
+	std::uint64_t dormant_evictions = 0;
+	std::uint64_t dormant_stale_evictions = 0;
+	std::uint64_t dormant_entries = 0;
+	std::uint64_t dormant_entry_peak = 0;
 };
 
 class WtDesiredSetRuntimeService {
@@ -63,12 +72,29 @@ public:
 
 	std::size_t change_capacity() const noexcept;
 	WtDesiredSetRuntimeMetrics get_metrics() const noexcept;
+	bool has_dormant_generation(
+		const WtChunkKey &key,
+		WtGenerationToken generation
+	) const noexcept;
 
 private:
+	struct DormantChunk {
+		WtChunkKey key;
+		WtGenerationToken generation;
+		std::uint64_t source_revision = 0;
+		std::uint64_t world_revision = 0;
+	};
+
 	bool validate_delta(const WtDesiredSetDelta &delta) const noexcept;
+	bool copy_dormant(const WtChunkKey &key, DormantChunk &output) const noexcept;
+	void erase_dormant(const WtChunkKey &key) noexcept;
+	void retain_dormant(const WtChunkRecord &record) noexcept;
 
 	std::size_t change_capacity_ = 0;
+	std::size_t dormant_capacity_ = 0;
 	bool valid_ = false;
+	mutable std::mutex dormant_mutex_;
+	std::vector<DormantChunk> dormant_chunks_;
 	WtDesiredSetRuntimeMetrics metrics_;
 };
 
