@@ -368,11 +368,14 @@ bool WtReadOnlyWorldRuntime::pop_interaction_collision_publication(
 		std::size_t &head,
 		std::size_t &count
 	) {
+		for (std::size_t priority_pass = 0; priority_pass < 2; ++priority_pass) {
 		for (std::size_t offset = 0; offset < count; ++offset) {
 			const std::size_t index = (head + offset) % slots.size();
 			const WtReadOnlyPublication &candidate = slots[index];
 			if (!candidate.interaction_critical ||
-					candidate.kind != WtReadOnlyPublicationKind::CollisionPayload) {
+					candidate.kind != WtReadOnlyPublicationKind::CollisionPayload ||
+					(priority_pass == 0 && !candidate.committed_edit) ||
+					(priority_pass == 1 && candidate.committed_edit)) {
 				continue;
 			}
 			std::size_t selected_offset = offset;
@@ -406,6 +409,7 @@ bool WtReadOnlyWorldRuntime::pop_interaction_collision_publication(
 			--count;
 			return true;
 		}
+		}
 		return false;
 	};
 	const bool priority = pop_matching(
@@ -420,9 +424,12 @@ bool WtReadOnlyWorldRuntime::pop_interaction_collision_publication(
 		std::size_t &head,
 		std::size_t &count
 	) {
+		for (std::size_t priority_pass = 0; priority_pass < 2; ++priority_pass) {
 		for (std::size_t offset = 0; offset < count; ++offset) {
 			const std::size_t index = (head + offset) % slots.size();
-			if (slots[index].kind != WtReadOnlyPublicationKind::CollisionPayload) {
+			if (slots[index].kind != WtReadOnlyPublicationKind::CollisionPayload ||
+					(priority_pass == 0 && !slots[index].committed_edit) ||
+					(priority_pass == 1 && slots[index].committed_edit)) {
 				continue;
 			}
 			std::size_t selected_offset = offset;
@@ -452,6 +459,7 @@ bool WtReadOnlyWorldRuntime::pop_interaction_collision_publication(
 			slots[tail] = {};
 			--count;
 			return true;
+		}
 		}
 		return false;
 	};

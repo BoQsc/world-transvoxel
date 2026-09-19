@@ -277,6 +277,7 @@ bool WtReadOnlyWorldRuntime::process_terrain_mesh_completion(
 	collision_publication.generation = collision->generation;
 	collision_publication.collision_required = true;
 	collision_publication.collision = collision;
+	collision_publication.committed_edit = completion.incremental_edit;
 	collision_publication.interaction_critical =
 		application_record.independently_publishable_replacement ||
 		is_interaction_critical_key(completion.key);
@@ -447,6 +448,7 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 				collision_publication.generation = replacement_collision->generation;
 				collision_publication.collision_required = true;
 				collision_publication.collision = replacement_collision;
+				collision_publication.committed_edit = completion.incremental_edit;
 				collision_publication.interaction_critical =
 					application_record.independently_publishable_replacement ||
 					is_interaction_critical_key(completion.key);
@@ -511,6 +513,7 @@ bool WtReadOnlyWorldRuntime::process_mesh_completions() {
 			collision_publication.generation = replacement_collision->generation;
 			collision_publication.collision_required = true;
 			collision_publication.collision = replacement_collision;
+			collision_publication.committed_edit = completion.incremental_edit;
 			collision_publication.interaction_critical =
 				application_record.independently_publishable_replacement ||
 				is_interaction_critical_key(completion.key);

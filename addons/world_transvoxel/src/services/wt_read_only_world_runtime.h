@@ -131,6 +131,7 @@ struct WtReadOnlyPublication {
 	std::size_t snapshot_page_count = 0;
 	bool independently_publishable_replacement = false;
 	bool interaction_critical = false;
+	bool committed_edit = false;
 };
 
 struct WtVisibilityCoveragePriorityRequest {
