@@ -1742,6 +1742,13 @@ flag; staging remains driven by its existing pending state. Cancellation is not
 an event rejection. Runtime metrics expose its count and the maximum interval
 from edit admission to planner yield.
 
+Foreground projection is coverage-first. An empty or relocated visual plan
+admits only its bounded coarsest target roots until every root has a visually
+active covering leaf. LOD0 interaction projection begins afterward, under that
+retained coarse cover. A cold start therefore cannot turn the entire fine
+interaction shell into one inactive replacement graph, and a refinement never
+removes the only already-published terrain beneath it.
+
 Incremental LOD0 collision extraction has a dedicated regular-cell path. It
 samples each selected 8-cubed block grid point once, derives a deterministic
 cell gradient from the eight scalar corners, and emits canonical regular-cell

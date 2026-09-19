@@ -2670,21 +2670,30 @@ int main(int argc, char **argv) {
 		}
 		wt::WtLodMap target_map(2048);
 		check(target_map.set_active_chunks(fine_keys) == wt::WtLodMapStatus::Ok, "foreground target invalid");
-		wt::WtBalancedLodPlan target, empty, projected;
+		wt::WtBalancedLodPlan target, empty, coarse, projected;
 		target.entries = target_map.get_entries();
 		for (const auto &entry : target.entries) target.demands.push_back({entry.key, 1, false, true});
 		for (int z = 2; z <= 4; ++z) for (int y = 2; y <= 4; ++y) for (int x = 2; x <= 4; ++x) focus.push_back({x,y,z,0});
 		wt::WtBalancedLodPlanner planner(2048, catalog);
 		bool complete = false;
-		check(planner.stage_foreground(target, empty, {}, 3, focus, projected, complete) == wt::WtBalancedLodPlannerStatus::Ok,
-			"foreground projection failed without intermediate visual acknowledgements");
+		check(planner.stage_foreground(target, empty, {}, 3, focus, coarse, complete) == wt::WtBalancedLodPlannerStatus::Ok,
+			"foreground coarse coverage phase failed");
+		const std::vector<wt::WtChunkKey> roots = {
+			{0,0,0,3}, {1,0,0,3}, {2,0,0,3},
+		};
+		check(coarse.entries.size() == roots.size(),
+			"cold foreground planning bypassed coarse coverage");
+		for (const auto &key : roots) check(find_entry(coarse, key) != nullptr,
+			"cold foreground planning omitted a coarse coverage root");
+		check(planner.stage_foreground(target, coarse, roots, 3, focus, projected, complete) == wt::WtBalancedLodPlannerStatus::Ok,
+			"foreground projection failed after coarse coverage activation");
 		for (const auto &key : focus) check(find_entry(projected, key) != nullptr, "foreground projection omitted LOD0 interaction coverage");
 		check(!complete && find_entry(projected, {2,0,0,3}) != nullptr, "foreground projection refined distant target unnecessarily");
 		wt::WtBalancedLodPlanner bounded(32, catalog);
 		wt::WtBalancedLodPlan rejected;
-		check(bounded.stage_foreground(target, empty, {}, 3, focus, rejected, complete) == wt::WtBalancedLodPlannerStatus::CapacityExceeded,
+		check(bounded.stage_foreground(target, empty, roots, 3, focus, rejected, complete) == wt::WtBalancedLodPlannerStatus::CapacityExceeded,
 			"foreground projection exceeded configured capacity");
-		std::printf("FOREGROUND_PROJECTION_PASS full_resolution_keys=%zu requested_leaves=%zu intermediate_publications=0\n", focus.size(), projected.entries.size());
+		std::printf("FOREGROUND_PROJECTION_PASS full_resolution_keys=%zu requested_leaves=%zu coarse_publication_phases=1\n", focus.size(), projected.entries.size());
 	}
 	const bool hierarchical_staging_ok =
 		run_hierarchical_staging_regression();

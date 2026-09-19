@@ -996,6 +996,44 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_foreground(
 	const auto status = stage_toward(target, current, visually_ready, staging_root_lod,
 		1, base, complete, {}, true, false, true, cancel_requested);
 	if (status != WtBalancedLodPlannerStatus::Ok) return status;
+	// Cold coverage is the first publication phase.  Projecting the interaction
+	// shell directly to LOD0 from an empty or relocated plan turns every fine
+	// leaf into one large pending replacement set and can leave the renderer with
+	// no active terrain while that set is built.  Require the coarse target roots
+	// to be visibly active before admitting foreground refinement.  Once active,
+	// they remain in `current` and publication keeps them visible until the
+	// refined descendants commit atomically.
+	std::vector<WtChunkKey> ready = visually_ready;
+	std::sort(ready.begin(), ready.end());
+	ready.erase(std::unique(ready.begin(), ready.end()), ready.end());
+	std::vector<WtChunkKey> target_roots;
+	for (const auto &entry : target.entries) {
+		WtChunkKey root = entry.key;
+		while (root.lod < staging_root_lod) root = wt_parent_chunk_key(root);
+		target_roots.push_back(root);
+	}
+	std::sort(target_roots.begin(), target_roots.end());
+	target_roots.erase(
+		std::unique(target_roots.begin(), target_roots.end()),
+		target_roots.end()
+	);
+	const bool coarse_coverage_ready = std::all_of(
+		target_roots.begin(), target_roots.end(),
+		[&](const WtChunkKey &root) {
+			return std::any_of(
+				base.entries.begin(), base.entries.end(),
+				[&](const WtLodMapEntry &leaf) {
+					return bounds_contain(root, leaf.key) &&
+						std::binary_search(ready.begin(), ready.end(), leaf.key);
+				}
+			);
+		}
+	);
+	if (!coarse_coverage_ready) {
+		output = std::move(base);
+		complete = false;
+		return WtBalancedLodPlannerStatus::Ok;
+	}
 	std::vector<WtChunkKey> refined_ancestors;
 	for (const auto &entry : target.entries) {
 		if (cancel_requested && cancel_requested()) {
