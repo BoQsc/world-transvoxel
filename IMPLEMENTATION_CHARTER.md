@@ -1548,6 +1548,13 @@ collision and visual-only work remain on background workers. This prevents an
 approaching player-support shape from waiting behind the streaming mesh frontier
 without allowing distant work to consume the edit reservation.
 
+A same-layout GPU edit replacement that requires collision cannot activate its
+new draw while the application record still carries predecessor collision. Its
+independently publishable collision reaches the physics sink first; only a
+matching current collision generation makes the prepared GPU member eligible
+for cohort commit. This forbids visible holes, constructed surfaces, or tunnels
+from getting ahead of their authoritative physics shape during rapid edits.
+
 A regional visibility publication accelerates missing replacement members with
 a distinct coverage priority below player support and interaction focus. It
 never promotes those members into the committed-edit mesh lane, and promotion is

@@ -989,10 +989,19 @@ get_gpu_resident_render_activation_cohort(
 			render_sink_->gpu_resident_replacement_matches(
 				key, record.generation, record.external_visual_transition_mask
 			);
+		// Same-layout edit replacements can publish collision independently. Do
+		// not expose their new GPU surface over a predecessor collision shape:
+		// mining would remain blocked and construction could become unsupported.
+		// Viewer topology replacements keep their existing regional ordering,
+		// where collision publication may legitimately follow visual activation.
+		const bool edit_collision_matches = !record_present ||
+			!record.independently_publishable_replacement ||
+			!record.collision_required || record.collision_current();
 		const bool prepared_member = record_present && record.visual_required && boundary_mask_matches &&
 			generation_matches &&
 			record.external_visual_activation_required &&
-			record.external_visual_prepared && sink_can_set;
+			record.external_visual_prepared && sink_can_set &&
+			edit_collision_matches;
 		const bool retained_active_member = record_present && boundary_mask_matches &&
 			record.visual_required && record.visual_ready &&
 			generation_matches && !record.external_visual_activation_required &&
@@ -1036,6 +1045,8 @@ get_gpu_resident_render_activation_cohort(
 			first_waiting_record.external_visual_prepared;
 		result["waiting_member_visual_ready"] =
 			first_waiting_record.visual_ready;
+		result["waiting_member_collision_current"] =
+			first_waiting_record.collision_current();
 		result["waiting_member_generation_matches"] =
 			first_waiting_record_present &&
 			first_waiting_record.visual_generation ==
