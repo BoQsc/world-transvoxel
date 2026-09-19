@@ -376,11 +376,14 @@ void WtWorldLifecycleService::record_frontend_sink(
 
 void WtWorldLifecycleService::record_frontend_collision_residency(
 	const WtChunkKey &key,
-	WtGenerationToken generation
+	WtGenerationToken generation,
+	std::uint64_t world_revision
 ) {
 	std::lock_guard<std::mutex> lock(state_mutex_);
 	if (runtime_) {
-		runtime_->record_frontend_collision_residency(key, generation);
+		runtime_->record_frontend_collision_residency(
+			key, generation, world_revision
+		);
 	}
 }
 

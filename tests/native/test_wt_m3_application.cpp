@@ -620,6 +620,7 @@ void test_collision_revision_is_independent_from_visual_generation(
 	service.apply(0, 1, render_sink, collision_sink);
 	const wt::WtChunkApplicationRecord *record = service.find_record(key);
 	check(record != nullptr && record->collision_current() &&
+		!record->collision_work_required() &&
 		record->collision_world_revision == 41,
 		"applied collision did not retain its authoritative world revision");
 
@@ -629,6 +630,7 @@ void test_collision_revision_is_independent_from_visual_generation(
 	record = service.find_record(key);
 	check(record != nullptr && record->collision_generation.value == 1 &&
 		record->generation.value == 2 && record->collision_current() &&
+		!record->collision_work_required() &&
 		record->fully_ready(),
 		"same world revision incorrectly invalidated authoritative collision");
 
@@ -637,7 +639,8 @@ void test_collision_revision_is_independent_from_visual_generation(
 		"edited world revision supersession failed");
 	record = service.find_record(key);
 	check(record != nullptr && record->collision_ready &&
-		!record->collision_current() && !record->fully_ready(),
+		!record->collision_current() && record->collision_work_required() &&
+		!record->fully_ready(),
 		"new world revision accepted stale physical collision as current");
 	check(service.submit_collision(collision1) == wt::WtApplicationStatus::Ok,
 		"stale collision revision submission failed");
@@ -659,6 +662,27 @@ void test_collision_revision_is_independent_from_visual_generation(
 	check(record != nullptr && record->collision_current() &&
 		record->collision_world_revision == 42 && record->fully_ready(),
 		"matching edited collision did not become authoritative");
+
+	wt::WtChunkApplicationService acknowledgement_service(4, 4, 4);
+	check(acknowledgement_service.expect_chunk(
+			key, {1}, true, false, false, false, 51
+		) == wt::WtApplicationStatus::Ok &&
+		acknowledgement_service.expect_chunk(
+			key, {2}, true, true, true, false, 51
+		) == wt::WtApplicationStatus::Ok &&
+		acknowledgement_service.acknowledge_collision_residency(
+			key, {1}, 51
+		) == wt::WtApplicationStatus::Ok,
+		"late frontend collision acknowledgement was rejected");
+	record = acknowledgement_service.find_record(key);
+	check(record != nullptr && record->collision_current() &&
+		record->collision_generation.value == 1 &&
+		!record->collision_work_required(),
+		"matching predecessor collision residency did not satisfy successor");
+	check(acknowledgement_service.acknowledge_collision_residency(
+			key, {1}, 50
+		) == wt::WtApplicationStatus::StaleGeneration,
+		"stale frontend collision revision was accepted");
 }
 
 void test_gpu_placeholder_waits_for_external_activation(

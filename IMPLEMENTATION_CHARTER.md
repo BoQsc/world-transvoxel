@@ -2010,6 +2010,18 @@ the matching collision branch publishes at the physics boundary. Runtime repair,
 readiness, and diagnostics use this content-revision test, so LOD/viewer churn
 cannot cause redundant collision extraction or movement waits.
 
+Scheduler admission and mesh dispatch use the same content-revision predicate.
+A mixed visual/collision record whose collision already represents its current
+world revision dispatches as visual-only: it does not bypass saturated GPU
+capture capacity, select a collision patch base, extract collision blocks, or
+publish another physics payload. Initial load, collision-role promotion, and a
+journal revision change make the predicate true and retain the authoritative CPU
+collision branch. Visual generation tokens alone never request collision work.
+After the physics sink installs or publishes a shape, the frontend reports its
+generation and authoritative world revision back to the worker-side application
+record. A same-revision successor may acknowledge a still-active predecessor
+generation; a stale revision may not. Collision removal clears that residency.
+
 Collision demand entering an already visual GPU chunk refreshes CPU collision
 topology inside the existing `(chunk, generation, world revision)` identity.
 The scheduler reopens that record for bounded sampling and CPU meshing without

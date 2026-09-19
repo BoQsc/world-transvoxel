@@ -43,7 +43,8 @@ void WorldTransvoxelTerrain::publish_ready_independent_collision_coverage() {
 		if (lifecycle_) {
 			lifecycle_->record_frontend_collision_residency(
 				record.key,
-				collision_sink_->applied_generation(record.key)
+				collision_sink_->applied_generation(record.key),
+				record.collision_world_revision
 			);
 		}
 	}
@@ -288,9 +289,12 @@ void WorldTransvoxelTerrain::flush_ready_independent_publication_regions() {
 			published = render_sink_->publish_staged_record(replacement) &&
 				collision_sink_->publish_staged_record(replacement) && published;
 			if (lifecycle_) {
+				WtChunkApplicationRecord record;
+				application_->copy_record(replacement, record);
 				lifecycle_->record_frontend_collision_residency(
 					replacement,
-					collision_sink_->applied_generation(replacement)
+					collision_sink_->applied_generation(replacement),
+					record.collision_world_revision
 				);
 			}
 		}

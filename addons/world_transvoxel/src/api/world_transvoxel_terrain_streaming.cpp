@@ -74,7 +74,8 @@ drain_interaction_collision_publications_at_physics_boundary() {
 				application_->get_records()) {
 			lifecycle_->record_frontend_collision_residency(
 				record.key,
-				collision_sink_->applied_generation(record.key)
+				collision_sink_->applied_generation(record.key),
+				record.collision_world_revision
 			);
 		}
 		publish_ready_independent_collision_coverage();
@@ -827,9 +828,12 @@ void WorldTransvoxelTerrain::flush_ready_chunk_replacements() {
 				continue;
 			}
 			if (lifecycle_) {
+				WtChunkApplicationRecord record;
+				application_->copy_record(*iterator, record);
 				lifecycle_->record_frontend_collision_residency(
 					*iterator,
-					collision_sink_->applied_generation(*iterator)
+					collision_sink_->applied_generation(*iterator),
+					record.collision_world_revision
 				);
 			}
 			independently_publishable_chunk_replacements_.erase(independent);
@@ -936,7 +940,8 @@ void WorldTransvoxelTerrain::publish_staged_records_if_ready() {
 					application_->get_records()) {
 				lifecycle_->record_frontend_collision_residency(
 					record.key,
-					collision_sink_->applied_generation(record.key)
+					collision_sink_->applied_generation(record.key),
+					record.collision_world_revision
 				);
 			}
 		}

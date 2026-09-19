@@ -621,7 +621,7 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			const std::uint64_t reservation_id =
 				gpu_meshing_shadow_->reserve_capture_slots(next_job);
 			if (reservation_id == 0) {
-				if (admission_record.collision_required &&
+				if (admission_record.collision_work_required() &&
 					page_runtime_->deferred_gpu_capture_count() <
 						kWtDeferredGpuCaptureCapacity) {
 					defer_gpu_capture = true;
@@ -648,7 +648,7 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 		if (next_job.stage == WtChunkJobStage::Mesh && resident_input &&
 			admission_record.generation == next_job.generation &&
 			!admission_record.visual_required &&
-			admission_record.collision_required &&
+			admission_record.collision_work_required() &&
 			next_job.priority >= kWtPlayerSupportPriority &&
 			page_runtime_->deferred_gpu_capture_count() <
 				kWtDeferredGpuCaptureCapacity) {
@@ -751,7 +751,9 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 			const bool job_visual_required =
 				application_record.visual_required &&
 				!application_record.collision_only_refresh;
-			if (application_record.collision_required || defer_gpu_capture ||
+			const bool job_collision_required =
+				application_record.collision_work_required();
+			if (job_collision_required || defer_gpu_capture ||
 				!application_record.visual_required ||
 				!application_record.staged_replacement) {
 				terrain_mesh_ready =
@@ -799,7 +801,7 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 				);
 			}
 			const bool live_collision_patch_base =
-				application_record.collision_required &&
+				job_collision_required &&
 				job.world_revision > initial_world_revision_ &&
 				collision_patch_base != nullptr;
 			if (asynchronous_mesh) {
@@ -847,7 +849,7 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 					execution_callback,
 					cell_capture_callback,
 					pre_mesh_field_capture,
-					application_record.collision_required,
+					job_collision_required,
 					defer_gpu_capture,
 					live_collision_patch_base
 				);
@@ -865,7 +867,7 @@ bool WtReadOnlyWorldRuntime::process_scheduler_jobs() {
 					job_visual_required,
 					cell_capture_callback,
 					pre_mesh_field_capture,
-					application_record.collision_required,
+					job_collision_required,
 					defer_gpu_capture,
 					live_collision_patch_base
 				);

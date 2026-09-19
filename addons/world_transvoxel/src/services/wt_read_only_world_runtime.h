@@ -239,7 +239,8 @@ public:
 	);
 	void record_frontend_collision_residency(
 		const WtChunkKey &key,
-		WtGenerationToken generation
+		WtGenerationToken generation,
+		std::uint64_t world_revision = 0
 	);
 	void record_frontend_visibility(
 		WtCausalTraceEventKind kind,

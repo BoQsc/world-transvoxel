@@ -31,6 +31,10 @@ bool WtChunkApplicationRecord::collision_current() const noexcept {
 		(collision_ready && collision_world_revision == world_revision);
 }
 
+bool WtChunkApplicationRecord::collision_work_required() const noexcept {
+	return collision_required && !collision_current();
+}
+
 bool WtChunkApplicationRecord::fully_ready() const noexcept {
 	return (!visual_required ||
 			(visual_ready && visual_generation == generation &&
@@ -203,6 +207,38 @@ WtApplicationStatus WtChunkApplicationService::set_collision_required(
 		record->collision_generation = {};
 		record->collision_world_revision = 0;
 	}
+	return WtApplicationStatus::Ok;
+}
+
+WtApplicationStatus WtChunkApplicationService::acknowledge_collision_residency(
+	const WtChunkKey &key,
+	WtGenerationToken generation,
+	std::uint64_t world_revision
+) {
+	std::lock_guard<std::mutex> lock(records_mutex_);
+	WtChunkApplicationRecord *record = find_record_mutable(key);
+	if (record == nullptr) return WtApplicationStatus::NotFound;
+	if (generation.value == 0) {
+		record->collision_ready = false;
+		record->collision_generation = {};
+		record->collision_world_revision = 0;
+		return WtApplicationStatus::Ok;
+	}
+	if (!record->collision_required || world_revision == 0) {
+		return WtApplicationStatus::InvalidInput;
+	}
+	if (world_revision != record->world_revision ||
+		generation.value > record->generation.value) {
+		return WtApplicationStatus::StaleGeneration;
+	}
+	if (record->collision_ready &&
+		record->collision_generation == generation &&
+		record->collision_world_revision == world_revision) {
+		return WtApplicationStatus::AlreadyCurrent;
+	}
+	record->collision_ready = true;
+	record->collision_generation = generation;
+	record->collision_world_revision = world_revision;
 	return WtApplicationStatus::Ok;
 }
 

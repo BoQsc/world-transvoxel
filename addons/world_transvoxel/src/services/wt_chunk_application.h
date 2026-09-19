@@ -35,6 +35,7 @@ struct WtChunkApplicationRecord {
 	bool gpu_placeholder_published = false;
 
 	bool collision_current() const noexcept;
+	bool collision_work_required() const noexcept;
 	bool fully_ready() const noexcept;
 };
 
@@ -106,6 +107,11 @@ public:
 	WtApplicationStatus set_collision_required(
 		const WtChunkKey &key,
 		bool required
+	);
+	WtApplicationStatus acknowledge_collision_residency(
+		const WtChunkKey &key,
+		WtGenerationToken generation,
+		std::uint64_t world_revision
 	);
 	WtApplicationStatus begin_collision_only_refresh(
 		const WtChunkKey &key,

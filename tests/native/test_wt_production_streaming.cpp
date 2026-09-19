@@ -689,11 +689,17 @@ void test_collision_only_with_full_gpu_queue(std::size_t mesh_workers) {
 		wt::WtReadOnlyRuntimeStatus::Ok, "GPU collision-only viewer rejected");
 	bool collision_ready = false;
 	bool hidden_render = false;
+	wt::WtGenerationToken collision_generation;
+	std::uint64_t collision_world_revision = 0;
 	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
 	while (!collision_ready && std::chrono::steady_clock::now() < deadline) {
 		wt::WtReadOnlyPublication publication;
 		while (runtime.pop_non_collision_publication(publication)) {
 			hidden_render |= publication.kind == wt::WtReadOnlyPublicationKind::RenderPayload;
+			if (publication.key == wt::WtChunkKey{ 2, 0, 0, 0 } &&
+					publication.kind == wt::WtReadOnlyPublicationKind::ExpectChunk) {
+				collision_world_revision = publication.world_revision;
+			}
 			check(publication.kind != wt::WtReadOnlyPublicationKind::CollisionPayload,
 				"render drain stole collision from the physics-boundary lane");
 		}
@@ -701,12 +707,18 @@ void test_collision_only_with_full_gpu_queue(std::size_t mesh_workers) {
 			if (publication.key == wt::WtChunkKey{ 2, 0, 0, 0 } &&
 					publication.collision) {
 				collision_ready = !publication.collision->faces.empty();
+				collision_generation = publication.generation;
 			}
 		}
 		if (!collision_ready) std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 	const auto metrics = gpu->metrics();
-	check(collision_ready, "collision-only work blocked by full GPU visual queue");
+	check(collision_ready && collision_generation.value != 0 &&
+		collision_world_revision != 0,
+		"collision-only work blocked or lost its authoritative identity");
+	runtime.record_frontend_collision_residency(
+		{ 2, 0, 0, 0 }, collision_generation, collision_world_revision
+	);
 	check(!hidden_render && metrics.captured_requests == 0 &&
 		metrics.reserved_capture_slots == 2 &&
 		metrics.capture_reservation_attempts == 1,

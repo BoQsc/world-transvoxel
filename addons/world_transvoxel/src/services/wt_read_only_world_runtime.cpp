@@ -338,8 +338,14 @@ void WtReadOnlyWorldRuntime::record_frontend_sink(
 
 void WtReadOnlyWorldRuntime::record_frontend_collision_residency(
 	const WtChunkKey &key,
-	WtGenerationToken generation
+	WtGenerationToken generation,
+	std::uint64_t world_revision
 ) {
+	if (application_) {
+		application_->acknowledge_collision_residency(
+			key, generation, world_revision
+		);
+	}
 	if (resource_cache_) {
 		resource_cache_->set_active_collision_generation(key, generation);
 	}
