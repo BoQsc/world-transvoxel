@@ -74,6 +74,8 @@ godot::Dictionary wt_gpu_meshing_shadow_identity(
 	identity["scheduler_priority"] = request.job.priority;
 	identity["interaction_priority"] = request.job.priority >=
 		world_transvoxel::kWtInteractionFocusPriority;
+	identity["local_publication_priority"] = request.job.priority >=
+		world_transvoxel::kWtVisibilityCoveragePriority;
 	identity["dirty_regular_brick_mask"] = request.dirty_regular_brick_mask;
 	if (request.has_dirty_edit_bounds) {
 		identity["dirty_bounds_min"] = godot::Vector3i(
@@ -179,6 +181,9 @@ bool wt_parse_gpu_meshing_shadow_identity(
 		WtGpuMeshingShadowSurface::Terrain;
 	identity.incremental_edit = dictionary.get("incremental_edit", false);
 	identity.interaction_priority = dictionary.get("interaction_priority", false);
+	identity.local_publication_priority = dictionary.get(
+		"local_publication_priority", false
+	);
 	return wt_is_valid_chunk_key(identity.key);
 }
 

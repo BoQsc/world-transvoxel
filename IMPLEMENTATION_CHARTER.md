@@ -2404,3 +2404,12 @@ queue incrementally would allow one chunk of a multi-chunk brush to activate
 before its peers; no visual member may publish alone. Collision independence,
 collision authority, and its physics-boundary publication contract are
 unchanged.
+### Local GPU publication priority
+
+GPU capture identities distinguish interaction priority from local publication
+priority. Visibility-coverage repair work at or above
+`kWtVisibilityCoveragePriority` keeps a bounded seed-local publication cohort
+through both selection and commit, even after transient collision demand moves.
+It does not inherit the edit-only scheduler lane. This prevents a prepared
+camera-local ancestor from joining an unrelated world-scale replacement cohort
+and leaving visible holes during movement.

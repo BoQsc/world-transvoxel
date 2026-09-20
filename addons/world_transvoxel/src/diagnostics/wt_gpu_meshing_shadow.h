@@ -65,6 +65,7 @@ struct WtGpuMeshingShadowIdentity {
 	WtGpuMeshingShadowSurface surface = WtGpuMeshingShadowSurface::Terrain;
 	bool incremental_edit = false;
 	bool interaction_priority = false;
+	bool local_publication_priority = false;
 	std::uint8_t regular_visibility_mask = 0xff;
 };
 
