@@ -79,6 +79,32 @@ void test_chunk_bricks() {
 		negative_child, { negative_parent.x, negative_parent.y,
 			negative_parent.z, 2 }, parent_brick
 	), "non-direct ancestor accepted as one parent brick");
+
+	const wt::WtRegularBrickTransitionSet hidden_zero =
+		wt::wt_regular_brick_transition_faces(chunk, 0xfe);
+	check(hidden_zero.count == 3 &&
+		hidden_zero.faces[0] == wt::WtRegularBrickTransitionFace{
+			{ chunk, 1 }, wt::WtChunkFace::NegativeX
+		} && hidden_zero.faces[1] == wt::WtRegularBrickTransitionFace{
+			{ chunk, 2 }, wt::WtChunkFace::NegativeY
+		} && hidden_zero.faces[2] == wt::WtRegularBrickTransitionFace{
+			{ chunk, 4 }, wt::WtChunkFace::NegativeZ
+		}, "single hidden brick transition ownership mismatch");
+	const wt::WtRegularBrickTransitionSet visible_zero =
+		wt::wt_regular_brick_transition_faces(chunk, 0x01);
+	check(visible_zero.count == 3 &&
+		visible_zero.faces[0] == wt::WtRegularBrickTransitionFace{
+			{ chunk, 0 }, wt::WtChunkFace::PositiveX
+		} && visible_zero.faces[1] == wt::WtRegularBrickTransitionFace{
+			{ chunk, 0 }, wt::WtChunkFace::PositiveY
+		} && visible_zero.faces[2] == wt::WtRegularBrickTransitionFace{
+			{ chunk, 0 }, wt::WtChunkFace::PositiveZ
+		}, "single visible brick transition ownership mismatch");
+	check(wt::wt_regular_brick_transition_faces(chunk, 0x69).count == 12,
+		"checkerboard cut did not expose all internal brick adjacencies");
+	check(wt::wt_regular_brick_transition_faces(chunk, 0x00).count == 0 &&
+		wt::wt_regular_brick_transition_faces(chunk, 0xff).count == 0,
+		"uniform brick visibility created internal transitions");
 }
 
 void test_lod_map() {

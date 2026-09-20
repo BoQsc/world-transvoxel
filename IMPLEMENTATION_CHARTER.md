@@ -2283,9 +2283,9 @@ generation, world revision, and its one-sample halo dependency. A coarse active
 chunk exposes a device-resident cut mask so only meshlets spatially replaced by
 ready fine bricks are disabled. The render callback validates the complete
 changed-brick cohort and atomically changes candidate and replaced indirect draw
-arguments. Unchanged bricks, transition faces, and coarse coverage remain
-active. A missing brick can delay only its bounded local cut and cannot join the
-remaining chunk or global retirement frontier.
+arguments. Unchanged bricks, unaffected external transition faces, and coarse
+coverage remain active. A missing brick can delay only its bounded local cut
+and cannot join the remaining chunk or global retirement frontier.
 
 Brick state and candidate storage are configuration bounded. Superseding a
 generation cancels every candidate brick for that generation without changing
@@ -2302,3 +2302,14 @@ integer and sign-safe: each LOD child maps to exactly one regular brick in its
 immediate parent, including across negative chunk coordinates. Edit dirty masks,
 publication cuts, diagnostics, and collision blocks must use these shared
 operations rather than duplicating coordinate arithmetic.
+
+A partial parent cut creates fine/coarse boundaries inside the original chunk.
+The existing chunk-edge transition meshlets cannot cover those internal planes;
+regular visibility masks alone are therefore insufficient for seamless partial
+publication. Every unlike pair in the twelve internal brick adjacencies owns
+one transition face on its retained coarse brick. The maximum internal
+transition inventory is twelve faces (the checkerboard cut), is derived
+deterministically from the eight-bit visibility mask, and must be generated and
+committed with that mask before single-brick refinement is enabled. Until this
+inventory exists, publication may use only complete parent cuts; exposing an
+individual child would violate exact Transvoxel topology.

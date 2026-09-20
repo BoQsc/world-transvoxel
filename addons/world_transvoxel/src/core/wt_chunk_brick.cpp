@@ -22,6 +22,12 @@ bool WtRegularBrickKey::operator<(
 	return std::tie(chunk, index) < std::tie(other.chunk, other.index);
 }
 
+bool WtRegularBrickTransitionFace::operator==(
+	const WtRegularBrickTransitionFace &other
+) const noexcept {
+	return coarse_brick == other.coarse_brick && face == other.face;
+}
+
 bool wt_is_valid_regular_brick_key(const WtRegularBrickKey &key) noexcept {
 	return wt_is_valid_chunk_key(key.chunk) && key.index < kWtRegularBrickCount;
 }
@@ -111,6 +117,32 @@ bool wt_direct_child_parent_brick(
 		static_cast<std::uint8_t>(local_x + local_y * 2 + local_z * 4),
 	};
 	return true;
+}
+
+WtRegularBrickTransitionSet wt_regular_brick_transition_faces(
+	const WtChunkKey &chunk,
+	std::uint8_t visible_mask
+) noexcept {
+	WtRegularBrickTransitionSet result;
+	if (!wt_is_valid_chunk_key(chunk) || visible_mask == 0 ||
+			visible_mask == kWtAllRegularBricksMask) return result;
+	for (std::uint8_t axis = 0; axis < 3; ++axis) {
+		const std::uint8_t step = static_cast<std::uint8_t>(1U << axis);
+		for (std::uint8_t lower = 0; lower < kWtRegularBrickCount; ++lower) {
+			if ((lower & step) != 0) continue;
+			const std::uint8_t upper = static_cast<std::uint8_t>(lower | step);
+			const bool lower_visible =
+				(visible_mask & static_cast<std::uint8_t>(1U << lower)) != 0;
+			const bool upper_visible =
+				(visible_mask & static_cast<std::uint8_t>(1U << upper)) != 0;
+			if (lower_visible == upper_visible) continue;
+			result.faces[result.count++] = {
+				{ chunk, lower_visible ? lower : upper },
+				static_cast<WtChunkFace>(axis * 2U + (lower_visible ? 1U : 0U)),
+			};
+		}
+	}
+	return result;
 }
 
 } // namespace world_transvoxel

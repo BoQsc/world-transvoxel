@@ -11,6 +11,7 @@ constexpr std::int64_t kWtRegularBrickCellsPerAxis = 8;
 constexpr std::uint8_t kWtRegularBricksPerAxis = 2;
 constexpr std::uint8_t kWtRegularBrickCount = 8;
 constexpr std::uint8_t kWtAllRegularBricksMask = 0xff;
+constexpr std::uint8_t kWtMaximumInternalBrickTransitionFaces = 12;
 
 struct WtRegularBrickKey {
 	WtChunkKey chunk;
@@ -25,6 +26,25 @@ struct WtRegularBrickSet {
 	std::array<WtRegularBrickKey, kWtRegularBrickCount> keys;
 	std::uint8_t count = 0;
 	std::uint8_t mask = 0;
+};
+
+// A transition face belongs to the retained coarse brick and points toward an
+// adjacent brick replaced by finer coverage. Only the twelve internal brick
+// adjacencies are eligible; outer chunk faces keep their existing transition
+// inventory.
+struct WtRegularBrickTransitionFace {
+	WtRegularBrickKey coarse_brick;
+	WtChunkFace face = WtChunkFace::NegativeX;
+
+	bool operator==(const WtRegularBrickTransitionFace &other) const noexcept;
+};
+
+struct WtRegularBrickTransitionSet {
+	std::array<
+		WtRegularBrickTransitionFace,
+		kWtMaximumInternalBrickTransitionFaces
+	> faces;
+	std::uint8_t count = 0;
 };
 
 bool wt_is_valid_regular_brick_key(const WtRegularBrickKey &key) noexcept;
@@ -50,6 +70,13 @@ bool wt_direct_child_parent_brick(
 	const WtChunkKey &child,
 	const WtChunkKey &parent,
 	WtRegularBrickKey &brick
+) noexcept;
+
+// visible_mask selects retained coarse bricks. Every internal adjacency with
+// unlike visibility requires exactly one transition face on the coarse side.
+WtRegularBrickTransitionSet wt_regular_brick_transition_faces(
+	const WtChunkKey &chunk,
+	std::uint8_t visible_mask
 ) noexcept;
 
 } // namespace world_transvoxel
