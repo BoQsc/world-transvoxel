@@ -2293,3 +2293,12 @@ active coverage. Empty candidate bricks retire the corresponding old meshlets;
 failed candidates retain old coverage. No CPU geometry readback participates in
 publication. Collision uses the matching independently replaceable CPU block
 identity and commits its changed block set at the physics boundary.
+
+The shared core defines the regular brick lattice once: two bricks per axis,
+eight cells per brick, and eight regular bricks per chunk. Inclusive sample
+bounds select every brick that owns a cell adjacent to a touched boundary, so a
+one-sample edit halo cannot omit a neighboring meshlet. Direct-child mapping is
+integer and sign-safe: each LOD child maps to exactly one regular brick in its
+immediate parent, including across negative chunk coordinates. Edit dirty masks,
+publication cuts, diagnostics, and collision blocks must use these shared
+operations rather than duplicating coordinate arithmetic.

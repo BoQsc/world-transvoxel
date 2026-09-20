@@ -1,5 +1,6 @@
 #include "services/wt_edit_runtime_replacement.h"
 
+#include "core/wt_chunk_brick.h"
 #include "services/wt_chunk_application.h"
 #include "services/wt_chunk_resource_cache.h"
 #include "services/wt_page_meshing_runtime_owner.h"
@@ -96,30 +97,9 @@ std::uint8_t command_dirty_regular_bricks(
 	const WtEditBounds &dirty
 ) noexcept {
 	if (key.lod != 0) return 0xff;
-	const WtGridPoint chunk_minimum = wt_chunk_bounds(key).minimum;
-	std::uint8_t mask = 0;
-	for (std::int32_t z = 0; z < 2; ++z) {
-		for (std::int32_t y = 0; y < 2; ++y) {
-			for (std::int32_t x = 0; x < 2; ++x) {
-				const WtGridPoint minimum = {
-					chunk_minimum.x + x * 8,
-					chunk_minimum.y + y * 8,
-					chunk_minimum.z + z * 8,
-				};
-				const WtGridPoint maximum = {
-					minimum.x + 8, minimum.y + 8, minimum.z + 8,
-				};
-				if (dirty.maximum.x >= minimum.x && dirty.minimum.x <= maximum.x &&
-					dirty.maximum.y >= minimum.y && dirty.minimum.y <= maximum.y &&
-					dirty.maximum.z >= minimum.z && dirty.minimum.z <= maximum.z) {
-					mask |= static_cast<std::uint8_t>(
-						1U << static_cast<unsigned int>(x + y * 2 + z * 4)
-					);
-				}
-			}
-		}
-	}
-	return mask;
+	return wt_regular_brick_mask_for_sample_bounds(
+		key, dirty.minimum, dirty.maximum
+	);
 }
 
 WtChunkEditDelta transaction_delta(

@@ -133,6 +133,7 @@ m2_core_test = native_test_env.Program(
     ),
     source=[
         "tests/native/test_wt_m2_core.cpp",
+        "addons/world_transvoxel/src/core/wt_chunk_brick.cpp",
         "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
         "addons/world_transvoxel/src/streaming/wt_lod_map.cpp",
         "addons/world_transvoxel/src/streaming/wt_stream_scheduler.cpp",
@@ -499,6 +500,7 @@ m5_edit_replacement_test = native_test_env.Program(
         "tests/native/test_wt_m5_edit_replacement.cpp",
         "addons/world_transvoxel/src/bake/wt_chunk_baker.cpp",
         "addons/world_transvoxel/src/meshing/wt_multiresolution_vertex_resolver.cpp",
+        "addons/world_transvoxel/src/core/wt_chunk_brick.cpp",
         "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
         "addons/world_transvoxel/src/editing/wt_edit_spatial_index.cpp",
         "addons/world_transvoxel/src/editing/wt_edit_types.cpp",
@@ -524,6 +526,7 @@ m5_edit_replacement_test = native_test_env.Program(
 
 m5_workload_runtime_sources = [
     "tests/native/wt_m5_workload_fixture.cpp",
+    "addons/world_transvoxel/src/core/wt_chunk_brick.cpp",
     "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
     "addons/world_transvoxel/src/editing/wt_edit_spatial_index.cpp",
     "addons/world_transvoxel/src/editing/wt_edit_types.cpp",
@@ -923,6 +926,7 @@ production_read_only_runtime_sources = [
     "addons/world_transvoxel/src/render/wt_render_payload.cpp",
     "addons/world_transvoxel/src/services/wt_chunk_application.cpp",
     "addons/world_transvoxel/src/services/wt_authoritative_sample_query.cpp",
+    "addons/world_transvoxel/src/core/wt_chunk_brick.cpp",
     "addons/world_transvoxel/src/services/wt_chunk_resource_cache.cpp",
     "addons/world_transvoxel/src/services/wt_chunk_resource_payload.cpp",
     "addons/world_transvoxel/src/services/wt_desired_set_runtime.cpp",

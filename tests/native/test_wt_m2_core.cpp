@@ -1,4 +1,5 @@
 #include "core/wt_chunk_key.h"
+#include "core/wt_chunk_brick.h"
 #include "streaming/wt_lod_map.h"
 #include "streaming/wt_stream_scheduler.h"
 
@@ -40,6 +41,44 @@ void test_chunk_keys() {
 		"face mask encoding mismatch");
 	check(wt::wt_opposite_face(wt::WtChunkFace::NegativeY) == wt::WtChunkFace::PositiveY,
 		"opposite face mismatch");
+}
+
+void test_chunk_bricks() {
+	const wt::WtChunkKey chunk = { -1, 2, -3, 0 };
+	const wt::WtChunkBounds first = wt::wt_regular_brick_bounds({ chunk, 0 });
+	const wt::WtChunkBounds last = wt::wt_regular_brick_bounds({ chunk, 7 });
+	check(first.minimum == wt::WtGridPoint{ -16, 32, -48 } &&
+		first.maximum == wt::WtGridPoint{ -8, 40, -40 },
+		"first regular brick bounds mismatch");
+	check(last.minimum == wt::WtGridPoint{ -8, 40, -40 } &&
+		last.maximum == wt::WtGridPoint{ 0, 48, -32 },
+		"last regular brick bounds mismatch");
+
+	const wt::WtRegularBrickSet sparse = wt::wt_regular_bricks_from_mask(
+		chunk, 0x81
+	);
+	check(sparse.count == 2 && sparse.mask == 0x81 &&
+		sparse.keys[0] == wt::WtRegularBrickKey{ chunk, 0 } &&
+		sparse.keys[1] == wt::WtRegularBrickKey{ chunk, 7 },
+		"regular brick mask expansion mismatch");
+	check(wt::wt_regular_brick_mask_for_sample_bounds(
+		chunk, { -15, 33, -47 }, { -14, 34, -46 }
+	) == 0x01, "interior dirty bounds selected unrelated bricks");
+	check(wt::wt_regular_brick_mask_for_sample_bounds(
+		chunk, { -8, 40, -40 }, { -8, 40, -40 }
+	) == 0xff, "shared halo sample did not select all adjacent bricks");
+
+	wt::WtRegularBrickKey parent_brick;
+	const wt::WtChunkKey negative_child = { -1, -2, -3, 0 };
+	const wt::WtChunkKey negative_parent = wt::wt_parent_chunk_key(negative_child);
+	check(wt::wt_direct_child_parent_brick(
+		negative_child, negative_parent, parent_brick
+	) && parent_brick == wt::WtRegularBrickKey{ negative_parent, 5 },
+		"negative direct-child parent brick mismatch");
+	check(!wt::wt_direct_child_parent_brick(
+		negative_child, { negative_parent.x, negative_parent.y,
+			negative_parent.z, 2 }, parent_brick
+	), "non-direct ancestor accepted as one parent brick");
 }
 
 void test_lod_map() {
@@ -339,6 +378,7 @@ void test_scheduler_forget_wrapped_completions() {
 
 int main() {
 	test_chunk_keys();
+	test_chunk_bricks();
 	test_lod_map();
 	test_scheduler_priority_and_lifecycle();
 	test_scheduler_queue_trace_observer();
