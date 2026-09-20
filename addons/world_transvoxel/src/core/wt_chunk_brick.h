@@ -72,6 +72,15 @@ bool wt_direct_child_parent_brick(
 	WtRegularBrickKey &brick
 ) noexcept;
 
+// Returns the direct child chunk that occupies one regular parent brick.
+// Coordinate arithmetic is checked so malformed extreme parent keys cannot
+// wrap into an apparently valid child dependency.
+bool wt_regular_brick_child_chunk(
+	const WtChunkKey &parent,
+	std::uint8_t brick_index,
+	WtChunkKey &child
+) noexcept;
+
 // visible_mask selects retained coarse bricks. Every internal adjacency with
 // unlike visibility requires exactly one transition face on the coarse side.
 WtRegularBrickTransitionSet wt_regular_brick_transition_faces(

@@ -2323,3 +2323,11 @@ terrain level exists for it to transition toward. Recorded legacy captures retai
 the same 20-word layout with zero internal faces. The mask is part of immutable
 capture identity, so a visibility-cut change cannot reuse or complete a candidate
 prepared for another cut.
+
+A partial parent page-field capture retains exactly one direct child page for
+every hidden regular brick and no direct child beneath a visible coarse brick.
+The checked parent-to-child mapping is the inverse of the shared sign-safe child
+mapping and rejects coordinate overflow. Other retained pages remain limited to
+the bounded external transition dependencies. Input packing rejects a missing or
+unexpected direct child before GPU admission, so finest-page sampling cannot
+silently create a hole or replace a visible coarse brick with finer field data.

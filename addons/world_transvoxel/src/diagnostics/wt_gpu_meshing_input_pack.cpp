@@ -247,6 +247,35 @@ bool pack_page_field_input(
 		error = "LOD0 cannot own an internal fine/coarse brick transition";
 		return false;
 	}
+	if (request.regular_visibility_mask != kWtAllRegularBricksMask) {
+		for (std::uint8_t brick_index = 0;
+				brick_index < kWtRegularBrickCount; ++brick_index) {
+			WtChunkKey child;
+			if (!wt_regular_brick_child_chunk(
+					request.job.key, brick_index, child
+			)) {
+				error = "GPU partial-brick cut has an invalid direct-child identity";
+				return false;
+			}
+			const auto retained_child = std::lower_bound(
+				pages.begin(), pages.end(), child,
+				[](const WtGpuMeshingShadowPage *page, const WtChunkKey &key) {
+					return page->key < key;
+				}
+			);
+			const bool child_retained = retained_child != pages.end() &&
+				(*retained_child)->key == child;
+			const bool child_required =
+				(request.regular_visibility_mask &
+					static_cast<std::uint8_t>(1U << brick_index)) == 0;
+			if (child_retained != child_required) {
+				error = child_required ?
+					"GPU partial-brick cut lacks an exact direct-child page" :
+					"GPU partial-brick cut retained a child beneath a visible coarse brick";
+				return false;
+			}
+		}
+	}
 	const WtRegularBrickTransitionSet internal_transitions =
 		wt_regular_brick_transition_faces(
 			request.job.key, request.regular_visibility_mask

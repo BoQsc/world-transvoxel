@@ -1,6 +1,7 @@
 #include "diagnostics/wt_gpu_meshing_shadow.h"
 #include "diagnostics/wt_gpu_meshing_input_pack.h"
 #include "backend/wt_transvoxel_mit_backend.h"
+#include "core/wt_chunk_brick.h"
 #include "storage/wt_chunk_page.h"
 
 #include <cstdlib>
@@ -225,13 +226,47 @@ int main() {
 	partial_page_request.regular_visibility_mask = 0xfe;
 	WtGpuMeshingInputPack partial_page_packed;
 	require(
+		!wt_pack_gpu_meshing_input(
+			partial_page_request, partial_page_packed, packing_error
+		),
+		"partial brick cut accepted a missing direct-child page"
+	);
+	WtChunkKey hidden_child;
+	require(wt_regular_brick_child_chunk(
+		partial_page_request.job.key, 0, hidden_child
+	), "hidden brick did not map to its direct child");
+	auto child_page = std::make_shared<WtChunkPage>(
+		*partial_page_request.retained_pages[0].page
+	);
+	child_page->metadata.key = hidden_child;
+	child_page->metadata.cell_spacing = 1;
+	child_page->surface_shift_records.clear();
+	partial_page_request.retained_pages.push_back({ hidden_child, child_page });
+	require(
 		wt_pack_gpu_meshing_input(
 			partial_page_request, partial_page_packed, packing_error
 		) && partial_page_packed.cell_count == 4800 &&
+			partial_page_packed.config[2] == 2 &&
 			partial_page_packed.config[16] == 0xfe &&
 			partial_page_packed.config[17] == 3,
 		"partial brick cut did not reserve its exact internal transition cells"
 	);
+	WtChunkKey visible_child;
+	require(wt_regular_brick_child_chunk(
+		partial_page_request.job.key, 1, visible_child
+	), "visible brick did not map to its direct child");
+	auto unexpected_child_page = std::make_shared<WtChunkPage>(*child_page);
+	unexpected_child_page->metadata.key = visible_child;
+	partial_page_request.retained_pages.push_back({
+		visible_child, unexpected_child_page
+	});
+	require(
+		!wt_pack_gpu_meshing_input(
+			partial_page_request, partial_page_packed, packing_error
+		),
+		"partial brick cut accepted a child beneath visible coarse coverage"
+	);
+	partial_page_request.retained_pages.pop_back();
 	partial_page_request.job.key.lod = 0;
 	require(
 		!wt_pack_gpu_meshing_input(

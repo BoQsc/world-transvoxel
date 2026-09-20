@@ -1,5 +1,6 @@
 #include "core/wt_chunk_brick.h"
 
+#include <limits>
 #include <tuple>
 
 namespace world_transvoxel {
@@ -115,6 +116,34 @@ bool wt_direct_child_parent_brick(
 	brick = {
 		parent,
 		static_cast<std::uint8_t>(local_x + local_y * 2 + local_z * 4),
+	};
+	return true;
+}
+
+bool wt_regular_brick_child_chunk(
+	const WtChunkKey &parent,
+	std::uint8_t brick_index,
+	WtChunkKey &child
+) noexcept {
+	if (!wt_is_valid_chunk_key(parent) || parent.lod == 0 ||
+			brick_index >= kWtRegularBrickCount) return false;
+	const WtGridPoint coordinate = wt_regular_brick_coordinate(brick_index);
+	const std::int64_t child_x = static_cast<std::int64_t>(parent.x) * 2 +
+		coordinate.x;
+	const std::int64_t child_y = static_cast<std::int64_t>(parent.y) * 2 +
+		coordinate.y;
+	const std::int64_t child_z = static_cast<std::int64_t>(parent.z) * 2 +
+		coordinate.z;
+	constexpr std::int64_t minimum = std::numeric_limits<std::int32_t>::min();
+	constexpr std::int64_t maximum = std::numeric_limits<std::int32_t>::max();
+	if (child_x < minimum || child_x > maximum ||
+			child_y < minimum || child_y > maximum ||
+			child_z < minimum || child_z > maximum) return false;
+	child = {
+		static_cast<std::int32_t>(child_x),
+		static_cast<std::int32_t>(child_y),
+		static_cast<std::int32_t>(child_z),
+		static_cast<std::uint8_t>(parent.lod - 1U),
 	};
 	return true;
 }

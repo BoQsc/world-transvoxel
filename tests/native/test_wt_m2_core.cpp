@@ -79,6 +79,20 @@ void test_chunk_bricks() {
 		negative_child, { negative_parent.x, negative_parent.y,
 			negative_parent.z, 2 }, parent_brick
 	), "non-direct ancestor accepted as one parent brick");
+	wt::WtChunkKey reconstructed_child;
+	check(wt::wt_regular_brick_child_chunk(
+		negative_parent, 5, reconstructed_child
+	) && reconstructed_child == negative_child,
+		"negative parent-brick inverse mapping mismatch");
+	check(!wt::wt_regular_brick_child_chunk(
+		chunk, 0, reconstructed_child
+	), "LOD0 parent produced an impossible direct child");
+	check(!wt::wt_regular_brick_child_chunk(
+		negative_parent, 8, reconstructed_child
+	), "out-of-range brick produced a direct child");
+	check(!wt::wt_regular_brick_child_chunk({
+		std::numeric_limits<std::int32_t>::max(), 0, 0, 1
+	}, 1, reconstructed_child), "overflowing parent coordinate produced a child");
 
 	const wt::WtRegularBrickTransitionSet hidden_zero =
 		wt::wt_regular_brick_transition_faces(chunk, 0xfe);
