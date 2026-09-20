@@ -2149,11 +2149,12 @@ key as an inactive visual merely because the application generation advanced
 before the replacement activated. The newest generation supersedes pending
 work and atomically replaces the retained coverage.
 
-Every loaded LOD0 chunk whose owned cells intersect an edit enters the
-interactive visual publication lane even if its prior GPU generation has not
-activated. Directly edited LOD0 neighbors form the bounded atomic publication
-cohort required for seam-safe replacement. Inactive higher-LOD and halo-only
-chunks retain background priority and do not delay that cohort.
+Every loaded LOD0 chunk affected by an edit enters the interactive visual
+publication lane even if its prior GPU generation has not activated. The
+bounded cohort includes directly edited chunks and their required one-cell
+sampling-halo providers, so a brush crossing a chunk boundary cannot leave an
+old visible generation at the seam. Inactive higher-LOD chunks retain
+background priority and do not delay the LOD0 cohort.
 
 Runtime
 metrics expose the terminal runtime status plus the exact terrain mesh completion

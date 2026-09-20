@@ -659,21 +659,27 @@ void test_foreground_interaction_ordering() {
 			return entry.independently_publishable;
 		})
 	);
-	check(independently_publishable == 2 &&
-		replacements[0].independently_publishable &&
-		replacements[1].independently_publishable,
-		"cold intersected LOD0 chunks did not enter the active edit cohort");
+	check(independently_publishable == 4 &&
+		std::all_of(
+			replacements.begin(), replacements.begin() + 4,
+			[](const auto &entry) {
+				return entry.key.lod == 0 && entry.independently_publishable;
+			}
+		),
+		"affected LOD0 halo cohort did not enter the active edit lane");
 	const std::size_t atomic_visual_members = static_cast<std::size_t>(
 		std::count_if(replacements.begin(), replacements.end(), [](const auto &entry) {
 			return entry.atomic_visual_edit_member;
 		})
 	);
-	check(atomic_visual_members == 2 &&
-		replacements[0].atomic_visual_edit_member &&
-		replacements[1].atomic_visual_edit_member,
-		"cold intersected LOD0 chunks retained deferred visual cohort members");
+	check(atomic_visual_members == 4 &&
+		std::all_of(
+			replacements.begin(), replacements.begin() + 4,
+			[](const auto &entry) { return entry.atomic_visual_edit_member; }
+		),
+		"affected LOD0 halo cohort retained deferred visual members");
 	const auto edit_metrics = service.get_metrics();
-	check(edit_metrics.active_visual_cohort_chunks == 2 &&
+	check(edit_metrics.active_visual_cohort_chunks == 4 &&
 		edit_metrics.deferred_inactive_visual_chunks == 1,
 		"active/deferred edit cohort metrics mismatch");
 	wt::WtChunkJob job;
