@@ -424,8 +424,19 @@ bool build_gpu_publication_cohort(
 			if (active_ancestor.lod >= kWtMaximumLod) break;
 			active_ancestor = wt_parent_chunk_key(active_ancestor);
 		}
-		if (found_active_ancestor) {
-			const WtChunkBounds region_bounds = wt_chunk_bounds(active_ancestor);
+		// A warm interaction replaces the smallest active ancestor that currently
+		// supplies its coverage. During cold bootstrap there is no such ancestor;
+		// admitting the complete world queue in that case makes the player-local
+		// seed wait for every unrelated incomplete boundary. Bound cold work to the
+		// seed's immediate parent cell. The publication-policy closure below may
+		// still add compatible active boundary coverage, but cold candidates outside
+		// this cell cannot hold the interaction lane.
+		WtChunkKey interaction_root = active_ancestor;
+		if (!found_active_ancestor && seed.lod < kWtMaximumLod) {
+			interaction_root = wt_parent_chunk_key(seed);
+		}
+		if (found_active_ancestor || seed.lod < kWtMaximumLod) {
+			const WtChunkBounds region_bounds = wt_chunk_bounds(interaction_root);
 			const auto contained = [&region_bounds](const WtChunkKey &key) {
 				const WtChunkBounds bounds = wt_chunk_bounds(key);
 				return bounds.minimum.x >= region_bounds.minimum.x &&
