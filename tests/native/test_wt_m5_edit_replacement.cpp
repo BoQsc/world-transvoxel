@@ -635,9 +635,7 @@ void test_foreground_interaction_ordering() {
 		wt::kWtMaximumResourceCacheBytes,
 	});
 	wt::WtEditRuntimeReplacementService service(keys.size());
-	const std::vector<wt::WtChunkKey> active_visual_chunks = {
-		foreground_key,
-	};
+	const std::vector<wt::WtChunkKey> active_visual_chunks;
 	check(service.replace_loaded_chunks(
 		transaction_at(source_revision, 7, 16, 8, 14, 50),
 		spatial,
@@ -661,7 +659,15 @@ void test_foreground_interaction_ordering() {
 	);
 	check(independently_publishable == 1 &&
 		replacements.front().independently_publishable,
-		"inactive LOD replacements entered the active edit cohort");
+		"cold interacted LOD0 chunk did not enter the active edit cohort");
+	const std::size_t atomic_visual_members = static_cast<std::size_t>(
+		std::count_if(replacements.begin(), replacements.end(), [](const auto &entry) {
+			return entry.atomic_visual_edit_member;
+		})
+	);
+	check(atomic_visual_members == 1 &&
+		replacements.front().atomic_visual_edit_member,
+		"cold interacted LOD0 chunk retained deferred visual cohort members");
 	const auto edit_metrics = service.get_metrics();
 	check(edit_metrics.active_visual_cohort_chunks == 1 &&
 		edit_metrics.deferred_inactive_visual_chunks == 2,

@@ -253,6 +253,11 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 			std::binary_search(
 				active_visual_chunks->begin(), active_visual_chunks->end(), key
 			);
+		const bool foreground_interaction =
+			key.lod == 0 && contains_command_center(key, transaction);
+		const bool interactive_visual_member =
+			visual_required && owned_cells_intersect &&
+			(active_visual || foreground_interaction);
 		prepared_.push_back({
 			key,
 			record->generation,
@@ -261,10 +266,11 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 			record->priority,
 			collision_required,
 			visual_required,
-			key.lod == 0 && contains_command_center(key, transaction),
-			active_visual && owned_cells_intersect,
-			visual_required && owned_cells_intersect && !active_visual,
-			visual_required && owned_cells_intersect,
+			foreground_interaction,
+			interactive_visual_member,
+			visual_required && owned_cells_intersect &&
+				!interactive_visual_member,
+			interactive_visual_member,
 			transaction_delta(key, transaction),
 		});
 	}
