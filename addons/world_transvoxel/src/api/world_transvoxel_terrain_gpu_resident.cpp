@@ -427,35 +427,31 @@ bool build_gpu_publication_cohort(
 		// A warm interaction replaces the smallest active ancestor that currently
 		// supplies its coverage. During cold bootstrap there is no such ancestor;
 		// admitting the complete world queue in that case makes the player-local
-		// seed wait for every unrelated incomplete boundary. Bound cold work to the
-		// seed's immediate parent cell. The publication-policy closure below may
+		// seed wait for every unrelated incomplete boundary. Bound cold work to
+		// the requested seed. The publication-policy closure below may
 		// still add compatible active boundary coverage, but cold candidates outside
-		// this cell cannot hold the interaction lane.
-		WtChunkKey interaction_root = active_ancestor;
-		if (!found_active_ancestor && seed.lod < kWtMaximumLod) {
-			interaction_root = wt_parent_chunk_key(seed);
-		}
-		if (found_active_ancestor || seed.lod < kWtMaximumLod) {
-			const WtChunkBounds region_bounds = wt_chunk_bounds(interaction_root);
-			const auto contained = [&region_bounds](const WtChunkKey &key) {
-				const WtChunkBounds bounds = wt_chunk_bounds(key);
-				return bounds.minimum.x >= region_bounds.minimum.x &&
-					bounds.minimum.y >= region_bounds.minimum.y &&
-					bounds.minimum.z >= region_bounds.minimum.z &&
-					bounds.maximum.x <= region_bounds.maximum.x &&
-					bounds.maximum.y <= region_bounds.maximum.y &&
-					bounds.maximum.z <= region_bounds.maximum.z;
-			};
-			candidates.erase(std::remove_if(
-				candidates.begin(), candidates.end(),
-				[&contained](const WtChunkKey &key) { return !contained(key); }
-			), candidates.end());
-			visual_retirements.erase(std::remove_if(
-				visual_retirements.begin(), visual_retirements.end(),
-				[&contained](const WtChunkKey &key) { return !contained(key); }
-			), visual_retirements.end());
-			if (interaction_region_isolated) *interaction_region_isolated = true;
-		}
+		// this region cannot hold the interaction lane.
+		const WtChunkKey interaction_root = found_active_ancestor ?
+			active_ancestor : seed;
+		const WtChunkBounds region_bounds = wt_chunk_bounds(interaction_root);
+		const auto contained = [&region_bounds](const WtChunkKey &key) {
+			const WtChunkBounds bounds = wt_chunk_bounds(key);
+			return bounds.minimum.x >= region_bounds.minimum.x &&
+				bounds.minimum.y >= region_bounds.minimum.y &&
+				bounds.minimum.z >= region_bounds.minimum.z &&
+				bounds.maximum.x <= region_bounds.maximum.x &&
+				bounds.maximum.y <= region_bounds.maximum.y &&
+				bounds.maximum.z <= region_bounds.maximum.z;
+		};
+		candidates.erase(std::remove_if(
+			candidates.begin(), candidates.end(),
+			[&contained](const WtChunkKey &key) { return !contained(key); }
+		), candidates.end());
+		visual_retirements.erase(std::remove_if(
+			visual_retirements.begin(), visual_retirements.end(),
+			[&contained](const WtChunkKey &key) { return !contained(key); }
+		), visual_retirements.end());
+		if (interaction_region_isolated) *interaction_region_isolated = true;
 	}
 	if (inspected_candidates) *inspected_candidates = candidates;
 	if (inspected_visual_retirements) {

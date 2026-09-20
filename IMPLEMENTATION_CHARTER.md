@@ -1950,9 +1950,9 @@ Internal cohort inspection reports the bounded reason and first key whenever
 the same-layout edit path is unavailable.
 
 An interaction-priority GPU publication query is spatially bounded even during
-cold bootstrap. When no active ancestor supplies retained coverage, the seed's
-immediate parent cell defines the candidate region; unrelated cold candidates
-outside that cell cannot delay player-local visibility. The ordinary publication
+cold bootstrap. When no active ancestor supplies retained coverage, the seed
+itself defines the candidate region; unrelated cold candidates cannot delay
+player-local visibility. The ordinary publication
 policy still closes active replacement coverage and transition-bearing faces,
 and query and commit use the same deterministic bound. Warm replacement keeps
 using the smallest retiring active ancestor as its atomic region.
