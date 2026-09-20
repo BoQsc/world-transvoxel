@@ -2341,3 +2341,13 @@ partial cuts are therefore rejected on the CPU meshing route. The bounded
 dependency maximum is 33 pages: one primary, up to twenty-four external face
 support pages, and eight direct children. Existing full-mask jobs retain their
 original dependency inventory and execution path.
+
+Hierarchical staging must not orphan an immutable GPU candidate that is still
+required by the completed visual topology. If a newer staging pass retains the
+same key but removes its frontend replacement marker before external activation,
+cohort selection restores that marker when the application record is prepared,
+activation-required, and not visually ready. The repaired seed then follows the
+normal bounded cohort and coverage validation. A key absent from completed
+topology, a stale generation, or a superseded visual remains ineligible. This
+guarantees that the coarse root can publish before descendant refinement and
+prevents a no-coverage deadlock during startup or relocation.

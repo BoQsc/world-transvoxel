@@ -959,13 +959,30 @@ get_gpu_resident_render_activation_cohort(
 		identity.key
 	);
 	result["seed_independently_publishable"] = seed_independently_publishable;
-	const bool seed_pending_replacement = std::binary_search(
+	bool seed_pending_replacement = std::binary_search(
 		pending_chunk_replacements_.begin(), pending_chunk_replacements_.end(),
 		identity.key
 	) || std::binary_search(
 		ready_staged_chunk_replacements_.begin(),
 		ready_staged_chunk_replacements_.end(), identity.key
 	);
+	const bool seed_in_completed_topology =
+		latest_completed_viewer_plan_revision_ != 0 &&
+		find_topology_entry(latest_completed_visual_plan_, identity.key) != nullptr;
+	const bool recoverable_prepared_seed =
+		seed_record.external_visual_activation_required &&
+		seed_record.external_visual_prepared && !seed_record.visual_ready &&
+		seed_in_completed_topology;
+	if (!seed_pending_replacement && recoverable_prepared_seed) {
+		// A newer hierarchical staging pass may retain the same coarse key while
+		// cancelling the frontend replacement marker that admitted its GPU
+		// capture. The application record still owns an immutable prepared visual
+		// and the completed topology still requires that exact key. Restore the
+		// marker so the root can publish and unlock descendant refinement.
+		stage_chunk_replacement(identity.key, false);
+		seed_pending_replacement = true;
+		result["recovered_prepared_seed"] = true;
+	}
 	std::uint8_t seed_active_mask = 0;
 	const bool seed_mask_replacement =
 		render_sink_->get_gpu_resident_boundary_mask(
@@ -983,7 +1000,7 @@ get_gpu_resident_render_activation_cohort(
 	}
 	if (!seed_independently_publishable &&
 		latest_completed_viewer_plan_revision_ != 0 &&
-		find_topology_entry(latest_completed_visual_plan_, identity.key) == nullptr) {
+		!seed_in_completed_topology) {
 		result["status"] = "STALE_APPLICATION";
 		result["error"] = "GPU resident cohort seed is absent from completed topology";
 		return result;
