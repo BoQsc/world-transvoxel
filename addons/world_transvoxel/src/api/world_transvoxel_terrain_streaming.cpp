@@ -543,6 +543,17 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 						publication.world_revision;
 					latest_completed_visual_plan_ =
 						std::move(publication.visual_plan_entries);
+					// A key can leave and re-enter the desired set before its old
+					// asynchronous retirement transaction commits. Reusing an existing
+					// application record emits no new ExpectChunk publication, so that
+					// path cannot cancel the stale retirement above. Reconcile the
+					// completed immutable plan directly: desired visual coverage must
+					// never remain in either retirement frontier.
+					for (const WtLodMapEntry &entry :
+							latest_completed_visual_plan_) {
+						cancel_chunk_retirement(entry.key);
+						cancel_render_retirement(entry.key);
+					}
 				}
 				break;
 			case WtReadOnlyPublicationKind::EditCommitted:
@@ -785,6 +796,57 @@ void WorldTransvoxelTerrain::cancel_render_retirement(
 
 void WorldTransvoxelTerrain::flush_ready_chunk_retirements() {
 	if (open_viewer_plan_publications_ != 0) return;
+	if (pending_chunk_retirements_.empty()) return;
+	const auto overlaps = [](const WtChunkKey &left, const WtChunkKey &right) {
+		const WtChunkBounds left_bounds = wt_chunk_bounds(left);
+		const WtChunkBounds right_bounds = wt_chunk_bounds(right);
+		return left_bounds.minimum.x < right_bounds.maximum.x &&
+			right_bounds.minimum.x < left_bounds.maximum.x &&
+			left_bounds.minimum.y < right_bounds.maximum.y &&
+			right_bounds.minimum.y < left_bounds.maximum.y &&
+			left_bounds.minimum.z < right_bounds.maximum.z &&
+			right_bounds.minimum.z < left_bounds.maximum.z;
+	};
+	// Retire obsolete, spatially independent coverage immediately. A missing
+	// replacement in the current interaction region must not pin every old GPU
+	// chunk from a distant viewer position. Chunks overlapping the immutable
+	// target topology or either replacement frontier remain protected for their
+	// normal atomic publication cohort.
+	for (auto iterator = pending_chunk_retirements_.begin();
+			iterator != pending_chunk_retirements_.end();) {
+		WtChunkApplicationRecord record;
+		const bool collision_protected =
+			application_->copy_record(*iterator, record) && record.collision_required;
+		const bool target_protected = std::any_of(
+			latest_completed_visual_plan_.begin(),
+			latest_completed_visual_plan_.end(),
+			[&](const WtLodMapEntry &entry) {
+				return overlaps(*iterator, entry.key);
+			}
+		);
+		const auto overlaps_replacement = [&](const WtChunkKey &replacement) {
+			return overlaps(*iterator, replacement);
+		};
+		const bool replacement_protected = std::any_of(
+			pending_chunk_replacements_.begin(),
+			pending_chunk_replacements_.end(), overlaps_replacement
+		) || std::any_of(
+			ready_staged_chunk_replacements_.begin(),
+			ready_staged_chunk_replacements_.end(), overlaps_replacement
+		);
+		if (collision_protected || target_protected || replacement_protected) {
+			++iterator;
+			continue;
+		}
+		const WtChunkKey key = *iterator;
+		application_->forget_chunk(key);
+		render_sink_->begin_render_retirement(key);
+		collision_sink_->remove_collision(key);
+		if (lifecycle_) {
+			lifecycle_->record_frontend_collision_residency(key, {});
+		}
+		iterator = pending_chunk_retirements_.erase(iterator);
+	}
 	if (pending_chunk_retirements_.empty()) return;
 	if (!pending_chunk_replacements_.empty()) return;
 	for (const WtChunkApplicationRecord &record : application_->get_records()) {

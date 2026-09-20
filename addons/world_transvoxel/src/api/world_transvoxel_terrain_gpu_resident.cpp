@@ -358,9 +358,12 @@ bool build_gpu_publication_cohort(
 		return find_topology_entry(target_topology, key);
 	};
 	candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
-		[&application, &target_entry](const WtChunkKey &key) {
+		[&application, &target_entry, &edit_replacements](const WtChunkKey &key) {
 			WtChunkApplicationRecord record;
-			return target_entry(key) == nullptr ||
+			const bool interaction_local = std::binary_search(
+				edit_replacements.begin(), edit_replacements.end(), key
+			);
+			return (target_entry(key) == nullptr && !interaction_local) ||
 				!application.copy_record(key, record) || !record.visual_required;
 		}), candidates.end());
 	// Chunk retirement is shared by visual and collision-only records. Only a
@@ -436,8 +439,14 @@ bool build_gpu_publication_cohort(
 			}
 			WtChunkApplicationRecord record;
 			const WtLodMapEntry *target = target_entry(key);
-			if (target == nullptr || !application.copy_record(key, record) ||
+			const bool interaction_local = std::binary_search(
+				edit_replacements.begin(), edit_replacements.end(), key
+			);
+			if ((target == nullptr && !interaction_local) ||
+					!application.copy_record(key, record) ||
 					!record.visual_required) return false;
+			const std::uint8_t target_transition_mask = target != nullptr ?
+				target->transition_mask : record.external_visual_transition_mask;
 			std::uint8_t active_mask = 0;
 			const bool active_present = render_sink.get_gpu_resident_boundary_mask(key, active_mask);
 			// Application records outlive asynchronous frontend retirement. A record
@@ -452,7 +461,7 @@ bool build_gpu_publication_cohort(
 			}
 			const bool candidate_mask_prepared =
 				record.visual_generation == record.generation &&
-				record.external_visual_transition_mask == target->transition_mask;
+				record.external_visual_transition_mask == target_transition_mask;
 			const bool edit_pending = std::binary_search(
 				edit_replacements.begin(), edit_replacements.end(), key
 			);
@@ -461,7 +470,7 @@ bool build_gpu_publication_cohort(
 					key, record.generation, active_mask
 				);
 			boundary = wt_gpu_publication_boundary(
-				target->transition_mask, true,
+				target_transition_mask, true,
 				active_mask, active_present, active_content_current
 			);
 			if (inspected_boundaries) {
@@ -470,7 +479,7 @@ bool build_gpu_publication_cohort(
 				member["boundary_mask"] = boundary.transition_mask;
 				member["candidate_mask_known"] = candidate_mask_prepared;
 				member["target_transition_mask"] = static_cast<std::int64_t>(
-					target->transition_mask
+					target_transition_mask
 				);
 				member["active_present"] = active_present;
 				member["active_mask"] = active_mask;

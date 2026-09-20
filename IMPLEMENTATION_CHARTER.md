@@ -2265,3 +2265,31 @@ restores the same generation and publishes cached resources with zero scheduler
 jobs. In-flight removals, changed revisions, capacity pressure, and edits use
 the existing cancel, evict, and rebuild paths. GPU slots follow the same dormant
 lifecycle but require separate frontend residency bookkeeping.
+
+### Brick-granular interaction publication requirement
+
+Whole-chunk regional replacement is not an acceptable interaction critical
+path. A measured moving-road transaction selected sixteen LOD0 chunks and nine
+LOD1 chunks because one coarse ancestor had to remain authoritative until its
+complete descendant cut was ready. Collision and coarse visible coverage both
+reached the target in one frame, while exact LOD0 required up to twelve frames
+and the replacement/retirement frontier could remain nonempty after all storage,
+mesh, and GPU queues became idle. This proves that further priority or queue
+tuning cannot satisfy the two-frame interaction contract at chunk granularity.
+
+LOD0 interaction refinement and edits therefore publish 8-cubed-cell regular
+bricks. Each brick has an immutable identity containing chunk key, brick index,
+generation, world revision, and its one-sample halo dependency. A coarse active
+chunk exposes a device-resident cut mask so only meshlets spatially replaced by
+ready fine bricks are disabled. The render callback validates the complete
+changed-brick cohort and atomically changes candidate and replaced indirect draw
+arguments. Unchanged bricks, transition faces, and coarse coverage remain
+active. A missing brick can delay only its bounded local cut and cannot join the
+remaining chunk or global retirement frontier.
+
+Brick state and candidate storage are configuration bounded. Superseding a
+generation cancels every candidate brick for that generation without changing
+active coverage. Empty candidate bricks retire the corresponding old meshlets;
+failed candidates retain old coverage. No CPU geometry readback participates in
+publication. Collision uses the matching independently replaceable CPU block
+identity and commits its changed block set at the physics boundary.
