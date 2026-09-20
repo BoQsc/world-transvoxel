@@ -62,7 +62,9 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 	bool staged_replacement,
 	bool preserve_collision_ready,
 	std::uint64_t world_revision,
-	bool independently_publishable_replacement
+	bool independently_publishable_replacement,
+	std::uint32_t visual_publication_cohort_size,
+	bool atomic_visual_edit_member
 ) {
 	std::lock_guard<std::mutex> lock(records_mutex_);
 	if (!wt_is_valid_chunk_key(key) || generation.value == 0 ||
@@ -107,6 +109,18 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 				record->independently_publishable_replacement = true;
 				changed = true;
 			}
+			if (visual_publication_cohort_size != 0 &&
+					record->visual_publication_cohort_size !=
+						visual_publication_cohort_size) {
+				record->visual_publication_cohort_size =
+					visual_publication_cohort_size;
+				changed = true;
+			}
+			if (atomic_visual_edit_member &&
+					!record->atomic_visual_edit_member) {
+				record->atomic_visual_edit_member = true;
+				changed = true;
+			}
 			return changed ? WtApplicationStatus::Ok :
 				WtApplicationStatus::AlreadyCurrent;
 		}
@@ -133,6 +147,9 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 		};
 		record->independently_publishable_replacement =
 			independently_publishable_replacement;
+		record->visual_publication_cohort_size =
+			visual_publication_cohort_size;
+		record->atomic_visual_edit_member = atomic_visual_edit_member;
 		return WtApplicationStatus::Ok;
 	}
 	if (records_.size() >= record_capacity_) {
@@ -153,6 +170,9 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 	});
 	records_.back().independently_publishable_replacement =
 		independently_publishable_replacement;
+	records_.back().visual_publication_cohort_size =
+		visual_publication_cohort_size;
+	records_.back().atomic_visual_edit_member = atomic_visual_edit_member;
 	std::sort(records_.begin(), records_.end(), [](const auto &a, const auto &b) {
 		return a.key < b.key;
 	});

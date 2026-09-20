@@ -133,6 +133,8 @@ struct WtReadOnlyPublication {
 	bool interaction_critical = false;
 	bool committed_edit = false;
 	bool force_external_visual_reactivation = false;
+	std::uint32_t visual_publication_cohort_size = 0;
+	bool atomic_visual_edit_member = false;
 	// Immutable visual topology for ViewerPlanCompleted. The frontend keeps only
 	// the newest snapshot and uses its masks as the sole GPU cohort authority.
 	std::vector<WtLodMapEntry> visual_plan_entries;

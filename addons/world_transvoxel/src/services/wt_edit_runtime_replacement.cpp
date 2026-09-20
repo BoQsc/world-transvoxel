@@ -264,6 +264,7 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 			key.lod == 0 && contains_command_center(key, transaction),
 			active_visual && owned_cells_intersect,
 			visual_required && owned_cells_intersect && !active_visual,
+			visual_required && owned_cells_intersect,
 			transaction_delta(key, transaction),
 		});
 	}
@@ -315,6 +316,13 @@ WtEditRuntimeReplacementService::apply_prepared(
 		++metrics_.empty_transactions;
 		return WtEditRuntimeReplacementStatus::Ok;
 	}
+	const std::uint32_t visual_publication_cohort_size =
+		static_cast<std::uint32_t>(std::count_if(
+			prepared_.begin(), prepared_.end(),
+			[](const PreparedReplacement &replacement) {
+				return replacement.atomic_visual_edit_member;
+			}
+		));
 	for (const PreparedReplacement &replacement : prepared_) {
 		if (page_meshing_runtime != nullptr) {
 			const WtPageMeshingRuntimeOwnerStatus status =
@@ -357,7 +365,10 @@ WtEditRuntimeReplacementService::apply_prepared(
 				true,
 				replacement.collision_required,
 				current->world_revision,
-				replacement.independently_publishable
+				replacement.independently_publishable,
+				replacement.atomic_visual_edit_member ?
+					visual_publication_cohort_size : 0,
+				replacement.atomic_visual_edit_member
 			) != WtApplicationStatus::Ok) {
 			++metrics_.application_failures;
 			return WtEditRuntimeReplacementStatus::ApplicationFailure;
@@ -384,6 +395,7 @@ WtEditRuntimeReplacementService::apply_prepared(
 			replacement.collision_required,
 			replacement.visual_required,
 			replacement.independently_publishable,
+			replacement.atomic_visual_edit_member,
 		});
 		metrics_.evicted_page_entries += page_entries;
 		metrics_.evicted_resource_entries += resource_entries;

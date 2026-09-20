@@ -59,7 +59,9 @@ drain_interaction_collision_publications_at_physics_boundary() {
 					publication.staged_replacement,
 					publication.preserve_collision_ready,
 					publication.world_revision,
-					publication.independently_publishable_replacement
+					publication.independently_publishable_replacement,
+					publication.visual_publication_cohort_size,
+					publication.atomic_visual_edit_member
 				);
 				if (submit_status == WtApplicationStatus::Ok ||
 					submit_status == WtApplicationStatus::AlreadyCurrent) {
@@ -438,7 +440,9 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 					publication.staged_replacement,
 					publication.preserve_collision_ready,
 					publication.world_revision,
-					publication.independently_publishable_replacement
+					publication.independently_publishable_replacement,
+					publication.visual_publication_cohort_size,
+					publication.atomic_visual_edit_member
 				);
 				if (status == WtApplicationStatus::Ok ||
 					status == WtApplicationStatus::AlreadyCurrent) {

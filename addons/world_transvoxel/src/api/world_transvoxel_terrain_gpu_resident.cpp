@@ -231,7 +231,7 @@ SameLayoutEditCohortStatus build_same_layout_edit_cohort(
 		return SameLayoutEditCohortStatus::NotApplicable;
 	}
 	const bool incremental_edit =
-		seed_record.independently_publishable_replacement &&
+		seed_record.atomic_visual_edit_member &&
 		seed_record.world_revision != 0;
 
 	WtChunkPublicationRegion candidate;
@@ -244,13 +244,26 @@ SameLayoutEditCohortStatus build_same_layout_edit_cohort(
 		// atomic-cohort inventory. Select the complete same-revision transaction
 		// from authoritative application records instead.
 		for (const WtChunkApplicationRecord &record : application.get_records()) {
-			if (record.independently_publishable_replacement &&
+			if (record.atomic_visual_edit_member &&
 				record.visual_required &&
 				record.world_revision == seed_record.world_revision) {
 				replacements.push_back(record.key);
 			}
 		}
 		std::sort(replacements.begin(), replacements.end());
+		if (seed_record.visual_publication_cohort_size != 0 &&
+			replacements.size() < seed_record.visual_publication_cohort_size) {
+			region.replacements = replacements;
+			waiting_masks = replacements;
+			if (std::find(waiting_masks.begin(), waiting_masks.end(), seed) ==
+					waiting_masks.end()) {
+				waiting_masks.push_back(seed);
+			}
+			if (rejection_reason) {
+				*rejection_reason = "edit_cohort_publications_pending";
+			}
+			return SameLayoutEditCohortStatus::Waiting;
+		}
 	} else {
 		replacements.push_back(seed);
 	}
@@ -973,6 +986,18 @@ get_gpu_resident_render_activation_cohort(
 		identity.key
 	);
 	result["seed_independently_publishable"] = seed_independently_publishable;
+	result["seed_atomic_visual_edit_member"] =
+		seed_record.atomic_visual_edit_member;
+	result["seed_visual_publication_cohort_size"] =
+		static_cast<std::int64_t>(seed_record.visual_publication_cohort_size);
+	std::int64_t visible_atomic_revision_members = 0;
+	for (const WtChunkApplicationRecord &record : application_->get_records()) {
+		if (record.atomic_visual_edit_member && record.visual_required &&
+			record.world_revision == seed_record.world_revision) {
+			++visible_atomic_revision_members;
+		}
+	}
+	result["visible_atomic_revision_members"] = visible_atomic_revision_members;
 	bool seed_pending_replacement = std::binary_search(
 		pending_chunk_replacements_.begin(), pending_chunk_replacements_.end(),
 		identity.key

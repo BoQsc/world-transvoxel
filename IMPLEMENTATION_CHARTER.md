@@ -2352,9 +2352,14 @@ topology, a stale generation, or a superseded visual remains ineligible. This
 guarantees that the coarse root can publish before descendant refinement and
 prevents a no-coverage deadlock during startup or relocation.
 
-An independently publishable edit cohort is the complete set of authoritative
-application records for its nonzero world revision. Frontend replacement
-markers are asynchronous progress signals and cannot define cohort membership:
-observing them incrementally would allow one chunk of a multi-chunk brush to
-activate before its peers. Cohort readiness may wait for those peers, but no
-member can publish alone.
+An atomic visual edit cohort is the complete set of visual application records
+whose owned cells intersect one committed nonzero world revision. This identity
+is independent of whether collision may publish separately and of whether the
+runtime has observed the predecessor visual activation. Every frontend
+expectation carries the bounded expected member count. Frontend replacement
+markers and application records arrive asynchronously, so cohort selection
+waits until that count is present and every member is prepared. Observing the
+queue incrementally would allow one chunk of a multi-chunk brush to activate
+before its peers; no visual member may publish alone. Collision independence,
+collision authority, and its physics-boundary publication contract are
+unchanged.

@@ -33,6 +33,11 @@ struct WtChunkApplicationRecord {
 	bool independently_publishable_replacement = false;
 	bool collision_only_refresh = false;
 	bool gpu_placeholder_published = false;
+	bool atomic_visual_edit_member = false;
+	// Number of atomic visual replacements belonging to this
+	// edit revision. A nonzero value prevents the frontend from activating a
+	// partial transaction while its bounded publication queue is still draining.
+	std::uint32_t visual_publication_cohort_size = 0;
 
 	bool collision_current() const noexcept;
 	bool collision_work_required() const noexcept;
@@ -98,7 +103,9 @@ public:
 		bool staged_replacement = false,
 		bool preserve_collision_ready = false,
 		std::uint64_t world_revision = 0,
-		bool independently_publishable_replacement = false
+		bool independently_publishable_replacement = false,
+		std::uint32_t visual_publication_cohort_size = 0,
+		bool atomic_visual_edit_member = false
 	);
 	WtApplicationStatus set_visual_required(
 		const WtChunkKey &key,

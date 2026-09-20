@@ -44,6 +44,7 @@ struct WtEditRuntimeReplacementRecord {
 	bool collision_required = false;
 	bool visual_required = true;
 	bool independently_publishable = false;
+	bool atomic_visual_edit_member = false;
 };
 
 struct WtEditRuntimeReplacementMetrics {
@@ -118,6 +119,7 @@ private:
 		bool foreground_interaction = false;
 		bool independently_publishable = false;
 		bool deferred_inactive_visual = false;
+		bool atomic_visual_edit_member = false;
 		WtChunkEditDelta edit_delta;
 	};
 

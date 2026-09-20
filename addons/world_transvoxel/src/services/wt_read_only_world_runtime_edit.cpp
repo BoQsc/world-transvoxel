@@ -203,8 +203,15 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 		set_failure(WtReadOnlyRuntimeStatus::EditFailure);
 		return true;
 	}
-	for (const WtEditRuntimeReplacementRecord &replacement :
-			edit_replacement_->get_last_replacements()) {
+	const auto &edit_replacements = edit_replacement_->get_last_replacements();
+	const std::uint32_t visual_publication_cohort_size =
+		static_cast<std::uint32_t>(std::count_if(
+			edit_replacements.begin(), edit_replacements.end(),
+			[](const WtEditRuntimeReplacementRecord &replacement) {
+				return replacement.atomic_visual_edit_member;
+			}
+		));
+	for (const WtEditRuntimeReplacementRecord &replacement : edit_replacements) {
 		causal_trace_.record(
 			WtCausalTraceEventKind::ChunkDemandAccepted,
 			WtCausalTraceThreadRole::Runtime,
@@ -233,6 +240,11 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 		publication.preserve_collision_ready = replacement.collision_required;
 		publication.independently_publishable_replacement =
 			replacement.independently_publishable;
+		publication.visual_publication_cohort_size =
+			replacement.atomic_visual_edit_member ?
+				visual_publication_cohort_size : 0;
+		publication.atomic_visual_edit_member =
+			replacement.atomic_visual_edit_member;
 		if (!config_.hierarchical_lod_viewer_activation_enabled &&
 			replacement.visual_required && replacement.key.lod != 0) {
 			std::lock_guard<std::mutex> lock(visual_activation_mutex_);
