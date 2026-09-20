@@ -51,6 +51,7 @@ WtChunkApplicationService::WtChunkApplicationService(
 		render_queue_(render_queue_capacity),
 		collision_queue_(collision_queue_capacity) {
 	records_.reserve(record_capacity);
+	gpu_placeholder_publication_claims_.reserve(record_capacity);
 	deferred_collisions_.reserve(collision_queue_capacity);
 }
 
@@ -132,6 +133,16 @@ WtApplicationStatus WtChunkApplicationService::expect_chunk(
 				WtGenerationToken{};
 		const std::uint64_t carried_collision_world_revision =
 			carried_collision_ready ? record->collision_world_revision : 0;
+		gpu_placeholder_publication_claims_.erase(
+			std::remove_if(
+				gpu_placeholder_publication_claims_.begin(),
+				gpu_placeholder_publication_claims_.end(),
+				[&key](const GpuPlaceholderPublicationClaim &claim) {
+					return claim.key == key;
+				}
+			),
+			gpu_placeholder_publication_claims_.end()
+		);
 		*record = {
 			key,
 			generation,
@@ -311,10 +322,43 @@ WtApplicationStatus WtChunkApplicationService::claim_gpu_placeholder_publication
 	if (record == nullptr) return WtApplicationStatus::NotFound;
 	if (record->generation != generation) return WtApplicationStatus::StaleGeneration;
 	if (!record->visual_required) return WtApplicationStatus::InvalidInput;
-	if (record->gpu_placeholder_published) {
+	const auto claim = std::find_if(
+		gpu_placeholder_publication_claims_.begin(),
+		gpu_placeholder_publication_claims_.end(),
+		[&key, generation](const GpuPlaceholderPublicationClaim &candidate) {
+			return candidate.key == key && candidate.generation == generation;
+		}
+	);
+	if (claim != gpu_placeholder_publication_claims_.end()) {
 		return WtApplicationStatus::AlreadyCurrent;
 	}
-	record->gpu_placeholder_published = true;
+	if (gpu_placeholder_publication_claims_.size() >= record_capacity_) {
+		return WtApplicationStatus::RecordCapacityExceeded;
+	}
+	gpu_placeholder_publication_claims_.push_back({ key, generation });
+	return WtApplicationStatus::Ok;
+}
+
+WtApplicationStatus WtChunkApplicationService::complete_gpu_placeholder_publication(
+	const WtChunkKey &key,
+	WtGenerationToken generation,
+	bool applied
+) {
+	std::lock_guard<std::mutex> lock(records_mutex_);
+	gpu_placeholder_publication_claims_.erase(
+		std::remove_if(
+			gpu_placeholder_publication_claims_.begin(),
+			gpu_placeholder_publication_claims_.end(),
+			[&key, generation](const GpuPlaceholderPublicationClaim &claim) {
+				return claim.key == key && claim.generation == generation;
+			}
+		),
+		gpu_placeholder_publication_claims_.end()
+	);
+	WtChunkApplicationRecord *record = find_record_mutable(key);
+	if (record == nullptr) return WtApplicationStatus::NotFound;
+	if (record->generation != generation) return WtApplicationStatus::StaleGeneration;
+	if (applied) record->gpu_placeholder_published = true;
 	return WtApplicationStatus::Ok;
 }
 
@@ -427,6 +471,16 @@ WtApplicationStatus WtChunkApplicationService::forget_chunk(const WtChunkKey &ke
 		return WtApplicationStatus::NotFound;
 	}
 	records_.erase(iterator);
+	gpu_placeholder_publication_claims_.erase(
+		std::remove_if(
+			gpu_placeholder_publication_claims_.begin(),
+			gpu_placeholder_publication_claims_.end(),
+			[&key](const GpuPlaceholderPublicationClaim &claim) {
+				return claim.key == key;
+			}
+		),
+		gpu_placeholder_publication_claims_.end()
+	);
 	return WtApplicationStatus::Ok;
 }
 
@@ -502,6 +556,7 @@ WtApplicationStatus WtChunkApplicationService::apply_gpu_resident_placeholder(
 	record->external_visual_prepared = already_prepared;
 	record->external_visual_transition_mask = payload->transition_mask;
 	record->visual_ready = !record->external_visual_activation_required;
+	record->gpu_placeholder_published = true;
 	if (record->fully_ready()) record->staged_replacement = false;
 	asynchronous_render_submissions_.fetch_add(1, std::memory_order_relaxed);
 	++metrics_.applied_render;

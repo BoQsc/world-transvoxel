@@ -2135,10 +2135,13 @@ If an immutable collision payload for the active generation remains cached after
 collision deactivation, promotion republishes that payload directly. It must not
 recompute and reinsert a different payload under the same identity. Runtime
 completion also reuses an existing generation-matched collision payload when a
-duplicate completion arrives. GPU resident placeholder publication is claimed
-once in the application record and enforced at the publication queue boundary,
-so dispatch, cached promotion, and CPU completion cannot publish the same visual
-generation more than once.
+duplicate completion arrives. GPU resident placeholder publication uses a
+bounded, generation-matched in-flight claim at the publication queue boundary.
+The frontend must acknowledge every popped placeholder: success records applied
+state, while rejection releases the claim so readiness repair can republish the
+same immutable candidate without remeshing. A completed placeholder may be
+republished for sink reactivation; only simultaneous queue or frontend copies
+are coalesced.
 
 Runtime
 metrics expose the terminal runtime status plus the exact terrain mesh completion

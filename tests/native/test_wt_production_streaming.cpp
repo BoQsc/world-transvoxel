@@ -1,4 +1,5 @@
 #include "services/wt_read_only_world_runtime.h"
+#include "services/wt_chunk_application.h"
 #include "diagnostics/wt_gpu_meshing_shadow.h"
 #include "storage/wt_async_storage_service.h"
 #include "storage/wt_hash256.h"
@@ -42,6 +43,39 @@ void print_hash(const wt::WtHash256 &hash) {
 		std::printf("%02x", static_cast<unsigned int>(byte));
 	}
 	std::printf("\n");
+}
+
+void test_gpu_placeholder_publication_claim_is_acknowledged() {
+	wt::WtChunkApplicationService service(1, 1, 1);
+	const wt::WtChunkKey key{ 7, 2, -3, 1 };
+	const wt::WtGenerationToken generation{ 73 };
+	check(service.expect_chunk(key, generation, false, true, true) ==
+			wt::WtApplicationStatus::Ok &&
+		service.claim_gpu_placeholder_publication(key, generation) ==
+			wt::WtApplicationStatus::Ok &&
+		service.claim_gpu_placeholder_publication(key, generation) ==
+			wt::WtApplicationStatus::AlreadyCurrent,
+		"GPU placeholder allowed duplicate in-flight publication");
+	const wt::WtChunkApplicationRecord *record = service.find_record(key);
+	check(record != nullptr && !record->gpu_placeholder_published,
+		"GPU placeholder enqueue was mistaken for successful publication");
+	check(service.complete_gpu_placeholder_publication(
+			key, generation, false
+		) == wt::WtApplicationStatus::Ok &&
+		service.claim_gpu_placeholder_publication(key, generation) ==
+			wt::WtApplicationStatus::Ok,
+		"failed GPU placeholder publication could not be retried");
+	check(service.complete_gpu_placeholder_publication(
+			key, generation, true
+		) == wt::WtApplicationStatus::Ok,
+		"successful GPU placeholder publication was not acknowledged");
+	record = service.find_record(key);
+	check(record != nullptr && record->gpu_placeholder_published,
+		"successful GPU placeholder publication retained an in-flight claim");
+	check(service.claim_gpu_placeholder_publication(key, generation) ==
+			wt::WtApplicationStatus::Ok,
+		"applied GPU placeholder could not be republished for reactivation");
+	std::printf("GPU_PLACEHOLDER_ACKNOWLEDGEMENT_PASS generation=73\n");
 }
 
 class FixtureRoot {
@@ -1553,6 +1587,7 @@ void test_active_visual_collision_refresh_keeps_generation() {
 } // namespace
 
 int main(int argc, char **argv) {
+	test_gpu_placeholder_publication_claim_is_acknowledged();
 	if (argc == 2 && std::string(argv[1]) == "--gpu-collision-admission") {
 		test_collision_only_with_full_gpu_queue(0);
 		test_collision_only_with_full_gpu_queue(1);

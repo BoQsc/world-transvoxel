@@ -132,6 +132,11 @@ public:
 		const WtChunkKey &key,
 		WtGenerationToken generation
 	);
+	WtApplicationStatus complete_gpu_placeholder_publication(
+		const WtChunkKey &key,
+		WtGenerationToken generation,
+		bool applied
+	);
 	WtApplicationStatus forget_chunk(const WtChunkKey &key);
 	WtApplicationStatus submit_render(const WtRenderPayloadPtr &payload);
 	// Main-thread fast path for the geometry-free GPU placeholder. This updates
@@ -193,6 +198,10 @@ public:
 	void set_trace_observer(WtApplicationTraceObserver observer);
 
 private:
+	struct GpuPlaceholderPublicationClaim {
+		WtChunkKey key;
+		WtGenerationToken generation;
+	};
 	WtChunkApplicationRecord *find_record_mutable(const WtChunkKey &key) noexcept;
 	std::size_t apply_render(
 		std::size_t budget,
@@ -224,6 +233,7 @@ private:
 	std::size_t record_capacity_ = 0;
 	mutable std::mutex records_mutex_;
 	std::vector<WtChunkApplicationRecord> records_;
+	std::vector<GpuPlaceholderPublicationClaim> gpu_placeholder_publication_claims_;
 	std::vector<WtCollisionApplyEntry> deferred_collisions_;
 	WtRenderApplyQueue render_queue_;
 	WtCollisionApplyQueue collision_queue_;

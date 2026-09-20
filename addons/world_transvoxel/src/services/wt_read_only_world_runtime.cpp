@@ -296,6 +296,18 @@ void WtReadOnlyWorldRuntime::record_frontend_publication(
 	const WtReadOnlyPublication &publication,
 	std::int64_t status
 ) {
+	if (publication.kind == WtReadOnlyPublicationKind::RenderPayload &&
+		publication.render && publication.render->publication_source ==
+			WtRenderPublicationSource::GpuResidentPlaceholder) {
+		application_->complete_gpu_placeholder_publication(
+			publication.key,
+			publication.generation,
+			status == static_cast<std::int64_t>(WtApplicationStatus::Ok) ||
+				status == static_cast<std::int64_t>(
+					WtApplicationStatus::AlreadyCurrent
+				)
+		);
+	}
 	const bool collision_publication_rejected =
 		publication.kind == WtReadOnlyPublicationKind::CollisionPayload &&
 		status != 0;
