@@ -561,6 +561,7 @@ godot::Dictionary WorldTransvoxelTerrain::inspect_gpu_resident_publication(
 	std::vector<WtChunkKey> visual_candidates;
 	std::vector<WtChunkKey> visual_retirements;
 	bool same_layout_edit = false;
+	bool interaction_region_isolated = false;
 	const char *same_layout_edit_rejection_reason = "none";
 	WtChunkKey same_layout_edit_rejection_key = seed;
 	const bool built = build_gpu_publication_cohort(
@@ -569,7 +570,8 @@ godot::Dictionary WorldTransvoxelTerrain::inspect_gpu_resident_publication(
 		independently_publishable_chunk_replacements_,
 		latest_completed_visual_plan_, region, waiting_masks, &boundaries, &visual_candidates,
 		&visual_retirements, nullptr, &same_layout_edit,
-		&same_layout_edit_rejection_reason, &same_layout_edit_rejection_key
+		&same_layout_edit_rejection_reason, &same_layout_edit_rejection_key,
+		nullptr, true, &interaction_region_isolated
 	);
 	// The cohort selector may take the same-layout fast path and therefore return
 	// only the seed-local transaction. Inspection also promises the classification
@@ -627,6 +629,7 @@ godot::Dictionary WorldTransvoxelTerrain::inspect_gpu_resident_publication(
 	result["retirements"] = gpu_cohort_keys(region.retirements);
 	result["waiting_masks"] = gpu_cohort_keys(waiting_masks);
 	result["same_layout_edit"] = same_layout_edit;
+	result["interaction_region_isolated"] = interaction_region_isolated;
 	result["same_layout_edit_rejection_reason"] = same_layout_edit_rejection_reason;
 	result["same_layout_edit_rejection_key"] = gpu_cohort_key(
 		same_layout_edit_rejection_key

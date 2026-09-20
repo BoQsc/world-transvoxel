@@ -1961,6 +1961,11 @@ seeds into this lane even when their immutable capture identity predates the
 latest interaction demand. Selection and commit derive the promotion from the
 same generation-checked record; frontend code never rewrites a prepared
 identity to change scheduling class.
+GPU capture identities carry the scheduler's immutable numeric priority for
+frontend ordering. The interaction activation lane selects higher-priority
+prepared seeds first while retaining its bounded query count and time budget;
+committed edits and nearest player support therefore cannot sit behind an old
+FIFO of lower-priority regional retries.
 
 ## 24. Final definition of success
 
