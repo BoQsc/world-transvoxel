@@ -150,9 +150,10 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 		for (const VisualActivation &activation : visual_activations_) {
 			WtChunkApplicationRecord record;
 			if (application_->copy_record(activation.key, record) &&
-					record.visual_required && record.visual_ready &&
-					record.generation == activation.generation &&
-					!record.visual_generation_superseded) {
+					record.visual_required) {
+				// The frontend-confirmed older generation remains visible while an
+				// atomic replacement is pending. Preserve interactive cohort status
+				// across rapid superseding edits instead of deferring the newer visual.
 				active_visual_chunks.push_back(activation.key);
 			}
 		}

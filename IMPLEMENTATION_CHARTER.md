@@ -2143,6 +2143,12 @@ same immutable candidate without remeshing. A completed placeholder may be
 republished for sink reactivation; only simultaneous queue or frontend copies
 are coalesced.
 
+Frontend-confirmed visual coverage remains an active edit-cohort member while
+a newer generation is pending. Rapid edits must not reclassify a still-covered
+key as an inactive visual merely because the application generation advanced
+before the replacement activated. The newest generation supersedes pending
+work and atomically replaces the retained coverage.
+
 Runtime
 metrics expose the terminal runtime status plus the exact terrain mesh completion
 failure substage and status so an automated route reports its native failure
