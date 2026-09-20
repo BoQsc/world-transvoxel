@@ -1,5 +1,7 @@
 #include "diagnostics/wt_gpu_meshing_input_pack.h"
 
+#include "core/wt_chunk_brick.h"
+
 #include "backend/wt_transvoxel_mit_backend.h"
 #include "core/wt_chunk_key.h"
 #include "storage/wt_chunk_page.h"
@@ -240,11 +242,22 @@ bool pack_page_field_input(
 		return false;
 	}
 
+	if (request.job.key.lod == 0 &&
+			request.regular_visibility_mask != kWtAllRegularBricksMask) {
+		error = "LOD0 cannot own an internal fine/coarse brick transition";
+		return false;
+	}
+	const WtRegularBrickTransitionSet internal_transitions =
+		wt_regular_brick_transition_faces(
+			request.job.key, request.regular_visibility_mask
+		);
 	output.page_field_input = true;
 	output.cell_count = static_cast<std::size_t>(
 		kWtChunkCellsPerAxis * kWtChunkCellsPerAxis * kWtChunkCellsPerAxis +
 		face_count(request.cached_transition_mask) *
-			kWtChunkCellsPerAxis * kWtChunkCellsPerAxis
+			kWtChunkCellsPerAxis * kWtChunkCellsPerAxis +
+		internal_transitions.count *
+			kWtRegularBrickCellsPerAxis * kWtRegularBrickCellsPerAxis
 	);
 	std::size_t surface_shift_record_count = 0;
 	for (const WtGpuMeshingShadowPage *retained : pages) {
@@ -299,6 +312,10 @@ bool pack_page_field_input(
 			static_cast<std::int32_t>(request.transition_mask),
 			request.surface == WtGpuMeshingShadowSurface::StaticWater ? 1 : 0,
 			static_cast<std::int32_t>(request.cached_transition_mask),
+			static_cast<std::int32_t>(request.regular_visibility_mask),
+			static_cast<std::int32_t>(internal_transitions.count),
+			0,
+			0,
 		};
 		return true;
 	}
@@ -432,6 +449,10 @@ bool pack_page_field_input(
 		static_cast<std::int32_t>(request.transition_mask),
 		request.surface == WtGpuMeshingShadowSurface::StaticWater ? 1 : 0,
 		static_cast<std::int32_t>(request.cached_transition_mask),
+		static_cast<std::int32_t>(request.regular_visibility_mask),
+		static_cast<std::int32_t>(internal_transitions.count),
+		0,
+		0,
 	};
 	const WtTransvoxelTablePack &tables = wt_get_transvoxel_mit_table_pack();
 	output.packed_byte_count =
@@ -595,6 +616,10 @@ bool wt_pack_gpu_meshing_input(
 		static_cast<std::int32_t>(request.transition_mask),
 		request.surface == WtGpuMeshingShadowSurface::StaticWater ? 1 : 0,
 		static_cast<std::int32_t>(output.sample_count),
+		static_cast<std::int32_t>(request.regular_visibility_mask),
+		0,
+		0,
+		0,
 	};
 
 	const WtTransvoxelTablePack &tables = wt_get_transvoxel_mit_table_pack();

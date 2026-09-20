@@ -221,6 +221,24 @@ int main() {
 			page_packed.config[15] == 5,
 		"page-field resident dimensions or mode changed"
 	);
+	WtGpuMeshingShadowRequest partial_page_request = page_field_request();
+	partial_page_request.regular_visibility_mask = 0xfe;
+	WtGpuMeshingInputPack partial_page_packed;
+	require(
+		wt_pack_gpu_meshing_input(
+			partial_page_request, partial_page_packed, packing_error
+		) && partial_page_packed.cell_count == 4800 &&
+			partial_page_packed.config[16] == 0xfe &&
+			partial_page_packed.config[17] == 3,
+		"partial brick cut did not reserve its exact internal transition cells"
+	);
+	partial_page_request.job.key.lod = 0;
+	require(
+		!wt_pack_gpu_meshing_input(
+			partial_page_request, partial_page_packed, packing_error
+		),
+		"LOD0 accepted an impossible internal finer-brick cut"
+	);
 	WtGpuMeshingShadowRequest empty_page_request = page_field_request();
 	auto empty_page = std::make_shared<WtChunkPage>(
 		*empty_page_request.retained_pages[0].page

@@ -43,6 +43,7 @@ struct WtGpuMeshingShadowCapture {
 	bool cpu_visual_mesh_omitted = false;
 	bool incremental_edit = false;
 	std::uint8_t dirty_regular_brick_mask = 0xff;
+	std::uint8_t regular_visibility_mask = 0xff;
 	WtEditBounds dirty_edit_bounds;
 	bool has_dirty_edit_bounds = false;
 	std::vector<WtRecordedMeshingCell> records;
@@ -64,6 +65,7 @@ struct WtGpuMeshingShadowIdentity {
 	WtGpuMeshingShadowSurface surface = WtGpuMeshingShadowSurface::Terrain;
 	bool incremental_edit = false;
 	bool interaction_priority = false;
+	std::uint8_t regular_visibility_mask = 0xff;
 };
 
 enum class WtGpuMeshingShadowCompletionStatus : std::uint8_t {

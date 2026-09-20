@@ -397,6 +397,7 @@ bool WtGpuMeshingShadowQueue::pop(
 	tracked_request.job = request.job;
 	tracked_request.transition_mask = request.transition_mask;
 	tracked_request.cached_transition_mask = request.cached_transition_mask;
+	tracked_request.regular_visibility_mask = request.regular_visibility_mask;
 	tracked_request.surface = request.surface;
 	tracked_request.capture_stage = request.capture_stage;
 	tracked_request.static_water_surface_expected =
@@ -615,6 +616,8 @@ WtGpuMeshingShadowMetrics WtGpuMeshingShadowQueue::metrics() const noexcept {
 			oldest.job.world_revision;
 		result.oldest_in_flight_identity.transition_mask =
 			oldest.transition_mask;
+		result.oldest_in_flight_identity.regular_visibility_mask =
+			oldest.regular_visibility_mask;
 		result.oldest_in_flight_identity.surface = oldest.surface;
 	}
 	return result;
@@ -638,6 +641,7 @@ bool WtGpuMeshingShadowQueue::identity_matches(
 		request.job.source_revision == identity.source_revision &&
 		request.job.world_revision == identity.world_revision &&
 		request.transition_mask == identity.transition_mask &&
+		request.regular_visibility_mask == identity.regular_visibility_mask &&
 		request.surface == identity.surface;
 }
 

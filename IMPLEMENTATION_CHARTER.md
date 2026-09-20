@@ -2313,3 +2313,13 @@ deterministically from the eight-bit visibility mask, and must be generated and
 committed with that mask before single-brick refinement is enabled. Until this
 inventory exists, publication may use only complete parent cuts; exposing an
 individual child would violate exact Transvoxel topology.
+
+The GPU page-field input contract carries the regular visibility mask as config
+word 16 and its derived internal-transition count as config word 17. Each active
+internal face contributes exactly 8 by 8 transition cells after the regular and
+external transition-cell ranges; the remaining two words in the appended config
+vector are reserved and zero. LOD0 rejects every partial mask because no finer
+terrain level exists for it to transition toward. Recorded legacy captures retain
+the same 20-word layout with zero internal faces. The mask is part of immutable
+capture identity, so a visibility-cut change cannot reuse or complete a candidate
+prepared for another cut.

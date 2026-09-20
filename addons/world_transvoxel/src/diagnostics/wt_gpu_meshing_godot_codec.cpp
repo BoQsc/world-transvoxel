@@ -60,6 +60,7 @@ godot::Dictionary wt_gpu_meshing_shadow_identity(
 	);
 	identity["transition_mask"] = request.transition_mask;
 	identity["cached_transition_mask"] = request.cached_transition_mask;
+	identity["regular_visibility_mask"] = request.regular_visibility_mask;
 	identity["surface"] = wt_gpu_meshing_shadow_surface_name(request.surface);
 	identity["input_stage"] = wt_gpu_meshing_capture_stage_name(
 		request.capture_stage
@@ -150,9 +151,13 @@ bool wt_parse_gpu_meshing_shadow_identity(
 	const std::int64_t world_revision = dictionary.get("world_revision", -1);
 	const std::int64_t lod = dictionary.get("lod", -1);
 	const std::int64_t transition_mask = dictionary.get("transition_mask", -1);
+	const std::int64_t regular_visibility_mask = dictionary.get(
+		"regular_visibility_mask", 0xff
+	);
 	if (generation <= 0 || source_revision <= 0 || world_revision < 0 ||
 		lod < 0 || lod > kWtMaximumLod || transition_mask < 0 ||
-		transition_mask > 0x3f) {
+		transition_mask > 0x3f || regular_visibility_mask < 0 ||
+		regular_visibility_mask > 0xff) {
 		return false;
 	}
 	identity.key = {
@@ -165,6 +170,9 @@ bool wt_parse_gpu_meshing_shadow_identity(
 	identity.source_revision = static_cast<std::uint64_t>(source_revision);
 	identity.world_revision = static_cast<std::uint64_t>(world_revision);
 	identity.transition_mask = static_cast<std::uint8_t>(transition_mask);
+	identity.regular_visibility_mask = static_cast<std::uint8_t>(
+		regular_visibility_mask
+	);
 	identity.surface = surface == "static_water" ?
 		WtGpuMeshingShadowSurface::StaticWater :
 		WtGpuMeshingShadowSurface::Terrain;
