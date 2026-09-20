@@ -1,5 +1,7 @@
 #include "backend/wt_transvoxel_mit_backend.h"
 #include "bake/wt_chunk_baker.h"
+#include "core/wt_chunk_brick.h"
+#include "diagnostics/wt_gpu_meshing_input_pack.h"
 #include "editing/wt_chunk_edit_state.h"
 #include "meshing/wt_material_volume_sample_source.h"
 #include "render/wt_render_payload.h"
@@ -37,6 +39,7 @@ namespace {
 constexpr std::uint64_t kSourceRevision = 7101;
 constexpr std::uint64_t kWorldRevision = 91;
 constexpr std::size_t kDependencyCount = 13;
+constexpr std::size_t kFixturePageCount = kDependencyCount + 8;
 
 wt::WtHash256 hash_text(const char *text) {
 	const std::string value(text);
@@ -1275,6 +1278,7 @@ struct RuntimeFixture {
 	wt::WtChunkKey coarse_key = { 0, 0, 0, 1 };
 	std::uint8_t transition_mask = 0;
 	std::vector<wt::WtChunkKey> support_keys;
+	std::vector<wt::WtChunkKey> child_keys;
 	std::vector<wt::WtBakedChunkPage> pages;
 
 	RuntimeFixture() = default;
@@ -1287,6 +1291,7 @@ struct RuntimeFixture {
 			coarse_key(other.coarse_key),
 			transition_mask(other.transition_mask),
 			support_keys(std::move(other.support_keys)),
+			child_keys(std::move(other.child_keys)),
 			pages(std::move(other.pages)) {
 		other.root.clear();
 	}
@@ -1364,6 +1369,15 @@ RuntimeFixture make_fixture() {
 	fixture.support_keys.assign(unique_support.begin(), unique_support.end());
 	std::vector<wt::WtChunkKey> keys = { fixture.coarse_key };
 	keys.insert(keys.end(), fixture.support_keys.begin(), fixture.support_keys.end());
+	for (std::uint8_t brick_index = 0;
+			brick_index < wt::kWtRegularBrickCount; ++brick_index) {
+		wt::WtChunkKey child;
+		check(wt::wt_regular_brick_child_chunk(
+			fixture.coarse_key, brick_index, child
+		), "runtime direct-child key generation failed");
+		fixture.child_keys.push_back(child);
+	}
+	keys.insert(keys.end(), fixture.child_keys.begin(), fixture.child_keys.end());
 	const SphereSource source;
 	wt::WtChunkBaker baker(keys.size());
 	check(
@@ -2700,6 +2714,93 @@ void test_shared_page_completion_survives_first_owner_cancellation(
 	storage.close();
 }
 
+void test_partial_brick_gpu_dependencies(const RuntimeFixture &fixture) {
+	wt::WtAsyncStorageService storage({ 8, 8, wt::kWtMaximumContainerSize });
+	check(storage.open(fixture.world_path, fixture.root) ==
+		wt::WtAsyncStorageStatus::Ok,
+		"partial-brick runtime storage open failed");
+	wt::WtStoragePageCache cache({
+		8,
+		wt::kWtMaximumContainerSize,
+		8,
+		wt::kWtMaximumContainerSize,
+	});
+	wt::WtStreamScheduler scheduler(8, 8, 1, 1);
+	wt::WtPageMeshingRuntimeService runtime(8);
+	const wt::WtChunkJob sample = request_sample_job(
+		scheduler, fixture.coarse_key, kWorldRevision, 20
+	);
+	constexpr std::uint8_t visibility_mask = 0xfe;
+	check(runtime.begin_sample_job(
+			sample,
+			0,
+			0,
+			visibility_mask,
+			storage,
+			cache,
+			scheduler
+		) == wt::WtPageMeshingRuntimeStatus::Ok,
+		"partial-brick runtime rejected its sample job");
+	const auto loading = runtime.get_records();
+	check(loading.size() == 1 && loading[0].dependency_count == 2 &&
+			loading[0].regular_visibility_mask == visibility_mask,
+		"partial-brick runtime did not own the exact hidden child dependency");
+	for (std::size_t index = 0; index < 2; ++index) {
+		wt::WtPageLoadCompletion completion;
+		if (!wait_completion(storage, completion)) break;
+		check(runtime.accept_storage_completion(completion, cache, scheduler) ==
+			wt::WtPageMeshingRuntimeStatus::Ok,
+			"partial-brick runtime rejected a retained page");
+	}
+	check(scheduler.apply_completions(1) == 1,
+		"partial-brick sample completion did not advance the scheduler");
+	wt::WtChunkJob mesh_job;
+	check(scheduler.pop_job(mesh_job) &&
+			mesh_job.stage == wt::WtChunkJobStage::Mesh,
+		"partial-brick mesh job was not scheduled");
+	wt::WtGpuMeshingShadowCapture captured;
+	std::size_t capture_count = 0;
+	const wt::WtChunkMesher mesher(wt::wt_get_transvoxel_mit_backend());
+	wt::WtChunkMeshingScratch scratch;
+	check(runtime.execute_mesh_job(
+			mesh_job, mesher, scratch, scheduler
+		) == wt::WtPageMeshingRuntimeStatus::InvalidTransitionMask,
+		"partial-brick cut entered the CPU meshing route");
+	check(runtime.execute_mesh_job(
+			mesh_job,
+			mesher,
+			scratch,
+			scheduler,
+			nullptr,
+			0,
+			nullptr,
+			{},
+			true,
+			[&](wt::WtGpuMeshingShadowCapture capture) {
+				captured = std::move(capture);
+				++capture_count;
+			},
+			true,
+			false
+		) == wt::WtPageMeshingRuntimeStatus::Ok,
+		"partial-brick runtime mesh execution failed");
+	check(capture_count == 1 &&
+			captured.regular_visibility_mask == visibility_mask &&
+			captured.retained_pages.size() == 2,
+		"partial-brick GPU capture lost its immutable cut dependencies");
+	wt::WtGpuMeshingInputPack packed;
+	std::string packing_error;
+	wt::WtGpuMeshingShadowRequest request;
+	static_cast<wt::WtGpuMeshingShadowCapture &>(request) = std::move(captured);
+	check(wt::wt_pack_gpu_meshing_input(request, packed, packing_error) &&
+			packed.config[2] == 2 && packed.config[16] == visibility_mask &&
+			packed.config[17] == 3,
+		"partial-brick runtime capture did not satisfy the GPU input contract");
+	check(scheduler.apply_completions(1) == 1,
+		"partial-brick mesh completion did not advance the scheduler");
+	storage.close();
+}
+
 void test_missing_support(const RuntimeFixture &fixture) {
 	wt::WtAsyncStorageService storage({ 32, 32, wt::kWtMaximumContainerSize });
 	check(
@@ -2760,8 +2861,9 @@ void test_missing_support(const RuntimeFixture &fixture) {
 int main() {
 	RuntimeFixture fixture = make_fixture();
 	check(
-		fixture.pages.size() == kDependencyCount &&
-		fixture.support_keys.size() == kDependencyCount - 1,
+		fixture.pages.size() == kFixturePageCount &&
+		fixture.support_keys.size() == kDependencyCount - 1 &&
+		fixture.child_keys.size() == 8,
 		"runtime fixture dependency count mismatch"
 	);
 	std::vector<std::uint8_t> evidence;
@@ -2780,6 +2882,7 @@ int main() {
 	test_priority_ordered_loading_retry(fixture);
 	test_shared_page_completion_fanout(fixture);
 	test_shared_page_completion_survives_first_owner_cancellation(fixture);
+	test_partial_brick_gpu_dependencies(fixture);
 	test_missing_support(fixture);
 	if (failure_count != 0) {
 		std::fprintf(stderr, "M5_PAGE_MESHING_RUNTIME_FAIL failures=%d\n",
@@ -2793,6 +2896,7 @@ int main() {
 		"backpressure=1 cancellations=1 invalidations=1 missing_support=1 "
 		"priority_ordered_loading_retry=1 shared_page_fanout=1 "
 		"shared_page_cancellation_fanout=1 "
+		"partial_brick_gpu_dependencies=1 "
 		"large_rolling_hills_cave_lod2_mask_regression=1 "
 		"human_boundary_repro=1 edited_coarse_rebuild=1 exact_edit_delta=1 "
 		"sphere_difference_topology=1 smooth_sphere_difference=1 "

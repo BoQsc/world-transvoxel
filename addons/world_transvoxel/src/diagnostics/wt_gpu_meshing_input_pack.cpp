@@ -209,7 +209,7 @@ bool pack_page_field_input(
 	WtGpuMeshingInputPack &output,
 	std::string &error
 ) {
-	if (request.retained_pages.empty() || request.retained_pages.size() > 25) {
+	if (request.retained_pages.empty() || request.retained_pages.size() > 33) {
 		error = "GPU page-field dependency count is outside the bounded contract";
 		return false;
 	}

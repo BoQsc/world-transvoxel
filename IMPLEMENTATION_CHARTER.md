@@ -2331,3 +2331,13 @@ mapping and rejects coordinate overflow. Other retained pages remain limited to
 the bounded external transition dependencies. Input packing rejects a missing or
 unexpected direct child before GPU admission, so finest-page sampling cannot
 silently create a hole or replace a visible coarse brick with finer field data.
+
+The page runtime owns the regular visibility mask with the generation from
+sample admission through immutable GPU capture. It adds every hidden direct
+child to the sorted storage dependency set, replays the same authoritative edit
+journal revision into those pages, and retains them until capture. Direct-child
+pages are GPU field inputs rather than external CPU transition-support pages;
+partial cuts are therefore rejected on the CPU meshing route. The bounded
+dependency maximum is 33 pages: one primary, up to twenty-four external face
+support pages, and eight direct children. Existing full-mask jobs retain their
+original dependency inventory and execution path.

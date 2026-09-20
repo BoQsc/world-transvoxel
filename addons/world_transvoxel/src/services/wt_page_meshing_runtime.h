@@ -20,7 +20,7 @@ class WtStoragePageCache;
 struct WtPageLoadCompletion;
 
 constexpr std::size_t kWtMaximumPageMeshingRuntimeRecords = 65536;
-constexpr std::size_t kWtMaximumPageMeshingDependencies = 25;
+constexpr std::size_t kWtMaximumPageMeshingDependencies = 33;
 
 enum class WtPageMeshingRuntimePhase : std::uint8_t {
 	Loading,
@@ -63,6 +63,7 @@ struct WtPageMeshingRuntimeRecordSnapshot {
 	std::int32_t priority = 0;
 	std::uint8_t transition_mask = 0;
 	std::uint8_t cached_transition_mask = 0;
+	std::uint8_t regular_visibility_mask = 0xff;
 	WtPageMeshingRuntimePhase phase = WtPageMeshingRuntimePhase::Loading;
 	std::size_t dependency_count = 0;
 	std::size_t pinned_page_count = 0;
@@ -220,6 +221,15 @@ public:
 		WtStoragePageCache &cache,
 		WtStreamScheduler &scheduler
 	);
+	WtPageMeshingRuntimeStatus begin_sample_job(
+		const WtChunkJob &job,
+		std::uint8_t transition_mask,
+		std::uint8_t requested_cached_transition_mask,
+		std::uint8_t regular_visibility_mask,
+		WtAsyncStorageService &storage,
+		WtStoragePageCache &cache,
+		WtStreamScheduler &scheduler
+	);
 	WtPageMeshingRuntimeStatus accept_storage_completion(
 		const WtPageLoadCompletion &completion,
 		WtStoragePageCache &cache,
@@ -354,6 +364,7 @@ private:
 		std::int32_t priority = 0;
 		std::uint8_t transition_mask = 0;
 		std::uint8_t cached_transition_mask = 0;
+		std::uint8_t regular_visibility_mask = 0xff;
 		WtPageMeshingRuntimePhase phase =
 			WtPageMeshingRuntimePhase::Loading;
 		std::vector<Dependency> dependencies;

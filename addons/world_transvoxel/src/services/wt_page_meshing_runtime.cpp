@@ -1,5 +1,6 @@
 #include "services/wt_page_meshing_runtime.h"
 
+#include "core/wt_chunk_brick.h"
 #include "storage/wt_chunk_page_sample_source.h"
 
 #include "services/wt_page_meshing_runtime_internal.h"
@@ -530,6 +531,7 @@ WtPageMeshingRuntimeService::begin_sample_job(
 		job,
 		transition_mask,
 		transition_mask,
+		kWtAllRegularBricksMask,
 		storage,
 		cache,
 		scheduler
@@ -541,6 +543,27 @@ WtPageMeshingRuntimeService::begin_sample_job(
 	const WtChunkJob &job,
 	std::uint8_t transition_mask,
 	std::uint8_t requested_cached_transition_mask,
+	WtAsyncStorageService &storage,
+	WtStoragePageCache &cache,
+	WtStreamScheduler &scheduler
+) {
+	return begin_sample_job(
+		job,
+		transition_mask,
+		requested_cached_transition_mask,
+		kWtAllRegularBricksMask,
+		storage,
+		cache,
+		scheduler
+	);
+}
+
+WtPageMeshingRuntimeStatus
+WtPageMeshingRuntimeService::begin_sample_job(
+	const WtChunkJob &job,
+	std::uint8_t transition_mask,
+	std::uint8_t requested_cached_transition_mask,
+	std::uint8_t regular_visibility_mask,
 	WtAsyncStorageService &storage,
 	WtStoragePageCache &cache,
 	WtStreamScheduler &scheduler
@@ -560,7 +583,9 @@ WtPageMeshingRuntimeService::begin_sample_job(
 	if ((transition_mask & 0xc0U) != 0 ||
 		(requested_cached_transition_mask & 0xc0U) != 0 ||
 		((transition_mask != 0 || requested_cached_transition_mask != 0) &&
-			job.key.lod == 0)) {
+			job.key.lod == 0) ||
+		(job.key.lod == 0 &&
+			regular_visibility_mask != kWtAllRegularBricksMask)) {
 		return WtPageMeshingRuntimeStatus::InvalidTransitionMask;
 	}
 	const std::uint8_t cached_transition_mask =
@@ -617,6 +642,20 @@ WtPageMeshingRuntimeService::begin_sample_job(
 			support.end()
 		);
 	}
+	if (regular_visibility_mask != kWtAllRegularBricksMask) {
+		for (std::uint8_t brick_index = 0;
+				brick_index < kWtRegularBrickCount; ++brick_index) {
+			if ((regular_visibility_mask &
+					static_cast<std::uint8_t>(1U << brick_index)) != 0) {
+				continue;
+			}
+			WtChunkKey child;
+			if (!wt_regular_brick_child_chunk(job.key, brick_index, child)) {
+				return WtPageMeshingRuntimeStatus::InvalidTransitionMask;
+			}
+			dependency_keys.push_back(child);
+		}
+	}
 	std::sort(dependency_keys.begin(), dependency_keys.end());
 	dependency_keys.erase(
 		std::unique(dependency_keys.begin(), dependency_keys.end()),
@@ -634,6 +673,7 @@ WtPageMeshingRuntimeService::begin_sample_job(
 	record.priority = job.priority;
 	record.transition_mask = transition_mask;
 	record.cached_transition_mask = cached_transition_mask;
+	record.regular_visibility_mask = regular_visibility_mask;
 	record.dependencies.reserve(dependency_keys.size());
 	for (const WtChunkKey &key : dependency_keys) {
 		record.dependencies.push_back({ key, {} });

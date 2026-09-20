@@ -1,6 +1,7 @@
 #include "services/wt_page_meshing_runtime_internal.h"
 
 #include "bake/wt_chunk_baker.h"
+#include "core/wt_chunk_brick.h"
 #include "editing/wt_chunk_edit_state.h"
 #include "editing/wt_edit_surface_shift_source.h"
 #include "meshing/wt_material_volume_sample_source.h"
@@ -185,6 +186,10 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 		record->phase != WtPageMeshingRuntimePhase::AwaitingMesh) {
 		return WtPageMeshingRuntimeStatus::NotReady;
 	}
+	if (record->regular_visibility_mask != kWtAllRegularBricksMask &&
+			!pre_mesh_field_capture) {
+		return WtPageMeshingRuntimeStatus::InvalidTransitionMask;
+	}
 	++metrics_.mesh_jobs;
 	const std::size_t record_index = static_cast<std::size_t>(
 		record - records_.begin()
@@ -326,6 +331,7 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 	prepared.job = job;
 	prepared.transition_mask = record->transition_mask;
 	prepared.cached_transition_mask = record->cached_transition_mask;
+	prepared.regular_visibility_mask = record->regular_visibility_mask;
 	prepared.visual_required = visual_required;
 	prepared.collision_required = collision_required;
 	// Visual and collision viewers are submitted independently. A LOD0 GPU
@@ -465,6 +471,14 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		for (const PreparedDependency &dependency :
 			completion.prepared.dependencies) {
 			if (dependency.key == completion.prepared.job.key) continue;
+			WtRegularBrickKey child_brick;
+			if (wt_direct_child_parent_brick(
+					dependency.key,
+					completion.prepared.job.key,
+					child_brick
+			)) {
+				continue;
+			}
 			if (!dependency.page ||
 				source->add_transition_support_page(*dependency.page) !=
 					WtChunkPageSampleSourceStatus::Ok) {
@@ -528,6 +542,8 @@ WtPageMeshingRuntimeService::execute_prepared_mesh_job(
 		capture.transition_mask = completion.prepared.transition_mask;
 		capture.cached_transition_mask =
 			completion.prepared.cached_transition_mask;
+		capture.regular_visibility_mask =
+			completion.prepared.regular_visibility_mask;
 		capture.surface = surface;
 		capture.capture_stage = WtGpuMeshingCaptureStage::PreMeshField;
 		capture.static_water_surface_expected = water_present;
@@ -824,6 +840,8 @@ WtPageMeshingRuntimeService::accept_prepared_mesh_completion(
 			capture.transition_mask = completion.prepared.transition_mask;
 			capture.cached_transition_mask =
 				completion.prepared.cached_transition_mask;
+			capture.regular_visibility_mask =
+				completion.prepared.regular_visibility_mask;
 			capture.surface = surface;
 			capture.static_water_surface_expected =
 				!completion.water_records.empty();

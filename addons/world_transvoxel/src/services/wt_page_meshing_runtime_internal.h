@@ -13,6 +13,7 @@ struct WtPageMeshingRuntimeService::PreparedMeshJob {
 	WtChunkJob job;
 	std::uint8_t transition_mask = 0;
 	std::uint8_t cached_transition_mask = 0;
+	std::uint8_t regular_visibility_mask = 0xff;
 	bool visual_required = true;
 	bool collision_required = false;
 	bool gpu_lod0_collision_prewarm = false;
