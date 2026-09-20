@@ -15,65 +15,6 @@ namespace world_transvoxel {
 
 namespace {
 
-std::int64_t floor_q16(std::int64_t value) noexcept {
-	const std::int64_t quotient = value / kWtEditCoordinateScale;
-	return value < 0 && value % kWtEditCoordinateScale != 0 ?
-		quotient - 1 :
-		quotient;
-}
-
-std::int64_t midpoint_q16(
-	std::int64_t minimum,
-	std::int64_t maximum
-) noexcept {
-	return minimum / 2 + maximum / 2 +
-		(minimum % 2 + maximum % 2) / 2;
-}
-
-WtGridPoint command_center(const WtEditCommand &command) noexcept {
-	if (command.shape == WtEditShape::Sphere) {
-		return {
-			floor_q16(command.sphere.center_x_q16),
-			floor_q16(command.sphere.center_y_q16),
-			floor_q16(command.sphere.center_z_q16),
-		};
-	}
-	return {
-		floor_q16(midpoint_q16(
-			command.box.minimum_x_q16,
-			command.box.maximum_x_q16
-		)),
-		floor_q16(midpoint_q16(
-			command.box.minimum_y_q16,
-			command.box.maximum_y_q16
-		)),
-		floor_q16(midpoint_q16(
-			command.box.minimum_z_q16,
-			command.box.maximum_z_q16
-		)),
-	};
-}
-
-bool contains_point(
-	const WtChunkBounds &bounds,
-	const WtGridPoint &point
-) noexcept {
-	return point.x >= bounds.minimum.x && point.x < bounds.maximum.x &&
-		point.y >= bounds.minimum.y && point.y < bounds.maximum.y &&
-		point.z >= bounds.minimum.z && point.z < bounds.maximum.z;
-}
-
-bool contains_command_center(
-	const WtChunkKey &key,
-	const WtEditTransaction &transaction
-) noexcept {
-	const WtChunkBounds bounds = wt_chunk_bounds(key);
-	for (const WtEditCommand &command : transaction.commands) {
-		if (contains_point(bounds, command_center(command))) return true;
-	}
-	return false;
-}
-
 bool intersects_owned_cells(
 	const WtChunkKey &key,
 	const WtEditTransaction &transaction
@@ -254,7 +195,7 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 				active_visual_chunks->begin(), active_visual_chunks->end(), key
 			);
 		const bool foreground_interaction =
-			key.lod == 0 && contains_command_center(key, transaction);
+			key.lod == 0 && owned_cells_intersect;
 		const bool interactive_visual_member =
 			visual_required && owned_cells_intersect &&
 			(active_visual || foreground_interaction);

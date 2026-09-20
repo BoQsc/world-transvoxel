@@ -603,6 +603,7 @@ void test_foreground_interaction_ordering() {
 		{ 1, 0, 1, 0 },
 		{ 0, 0, 0, 1 },
 	};
+	const wt::WtChunkKey boundary_neighbor_key = { 0, 0, 0, 0 };
 	const wt::WtChunkKey foreground_key = { 1, 0, 0, 0 };
 	const wt::WtChunkKey background_lod_key = { 0, 0, 0, 1 };
 	wt::WtEditSpatialIndex spatial(keys.size(), 64, keys.size());
@@ -650,34 +651,37 @@ void test_foreground_interaction_ordering() {
 		"foreground ordering replacement failed");
 	const auto &replacements = service.get_last_replacements();
 	check(replacements.size() == keys.size() &&
-		replacements.front().key == foreground_key,
-		"interacted chunk was not the first replacement");
+		replacements[0].key == boundary_neighbor_key &&
+		replacements[1].key == foreground_key,
+		"directly intersected LOD0 chunks were not scheduled first");
 	const std::size_t independently_publishable = static_cast<std::size_t>(
 		std::count_if(replacements.begin(), replacements.end(), [](const auto &entry) {
 			return entry.independently_publishable;
 		})
 	);
-	check(independently_publishable == 1 &&
-		replacements.front().independently_publishable,
-		"cold interacted LOD0 chunk did not enter the active edit cohort");
+	check(independently_publishable == 2 &&
+		replacements[0].independently_publishable &&
+		replacements[1].independently_publishable,
+		"cold intersected LOD0 chunks did not enter the active edit cohort");
 	const std::size_t atomic_visual_members = static_cast<std::size_t>(
 		std::count_if(replacements.begin(), replacements.end(), [](const auto &entry) {
 			return entry.atomic_visual_edit_member;
 		})
 	);
-	check(atomic_visual_members == 1 &&
-		replacements.front().atomic_visual_edit_member,
-		"cold interacted LOD0 chunk retained deferred visual cohort members");
+	check(atomic_visual_members == 2 &&
+		replacements[0].atomic_visual_edit_member &&
+		replacements[1].atomic_visual_edit_member,
+		"cold intersected LOD0 chunks retained deferred visual cohort members");
 	const auto edit_metrics = service.get_metrics();
-	check(edit_metrics.active_visual_cohort_chunks == 1 &&
-		edit_metrics.deferred_inactive_visual_chunks == 2,
+	check(edit_metrics.active_visual_cohort_chunks == 2 &&
+		edit_metrics.deferred_inactive_visual_chunks == 1,
 		"active/deferred edit cohort metrics mismatch");
 	wt::WtChunkJob job;
 	check(scheduler.pop_job(job) &&
-		job.key == foreground_key &&
+		job.key == boundary_neighbor_key &&
 		job.stage == wt::WtChunkJobStage::Sample &&
 		job.priority == wt::kWtInteractiveEditPriority,
-		"interacted chunk was not the first scheduled edit job");
+		"directly intersected LOD0 chunk was not the first scheduled edit job");
 	const wt::WtChunkRecord *background_record =
 		scheduler.find_record(background_lod_key);
 	check(background_record != nullptr && background_record->priority == 1,
