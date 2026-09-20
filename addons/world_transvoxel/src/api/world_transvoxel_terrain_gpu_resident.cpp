@@ -217,7 +217,6 @@ SameLayoutEditCohortStatus build_same_layout_edit_cohort(
 	WtGodotRenderSink &render_sink,
 	const WtChunkKey &seed,
 	const std::vector<WtChunkKey> &retirements,
-	const std::vector<WtChunkKey> &edit_replacements,
 	WtChunkPublicationRegion &region,
 	std::vector<WtChunkKey> &waiting_masks,
 	const char **rejection_reason = nullptr,
@@ -225,21 +224,36 @@ SameLayoutEditCohortStatus build_same_layout_edit_cohort(
 ) {
 	if (rejection_key) *rejection_key = seed;
 	if (rejection_reason) *rejection_reason = "none";
-	const bool incremental_edit = std::binary_search(
-		edit_replacements.begin(), edit_replacements.end(), seed
-	);
 	WtChunkApplicationRecord seed_record;
 	if (!application.copy_record(seed, seed_record) ||
-		!seed_record.visual_required ||
-		(incremental_edit && seed_record.world_revision == 0)) {
+		!seed_record.visual_required) {
 		if (rejection_reason) *rejection_reason = "seed_application_unavailable";
 		return SameLayoutEditCohortStatus::NotApplicable;
 	}
+	const bool incremental_edit =
+		seed_record.independently_publishable_replacement &&
+		seed_record.world_revision != 0;
 
 	WtChunkPublicationRegion candidate;
 	std::vector<WtChunkKey> candidate_waiting_masks;
-	const std::vector<WtChunkKey> replacements = incremental_edit ?
-		edit_replacements : std::vector<WtChunkKey>{seed};
+	std::vector<WtChunkKey> replacements;
+	if (incremental_edit) {
+		// The edit transaction installs every affected application record before
+		// asynchronous page completion begins. Frontend replacement markers arrive
+		// later and can be observed one chunk at a time, so they are not a valid
+		// atomic-cohort inventory. Select the complete same-revision transaction
+		// from authoritative application records instead.
+		for (const WtChunkApplicationRecord &record : application.get_records()) {
+			if (record.independently_publishable_replacement &&
+				record.visual_required &&
+				record.world_revision == seed_record.world_revision) {
+				replacements.push_back(record.key);
+			}
+		}
+		std::sort(replacements.begin(), replacements.end());
+	} else {
+		replacements.push_back(seed);
+	}
 	for (const WtChunkKey &key : replacements) {
 		WtChunkApplicationRecord record;
 		if (!application.copy_record(key, record) || !record.visual_required ||
@@ -316,7 +330,7 @@ bool build_gpu_publication_cohort(
 	if (interaction_region_isolated) *interaction_region_isolated = false;
 	if (same_layout_edit) *same_layout_edit = false;
 	const SameLayoutEditCohortStatus edit_status = build_same_layout_edit_cohort(
-		application, render_sink, seed, retirements, edit_replacements,
+		application, render_sink, seed, retirements,
 		region, waiting_masks, same_layout_edit_rejection_reason,
 		same_layout_edit_rejection_key
 	);

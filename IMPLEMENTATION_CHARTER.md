@@ -2351,3 +2351,10 @@ normal bounded cohort and coverage validation. A key absent from completed
 topology, a stale generation, or a superseded visual remains ineligible. This
 guarantees that the coarse root can publish before descendant refinement and
 prevents a no-coverage deadlock during startup or relocation.
+
+An independently publishable edit cohort is the complete set of authoritative
+application records for its nonzero world revision. Frontend replacement
+markers are asynchronous progress signals and cannot define cohort membership:
+observing them incrementally would allow one chunk of a multi-chunk brush to
+activate before its peers. Cohort readiness may wait for those peers, but no
+member can publish alone.
