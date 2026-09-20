@@ -1956,6 +1956,11 @@ outside that cell cannot delay player-local visibility. The ordinary publication
 policy still closes active replacement coverage and transition-bearing faces,
 and query and commit use the same deterministic bound. Warm replacement keeps
 using the smallest retiring active ancestor as its atomic region.
+The current application record promotes collision-required and atomic-edit
+seeds into this lane even when their immutable capture identity predates the
+latest interaction demand. Selection and commit derive the promotion from the
+same generation-checked record; frontend code never rewrites a prepared
+identity to change scheduling class.
 
 ## 24. Final definition of success
 

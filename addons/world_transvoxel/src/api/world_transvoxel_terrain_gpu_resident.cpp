@@ -1111,6 +1111,8 @@ get_gpu_resident_render_activation_cohort(
 	WtChunkKey same_layout_edit_rejection_key = identity.key;
 	WtGpuPublicationCohortDiagnostics cohort_diagnostics;
 	bool interaction_region_isolated = false;
+	const bool isolate_interaction_region = identity.interaction_priority ||
+		seed_record.collision_required || seed_record.atomic_visual_edit_member;
 	record_phase("seed_validation");
 	const bool built = build_gpu_publication_cohort(
 			*application_, *render_sink_, identity.key,
@@ -1127,7 +1129,7 @@ get_gpu_resident_render_activation_cohort(
 			// its replacement transaction inside the active ancestor it refines;
 			// otherwise a moving foreground seed joins the entire outstanding
 			// viewer-retirement frontier and repeatedly supersedes useful work.
-			identity.interaction_priority,
+			isolate_interaction_region,
 			&interaction_region_isolated
 		);
 	record_phase("selection");
@@ -1493,7 +1495,8 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 		// Selection and commit must derive the same local transaction. This also
 		// covers predictive LOD topology replacements, which are interaction work
 		// even before a journal edit exists.
-		isolate_interaction_region = seed.interaction_priority;
+		isolate_interaction_region = seed.interaction_priority ||
+			seed_record.collision_required || seed_record.atomic_visual_edit_member;
 	}
 	seed_independently_publishable = std::binary_search(
 		independently_publishable_chunk_replacements_.begin(),
