@@ -2410,6 +2410,8 @@ GPU capture identities distinguish interaction priority from local publication
 priority. Visibility-coverage repair work at or above
 `kWtVisibilityCoveragePriority` keeps a bounded seed-local publication cohort
 through both selection and commit, even after transient collision demand moves.
-It does not inherit the edit-only scheduler lane. This prevents a prepared
-camera-local ancestor from joining an unrelated world-scale replacement cohort
-and leaving visible holes during movement.
+It enters the bounded foreground GPU capture and activation lanes without
+claiming edit identity or collision authority. This prevents camera-local
+coverage from waiting behind a world-scale capture flood, and prevents a
+prepared local ancestor from joining an unrelated replacement cohort and
+leaving visible holes during movement.

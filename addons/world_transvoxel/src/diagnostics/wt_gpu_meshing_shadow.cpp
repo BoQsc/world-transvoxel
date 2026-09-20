@@ -356,7 +356,7 @@ bool WtGpuMeshingShadowQueue::pop(
 	auto selected = queued_.end();
 	for (auto candidate = queued_.begin(); candidate != queued_.end(); ++candidate) {
 		if (interaction_only && !candidate->incremental_edit &&
-				candidate->job.priority < kWtInteractionFocusPriority) continue;
+				candidate->job.priority < kWtVisibilityCoveragePriority) continue;
 		if (selected == queued_.end() ||
 				job_precedes(candidate->job, selected->job)) {
 			selected = candidate;

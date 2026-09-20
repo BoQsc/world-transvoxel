@@ -628,6 +628,25 @@ int main() {
 		dequeue_queue.metrics().priority_dequeues == 1,
 		"priority dequeue was not measured"
 	);
+	WtGpuMeshingShadowQueue coverage_lane_queue;
+	require(coverage_lane_queue.begin(2), "coverage lane queue did not start");
+	WtGpuMeshingShadowCapture background_coverage = capture_for(15);
+	background_coverage.job.key.x = 4;
+	background_coverage.job.priority = 10;
+	WtGpuMeshingShadowCapture local_coverage = capture_for(15);
+	local_coverage.job.key.x = 5;
+	local_coverage.job.priority = kWtVisibilityCoveragePriority;
+	require(
+		coverage_lane_queue.capture(background_coverage) &&
+			coverage_lane_queue.capture(local_coverage),
+		"coverage lane captures failed"
+	);
+	WtGpuMeshingShadowRequest coverage_request;
+	require(
+		coverage_lane_queue.pop(coverage_request, true) &&
+			coverage_request.job.key.x == 5,
+		"local visibility repair did not enter the bounded foreground lane"
+	);
 	require(
 		dequeue_queue.reject_resident(
 			priority_request.request_id,
