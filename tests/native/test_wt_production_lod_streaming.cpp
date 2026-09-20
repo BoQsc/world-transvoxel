@@ -2705,9 +2705,11 @@ int main(int argc, char **argv) {
 			"locally covered foreground omitted LOD0 while an unrelated root was cold"
 		);
 		wt::WtBalancedLodPlanner bounded(32, catalog);
-		wt::WtBalancedLodPlan rejected;
-		check(bounded.stage_foreground(target, empty, roots, 3, focus, rejected, complete) == wt::WtBalancedLodPlannerStatus::CapacityExceeded,
-			"foreground projection exceeded configured capacity");
+		wt::WtBalancedLodPlan bounded_stage, rejected;
+		check(bounded.stage_foreground(target, empty, roots, 3, focus, bounded_stage, complete) == wt::WtBalancedLodPlannerStatus::Ok,
+			"capacity-bound foreground projection rejected a valid coarse stage");
+		check(!complete && bounded_stage.entries.size() == roots.size(),
+			"capacity-bound foreground projection did not retain coarse coverage");
 		wt::WtBalancedLodPlan local_target, local_staged;
 		check(planner.project_foreground_target(
 			coarse, focus, wt::kWtInteractionFocusPriority, local_target

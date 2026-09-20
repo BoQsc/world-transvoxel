@@ -353,8 +353,11 @@ WtPageMeshingRuntimeService::prepare_mesh_job(
 	prepared.dirty_regular_brick_mask = dirty_regular_brick_mask;
 	prepared.dirty_edit_bounds = dirty_edit_bounds;
 	prepared.has_dirty_edit_bounds = has_dirty_edit_bounds;
-	prepared.gpu_resident_visual_only = pre_mesh_field_capture &&
-		visual_required;
+	// A collision-only interaction job may retain an immutable GPU field capture
+	// for later visual promotion. Keep its matching placeholder identity even
+	// while visual demand is absent so promotion can publish the same generation
+	// without repeating sampling, meshing, or collision work.
+	prepared.gpu_resident_visual_only = pre_mesh_field_capture;
 	prepared.gpu_resident_skip_cpu_meshing =
 		prepared.gpu_resident_visual_only && !collision_required;
 	prepared.dependencies.reserve(record->dependencies.size());

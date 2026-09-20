@@ -1066,7 +1066,14 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_foreground(
 			if (!page_hierarchy_.refinable_children(key, children)) return WtBalancedLodPlannerStatus::IncompleteHierarchy;
 			// Pending leaves plus completed leaves are the actual output bound.
 			if (leaves.size() + work.size() - cursor - 1 + children.size() > active_capacity_) {
-				return WtBalancedLodPlannerStatus::CapacityExceeded;
+				// A far relocation may still retain the previous visible cut while
+				// the new coarse roots become active. Foreground refinement can exceed
+				// the final target capacity only during that overlap. Publish the valid
+				// coarse base and retry after old coverage retires instead of rejecting
+				// an already accepted viewer update.
+				output = std::move(base);
+				complete = false;
+				return WtBalancedLodPlannerStatus::Ok;
 			}
 			work.insert(work.end(), children.begin(), children.end());
 		} else {
@@ -1076,6 +1083,11 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_foreground(
 	std::sort(leaves.begin(), leaves.end());
 	WtLodMap map(active_capacity_);
 	const auto balanced = balance(leaves, map, cancel_requested);
+	if (balanced == WtBalancedLodPlannerStatus::CapacityExceeded) {
+		output = std::move(base);
+		complete = false;
+		return WtBalancedLodPlannerStatus::Ok;
+	}
 	if (balanced != WtBalancedLodPlannerStatus::Ok) return balanced;
 	output.clear();
 	output.entries = map.get_entries();

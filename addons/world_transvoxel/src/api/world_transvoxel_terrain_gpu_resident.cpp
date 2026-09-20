@@ -564,6 +564,29 @@ godot::Dictionary WorldTransvoxelTerrain::inspect_gpu_resident_publication(
 		&visual_retirements, nullptr, &same_layout_edit,
 		&same_layout_edit_rejection_reason, &same_layout_edit_rejection_key
 	);
+	// The cohort selector may take the same-layout fast path and therefore return
+	// only the seed-local transaction. Inspection also promises the classification
+	// of the complete shared staging queues so collision-only records can be
+	// audited independently of which cohort the requested seed selects.
+	const std::vector<WtChunkKey> cohort_visual_candidates = visual_candidates;
+	visual_candidates = pending_chunk_replacements_;
+	visual_candidates.insert(
+		visual_candidates.end(), ready_staged_chunk_replacements_.begin(),
+		ready_staged_chunk_replacements_.end()
+	);
+	std::sort(visual_candidates.begin(), visual_candidates.end());
+	visual_candidates.erase(
+		std::unique(visual_candidates.begin(), visual_candidates.end()),
+		visual_candidates.end()
+	);
+	visual_candidates.erase(std::remove_if(
+		visual_candidates.begin(), visual_candidates.end(),
+		[&](const WtChunkKey &key) {
+			WtChunkApplicationRecord record;
+			return !application_->copy_record(key, record) ||
+				!record.visual_required;
+		}
+	), visual_candidates.end());
 	result["seed"] = gpu_cohort_key(seed);
 	result["built"] = built;
 	result["open_viewer_plan_publications"] = static_cast<std::int64_t>(open_viewer_plan_publications_);
@@ -572,6 +595,25 @@ godot::Dictionary WorldTransvoxelTerrain::inspect_gpu_resident_publication(
 	result["pending_replacements"] = gpu_cohort_keys(pending_chunk_replacements_);
 	result["ready_replacements"] = gpu_cohort_keys(ready_staged_chunk_replacements_);
 	result["visual_candidates"] = gpu_cohort_keys(visual_candidates);
+	result["cohort_visual_candidates"] = gpu_cohort_keys(
+		cohort_visual_candidates
+	);
+	std::vector<WtChunkKey> collision_only_records;
+	for (const WtChunkApplicationRecord &record : application_->get_records()) {
+		if (record.collision_required && !record.visual_required) {
+			collision_only_records.push_back(record.key);
+		}
+	}
+	std::sort(collision_only_records.begin(), collision_only_records.end());
+	result["collision_only_records"] = gpu_cohort_keys(collision_only_records);
+	std::vector<WtChunkKey> completed_visual_topology;
+	completed_visual_topology.reserve(latest_completed_visual_plan_.size());
+	for (const WtLodMapEntry &entry : latest_completed_visual_plan_) {
+		completed_visual_topology.push_back(entry.key);
+	}
+	result["completed_visual_topology"] = gpu_cohort_keys(
+		completed_visual_topology
+	);
 	result["pending_retirements"] = gpu_cohort_keys(pending_chunk_retirements_);
 	result["pending_visual_retirements"] = gpu_cohort_keys(visual_retirements);
 	result["selected"] = gpu_cohort_keys(region.replacements);

@@ -863,6 +863,7 @@ void test_player_support_visual_promotion_reuses_collision_generation() {
 		wt::WtReadOnlyRuntimeStatus::Ok,
 		"support promotion collision viewer rejected");
 	wt::WtGenerationToken generation;
+	std::uint64_t collision_world_revision = 0;
 	bool collision_ready = false;
 	bool hidden_render = false;
 	const auto deadline = std::chrono::steady_clock::now() +
@@ -874,6 +875,7 @@ void test_player_support_visual_promotion_reuses_collision_generation() {
 			if (publication.key != target) continue;
 			if (publication.kind == wt::WtReadOnlyPublicationKind::ExpectChunk) {
 				generation = publication.generation;
+				collision_world_revision = publication.world_revision;
 			}
 			hidden_render |= publication.kind ==
 				wt::WtReadOnlyPublicationKind::RenderPayload;
@@ -886,6 +888,9 @@ void test_player_support_visual_promotion_reuses_collision_generation() {
 	check(collision_ready && !hidden_render && generation.value != 0 &&
 		gpu->metrics().pre_mesh_field_captures == 0,
 		"support collision did not complete with a hidden speculative field");
+	runtime.record_frontend_collision_residency(
+		target, generation, collision_world_revision
+	);
 	check(runtime.update_viewer(viewer(2, 1, 40.0, 8.0), 0) ==
 		wt::WtReadOnlyRuntimeStatus::Ok,
 		"support visual promotion rejected");

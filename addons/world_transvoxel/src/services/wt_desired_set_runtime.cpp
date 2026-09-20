@@ -549,6 +549,20 @@ WtDesiredSetRuntimeStatus WtDesiredSetRuntimeService::apply_delta(
 			++metrics_.application_failures;
 			return WtDesiredSetRuntimeStatus::ApplicationFailure;
 		}
+		if (promote_visual) {
+			const auto cached_render = resource_cache.find_render(
+				item.key, record->generation
+			);
+			if (cached_render) {
+				const WtApplicationStatus submit_status =
+					application.submit_render(cached_render);
+				if (submit_status != WtApplicationStatus::Ok &&
+					submit_status != WtApplicationStatus::AlreadyCurrent) {
+					++metrics_.application_failures;
+					return WtDesiredSetRuntimeStatus::ApplicationFailure;
+				}
+			}
+		}
 		if (item.collision_required) {
 			application_status = application.set_collision_required(
 				item.key, true

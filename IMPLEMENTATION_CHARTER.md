@@ -1989,8 +1989,10 @@ its ownership when visual demand reaches the same key. Promotion during CPU
 meshing, after mesh completion, or after scheduler readiness publishes the
 matching geometry-free GPU placeholder without creating a successor generation.
 The completed collision branch is never repeated. If bounded GPU admission was
-unavailable when collision began, visual promotion follows the normal bounded
-remesh path while the already published collision remains authoritative.
+unavailable when collision began, the generation retains its bounded immutable
+capture and matching cached placeholder. Later visual demand publishes that
+placeholder and admits the retained capture without sampling, meshing, or
+collision work for a successor generation.
 
 Retained field data occupies no GPU admission slot and is invisible while a
 chunk remains collision-only. GPU capture is admitted only after matching visual
@@ -2256,6 +2258,11 @@ as one desired-set transaction instead of restaging it through the broad viewer
 target. The projection begins with the accepted cut, and regional publication
 retains every replaced ancestor until the descendant cohort is complete. This
 keeps unrelated streaming roots out of the interaction LOD0 critical path.
+
+A foreground stage that reaches temporary active-capacity pressure publishes its
+valid coarse base and remains incomplete. Accepted viewer relocation cannot be
+rejected merely because the retained old cut and the new refining cut overlap
+during handoff; refinement resumes after obsolete coverage retires.
 
 The native desired-set runtime retains at most 64 fully ready removed chunks as
 dormant generations. It retires their frontend application state immediately,
