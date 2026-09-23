@@ -2415,3 +2415,16 @@ claiming edit identity or collision authority. This prevents camera-local
 coverage from waiting behind a world-scale capture flood, and prevents a
 prepared local ancestor from joining an unrelated replacement cohort and
 leaving visible holes during movement.
+
+### Bounded frontend publication maintenance
+
+Viewer relocation can enqueue a world-scale immutable plan, but applying that
+plan may not turn one frame into a world-scale transaction. The main-thread
+frontend drains at most 32 publications or two milliseconds per frame. Pending
+replacement readiness is inspected through a persistent round-robin cursor, at
+most 32 records per frame, so an unready prefix cannot starve later local work.
+Regional publication closure is inspected through a separate round-robin
+cursor, at most two seeds per frame. GPU activation callbacks commit only their
+validated cohort; they never run regional closure or scan unrelated world
+state. Collision publication remains on the physics-boundary lane and retains
+its independent authority and deadline.

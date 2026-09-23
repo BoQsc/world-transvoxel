@@ -385,9 +385,18 @@ bool WorldTransvoxelTerrain::drain_world_publications(
 	std::uint64_t collision_apply_time_ns_start
 ) {
 	if (!lifecycle_) return false;
+	const auto drain_started = std::chrono::steady_clock::now();
+	constexpr std::size_t kMaximumPublicationsPerFrame = 32U;
+	constexpr std::uint64_t kPublicationDrainBudgetNs = 2000000U;
 	std::size_t render_count = 0;
 	bool drained = false;
-	for (std::size_t count = 0; count < 256U; ++count) {
+	for (std::size_t count = 0; count < kMaximumPublicationsPerFrame; ++count) {
+		if (count != 0U && static_cast<std::uint64_t>(
+				std::chrono::duration_cast<std::chrono::nanoseconds>(
+					std::chrono::steady_clock::now() - drain_started
+				).count()) >= kPublicationDrainBudgetNs) {
+			break;
+		}
 		WtReadOnlyPublication publication;
 		if (has_deferred_publication_) {
 			const bool deferred_interaction_collision =
@@ -906,12 +915,22 @@ void WorldTransvoxelTerrain::flush_ready_chunk_replacements() {
 			return !application_->copy_record(key, record) ||
 				!record.visual_required;
 		}), ready_staged_chunk_replacements_.end());
-	for (auto iterator = pending_chunk_replacements_.begin();
-			iterator != pending_chunk_replacements_.end();) {
+	constexpr std::size_t kMaximumReplacementInspectionsPerFrame = 32U;
+	std::size_t inspected = 0;
+	while (!pending_chunk_replacements_.empty() &&
+			inspected < kMaximumReplacementInspectionsPerFrame) {
+		if (pending_replacement_scan_cursor_ >=
+				pending_chunk_replacements_.size()) {
+			pending_replacement_scan_cursor_ = 0;
+		}
+		const std::size_t index = pending_replacement_scan_cursor_;
+		const WtChunkKey key = pending_chunk_replacements_[index];
+		++inspected;
 		WtChunkApplicationRecord record;
-		if (!application_->copy_record(*iterator, record)) {
-			const WtChunkKey key = *iterator;
-			iterator = pending_chunk_replacements_.erase(iterator);
+		if (!application_->copy_record(key, record)) {
+			pending_chunk_replacements_.erase(
+				pending_chunk_replacements_.begin() + index
+			);
 			const auto independent = std::lower_bound(
 				independently_publishable_chunk_replacements_.begin(),
 				independently_publishable_chunk_replacements_.end(),
@@ -927,7 +946,7 @@ void WorldTransvoxelTerrain::flush_ready_chunk_replacements() {
 			continue;
 		}
 		if (!record.fully_ready()) {
-			++iterator;
+			++pending_replacement_scan_cursor_;
 			continue;
 		}
 		clear_visibility_coverage_priority_request(record.key);
@@ -943,14 +962,16 @@ void WorldTransvoxelTerrain::flush_ready_chunk_replacements() {
 			const auto independent = std::lower_bound(
 				independently_publishable_chunk_replacements_.begin(),
 				independently_publishable_chunk_replacements_.end(),
-				*iterator
+					key
 			);
 			if (independent !=
 					independently_publishable_chunk_replacements_.end() &&
-					*independent == *iterator) {
+					*independent == key) {
 				independently_publishable_chunk_replacements_.erase(independent);
 			}
-			iterator = pending_chunk_replacements_.erase(iterator);
+			pending_chunk_replacements_.erase(
+				pending_chunk_replacements_.begin() + index
+			);
 			++completed_split_replacements_detached_;
 			continue;
 		}
@@ -967,18 +988,17 @@ void WorldTransvoxelTerrain::flush_ready_chunk_replacements() {
 		const auto independent = std::lower_bound(
 			independently_publishable_chunk_replacements_.begin(),
 			independently_publishable_chunk_replacements_.end(),
-			*iterator
+				key
 		);
 		if (independent !=
 				independently_publishable_chunk_replacements_.end() &&
-				*independent == *iterator) {
+					*independent == key) {
 			const bool requires_regional_publication =
 				wt_chunk_replacement_requires_regional_publication(
-					*iterator,
+					key,
 					pending_chunk_retirements_
 				);
 			if (requires_regional_publication) {
-				const WtChunkKey key = *iterator;
 				const auto ready = std::lower_bound(
 					ready_staged_chunk_replacements_.begin(),
 					ready_staged_chunk_replacements_.end(),
@@ -988,26 +1008,27 @@ void WorldTransvoxelTerrain::flush_ready_chunk_replacements() {
 						*ready != key) {
 					ready_staged_chunk_replacements_.insert(ready, key);
 				}
-				iterator = pending_chunk_replacements_.erase(iterator);
+				pending_chunk_replacements_.erase(
+					pending_chunk_replacements_.begin() + index
+				);
 				continue;
 			}
-			if (!render_sink_->publish_staged_record(*iterator) ||
-					!collision_sink_->publish_staged_record(*iterator)) {
-				++iterator;
+			if (!render_sink_->publish_staged_record(key) ||
+					!collision_sink_->publish_staged_record(key)) {
+				++pending_replacement_scan_cursor_;
 				continue;
 			}
 			if (lifecycle_) {
 				WtChunkApplicationRecord record;
-				application_->copy_record(*iterator, record);
+				application_->copy_record(key, record);
 				lifecycle_->record_frontend_collision_residency(
-					*iterator,
-					collision_sink_->applied_generation(*iterator),
+					key,
+					collision_sink_->applied_generation(key),
 					record.collision_world_revision
 				);
 			}
 			independently_publishable_chunk_replacements_.erase(independent);
 		} else {
-			const WtChunkKey key = *iterator;
 			const auto ready = std::lower_bound(
 				ready_staged_chunk_replacements_.begin(),
 				ready_staged_chunk_replacements_.end(),
@@ -1018,7 +1039,9 @@ void WorldTransvoxelTerrain::flush_ready_chunk_replacements() {
 				ready_staged_chunk_replacements_.insert(ready, key);
 			}
 		}
-		iterator = pending_chunk_replacements_.erase(iterator);
+		pending_chunk_replacements_.erase(
+			pending_chunk_replacements_.begin() + index
+		);
 	}
 }
 
@@ -1155,6 +1178,8 @@ void WorldTransvoxelTerrain::reset_world_application(std::size_t capacity) {
 	ready_staged_chunk_replacements_.reserve(staging_capacity);
 	independently_publishable_chunk_replacements_.clear();
 	independently_publishable_chunk_replacements_.reserve(staging_capacity);
+	independent_publication_scan_cursor_ = 0;
+	pending_replacement_scan_cursor_ = 0;
 	visibility_coverage_priority_requests_.clear();
 	visibility_coverage_priority_requests_.reserve(staging_capacity);
 	pending_render_retirements_.clear();

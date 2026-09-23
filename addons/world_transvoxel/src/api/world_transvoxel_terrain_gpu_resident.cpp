@@ -1722,7 +1722,9 @@ godot::Dictionary WorldTransvoxelTerrain::activate_gpu_resident_render_cohort(
 	}
 	gpu_resident_render_activated_chunks_ += sink_activated;
 	gpu_resident_render_retired_chunks_ += native_retirements.size();
-	flush_ready_independent_publication_regions();
+	// Regional closure can inspect hundreds of world records. Keep it on the
+	// bounded terrain process lane; an activation callback must only commit the
+	// cohort supplied by the renderer and return immediately.
 	result["status"] = "ACTIVE";
 	result["active"] = true;
 	result["chunks"] = activated_chunks;

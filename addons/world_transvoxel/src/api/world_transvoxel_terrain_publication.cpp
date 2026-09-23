@@ -185,8 +185,16 @@ void WorldTransvoxelTerrain::request_visibility_coverage_priority_batch(
 }
 
 void WorldTransvoxelTerrain::flush_ready_independent_publication_regions() {
-	for (std::size_t index = 0;
-			index < independently_publishable_chunk_replacements_.size();) {
+	constexpr std::size_t kMaximumRegionInspectionsPerFrame = 2U;
+	std::size_t inspected = 0;
+	while (!independently_publishable_chunk_replacements_.empty() &&
+			inspected < kMaximumRegionInspectionsPerFrame) {
+		if (independent_publication_scan_cursor_ >=
+				independently_publishable_chunk_replacements_.size()) {
+			independent_publication_scan_cursor_ = 0;
+		}
+		const std::size_t index = independent_publication_scan_cursor_;
+		++inspected;
 		const WtChunkKey seed =
 			independently_publishable_chunk_replacements_[index];
 		const bool seed_pending = std::binary_search(
@@ -209,7 +217,7 @@ void WorldTransvoxelTerrain::flush_ready_independent_publication_regions() {
 				seed,
 				pending_chunk_retirements_
 			)) {
-			++index;
+			++independent_publication_scan_cursor_;
 			continue;
 		}
 		std::vector<WtChunkKey> regional_replacement_candidates =
@@ -237,7 +245,7 @@ void WorldTransvoxelTerrain::flush_ready_independent_publication_regions() {
 				pending_chunk_retirements_,
 				region
 			) || !publication_region_has_complete_authoritative_coverage(region)) {
-			++index;
+			++independent_publication_scan_cursor_;
 			continue;
 		}
 		bool ready = true;
@@ -276,6 +284,7 @@ void WorldTransvoxelTerrain::flush_ready_independent_publication_regions() {
 				region.replacements.size(),
 				region.retirements.size()
 			);
+			++independent_publication_scan_cursor_;
 			return;
 		}
 		for (const WtChunkKey &retirement : region.retirements) {
@@ -403,7 +412,8 @@ void WorldTransvoxelTerrain::flush_ready_independent_publication_regions() {
 				1
 			);
 		}
-		index = 0;
+		independent_publication_scan_cursor_ = 0;
+		return;
 	}
 }
 

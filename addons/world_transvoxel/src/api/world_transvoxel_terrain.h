@@ -390,6 +390,8 @@ private:
 	std::vector<WtChunkKey> pending_chunk_replacements_;
 	std::vector<WtChunkKey> ready_staged_chunk_replacements_;
 	std::vector<WtChunkKey> independently_publishable_chunk_replacements_;
+	std::size_t independent_publication_scan_cursor_ = 0;
+	std::size_t pending_replacement_scan_cursor_ = 0;
 	std::vector<CoveragePriorityRequest> visibility_coverage_priority_requests_;
 	std::vector<WtChunkKey> pending_render_retirements_;
 	std::uint32_t open_viewer_plan_publications_ = 0;
