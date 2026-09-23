@@ -26,6 +26,35 @@ absent active replacement is **unknown coverage**, not proof of an empty chunk:
 a zero transition mask alone may not enter the same-layout edit fast path.
 Newly exposed edit surfaces must pass the full topology and coverage cohort.
 
+## Persistent GPU base coverage
+
+The GPU candidate's current on-demand cold-root path is insufficient for the
+game's seamless visible-world requirement. A viewer move may admit only sixteen
+cold roots per staging pass, while their page sampling, GPU extraction, and
+activation still occur after the camera can see them. Queue priority cannot
+guarantee coverage of an arbitrary visible cold region under that dependency.
+
+The next GPU architecture checkpoint is a versioned, offline-baked base
+coverage atlas for the finite production world. The native baker must use the
+same authoritative source samples and official MIT Transvoxel tables as the
+runtime. Each root record carries source identity, geometry format version,
+chunk key, transition topology, bounds, content digest, and either complete
+mesh data or an explicit proven-empty certificate. Runtime code validates the
+record and uploads it without density generation, topology extraction, or GPU
+readback on the camera-movement path. Invalid or unavailable records fail
+closed and are reported as missing coverage; they are never treated as empty.
+
+For a profile that promises an entirely visible finite world, base coverage
+must be resident before that world is exposed. The atlas must have measured
+disk size, upload time, GPU memory, and idle power within configured budgets;
+if it does not fit, the profile cannot claim arbitrary fast-flight coverage.
+LOD refinement and journal edits then replace bounded regions of this active
+base using generation/revision-safe atomic cohorts. The previous base remains
+visible until every required replacement and transition is ready. Collision
+continues to use independent authoritative CPU geometry at the physics
+boundary. The existing on-demand cold-root path remains a fallback for worlds
+without a qualified atlas, with visible incompleteness reported honestly.
+
 Current state: M5 streaming production baseline complete on Windows x86-64
 with bounded storage/caches, multi-viewer/edit runtime ownership, page-backed
 official MIT meshing, real Godot render/physics application budgets, versioned
