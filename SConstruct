@@ -1081,6 +1081,39 @@ bake_tool = native_test_env.Program(
     ],
 )
 
+base_coverage_atlas_probe = native_test_env.Program(
+    os.path.join(
+        "build", "tools",
+        "wt_base_coverage_atlas_probe.{}.{}{}".format(
+            env["target"], env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tools/native/wt_base_coverage_atlas_probe.cpp",
+        "addons/world_transvoxel/src/backend/wt_cell_types.cpp",
+        "addons/world_transvoxel/src/backend/wt_transvoxel_mit_backend.cpp",
+		"addons/world_transvoxel/src/bake/wt_chunk_baker.cpp",
+        "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/meshing/wt_chunk_mesh_finalize.cpp",
+        "addons/world_transvoxel/src/meshing/wt_chunk_mesh_geometry.cpp",
+        "addons/world_transvoxel/src/meshing/wt_chunk_mesh_key.cpp",
+        "addons/world_transvoxel/src/meshing/wt_chunk_mesher.cpp",
+        "addons/world_transvoxel/src/meshing/wt_transition_face_constraints.cpp",
+        "addons/world_transvoxel/src/meshing/wt_multiresolution_vertex_resolver.cpp",
+        "addons/world_transvoxel/src/storage/wt_procedural_cave_field.cpp",
+        "addons/world_transvoxel/src/storage/wt_procedural_world_source.cpp",
+        "addons/world_transvoxel/src/storage/wt_procedural_road_field.cpp",
+		"addons/world_transvoxel/src/storage/wt_binary_io.cpp",
+        "addons/world_transvoxel/src/storage/wt_chunk_page.cpp",
+		"addons/world_transvoxel/src/storage/wt_chunk_page_sample_source.cpp",
+		"addons/world_transvoxel/src/storage/wt_chunk_surface_shift.cpp",
+		"addons/world_transvoxel/src/storage/wt_container_format.cpp",
+        "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+		"addons/world_transvoxel/src/testing/wt_fault_injection.cpp",
+    ],
+)
+
 normalizer = os.path.join(PROJECT_ROOT, "tools", "normalize_pe_timestamp.py")
 
 
@@ -1272,6 +1305,11 @@ if env["platform"] == "windows":
         Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
     )
 
+    env.AddPostAction(
+        base_coverage_atlas_probe,
+        Action(normalize_pe_timestamp, "Normalizing PE timestamp $TARGET ..."),
+    )
+
 Default([
     library,
     native_test,
@@ -1309,4 +1347,5 @@ Default([
     production_lod_streaming_test,
     storage_tool,
     bake_tool,
+    base_coverage_atlas_probe,
 ])
