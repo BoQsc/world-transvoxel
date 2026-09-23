@@ -736,7 +736,7 @@ int main() {
 	WtGpuMeshingShadowQueue interaction_lane_queue;
 	require(interaction_lane_queue.begin(16),
 		"interaction lane queue did not start");
-	for (std::int32_t index = 0; index < 12; ++index) {
+	for (std::int32_t index = 0; index < 8; ++index) {
 		WtGpuMeshingShadowCapture background = capture_for(100 + index);
 		background.job.key.x = index;
 		require(interaction_lane_queue.capture(std::move(background)),
@@ -749,8 +749,20 @@ int main() {
 	WtGpuMeshingShadowCapture superseding_background = capture_for(500);
 	superseding_background.job.key.x = 0;
 	require(interaction_lane_queue.capture(std::move(superseding_background)) &&
-			interaction_lane_queue.metrics().queued_requests == 12,
+			interaction_lane_queue.metrics().queued_requests == 8,
 		"background reserve prevented an in-place superseding generation");
+	for (std::int32_t index = 0; index < 4; ++index) {
+		WtGpuMeshingShadowCapture coverage = capture_for(250 + index);
+		coverage.job.key.x = 40 + index;
+		coverage.job.priority = kWtVisibilityCoveragePriority;
+		require(interaction_lane_queue.capture(std::move(coverage)),
+			"player-visible coverage did not use its reserved capacity");
+	}
+	WtGpuMeshingShadowCapture excess_coverage = capture_for(275);
+	excess_coverage.job.key.x = 50;
+	excess_coverage.job.priority = kWtVisibilityCoveragePriority;
+	require(!interaction_lane_queue.capture(std::move(excess_coverage)),
+		"coverage capture consumed the edit reserve");
 	for (std::int32_t index = 0; index < 4; ++index) {
 		WtGpuMeshingShadowCapture interaction = capture_for(300 + index);
 		interaction.job.key.x = 30 + index;
@@ -770,6 +782,49 @@ int main() {
 			"test release"
 		).status == WtGpuMeshingResidentValidationStatus::Rejected,
 		"interaction-only dequeue request did not release");
+
+	WtGpuMeshingShadowQueue reserved_coverage_queue;
+	require(reserved_coverage_queue.begin(16),
+		"reserved coverage queue did not start");
+	std::vector<std::uint64_t> reservations;
+	for (std::int32_t index = 0; index < 4; ++index) {
+		WtChunkJob background = capture_for(600 + index).job;
+		background.key.x = 60 + index;
+		const std::uint64_t id =
+			reserved_coverage_queue.reserve_capture_slots(background);
+		require(id != 0, "background capture reservation was rejected early");
+		reservations.push_back(id);
+	}
+	WtChunkJob blocked_background = capture_for(605).job;
+	blocked_background.key.x = 65;
+	require(reserved_coverage_queue.reserve_capture_slots(blocked_background) == 0,
+		"background reservations consumed the coverage reserve");
+	for (std::int32_t index = 0; index < 2; ++index) {
+		WtChunkJob coverage = capture_for(610 + index).job;
+		coverage.key.x = 70 + index;
+		coverage.priority = kWtVisibilityCoveragePriority;
+		const std::uint64_t id =
+			reserved_coverage_queue.reserve_capture_slots(coverage);
+		require(id != 0, "coverage capture reservation was rejected early");
+		reservations.push_back(id);
+	}
+	WtChunkJob blocked_coverage = capture_for(615).job;
+	blocked_coverage.key.x = 75;
+	blocked_coverage.priority = kWtVisibilityCoveragePriority;
+	require(reserved_coverage_queue.reserve_capture_slots(blocked_coverage) == 0,
+		"coverage reservations consumed the edit reserve");
+	for (std::int32_t index = 0; index < 2; ++index) {
+		WtChunkJob edit = capture_for(620 + index).job;
+		edit.key.x = 80 + index;
+		edit.priority = kWtInteractiveEditPriority;
+		const std::uint64_t id =
+			reserved_coverage_queue.reserve_capture_slots(edit);
+		require(id != 0, "edit capture lost its reserved capacity");
+		reservations.push_back(id);
+	}
+	for (const std::uint64_t id : reservations) {
+		reserved_coverage_queue.release_capture_slots(id);
+	}
 
 	WtGpuMeshingShadowQueue queue;
 	require(!queue.begin(0), "zero capacity was accepted");

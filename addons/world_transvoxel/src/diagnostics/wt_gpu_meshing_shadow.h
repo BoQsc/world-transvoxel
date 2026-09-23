@@ -208,7 +208,9 @@ private:
 		const WtChunkJob &right
 	) noexcept;
 	static bool interaction_job(const WtChunkJob &job) noexcept;
+	static bool coverage_job(const WtChunkJob &job) noexcept;
 	std::size_t background_occupancy_locked() const noexcept;
+	std::size_t noncoverage_occupancy_locked() const noexcept;
 	bool job_version_in_flight_locked(const WtChunkJob &job) const noexcept;
 	bool is_latest_locked(const WtGpuMeshingShadowRequest &request) const noexcept;
 	void notify_capacity_available() const;

@@ -2318,6 +2318,14 @@ valid coarse base and remains incomplete. Accepted viewer relocation cannot be
 rejected merely because the retained old cut and the new refining cut overlap
 during handoff; refinement resumes after obsolete coverage retires.
 
+At a 16-slot GPU field-capture capacity, background requests may occupy at most
+eight slots, player-visible coverage may use the next four, and committed edits
+retain four slots. Each pre-mesh reservation consumes up to two slots. The same
+class limits apply to unreserved captures; superseding a matching queued version
+remains allowed without expanding capacity. This prevents background capture
+floods from denying the first coarse coverage for a player-local root, while
+preserving the edit reservation and bounded total capacity.
+
 The native desired-set runtime retains at most 64 fully ready removed chunks as
 dormant generations. It retires their frontend application state immediately,
 so they provide no visual or collision authority while dormant. Their scheduler

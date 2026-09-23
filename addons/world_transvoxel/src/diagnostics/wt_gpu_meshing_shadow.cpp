@@ -8,6 +8,7 @@ namespace world_transvoxel {
 namespace {
 
 constexpr std::size_t kGpuInteractionCaptureReserve = 4;
+constexpr std::size_t kGpuCoverageCaptureReserve = 4;
 
 }
 
@@ -82,12 +83,19 @@ std::uint64_t WtGpuMeshingShadowQueue::reserve_capture_slots(
 	const bool interaction = interaction_job(job);
 	const std::size_t interaction_reserve =
 		capacity_ >= 16 ? kGpuInteractionCaptureReserve : 0U;
+	const std::size_t coverage_reserve =
+		capacity_ >= 16 ? kGpuCoverageCaptureReserve : 0U;
+	const bool coverage = coverage_job(job);
+	const std::size_t class_limit = capacity_ - interaction_reserve -
+		(coverage ? 0U : coverage_reserve);
+	const auto class_occupancy = [this, coverage]() {
+		return coverage ? background_occupancy_locked() :
+			noncoverage_occupancy_locked();
+	};
 	if (interaction_reserve != 0 && !interaction &&
-			background_occupancy_locked() + requested_slots >
-			capacity_ - interaction_reserve) {
+			class_occupancy() + requested_slots > class_limit) {
 		const std::size_t required =
-			background_occupancy_locked() + requested_slots -
-			(capacity_ - interaction_reserve);
+			class_occupancy() + requested_slots - class_limit;
 		std::size_t released = 0;
 		while (released < required) {
 			const auto candidate = std::find_if(
@@ -113,8 +121,7 @@ std::uint64_t WtGpuMeshingShadowQueue::reserve_capture_slots(
 			metrics_.superseded_queued_requests += removed;
 		}
 		metrics_.queued_requests = queued_.size();
-		if (background_occupancy_locked() + requested_slots >
-				capacity_ - interaction_reserve) {
+		if (class_occupancy() + requested_slots > class_limit) {
 			++metrics_.capture_reservation_rejections;
 			return 0;
 		}
@@ -276,8 +283,14 @@ bool WtGpuMeshingShadowQueue::capture(WtGpuMeshingShadowCapture capture) {
 	static_cast<WtGpuMeshingShadowCapture &>(request) = std::move(capture);
 	const std::size_t interaction_reserve =
 		capacity_ >= 16 ? kGpuInteractionCaptureReserve : 0U;
+	const std::size_t coverage_reserve =
+		capacity_ >= 16 ? kGpuCoverageCaptureReserve : 0U;
+	const bool coverage = coverage_job(request.job);
+	const std::size_t class_limit = capacity_ - interaction_reserve -
+		(coverage ? 0U : coverage_reserve);
 	if (interaction_reserve != 0 && !request.incremental_edit &&
-			background_occupancy_locked() >= capacity_ - interaction_reserve) {
+			(coverage ? background_occupancy_locked() :
+				noncoverage_occupancy_locked()) >= class_limit) {
 		const auto replace = std::find_if(
 			queued_.begin(), queued_.end(),
 			[this, &request](const WtGpuMeshingShadowRequest &queued) {
@@ -449,6 +462,13 @@ bool WtGpuMeshingShadowQueue::interaction_job(
 	return job.priority == kWtInteractiveEditPriority;
 }
 
+bool WtGpuMeshingShadowQueue::coverage_job(
+	const WtChunkJob &job
+) noexcept {
+	return job.priority >= kWtVisibilityCoveragePriority &&
+		!interaction_job(job);
+}
+
 std::size_t WtGpuMeshingShadowQueue::background_occupancy_locked() const noexcept {
 	std::size_t occupied = 0;
 	for (const WtGpuMeshingShadowRequest &request : queued_) {
@@ -459,6 +479,23 @@ std::size_t WtGpuMeshingShadowQueue::background_occupancy_locked() const noexcep
 	}
 	for (const CaptureReservation &reservation : capture_reservations_) {
 		if (!interaction_job(reservation.job)) {
+			occupied += reservation.remaining_slots;
+		}
+	}
+	return occupied;
+}
+
+std::size_t WtGpuMeshingShadowQueue::noncoverage_occupancy_locked() const noexcept {
+	std::size_t occupied = 0;
+	for (const WtGpuMeshingShadowRequest &request : queued_) {
+		if (!request.incremental_edit && !coverage_job(request.job)) ++occupied;
+	}
+	for (const WtGpuMeshingShadowRequest &request : in_flight_) {
+		if (!request.incremental_edit && !coverage_job(request.job)) ++occupied;
+	}
+	for (const CaptureReservation &reservation : capture_reservations_) {
+		if (!interaction_job(reservation.job) &&
+				!coverage_job(reservation.job)) {
 			occupied += reservation.remaining_slots;
 		}
 	}
