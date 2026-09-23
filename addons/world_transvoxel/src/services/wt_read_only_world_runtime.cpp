@@ -18,6 +18,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <utility>
 
@@ -558,7 +560,24 @@ bool WtReadOnlyWorldRuntime::enqueue_foreground_priority_event(
 bool WtReadOnlyWorldRuntime::enqueue_viewer_event(
 	const ViewerEvent &event
 ) {
+	static const bool measure_lock_wait =
+		std::getenv("WT_VIEWER_ENQUEUE_TIMING") != nullptr;
+	const auto lock_requested_at = measure_lock_wait ?
+		std::chrono::steady_clock::now() :
+		std::chrono::steady_clock::time_point{};
 	std::lock_guard<std::mutex> lock(input_mutex_);
+	if (measure_lock_wait) {
+		const auto wait_usec = std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now() - lock_requested_at
+		).count();
+		if (wait_usec >= 5000) {
+			std::fprintf(stderr,
+				"WT_VIEWER_ENQUEUE_LOCK_WAIT viewer=%llu revision=%llu usec=%lld\n",
+				static_cast<unsigned long long>(event.snapshot.id),
+				static_cast<unsigned long long>(event.snapshot.revision),
+				static_cast<long long>(wait_usec));
+		}
+	}
 	const auto existing = std::find_if(
 		viewer_events_.begin(),
 		viewer_events_.end(),

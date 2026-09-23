@@ -2295,6 +2295,11 @@ declared complete until every target root is represented and ready. This bounds
 the initial scheduler and GPU publication burst without changing LOD topology,
 visual handoff, or collision authority.
 
+The opt-in `WT_VIEWER_ENQUEUE_TIMING` diagnostic reports input-mutex waits of
+at least 5 ms during viewer submission. It is enabled by the short GPU gate to
+separate runtime lock contention from main-thread scheduling and publication
+delays; it does not alter viewer ordering or admission.
+
 An explicit foreground-topology refresh publishes the balanced local projection
 as one desired-set transaction instead of restaging it through the broad viewer
 target. The projection begins with the accepted cut, and regional publication
