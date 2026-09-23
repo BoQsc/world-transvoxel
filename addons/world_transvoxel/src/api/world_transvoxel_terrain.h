@@ -146,6 +146,7 @@ public:
 	godot::String get_world_error() const;
 	std::int64_t get_world_source_revision() const noexcept;
 	std::int64_t get_world_revision() const noexcept;
+	godot::Dictionary _load_gpu_base_coverage_atlas(const godot::String &path) const;
 	std::int64_t get_world_page_count() const noexcept;
 	godot::Ref<WorldTransvoxelEditTransaction> begin_edit_transaction(
 		std::int64_t author_id = 0

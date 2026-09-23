@@ -59,14 +59,26 @@ The runtime atlas admission boundary is fail-closed: source identity, pristine
 world revision, exact complete root inventory, payload hashes, mesh structure,
 finite vertices, and empty certificates must all validate before any root is
 eligible for GPU upload. The validated view is borrowed from the caller-owned
-atlas bytes, which remain alive through upload. The base atlas has a separate
-bounded GPU allocation from the 64-entry dynamic resident pool: the finite
-world has 266 nonempty coarse roots, so routing the base through that pool
-would immediately repeat its capacity bottleneck. Validation alone does not
+atlas bytes, which remain alive through upload. The base atlas needs a separate
+bounded GPU lifetime so camera-wide coverage cannot be evicted by dynamic LOD
+and edit churn. The four-biome game profile configures 4,096 dynamic resident
+slots, enough for the 266 nonempty coarse roots by count. Validation alone does not
 authorize world exposure; the entire base cut must also be uploaded and active.
 Refinement may retire a base root only in the same complete cohort that makes
 its replacement coverage visible. Existing journals require replay before the
 base can be shown as current terrain.
+
+The native atlas upload preparation converts the verified chunk-local mesh
+positions into world coordinates and packs normals, material metadata, and
+indexed indirect commands for one shared GPU allocation. Every nonempty root
+has a separately switchable indirect command; proven-empty roots remain in
+the complete inventory without a draw. The exact g23 atlas is packaged with
+the native addon and may only be requested for a matching running pristine
+procedural world. The renderer must draw this base before human-visible world
+release. Its cut owner keeps each base root submitted until validated dynamic
+leaves cover that entire root and any edge against a retained coarser root has
+the required Transvoxel transition. A failed cut update retains the prior
+complete cut. This visual base does not replace authoritative collision.
 
 Current state: M5 streaming production baseline complete on Windows x86-64
 with bounded storage/caches, multi-viewer/edit runtime ownership, page-backed

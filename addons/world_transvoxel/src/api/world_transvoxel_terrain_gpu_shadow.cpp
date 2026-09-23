@@ -134,6 +134,10 @@ bool build_gpu_cell_render_candidate(
 
 void WorldTransvoxelTerrain::bind_gpu_meshing_shadow_methods() {
 	godot::ClassDB::bind_method(
+		godot::D_METHOD("_load_gpu_base_coverage_atlas", "path"),
+		&WorldTransvoxelTerrain::_load_gpu_base_coverage_atlas
+	);
+	godot::ClassDB::bind_method(
 		godot::D_METHOD("begin_gpu_meshing_shadow", "capacity"),
 		&WorldTransvoxelTerrain::begin_gpu_meshing_shadow,
 		DEFVAL(3)

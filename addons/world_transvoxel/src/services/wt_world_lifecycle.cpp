@@ -597,6 +597,16 @@ std::uint64_t WtWorldLifecycleService::world_revision() const noexcept {
 	return runtime_ ? runtime_->world_revision() : world_revision_;
 }
 
+bool WtWorldLifecycleService::procedural_descriptor(
+	WtProceduralWorldDescriptor &output
+) const noexcept {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	if (!procedural_ || state_ != WtWorldLifecycleState::Running) return false;
+	output = procedural_descriptor_;
+	output.world_revision = runtime_ ? runtime_->world_revision() : world_revision_;
+	return true;
+}
+
 std::size_t WtWorldLifecycleService::page_count() const noexcept {
 	std::lock_guard<std::mutex> lock(state_mutex_);
 	return page_count_;

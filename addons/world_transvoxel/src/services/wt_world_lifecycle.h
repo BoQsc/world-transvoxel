@@ -160,6 +160,7 @@ public:
 	WtEditJournalStoreStatus last_edit_journal_status() const noexcept;
 	std::uint64_t source_revision() const noexcept;
 	std::uint64_t world_revision() const noexcept;
+	bool procedural_descriptor(WtProceduralWorldDescriptor &output) const noexcept;
 	std::size_t page_count() const noexcept;
 	WtPageHierarchy page_hierarchy() const;
 	bool wait_for_state(

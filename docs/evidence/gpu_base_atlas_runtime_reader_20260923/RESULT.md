@@ -16,6 +16,8 @@ flag. The independent Python verifier passed the file earlier.
 
 This is an admission boundary, not render qualification. The GPU base has not
 yet been uploaded, activated, or atomically handed off to fine LOD/edit
-cohorts. The 64-entry dynamic resident pool cannot hold the 266 nonempty
-base roots; base coverage needs its own bounded allocation. The GPU candidate
+cohorts. Although the dynamic pool defaults to 64 entries, the four-biome game
+profile configures 4,096. The base needs independent residency to survive
+dynamic LOD and edit churn, not because 266 roots exceed that configured cap.
+The GPU candidate
 remains unqualified for seamless movement, collision, latency, or low power.

@@ -1,6 +1,8 @@
 #include "render/wt_base_coverage_atlas.h"
+#include "render/wt_base_coverage_gpu_pack.h"
 
 #include <cstdint>
+#include <cstring>
 #include <cstdio>
 #include <fstream>
 #include <iterator>
@@ -60,6 +62,33 @@ bool expect(
 		}
 		if (view.roots.size() != 512 || empties != 246 ||
 			vertices != 86049 || indices != 460344) return false;
+		wt::WtBaseCoverageGpuPack packed;
+		if (!wt::wt_pack_base_coverage_for_gpu(view, packed) ||
+			packed.roots.size() != 512 || packed.vertex_count != vertices ||
+			packed.index_count != indices ||
+			packed.positions.size() != vertices * 12 ||
+			packed.normals.size() != vertices * 4 ||
+			packed.metadata.size() != vertices * 4 ||
+			packed.indices.size() != indices * 4 ||
+			packed.indirect.size() != (512 - empties) * 20) return false;
+		bool checked_world_position = false;
+		for (const auto &root : packed.roots) {
+			if (root.key == wt::WtChunkKey {0, 0, 1, 3} && root.draw_index >= 0) {
+				const auto *draw = packed.indirect.data() + root.draw_index * 20;
+				const std::uint32_t base_vertex =
+					static_cast<std::uint32_t>(draw[12]) |
+					(static_cast<std::uint32_t>(draw[13]) << 8) |
+					(static_cast<std::uint32_t>(draw[14]) << 16) |
+					(static_cast<std::uint32_t>(draw[15]) << 24);
+				std::uint32_t bits = 0;
+				std::memcpy(&bits, packed.positions.data() + base_vertex * 12 + 8, 4);
+				float world_z = 0.0f;
+				std::memcpy(&world_z, &bits, 4);
+				if (world_z < 128.0f || world_z > 256.0f) return false;
+				checked_world_position = true;
+			}
+		}
+		if (!checked_world_position) return false;
 	}
 	return true;
 }
