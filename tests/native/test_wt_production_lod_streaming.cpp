@@ -2737,6 +2737,26 @@ int main(int argc, char **argv) {
 			find_entry(locally_ready_projection, key) != nullptr,
 			"locally covered foreground omitted LOD0 while an unrelated root was cold"
 		);
+		std::vector<wt::WtChunkKey> partially_refined_keys = {
+			{1,0,0,3}, {2,0,0,3},
+		};
+		for (int z = 0; z < 2; ++z) for (int y = 0; y < 2; ++y)
+			for (int x = 0; x < 2; ++x)
+				partially_refined_keys.push_back({x,y,z,2});
+		wt::WtLodMap partially_refined_map(2048);
+		check(partially_refined_map.set_active_chunks(partially_refined_keys) ==
+			wt::WtLodMapStatus::Ok, "partial foreground cut invalid");
+		wt::WtBalancedLodPlan partially_refined, gated_projection;
+		partially_refined.entries = partially_refined_map.get_entries();
+		for (const auto &entry : partially_refined.entries)
+			partially_refined.demands.push_back({entry.key, 1, false, true});
+		check(planner.stage_foreground(target, partially_refined,
+			{{0,0,0,2}}, 3, focus, gated_projection, complete) ==
+			wt::WtBalancedLodPlannerStatus::Ok,
+			"partially ready foreground coverage gate failed");
+		check(find_entry(gated_projection, {2,2,2,0}) == nullptr &&
+			find_entry(gated_projection, {1,1,1,2}) != nullptr,
+			"ready sibling incorrectly unlocked unready player-local refinement");
 		wt::WtBalancedLodPlanner bounded(32, catalog);
 		wt::WtBalancedLodPlan bounded_stage, rejected;
 		check(bounded.stage_foreground(target, empty, roots, 3, focus, bounded_stage, complete) == wt::WtBalancedLodPlannerStatus::Ok,

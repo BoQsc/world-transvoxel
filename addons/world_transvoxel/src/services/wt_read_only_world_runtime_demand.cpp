@@ -934,14 +934,15 @@ bool WtReadOnlyWorldRuntime::process_viewer_event() {
 		const bool direct_edit_refinement =
 			retention_refresh_event && !preferred_refinement_keys.empty();
 		if (foreground_topology_refresh_event) {
-			// project_foreground_target starts from the accepted current cut and
-			// produces one balanced descendant replacement. Restaging that local
-			// transaction through the broad viewer target can wait on unrelated
-			// cold roots and discard the interaction lease. Publication already
-			// retains the replaced ancestors until this complete cohort activates.
-			staged = candidate_staging_target;
-			staging_complete = true;
-			plan_status = WtBalancedLodPlannerStatus::Ok;
+			// The local target is already projected from the accepted cut, but an
+			// accepted leaf is not necessarily visible yet. Keep its coarse cover
+			// requested until the exact focus position has active visual coverage;
+			// otherwise an early lease can replace a cold root with fine demands
+			// and leave a hole at the player before either generation is drawn.
+			plan_status = lod_planner_->stage_foreground(
+				candidate_staging_target, current_plan_, visually_ready,
+				candidate_staging_root_lod, preferred_refinement_keys,
+				staged, staging_complete, cancel_for_pending_edit);
 		} else if (config_.hierarchical_lod_viewer_activation_enabled) {
 			plan_status = lod_planner_->stage_foreground(candidate_staging_target,
 				current_plan_, visually_ready, candidate_staging_root_lod,

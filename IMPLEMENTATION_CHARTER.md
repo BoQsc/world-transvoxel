@@ -2287,6 +2287,13 @@ target remain asynchronous and cannot suppress already-covered player-local
 LOD0 refinement. Publication still retains each replaced ancestor until its
 balanced descendant cohort is complete.
 
+An interaction-topology refresh is also a staging event. Its accepted but
+unready parent is not visible coverage. Every targeted interaction key must be
+contained by a visually active leaf before that leaf is refined; readiness of
+another child in the same coarse root is insufficient. Cold focus requests keep
+their coarse parent demanded until it activates, then stage the balanced fine
+cut. Collision-only LOD0 demand does not count as visual coverage.
+
 Cold coarse roots enter the desired set in batches of at most 16 per staging
 pass, ordered by the highest descendant demand priority so interaction roots
 enter first. A visual activation advances the next batch.

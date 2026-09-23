@@ -1059,12 +1059,22 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_foreground(
 		foreground_roots.end()
 	);
 	const bool coarse_coverage_ready = std::all_of(
-		foreground_roots.begin(), foreground_roots.end(),
-		[&](const WtChunkKey &root) {
+		foreground_keys.begin(), foreground_keys.end(),
+		[&](const WtChunkKey &focus) {
+			const bool targeted = std::any_of(
+				foreground_roots.begin(), foreground_roots.end(),
+				[&](const WtChunkKey &root) {
+					return bounds_contain(root, focus);
+				}
+			);
+			if (!targeted) return true;
+			// A ready sibling in the same coarse root does not cover the focus.
+			// Refining from an unready leaf can remove the only intended parent
+			// before any GPU surface has appeared at the player's position.
 			return std::any_of(
 				base.entries.begin(), base.entries.end(),
 				[&](const WtLodMapEntry &leaf) {
-					return bounds_contain(root, leaf.key) &&
+					return bounds_contain(leaf.key, focus) &&
 						std::binary_search(ready.begin(), ready.end(), leaf.key);
 				}
 			);
