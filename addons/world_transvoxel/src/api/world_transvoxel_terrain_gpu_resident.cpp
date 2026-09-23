@@ -282,17 +282,10 @@ SameLayoutEditCohortStatus build_same_layout_edit_cohort(
 		}
 		std::uint8_t active_mask = 0;
 		if (!render_sink.get_gpu_resident_boundary_mask(key, active_mask)) {
-			// An edit can expose a surface inside a previously proven-solid/empty
-			// chunk. The complete same-revision edit cohort is already atomic, and
-			// a zero transition mask introduces no LOD boundary dependency.
-			if (incremental_edit &&
-				record.external_visual_transition_mask == 0) {
-				candidate.replacements.push_back(key);
-				if (record.visual_generation != record.generation) {
-					candidate_waiting_masks.push_back(key);
-				}
-				continue;
-			}
+			// A zero transition mask says nothing about whether this chunk was
+			// previously empty or whether its coverage was lost. Only an active
+			// replacement is an authoritative same-layout predecessor. A newly
+			// exposed chunk follows the full topology/coverage cohort below.
 			if (rejection_key) *rejection_key = key;
 			if (rejection_reason) *rejection_reason = "active_gpu_coverage_missing";
 			return SameLayoutEditCohortStatus::NotApplicable;

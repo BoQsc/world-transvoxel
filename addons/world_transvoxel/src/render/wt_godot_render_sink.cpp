@@ -298,6 +298,15 @@ bool WtGodotRenderSink::apply_render(const WtRenderPayload &payload) {
 				record.gpu_resident_replaced) {
 				return true;
 			}
+			if (record.gpu_resident_replaced) {
+				// A transition-mask update can retain the same geometry generation.
+				// Keep its active coverage and stage the new placeholder until the
+				// GPU cohort commits both sides of the boundary change atomically.
+				record.pending_gpu_generation = payload.generation;
+				record.pending_gpu_transition_mask = payload.transition_mask;
+				record.pending_gpu_resident_placeholder = true;
+				return true;
+			}
 			record.transition_mask = payload.transition_mask;
 			record.instance->set_mesh(godot::Ref<godot::Mesh>());
 			record.instance->set_visible(false);

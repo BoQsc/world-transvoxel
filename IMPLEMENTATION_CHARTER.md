@@ -15,6 +15,17 @@ collision rebuild. Generation ordering and cache identity must match before a
 partial patch is admitted; otherwise the runtime uses the complete
 authoritative rebuild fallback.
 
+## GPU visual coverage handoff
+
+An active GPU replacement is the render sink's authoritative visible coverage
+until the replacement cohort commits. A new GPU placeholder, including one for
+the same geometry generation with a changed transition mask, is pending state;
+it must not clear the active replacement or its boundary mask on arrival.
+Activation swaps the pending identity and retires the old draw together. An
+absent active replacement is **unknown coverage**, not proof of an empty chunk:
+a zero transition mask alone may not enter the same-layout edit fast path.
+Newly exposed edit surfaces must pass the full topology and coverage cohort.
+
 Current state: M5 streaming production baseline complete on Windows x86-64
 with bounded storage/caches, multi-viewer/edit runtime ownership, page-backed
 official MIT meshing, real Godot render/physics application budgets, versioned
