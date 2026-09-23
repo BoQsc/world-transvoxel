@@ -2287,6 +2287,14 @@ target remain asynchronous and cannot suppress already-covered player-local
 LOD0 refinement. Publication still retains each replaced ancestor until its
 balanced descendant cohort is complete.
 
+Cold coarse roots enter the desired set in batches of at most 16 per staging
+pass, ordered by the highest descendant demand priority so interaction roots
+enter first. A visual activation advances the next batch.
+Previously admitted and active roots remain in the cut; target coverage is not
+declared complete until every target root is represented and ready. This bounds
+the initial scheduler and GPU publication burst without changing LOD topology,
+visual handoff, or collision authority.
+
 An explicit foreground-topology refresh publishes the balanced local projection
 as one desired-set transaction instead of restaging it through the broad viewer
 target. The projection begins with the accepted cut, and regional publication

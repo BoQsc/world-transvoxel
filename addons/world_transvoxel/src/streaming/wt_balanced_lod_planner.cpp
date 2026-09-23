@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <map>
 #include <utility>
 
 namespace world_transvoxel {
@@ -758,7 +759,37 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 		}
 		leaves.push_back(entry.key);
 	}
-	for (const WtChunkKey &root : target_roots) {
+	// Admit cold roots in bounded batches. A viewer move can target hundreds of
+	// coarse pages; enqueuing all of them before the interaction root is visible
+	// monopolizes the scheduler and GPU publication pipeline. Each activated
+	// batch drives the next staging pass, while current leaves retain coverage.
+	constexpr std::size_t kColdRootAdmissionLimit = 16;
+	std::vector<WtChunkKey> admission_roots = target_roots;
+	std::map<WtChunkKey, std::int32_t> root_priorities;
+	for (const auto &demand : target.demands) {
+		WtChunkKey root = demand.key;
+		while (root.lod < staging_root_lod) root = wt_parent_chunk_key(root);
+		auto [it, inserted] = root_priorities.emplace(root, demand.priority);
+		if (!inserted) it->second = std::max(it->second, demand.priority);
+	}
+	std::sort(admission_roots.begin(), admission_roots.end(),
+		[&](const WtChunkKey &left, const WtChunkKey &right) {
+			const auto preferred_root = [&](const WtChunkKey &root) {
+				return std::any_of(preferred.begin(), preferred.end(),
+					[&](const WtChunkKey &key) {
+						return bounds_contain(root, key);
+					});
+			};
+			const bool left_preferred = preferred_root(left);
+			const bool right_preferred = preferred_root(right);
+			if (left_preferred != right_preferred) return left_preferred;
+			const auto left_priority = root_priorities.at(left);
+			const auto right_priority = root_priorities.at(right);
+			return left_priority != right_priority ?
+				left_priority > right_priority : left < right;
+		});
+	std::size_t admitted_roots = 0;
+	for (const WtChunkKey &root : admission_roots) {
 		if (cancel_requested && cancel_requested()) {
 			return WtBalancedLodPlannerStatus::Cancelled;
 		}
@@ -766,7 +797,11 @@ WtBalancedLodPlannerStatus WtBalancedLodPlanner::stage_toward(
 			leaves.begin(), leaves.end(),
 			[&](const WtChunkKey &leaf) { return keys_overlap(root, leaf); }
 		);
-		if (!covered) leaves.push_back(root);
+		if (!covered) {
+			if (admitted_roots == kColdRootAdmissionLimit) break;
+			leaves.push_back(root);
+			++admitted_roots;
+		}
 	}
 	std::sort(leaves.begin(), leaves.end());
 	if (leaves.size() > active_capacity_) {

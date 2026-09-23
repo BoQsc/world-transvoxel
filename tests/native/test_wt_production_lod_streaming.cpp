@@ -2665,6 +2665,39 @@ bool run_edit_viewer_update_second_edit_regression(
 
 int main(int argc, char **argv) {
 	{
+		std::vector<wt::WtChunkKey> roots;
+		for (int x = 0; x < 40; ++x) roots.push_back({x, 0, 0, 3});
+		wt::WtLodMap target_map(64);
+		check(target_map.set_active_chunks(roots) == wt::WtLodMapStatus::Ok,
+			"cold root admission target invalid");
+		wt::WtBalancedLodPlan target, current, next;
+		target.entries = target_map.get_entries();
+		for (const auto &entry : target.entries)
+			target.demands.push_back({entry.key,
+				entry.key.x == 39 ? 100 : 1, false, true});
+		wt::WtBalancedLodPlanner planner(64, roots);
+		bool complete = false;
+		const wt::WtChunkKey focus{39, 0, 0, 3};
+		for (int pass = 0; pass < 3; ++pass) {
+			std::vector<wt::WtChunkKey> ready;
+			for (const auto &entry : current.entries) ready.push_back(entry.key);
+			check(planner.stage_foreground(target, current, ready, 3, {focus},
+				next, complete) == wt::WtBalancedLodPlannerStatus::Ok,
+				"bounded cold root admission failed");
+			check(next.entries.size() <= current.entries.size() + 16,
+				"cold root admission exceeded one batch");
+			check(find_entry(next, focus) != nullptr,
+				"cold root admission did not prioritize interaction coverage");
+			for (const auto &entry : current.entries)
+				check(find_entry(next, entry.key) != nullptr,
+					"cold root admission retired existing coverage");
+			current = std::move(next);
+		}
+		check(complete && current.entries.size() == roots.size(),
+			"cold root admission did not progress to complete coverage");
+		std::printf("COLD_ROOT_ADMISSION_PASS roots=%zu passes=3 first_batch_limit=16\n", roots.size());
+	}
+	{
 		std::vector<wt::WtChunkKey> catalog, fine_keys, focus;
 		for (std::uint8_t lod = 0; lod <= 3; ++lod) {
 			const int side = 1 << (3 - lod);
