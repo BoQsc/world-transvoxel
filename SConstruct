@@ -1114,6 +1114,23 @@ base_coverage_atlas_probe = native_test_env.Program(
     ],
 )
 
+base_coverage_atlas_runtime_test = native_test_env.Program(
+    os.path.join(
+        "build", "native-tests",
+        "test_wt_base_coverage_atlas.{}.{}{}".format(
+            env["target"], env["arch"],
+            ".exe" if env["platform"] == "windows" else "",
+        ),
+    ),
+    source=[
+        "tests/native/test_wt_base_coverage_atlas.cpp",
+        "addons/world_transvoxel/src/core/wt_chunk_key.cpp",
+        "addons/world_transvoxel/src/render/wt_base_coverage_atlas.cpp",
+        "addons/world_transvoxel/src/storage/wt_binary_io.cpp",
+        "addons/world_transvoxel/src/storage/wt_hash256.cpp",
+    ],
+)
+
 normalizer = os.path.join(PROJECT_ROOT, "tools", "normalize_pe_timestamp.py")
 
 

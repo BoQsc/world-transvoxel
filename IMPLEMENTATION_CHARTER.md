@@ -55,6 +55,19 @@ continues to use independent authoritative CPU geometry at the physics
 boundary. The existing on-demand cold-root path remains a fallback for worlds
 without a qualified atlas, with visible incompleteness reported honestly.
 
+The runtime atlas admission boundary is fail-closed: source identity, pristine
+world revision, exact complete root inventory, payload hashes, mesh structure,
+finite vertices, and empty certificates must all validate before any root is
+eligible for GPU upload. The validated view is borrowed from the caller-owned
+atlas bytes, which remain alive through upload. The base atlas has a separate
+bounded GPU allocation from the 64-entry dynamic resident pool: the finite
+world has 266 nonempty coarse roots, so routing the base through that pool
+would immediately repeat its capacity bottleneck. Validation alone does not
+authorize world exposure; the entire base cut must also be uploaded and active.
+Refinement may retire a base root only in the same complete cohort that makes
+its replacement coverage visible. Existing journals require replay before the
+base can be shown as current terrain.
+
 Current state: M5 streaming production baseline complete on Windows x86-64
 with bounded storage/caches, multi-viewer/edit runtime ownership, page-backed
 official MIT meshing, real Godot render/physics application budgets, versioned
