@@ -144,8 +144,10 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 	const std::vector<WtDesiredChunk> *desired_chunks =
 		desired_ ? &desired_->get_desired_chunks() : nullptr;
 	std::vector<WtChunkKey> active_visual_chunks;
+	std::vector<WtChunkKey> external_base_visual_cover;
 	{
 		std::lock_guard<std::mutex> lock(visual_activation_mutex_);
+		external_base_visual_cover = external_base_visual_cover_;
 		active_visual_chunks.reserve(visual_activations_.size());
 		for (const VisualActivation &activation : visual_activations_) {
 			WtChunkApplicationRecord record;
@@ -166,7 +168,8 @@ bool WtReadOnlyWorldRuntime::process_edit_operation(
 			*scheduler_,
 			*application_,
 			desired_chunks,
-			&active_visual_chunks
+			&active_visual_chunks,
+			&external_base_visual_cover
 		);
 	if (prepare != WtEditRuntimeReplacementStatus::Ok) {
 		if (!reject(map_prepare_status(prepare)) &&

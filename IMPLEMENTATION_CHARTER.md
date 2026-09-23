@@ -79,6 +79,13 @@ release. Its cut owner keeps each base root submitted until validated dynamic
 leaves cover that entire root and any edge against a retained coarser root has
 the required Transvoxel transition. A failed cut update retains the prior
 complete cut. This visual base does not replace authoritative collision.
+Once the complete atlas validates, its root keys are registered internally as
+external visible cover for edit scheduling. An affected root that has a desired
+visual generation receives foreground priority and can publish independently;
+it does not join the LOD0 atomic edit cohort or hold collision publication.
+This closes the scheduler's blind spot for atlas coverage, but the coarse
+replacement still requires page preparation and GPU extraction. It is not an
+instant-edit guarantee.
 
 Current state: M5 streaming production baseline complete on Windows x86-64
 with bounded storage/caches, multi-viewer/edit runtime ownership, page-backed
@@ -1925,6 +1932,10 @@ maximum interaction band. Other visual-only replacements retain their previously
 accepted desired-set priority, so LOD1/LOD2 reconstruction cannot queue ahead of
 LOD0 collision during a rapid edit burst. Every affected generation still uses
 the same committed journal revision and atomic visual publication rules.
+The exception is an affected root in a validated external GPU base atlas: that
+root is visible but lacks a native application generation, so its visual
+replacement receives foreground priority and independent publication. The
+finite root inventory is registered only after exact atlas validation.
 
 The frontend collision item budget limits background publication. An
 interaction-critical collision payload may continue past that item count while

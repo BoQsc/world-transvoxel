@@ -7,6 +7,7 @@
 #include <godot_cpp/classes/project_settings.hpp>
 #include <godot_cpp/variant/packed_byte_array.hpp>
 
+#include <algorithm>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -42,7 +43,7 @@ const char *atlas_status_name(WtBaseCoverageAtlasStatus status) noexcept {
 
 godot::Dictionary WorldTransvoxelTerrain::_load_gpu_base_coverage_atlas(
 	const godot::String &path
-) const {
+) {
 	godot::Dictionary result;
 	result["schema"] = "world_transvoxel.gpu_base_coverage_upload.v1";
 	result["ok"] = false;
@@ -93,6 +94,11 @@ godot::Dictionary WorldTransvoxelTerrain::_load_gpu_base_coverage_atlas(
 	WtBaseCoverageGpuPack gpu;
 	if (!wt_pack_base_coverage_for_gpu(atlas, gpu)) {
 		result["error"] = "bounded GPU packing failed";
+		return result;
+	}
+	std::sort(expected.begin(), expected.end());
+	if (!lifecycle_->set_external_base_visual_cover(expected)) {
+		result["error"] = "native base visual cover registration failed";
 		return result;
 	}
 	godot::Array roots;

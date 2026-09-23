@@ -692,6 +692,49 @@ void test_foreground_interaction_ordering() {
 		scheduler.find_record(background_lod_key);
 	check(background_record != nullptr && background_record->priority == 1,
 		"visual-only higher-LOD edit was promoted into the interaction band");
+
+	wt::WtStreamScheduler external_scheduler(keys.size(), 16, 16, 1);
+	wt::WtChunkApplicationService external_application(keys.size(), 4, 4);
+	for (const wt::WtChunkKey &key : keys) {
+		const auto generation = request_ready(
+			external_scheduler, key, source_revision, 7, 1
+		);
+		check(external_application.expect_chunk(
+			key, generation, key != background_lod_key, true
+		) == wt::WtApplicationStatus::Ok,
+			"external cover application setup failed");
+	}
+	wt::WtStoragePageCache external_page_cache({
+		keys.size(), wt::kWtMaximumContainerSize,
+		keys.size(), wt::kWtMaximumContainerSize,
+	});
+	wt::WtChunkResourceCache external_resource_cache({
+		keys.size(), wt::kWtMaximumResourceCacheBytes,
+		keys.size(), wt::kWtMaximumResourceCacheBytes,
+		keys.size(), wt::kWtMaximumResourceCacheBytes,
+	});
+	wt::WtEditRuntimeReplacementService external_service(keys.size());
+	const std::vector<wt::WtChunkKey> external_cover {background_lod_key};
+	check(external_service.replace_loaded_chunks(
+		transaction_at(source_revision, 7, 16, 8, 14, 50),
+		spatial, external_scheduler, external_page_cache,
+		external_resource_cache, external_application, nullptr,
+		nullptr, &active_visual_chunks, &external_cover
+	) == wt::WtEditRuntimeReplacementStatus::Ok,
+		"external base cover replacement failed");
+	const auto *promoted = external_scheduler.find_record(background_lod_key);
+	check(promoted != nullptr &&
+		promoted->priority == wt::kWtInteractiveEditPriority,
+		"edited external base cover did not enter the interaction lane");
+	const auto &external_replacements = external_service.get_last_replacements();
+	const auto external_member = std::find_if(
+		external_replacements.begin(), external_replacements.end(),
+		[&](const auto &entry) { return entry.key == background_lod_key; }
+	);
+	check(external_member != external_replacements.end() &&
+		external_member->independently_publishable &&
+		!external_member->atomic_visual_edit_member,
+		"external base cover was coupled to the LOD0 edit cohort");
 }
 
 void test_repeated_bounded_replacement(std::vector<std::uint8_t> &evidence) {

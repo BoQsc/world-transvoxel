@@ -467,6 +467,14 @@ WtReadOnlyRuntimeStatus WtWorldLifecycleService::submit_edit(
 	return runtime_->submit_edit(transaction);
 }
 
+bool WtWorldLifecycleService::set_external_base_visual_cover(
+	const std::vector<WtChunkKey> &keys
+) {
+	std::lock_guard<std::mutex> lock(state_mutex_);
+	return state_ == WtWorldLifecycleState::Running && runtime_ &&
+		runtime_->set_external_base_visual_cover(keys);
+}
+
 WtReadOnlyRuntimeStatus
 WtWorldLifecycleService::request_authoritative_sample(
 	const WtGridPoint &point,

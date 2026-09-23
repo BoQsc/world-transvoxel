@@ -162,6 +162,7 @@ public:
 	) = delete;
 
 	bool valid() const noexcept;
+	bool set_external_base_visual_cover(const std::vector<WtChunkKey> &keys);
 	WtReadOnlyRuntimeStatus update_viewer(
 		const WtViewerSnapshot &snapshot,
 		std::uint32_t radius_chunks,
@@ -424,6 +425,7 @@ private:
 	};
 	mutable std::mutex visual_activation_mutex_;
 	std::vector<VisualActivation> visual_activations_;
+	std::vector<WtChunkKey> external_base_visual_cover_;
 	std::vector<VisualActivation> edit_content_activation_waits_;
 
 	mutable std::mutex input_mutex_;

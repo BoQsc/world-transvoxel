@@ -208,6 +208,19 @@ bool WtReadOnlyWorldRuntime::valid() const noexcept {
 	return valid_;
 }
 
+bool WtReadOnlyWorldRuntime::set_external_base_visual_cover(
+	const std::vector<WtChunkKey> &keys
+) {
+	if (!valid_ || keys.empty() || keys.size() > 4096 ||
+		!std::is_sorted(keys.begin(), keys.end()) ||
+		std::adjacent_find(keys.begin(), keys.end()) != keys.end()) {
+		return false;
+	}
+	std::lock_guard<std::mutex> lock(visual_activation_mutex_);
+	external_base_visual_cover_ = keys;
+	return true;
+}
+
 bool WtReadOnlyWorldRuntime::begin_causal_trace() {
 	if (!valid_ || !causal_trace_.begin(static_cast<std::size_t>(
 			config_.trace_event_capacity

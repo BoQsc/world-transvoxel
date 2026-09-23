@@ -78,6 +78,7 @@ public:
 	WtReadOnlyRuntimeStatus submit_edit(
 		const WtEditTransaction &transaction
 	);
+	bool set_external_base_visual_cover(const std::vector<WtChunkKey> &keys);
 	WtReadOnlyRuntimeStatus request_visibility_coverage_priority_batch(
 		const std::vector<WtVisibilityCoveragePriorityRequest> &requests
 	);

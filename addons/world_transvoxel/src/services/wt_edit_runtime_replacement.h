@@ -80,7 +80,8 @@ public:
 		const WtStreamScheduler &scheduler,
 		const WtChunkApplicationService &application,
 		const std::vector<WtDesiredChunk> *desired_chunks = nullptr,
-		const std::vector<WtChunkKey> *active_visual_chunks = nullptr
+		const std::vector<WtChunkKey> *active_visual_chunks = nullptr,
+		const std::vector<WtChunkKey> *external_base_visual_cover = nullptr
 	);
 	WtEditRuntimeReplacementStatus apply_prepared(
 		const WtEditTransaction &transaction,
@@ -99,7 +100,8 @@ public:
 		WtChunkApplicationService &application,
 		WtPageMeshingRuntimeOwner *page_meshing_runtime,
 		const std::vector<WtDesiredChunk> *desired_chunks = nullptr,
-		const std::vector<WtChunkKey> *active_visual_chunks = nullptr
+		const std::vector<WtChunkKey> *active_visual_chunks = nullptr,
+		const std::vector<WtChunkKey> *external_base_visual_cover = nullptr
 	);
 
 	std::size_t replacement_capacity() const noexcept;

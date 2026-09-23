@@ -125,7 +125,8 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 	const WtStreamScheduler &scheduler,
 	const WtChunkApplicationService &application,
 	const std::vector<WtDesiredChunk> *desired_chunks,
-	const std::vector<WtChunkKey> *active_visual_chunks
+	const std::vector<WtChunkKey> *active_visual_chunks,
+	const std::vector<WtChunkKey> *external_base_visual_cover
 ) {
 	++metrics_.transaction_attempts;
 	affected_.clear();
@@ -194,10 +195,19 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 			std::binary_search(
 				active_visual_chunks->begin(), active_visual_chunks->end(), key
 			);
-		const bool foreground_interaction = key.lod == 0;
+		const bool external_base_visible = external_base_visual_cover != nullptr &&
+			std::binary_search(
+				external_base_visual_cover->begin(),
+				external_base_visual_cover->end(), key
+			);
+		// The external atlas is real visible coverage even though it has no
+		// application generation. Prioritize its edited replacement without
+		// joining the LOD0 atomic cohort or delaying collision publication.
+		const bool foreground_interaction = key.lod == 0 ||
+			(external_base_visible && visual_required);
 		const bool interactive_visual_member =
 			visual_required &&
-			((active_visual && owned_cells_intersect) || foreground_interaction);
+			((active_visual && owned_cells_intersect) || key.lod == 0);
 		prepared_.push_back({
 			key,
 			record->generation,
@@ -207,9 +217,9 @@ WtEditRuntimeReplacementService::prepare_loaded_chunks(
 			collision_required,
 			visual_required,
 			foreground_interaction,
-			interactive_visual_member,
+			interactive_visual_member || (external_base_visible && visual_required),
 			visual_required &&
-				!interactive_visual_member,
+				!interactive_visual_member && !external_base_visible,
 			interactive_visual_member,
 			transaction_delta(key, transaction),
 		});
@@ -376,11 +386,12 @@ WtEditRuntimeReplacementService::replace_loaded_chunks(
 	WtChunkApplicationService &application,
 	WtPageMeshingRuntimeOwner *page_meshing_runtime,
 	const std::vector<WtDesiredChunk> *desired_chunks,
-	const std::vector<WtChunkKey> *active_visual_chunks
+	const std::vector<WtChunkKey> *active_visual_chunks,
+	const std::vector<WtChunkKey> *external_base_visual_cover
 ) {
 	const WtEditRuntimeReplacementStatus prepare = prepare_loaded_chunks(
 		transaction, spatial_index, scheduler, application, desired_chunks,
-		active_visual_chunks
+		active_visual_chunks, external_base_visual_cover
 	);
 	if (prepare != WtEditRuntimeReplacementStatus::Ok) return prepare;
 	return apply_prepared(
